@@ -1,3 +1,4 @@
+import '../utils/num_parse.dart';
 import '../utils/warehouse_mapper.dart';
 
 enum StockStatus { inStock, lowStock, urgent }
@@ -47,15 +48,14 @@ class InventoryItem {
         json['warehouse']?.toString() ?? json['warehouse_id']?.toString() ?? '';
     final warehouseId = WarehouseMapper.toAreaId(warehouseRaw);
 
-    final qtyDouble =
-        double.tryParse(
-          json['actual_qty']?.toString() ?? json['quantity']?.toString() ?? '0',
-        ) ??
-        0;
-    final quantity = qtyDouble.toInt();
+    final quantity = NumParse.asInt(
+      json['actual_qty'] ?? json['quantity'] ?? json['projected_qty'],
+    );
 
-    final minThreshold =
-        int.tryParse(json['min_stock_threshold']?.toString() ?? '50') ?? 50;
+    final minThreshold = NumParse.asInt(
+      json['min_stock_threshold'],
+      fallback: 50,
+    );
 
     StockStatus status;
     if (quantity <= (minThreshold * 0.25)) {

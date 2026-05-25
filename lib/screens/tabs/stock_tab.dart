@@ -72,18 +72,21 @@ class _StockTabState extends State<StockTab> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final appState = context.read<AppState>();
+      if (appState.warehouses.isEmpty) {
+        await appState.refreshWarehouses();
+      }
       if (appState.inventory.isEmpty) {
-        appState.refreshInventoryForWarehouse(selectedWarehouseId);
+        await appState.refreshInventoryForWarehouse(selectedWarehouseId);
       }
     });
   }
 
   Future<void> _onPullRefresh() async {
-    await context.read<AppState>().refreshInventoryForWarehouse(
-      selectedWarehouseId,
-    );
+    final appState = context.read<AppState>();
+    await appState.refreshWarehouses();
+    await appState.refreshInventoryForWarehouse(selectedWarehouseId);
   }
 
   void _onHubChanged(String? hubId) {
@@ -94,7 +97,14 @@ class _StockTabState extends State<StockTab> {
       selectedAreaId = warehouseAreas[hubId]!.first['id'].toString();
     });
 
-    context.read<AppState>().refreshInventoryForWarehouse(hubId);
+    final appState = context.read<AppState>();
+    if (appState.warehouses.isEmpty) {
+      appState.refreshWarehouses().then((_) {
+        appState.refreshInventoryForWarehouse(hubId);
+      });
+    } else {
+      appState.refreshInventoryForWarehouse(hubId);
+    }
   }
 
   @override

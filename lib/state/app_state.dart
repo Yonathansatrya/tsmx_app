@@ -6,6 +6,7 @@ import '../models/sales_order.dart';
 import '../models/purchase_order.dart';
 import '../models/inventory_item.dart';
 import '../models/action_item.dart';
+import '../models/warehouse_info.dart';
 import '../services/frappe_service.dart';
 import '../utils/warehouse_mapper.dart';
 
@@ -32,6 +33,15 @@ class AppState with ChangeNotifier {
   List<InventoryItem> get inventory => _inventory;
   List<ActionItem> get actionRequired => _actionRequired;
 
+  List<WarehouseInfo> _warehouses = [];
+  List<WarehouseInfo> get warehouses => _warehouses;
+
+  bool _isWarehousesLoading = false;
+  bool get isWarehousesLoading => _isWarehousesLoading;
+
+  String? _warehousesError;
+  String? get warehousesError => _warehousesError;
+
   bool _isSalesOrdersLoading = false;
   bool get isSalesOrdersLoading => _isSalesOrdersLoading;
 
@@ -51,6 +61,8 @@ class AppState with ChangeNotifier {
   String? get inventoryError => _inventoryError;
 
   static const String _defaultFrappeBaseUrl = 'http://apps.willshine.id:8014';
+  /// Records per API page (Frappe max ~1000); loops until all rows are loaded.
+  static const int _frappePageSize = FrappeService.maxPageLength;
   static const String _prefsFrappeConfigKey = 'frappe_config';
   // static const String _prefsFrappeCookiesKey = 'frappe_cookies';
   static const String _prefsWarehouseMapKey = 'warehouse_mappings';
@@ -90,6 +102,13 @@ class AppState with ChangeNotifier {
       await _restoreFrappeConfig();
       await _fetchInitialFromFrappe();
     }();
+  }
+
+  Future<void> _persistWarehouseMappings() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setString(_prefsWarehouseMapKey, jsonEncode(_warehouseMappings));
+    } catch (_) {}
   }
 
   void setRememberDevice(bool value) {
@@ -134,11 +153,22 @@ class AppState with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<SalesOrder> loadSalesOrderDetail(String orderId) async {
+    await _frappeService.ensureLoggedIn();
+    final doc = await _frappeService.fetchDocument('Sales Order', orderId);
+    return SalesOrder.fromJson(doc);
+  }
+
+  Future<PurchaseOrder> loadPurchaseOrderDetail(String orderId) async {
+    await _frappeService.ensureLoggedIn();
+    final doc = await _frappeService.fetchDocument('Purchase Order', orderId);
+    return PurchaseOrder.fromJson(doc);
+  }
+
   Future<void> fetchSalesOrdersFromFrappe({
     String baseUrl = _defaultFrappeBaseUrl,
     String? username,
     String? password,
-    int limit = 50,
   }) async {
     _isSalesOrdersLoading = true;
     _salesOrdersError = null;
@@ -152,9 +182,9 @@ class AppState with ChangeNotifier {
         await _frappeService.ensureLoggedIn();
       }
 
-      final data = await _frappeService.fetchResource(
-        'Sales Order',
-        fields: [
+      final data = await _fetchAllResourcePages(
+        doctype: 'Sales Order',
+        fields: const [
           'name',
           'customer',
           'customer_name',
@@ -163,7 +193,6 @@ class AppState with ChangeNotifier {
           'transaction_date',
           'total_qty',
         ],
-        limit: limit,
         orderBy: 'transaction_date desc',
       );
 
@@ -180,7 +209,6 @@ class AppState with ChangeNotifier {
     String baseUrl = _defaultFrappeBaseUrl,
     String? username,
     String? password,
-    int limit = 50,
   }) async {
     _frappeService.baseUrl = baseUrl;
     _isPurchaseOrdersLoading = true;
@@ -194,7 +222,7 @@ class AppState with ChangeNotifier {
         await _frappeService.ensureLoggedIn();
       }
 
-      final data = await _fetchResourceWithFieldFallback(
+      final data = await _fetchAllResourcePages(
         doctype: 'Purchase Order',
         fields: const [
           'name',
@@ -207,13 +235,10 @@ class AppState with ChangeNotifier {
           'grand_total',
           'creation',
         ],
-        limit: limit,
         orderBy: 'modified desc',
       );
 
-      _purchaseOrders = data.map((item) {
-        return PurchaseOrder.fromJson(item);
-      }).toList();
+      _purchaseOrders = data.map((item) => PurchaseOrder.fromJson(item)).toList();
 
       _purchaseOrdersError = null;
     } catch (err) {
@@ -224,11 +249,90 @@ class AppState with ChangeNotifier {
     }
   }
 
+  Future<void> fetchWarehousesFromFrappe({
+    String baseUrl = _defaultFrappeBaseUrl,
+    String? username,
+    String? password,
+    bool showLoading = true,
+  }) async {
+    _frappeService.baseUrl = baseUrl;
+    if (showLoading) {
+      _isWarehousesLoading = true;
+      _warehousesError = null;
+      notifyListeners();
+    }
+
+    try {
+      if (username != null && password != null) {
+        await _frappeService.login(username, password);
+      } else {
+        await _frappeService.ensureLoggedIn();
+      }
+
+      List<Map<String, dynamic>> data;
+      try {
+        data = await _fetchAllResourcePages(
+          doctype: 'Warehouse',
+          fields: const [
+            'name',
+            'warehouse_name',
+            'parent_warehouse',
+            'is_group',
+          ],
+          orderBy: 'warehouse_name asc',
+          filters: [
+            ['is_group', '=', 0],
+          ],
+        );
+      } catch (_) {
+        data = await _fetchAllResourcePages(
+          doctype: 'Warehouse',
+          fields: const [
+            'name',
+            'warehouse_name',
+            'parent_warehouse',
+            'is_group',
+          ],
+          orderBy: 'warehouse_name asc',
+        );
+      }
+
+      _warehouses = data
+          .map((row) => WarehouseInfo.fromJson(row))
+          .where((w) => w.name.isNotEmpty && !w.isGroup)
+          .toList();
+
+      for (final w in _warehouses) {
+        _warehouseMappings[w.name] = WarehouseMapper.toAreaId(
+          w.name,
+          overrides: _warehouseMappings,
+        );
+      }
+      await _persistWarehouseMappings();
+      _warehousesError = null;
+    } catch (err) {
+      _warehousesError = err.toString();
+    } finally {
+      if (showLoading) {
+        _isWarehousesLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  List<String> erpWarehouseNamesForHub(String hubId) {
+    if (_warehouses.isEmpty) return [];
+    return _warehouses
+        .where((w) => WarehouseMapper.warehouseMatchesHub(w.name, hubId))
+        .map((w) => w.name)
+        .toList();
+  }
+
+  /// Loads all Bin rows matching [filters] (no total cap; paginated on server).
   Future<void> fetchInventoryFromFrappe({
     String baseUrl = _defaultFrappeBaseUrl,
     String? username,
     String? password,
-    int limit = 1000,
     List<List<dynamic>>? filters,
   }) async {
     _frappeService.baseUrl = baseUrl;
@@ -243,25 +347,37 @@ class AppState with ChangeNotifier {
         await _frappeService.ensureLoggedIn();
       }
 
-      List<Map<String, dynamic>> data;
-      try {
-        data = await _fetchResourceWithFieldFallback(
-          doctype: 'Bin',
-          fields: const ['item_code', 'warehouse', 'actual_qty'],
-          limit: limit,
-          filters: filters,
-        );
-      } catch (_) {
-        data = await _fetchResourceWithFieldFallback(
-          doctype: 'Bin',
-          fields: const ['item_code', 'warehouse', 'actual_qty'],
-          limit: limit,
+      if (_warehouses.isEmpty) {
+        await fetchWarehousesFromFrappe(
+          baseUrl: baseUrl,
+          username: username,
+          password: password,
+          showLoading: false,
         );
       }
 
-      final hubPrefix = filters != null && filters.isNotEmpty
-          ? (filters.first.length > 2 ? filters.first[2].toString() : '')
-          : '';
+      List<Map<String, dynamic>> data;
+      try {
+        data = await _fetchAllResourcePages(
+          doctype: 'Bin',
+          fields: const [
+            'item_code',
+            'warehouse',
+            'actual_qty',
+            'reserved_qty',
+            'projected_qty',
+          ],
+          filters: filters,
+        );
+      } catch (_) {
+        data = await _fetchAllResourcePages(
+          doctype: 'Bin',
+          fields: const ['item_code', 'warehouse', 'actual_qty'],
+          filters: filters,
+        );
+      }
+
+      final hubWarehouseFilter = _hubIdFromFilters(filters);
 
       final List<InventoryItem> items = [];
       for (final rawItem in data) {
@@ -270,18 +386,33 @@ class AppState with ChangeNotifier {
             rawItem['warehouse_id']?.toString() ??
             '';
 
-        if (hubPrefix.isNotEmpty &&
-            !rawWarehouse.toLowerCase().contains(
-              hubPrefix.replaceAll('%', '').toLowerCase(),
+        if (hubWarehouseFilter != null &&
+            !WarehouseMapper.warehouseMatchesHub(
+              rawWarehouse,
+              hubWarehouseFilter,
             )) {
           continue;
         }
 
         final inv = InventoryItem.fromJson(rawItem);
         final normalized = _mapWarehouseId(rawWarehouse);
+        if (normalized.isEmpty) continue;
         items.add(inv.copyWith(warehouseId: normalized));
       }
-      _inventory = items;
+
+      final itemNames = await _fetchItemNames(
+        items.map((i) => i.sku).where((s) => s.isNotEmpty).toSet(),
+      );
+
+      _inventory = items
+          .map((inv) {
+            final label = itemNames[inv.sku];
+            if (label != null && label.isNotEmpty && label != inv.sku) {
+              return inv.copyWith(name: label);
+            }
+            return inv;
+          })
+          .toList();
       _inventoryError = null;
     } catch (err) {
       _inventoryError = err.toString();
@@ -306,6 +437,11 @@ class AppState with ChangeNotifier {
         username: cfg['username'],
         password: cfg['password'],
       );
+      await fetchWarehousesFromFrappe(
+        baseUrl: cfg['baseUrl'] ?? _defaultFrappeBaseUrl,
+        username: cfg['username'],
+        password: cfg['password'],
+      );
       await fetchInventoryFromFrappe(
         baseUrl: cfg['baseUrl'] ?? _defaultFrappeBaseUrl,
         username: cfg['username'],
@@ -320,12 +456,29 @@ class AppState with ChangeNotifier {
   Future<void> refreshPurchaseOrders() => fetchPurchaseOrdersFromFrappe();
   Future<void> refreshInventory() => fetchInventoryFromFrappe();
 
-  Future<void> refreshInventoryForWarehouse(String hubId) =>
-      fetchInventoryFromFrappe(
+  Future<void> refreshWarehouses() => fetchWarehousesFromFrappe();
+
+  Future<void> refreshInventoryForWarehouse(String hubId) async {
+    if (_warehouses.isEmpty) {
+      await fetchWarehousesFromFrappe();
+    }
+
+    final erpNames = erpWarehouseNamesForHub(hubId);
+    if (erpNames.isNotEmpty) {
+      await fetchInventoryFromFrappe(
         filters: [
-          ['warehouse', 'like', '${WarehouseMapper.hubFilterPrefix(hubId)}%'],
+          ['warehouse', 'in', erpNames],
         ],
       );
+      return;
+    }
+
+    await fetchInventoryFromFrappe(
+      filters: [
+        ['warehouse', 'like', WarehouseMapper.hubFilterPrefix(hubId)],
+      ],
+    );
+  }
 
   Future<void> saveFrappeConfig({
     required String baseUrl,
@@ -375,10 +528,37 @@ class AppState with ChangeNotifier {
     super.dispose();
   }
 
+  Future<List<Map<String, dynamic>>> _fetchAllResourcePages({
+    required String doctype,
+    required List<String> fields,
+    String? orderBy,
+    List<List<dynamic>>? filters,
+  }) async {
+    final all = <Map<String, dynamic>>[];
+    var start = 0;
+
+    while (true) {
+      final page = await _fetchResourceWithFieldFallback(
+        doctype: doctype,
+        fields: fields,
+        limit: _frappePageSize,
+        limitStart: start,
+        orderBy: orderBy,
+        filters: filters,
+      );
+      all.addAll(page);
+      if (page.length < _frappePageSize) break;
+      start += _frappePageSize;
+    }
+
+    return all;
+  }
+
   Future<List<Map<String, dynamic>>> _fetchResourceWithFieldFallback({
     required String doctype,
     required List<String> fields,
     required int limit,
+    int limitStart = 0,
     String? orderBy,
     List<List<dynamic>>? filters,
   }) async {
@@ -391,6 +571,7 @@ class AppState with ChangeNotifier {
           doctype,
           fields: remainingFields,
           limit: limit,
+          limitStart: limitStart,
           orderBy: currentOrderBy,
           filters: filters,
         );
@@ -422,4 +603,59 @@ class AppState with ChangeNotifier {
 
     throw Exception('No permitted fields available for $doctype.');
   }
+
+  String? _hubIdFromFilters(List<List<dynamic>>? filters) {
+    if (filters == null || filters.isEmpty) return null;
+    final first = filters.first;
+    if (first.length < 3) return null;
+    final field = first[0]?.toString() ?? '';
+    if (field != 'warehouse') return null;
+
+    final op = first[1]?.toString() ?? '';
+    final value = first[2];
+    if (op == 'like' && value is String) {
+      final prefix = value.replaceAll('%', '').toLowerCase();
+      if (prefix.contains('jakarta') || prefix.contains('jkt')) {
+        return 'jakarta';
+      }
+      if (prefix.contains('curug')) return 'curug';
+      if (prefix.contains('medan')) return 'medan';
+    }
+    if (op == 'in' && value is List && value.isNotEmpty) {
+      return WarehouseMapper.hubIdFromWarehouse(value.first.toString());
+    }
+    return null;
+  }
+
+  Future<Map<String, String>> _fetchItemNames(Set<String> itemCodes) async {
+    if (itemCodes.isEmpty) return {};
+
+    final codes = itemCodes.toList();
+    final names = <String, String>{};
+
+    for (var i = 0; i < codes.length; i += 80) {
+      final chunk = codes.sublist(i, i + 80 > codes.length ? codes.length : i + 80);
+      try {
+        final data = await _fetchResourceWithFieldFallback(
+          doctype: 'Item',
+          fields: const ['name', 'item_name'],
+          limit: chunk.length,
+          filters: [
+            ['name', 'in', chunk],
+          ],
+        );
+        for (final row in data) {
+          final code = row['name']?.toString() ?? '';
+          final label = row['item_name']?.toString() ?? code;
+          if (code.isNotEmpty) names[code] = label;
+        }
+      } catch (_) {
+        // Item lookup is best-effort; SKU remains as display name.
+      }
+    }
+
+    return names;
+  }
+
 }
+

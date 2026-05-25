@@ -47,6 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       try {
+        await appState.refreshWarehouses();
         await appState.refreshSalesOrders();
         await appState.refreshPurchaseOrders();
         await appState.refreshInventory();

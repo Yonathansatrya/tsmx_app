@@ -5,6 +5,8 @@ import 'package:http/http.dart' as http;
 class FrappeService {
   static const String defaultBaseUrl = 'http://apps.willshine.id:8014';
 
+  static const int maxPageLength = 10000;
+
   String baseUrl;
   String? username;
   String? password;
@@ -58,7 +60,8 @@ class FrappeService {
   Future<List<Map<String, dynamic>>> fetchResource(
     String doctype, {
     required List<String> fields,
-    int limit = 50,
+    int limit = maxPageLength,
+    int limitStart = 0,
     String? orderBy,
     List<List<dynamic>>? filters,
   }) async {
@@ -68,6 +71,7 @@ class FrappeService {
     final queryParameters = {
       'fields': jsonEncode(fields),
       'limit_page_length': limit.toString(),
+      if (limitStart > 0) 'limit_start': limitStart.toString(),
       if (orderBy != null) 'order_by': orderBy,
       if (filters != null) 'filters': jsonEncode(filters),
     };
@@ -92,6 +96,61 @@ class FrappeService {
           ? item
           : Map<String, dynamic>.from(item as Map);
     }).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAllResources(
+    String doctype, {
+    required List<String> fields,
+    int pageSize = maxPageLength,
+    String? orderBy,
+    List<List<dynamic>>? filters,
+  }) async {
+    final all = <Map<String, dynamic>>[];
+    var start = 0;
+
+    while (true) {
+      final page = await fetchResource(
+        doctype,
+        fields: fields,
+        limit: pageSize,
+        limitStart: start,
+        orderBy: orderBy,
+        filters: filters,
+      );
+      all.addAll(page);
+      if (page.length < pageSize) break;
+      start += pageSize;
+    }
+
+    return all;
+  }
+
+  /// Fetches a single document including child tables (e.g. Sales Order items).
+  Future<Map<String, dynamic>> fetchDocument(
+    String doctype,
+    String name,
+  ) async {
+    await ensureLoggedIn();
+
+    final encodedDoctype = Uri.encodeComponent(doctype);
+    final encodedName = Uri.encodeComponent(name);
+    final uri = Uri.parse('$baseUrl/api/resource/$encodedDoctype/$encodedName');
+
+    final response = await _get(uri);
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractFrappeError(decoded, response.statusCode));
+    }
+
+    if (decoded is! Map || decoded['data'] is! Map) {
+      throw Exception('Invalid Frappe document response for $doctype/$name.');
+    }
+
+    final data = decoded['data'];
+    return data is Map<String, dynamic>
+        ? data
+        : Map<String, dynamic>.from(data as Map);
   }
 
   Future<http.Response> _post(

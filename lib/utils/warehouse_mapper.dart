@@ -18,13 +18,15 @@ class WarehouseMapper {
       return 'curug_stores';
     }
 
-    if (w.contains('medan')) {
+    if (w.contains('medan') || w.contains('sumatra')) {
+      if (w.contains('stores')) return 'medan_stores';
       return 'medan_stores';
     }
 
     if (w.contains('jakarta') ||
         w.contains('jkt') ||
-        w.contains('distribution hub')) {
+        w.contains('distribution hub') ||
+        w.endsWith(' - jakarta')) {
       if (w.contains('inbound') || w.contains('masuk')) {
         return 'jakarta_inbound';
       }
@@ -33,10 +35,11 @@ class WarehouseMapper {
           w.contains('pematang')) {
         return 'jakarta_ripening';
       }
-      if (w.contains('store') || w.contains('siap jual')) {
+      if (w.contains('stores') || w.contains('siap jual')) {
         return 'jakarta_stores';
       }
-      return 'jakarta_stores';
+      // Raw Material, Packing House, etc. — not shown in hub area tabs.
+      return '';
     }
 
     return w
@@ -48,12 +51,34 @@ class WarehouseMapper {
   static String hubFilterPrefix(String hubId) {
     switch (hubId) {
       case 'curug':
-        return 'Curug';
+        return '%Curug%';
       case 'medan':
-        return 'Medan';
+        return '%Medan%';
       case 'jakarta':
       default:
-        return 'Jakarta';
+        return '%Jakarta%';
     }
+  }
+
+  /// Maps an ERPNext warehouse name to a hub id (jakarta, curug, medan).
+  static String hubIdFromWarehouse(String rawWarehouse) {
+    final w = rawWarehouse.toLowerCase();
+    if (w.contains('curug')) return 'curug';
+    if (w.contains('medan') || w.contains('sumatra')) return 'medan';
+    if (w.contains('jakarta') ||
+        w.contains('jkt') ||
+        w.contains('distribution hub')) {
+      return 'jakarta';
+    }
+    return '';
+  }
+
+  static bool warehouseMatchesHub(String warehouseName, String hubId) {
+    if (hubId.isEmpty) return true;
+    final mapped = hubIdFromWarehouse(warehouseName);
+    if (mapped.isNotEmpty) return mapped == hubId;
+    return warehouseName.toLowerCase().contains(
+      hubFilterPrefix(hubId).toLowerCase(),
+    );
   }
 }

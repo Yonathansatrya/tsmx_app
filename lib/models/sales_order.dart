@@ -1,3 +1,5 @@
+import '../utils/num_parse.dart';
+
 enum SalesOrderStatus {
   draft,
   pending,
@@ -30,8 +32,8 @@ class SalesOrderItem {
           json['item_name']?.toString() ??
           json['item_code']?.toString() ??
           'Unknown Item',
-      qty: int.tryParse(json['qty']?.toString() ?? '0') ?? 0,
-      rate: double.tryParse(json['rate']?.toString() ?? '0') ?? 0,
+      qty: NumParse.asInt(json['qty'] ?? json['stock_qty']),
+      rate: NumParse.asDouble(json['rate'] ?? json['net_rate']),
     );
   }
 }
@@ -63,13 +65,9 @@ class SalesOrder {
         json['customer']?.toString() ??
         'Unknown Customer';
 
-    final value =
-        double.tryParse(
-          json['grand_total']?.toString() ??
-              json['net_total']?.toString() ??
-              '0',
-        ) ??
-        0;
+    final value = NumParse.asDouble(
+      json['grand_total'] ?? json['rounded_total'] ?? json['net_total'],
+    );
 
     final date =
         json['transaction_date']?.toString() ??
@@ -77,13 +75,9 @@ class SalesOrder {
         json['creation']?.toString() ??
         '';
 
-    final itemsCount =
-        int.tryParse(
-          json['total_qty']?.toString() ??
-              json['items_count']?.toString() ??
-              '0',
-        ) ??
-        0;
+    final itemsCount = NumParse.asInt(
+      json['total_qty'] ?? json['items_count'],
+    );
 
     final statusText = json['status']?.toString() ?? '';
     final statusLower = statusText.toLowerCase();

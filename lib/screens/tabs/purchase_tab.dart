@@ -98,7 +98,7 @@ class _PurchaseTabState extends State<PurchaseTab> {
   }
 
   void _showPurchaseOrderDetail(BuildContext context, PurchaseOrder po) {
-    final statusStyle = _purchaseStatusStyle(po.status);
+    final detailFuture = context.read<AppState>().loadPurchaseOrderDetail(po.id);
 
     showModalBottomSheet(
       context: context,
@@ -107,13 +107,26 @@ class _PurchaseTabState extends State<PurchaseTab> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.72,
+          minChildSize: 0.45,
+          maxChildSize: 0.92,
+          builder: (context, scrollController) {
+            return FutureBuilder<PurchaseOrder>(
+              future: detailFuture,
+              builder: (context, snapshot) {
+                final detail = snapshot.data ?? po;
+                final isLoading =
+                    snapshot.connectionState == ConnectionState.waiting;
+
+                return SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
               Center(
                 child: Container(
                   width: 42,
@@ -132,7 +145,7 @@ class _PurchaseTabState extends State<PurchaseTab> {
                 children: [
                   Expanded(
                     child: Text(
-                      po.id,
+                      detail.id,
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
@@ -150,7 +163,7 @@ class _PurchaseTabState extends State<PurchaseTab> {
               const SizedBox(height: 4),
 
               Text(
-                po.vendor,
+                detail.vendor,
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -161,25 +174,46 @@ class _PurchaseTabState extends State<PurchaseTab> {
               const SizedBox(height: 16),
 
               _StatusBadge(
-                label: statusStyle.label,
-                color: statusStyle.color,
-                icon: statusStyle.icon,
+                label: _purchaseStatusStyle(detail.status).label,
+                color: _purchaseStatusStyle(detail.status).color,
+                icon: _purchaseStatusStyle(detail.status).icon,
               ),
 
               const SizedBox(height: 18),
 
               _DetailCard(
                 children: [
-                  _DetailRow('Supplier', po.vendor),
-                  _DetailRow('Status ERP', po.statusText),
-                  _DetailRow('Expected Date', po.eta.isEmpty ? '-' : po.eta),
-                  _DetailRow('Total Qty', '${po.itemsCount}'),
+                  // _DetailRow('Supplier', detail.vendor),
+                  _DetailRow('Status ERP', detail.statusText),
+                  _DetailRow('Expected Date', detail.eta.isEmpty ? '-' : detail.eta),
+                  _DetailRow('Total Qty', '${detail.itemsCount}'),
                   _DetailRow(
                     'Total Value',
-                    'Rp ${_formatCurrency(po.totalValue)}',
+                    'Rp ${_formatCurrency(detail.totalValue)}',
                   ),
                 ],
               ),
+
+              const SizedBox(height: 18),
+
+              const Text(
+                'Order Items',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.navy,
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              if (isLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else
+                _PurchaseOrderItemsTable(po: detail),
 
               const SizedBox(height: 18),
 
@@ -202,10 +236,137 @@ class _PurchaseTabState extends State<PurchaseTab> {
                   color: AppColors.slate,
                 ),
               ),
-            ],
-          ),
+                ],
+              ),
+            );
+              },
+            );
+          },
         );
       },
+    );
+  }
+}
+
+class _PurchaseOrderItemsTable extends StatelessWidget {
+  final PurchaseOrder po;
+
+  const _PurchaseOrderItemsTable({required this.po});
+
+  @override
+  Widget build(BuildContext context) {
+    if (po.items.isEmpty) {
+      return const Text(
+        'No item details available.',
+        style: TextStyle(color: AppColors.slate, fontSize: 12),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withOpacity(0.06)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.04),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+            ),
+            child: const Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: Text(
+                    'ITEM',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.slate,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'QTY',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.slate,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    'PRICE',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.slate,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ...po.items.map(
+            (item) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: AppColors.primary.withOpacity(0.05)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Text(
+                      item.itemName,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.navy,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      '${item.qty}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.navy,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      'Rp ${_formatCurrency(item.rate)}',
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -583,7 +744,7 @@ class _PurchaseOrderCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${po.itemsCount} qty • ETA ${po.eta.isEmpty ? '-' : po.eta}',
+                        '${po.itemsCount} item ${po.eta.isEmpty ? '-' : po.eta}',
                         style: TextStyle(
                           fontSize: 10,
                           color: AppColors.slate.withOpacity(0.85),

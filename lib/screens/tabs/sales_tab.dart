@@ -100,6 +100,8 @@ class _SalesTabState extends State<SalesTab> {
   }
 
   void _showOrderDetailsBottomSheet(BuildContext context, SalesOrder order) {
+    final detailFuture = context.read<AppState>().loadSalesOrderDetail(order.id);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -107,14 +109,21 @@ class _SalesTabState extends State<SalesTab> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (context) {
+      builder: (sheetContext) {
         return DraggableScrollableSheet(
           expand: false,
           initialChildSize: 0.72,
           minChildSize: 0.45,
           maxChildSize: 0.92,
           builder: (context, scrollController) {
-            return SingleChildScrollView(
+            return FutureBuilder<SalesOrder>(
+              future: detailFuture,
+              builder: (context, snapshot) {
+                final detail = snapshot.data ?? order;
+                final isLoading =
+                    snapshot.connectionState == ConnectionState.waiting;
+
+                return SingleChildScrollView(
               controller: scrollController,
               padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
               child: Column(
@@ -138,7 +147,7 @@ class _SalesTabState extends State<SalesTab> {
                     children: [
                       Expanded(
                         child: Text(
-                          order.id,
+                          detail.id,
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,
@@ -154,7 +163,7 @@ class _SalesTabState extends State<SalesTab> {
                   ),
 
                   Text(
-                    order.customer,
+                    detail.customer,
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -166,16 +175,16 @@ class _SalesTabState extends State<SalesTab> {
 
                   _DetailCard(
                     children: [
-                      _DetailRow('Customer', order.customer),
-                      _DetailRow('Transaction Date', order.date),
-                      _DetailRow('Total Items', '${order.itemsCount} items'),
+                      // _DetailRow('Customer', detail.customer),
+                      _DetailRow('Transaction Date', detail.date),
+                      _DetailRow('Total Items', '${detail.itemsCount} items'),
                       _DetailRow(
                         'Net Value',
-                        'Rp ${_formatCurrency(order.value)}',
+                        'Rp ${_formatCurrency(detail.value)}',
                       ),
                       _DetailRow(
                         'Status',
-                        order.status.name.toUpperCase().replaceAll('_', ' '),
+                        detail.status.name.toUpperCase().replaceAll('_', ' '),
                       ),
                     ],
                   ),
@@ -193,7 +202,13 @@ class _SalesTabState extends State<SalesTab> {
 
                   const SizedBox(height: 10),
 
-                  _OrderItemsTable(order: order),
+                  if (isLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else
+                    _OrderItemsTable(order: detail),
 
                   const SizedBox(height: 18),
 
@@ -209,27 +224,29 @@ class _SalesTabState extends State<SalesTab> {
                   const SizedBox(height: 12),
 
                   _TimelineStep(
-                    time: '${order.date} 08:30',
+                    time: '${detail.date} 08:30',
                     message: 'Sales order created and confirmed.',
                     isLast: false,
                   ),
-                  if (order.status == SalesOrderStatus.shipped ||
-                      order.status == SalesOrderStatus.delivered ||
-                      order.status == SalesOrderStatus.completed)
+                  if (detail.status == SalesOrderStatus.shipped ||
+                      detail.status == SalesOrderStatus.delivered ||
+                      detail.status == SalesOrderStatus.completed)
                     _TimelineStep(
-                      time: '${order.date} 10:15',
+                      time: '${detail.date} 10:15',
                       message: 'Order prepared for delivery.',
                       isLast: false,
                     ),
-                  if (order.status == SalesOrderStatus.delivered ||
-                      order.status == SalesOrderStatus.completed)
+                  if (detail.status == SalesOrderStatus.delivered ||
+                      detail.status == SalesOrderStatus.completed)
                     _TimelineStep(
-                      time: '${order.date} 14:00',
+                      time: '${detail.date} 14:00',
                       message: 'Order delivered to customer.',
                       isLast: true,
                     ),
                 ],
               ),
+            );
+              },
             );
           },
         );
@@ -635,7 +652,7 @@ class _SalesOrderCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${order.itemsCount} items • ${order.date}',
+                        '${order.itemsCount} item • ${order.date}',
                         style: TextStyle(
                           fontSize: 10,
                           color: AppColors.slate.withOpacity(0.85),

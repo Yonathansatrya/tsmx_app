@@ -32,6 +32,10 @@ class _DashboardTabState extends State<DashboardTab> {
         appState.refreshPurchaseOrders();
       }
 
+      if (appState.warehouses.isEmpty) {
+        appState.refreshWarehouses();
+      }
+
       if (appState.inventory.isEmpty) {
         appState.refreshInventory();
       }

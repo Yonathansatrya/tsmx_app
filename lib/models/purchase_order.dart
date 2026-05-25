@@ -1,3 +1,28 @@
+import '../utils/num_parse.dart';
+
+class PurchaseOrderItem {
+  final String itemName;
+  final int qty;
+  final double rate;
+
+  PurchaseOrderItem({
+    required this.itemName,
+    required this.qty,
+    required this.rate,
+  });
+
+  factory PurchaseOrderItem.fromJson(Map<String, dynamic> json) {
+    return PurchaseOrderItem(
+      itemName:
+          json['item_name']?.toString() ??
+          json['item_code']?.toString() ??
+          'Unknown Item',
+      qty: NumParse.asInt(json['qty'] ?? json['stock_qty']),
+      rate: NumParse.asDouble(json['rate'] ?? json['net_rate']),
+    );
+  }
+}
+
 enum PurchaseOrderStatus {
   draft,
   pending,
@@ -18,6 +43,7 @@ class PurchaseOrder {
   final String eta;
   final int itemsCount;
   final double totalValue;
+  final List<PurchaseOrderItem> items;
 
   PurchaseOrder({
     required this.id,
@@ -27,6 +53,7 @@ class PurchaseOrder {
     required this.eta,
     required this.itemsCount,
     required this.totalValue,
+    this.items = const [],
   });
 
   PurchaseOrder copyWith({
@@ -37,6 +64,7 @@ class PurchaseOrder {
     String? eta,
     int? itemsCount,
     double? totalValue,
+    List<PurchaseOrderItem>? items,
   }) {
     return PurchaseOrder(
       id: id ?? this.id,
@@ -46,6 +74,7 @@ class PurchaseOrder {
       eta: eta ?? this.eta,
       itemsCount: itemsCount ?? this.itemsCount,
       totalValue: totalValue ?? this.totalValue,
+      items: items ?? this.items,
     );
   }
 
@@ -63,19 +92,26 @@ class PurchaseOrder {
           json['transaction_date'],
     );
 
-    final itemsCount = int.tryParse(json['total_qty']?.toString() ?? '0') ?? 0;
+    final itemsCount = NumParse.asInt(json['total_qty']);
 
-    final totalValue =
-        double.tryParse(
-          json['rounded_total']?.toString() ??
-              json['grand_total']?.toString() ??
-              '0',
-        ) ??
-        0;
+    final totalValue = NumParse.asDouble(
+      json['rounded_total'] ?? json['grand_total'],
+    );
 
     final statusText = json['status']?.toString() ?? 'Unknown';
 
     final status = _mapStatus(statusText: statusText, eta: eta);
+
+    final rawItems = json['items'];
+    final items = rawItems is List
+        ? rawItems
+              .map(
+                (e) => PurchaseOrderItem.fromJson(
+                  Map<String, dynamic>.from(e as Map),
+                ),
+              )
+              .toList()
+        : <PurchaseOrderItem>[];
 
     return PurchaseOrder(
       id: id,
@@ -85,6 +121,7 @@ class PurchaseOrder {
       eta: eta,
       itemsCount: itemsCount,
       totalValue: totalValue,
+      items: items,
     );
   }
 
