@@ -2,7 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 class WarehouseGauge extends StatefulWidget {
-  final double percentage; // 0.0 to 1.0
+  final double percentage;
   final String label;
 
   const WarehouseGauge({
@@ -139,9 +139,9 @@ class _WarehouseGaugeState extends State<WarehouseGauge> with SingleTickerProvid
   }
 
   Color _getColorForCapacity(double pct) {
-    if (pct < 0.6) return const Color(0xFF135e39); // Green
-    if (pct < 0.85) return const Color(0xFFFFB300); // Yellow/Amber
-    return const Color(0xFFE11D48); // Red
+    if (pct < 0.6) return const Color(0xFF135e39);
+    if (pct < 0.85) return const Color(0xFFFFB300);
+    return const Color(0xFFE11D48);
   }
 
   String _getCapacityStatusText(double pct) {
@@ -174,8 +174,6 @@ class GaugePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    // Draw the full background arc (220 degrees, pointing upwards)
-    // Starting from 160 degrees to 380 degrees (which is 20 deg)
     const startAngle = 135 * pi / 180;
     const sweepAngle = 270 * pi / 180;
 
@@ -187,7 +185,6 @@ class GaugePainter extends CustomPainter {
       backgroundPaint,
     );
 
-    // Draw active arc based on percentage
     final activeSweep = sweepAngle * percentage;
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),

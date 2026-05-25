@@ -1,11 +1,9 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sales_order.dart';
 import '../models/purchase_order.dart';
 import '../models/inventory_item.dart';
-import '../models/action_item.dart';
 import '../models/warehouse_info.dart';
 import '../services/frappe_service.dart';
 import '../utils/warehouse_mapper.dart';
@@ -20,27 +18,16 @@ class AppState with ChangeNotifier {
   bool _rememberDevice = false;
   bool get rememberDevice => _rememberDevice;
 
-  String _selectedWarehouseId = 'jakarta';
-  String get selectedWarehouseId => _selectedWarehouseId;
-
   List<SalesOrder> _salesOrders = [];
   List<PurchaseOrder> _purchaseOrders = [];
   List<InventoryItem> _inventory = [];
-  List<ActionItem> _actionRequired = [];
 
   List<SalesOrder> get salesOrders => _salesOrders;
   List<PurchaseOrder> get purchaseOrders => _purchaseOrders;
   List<InventoryItem> get inventory => _inventory;
-  List<ActionItem> get actionRequired => _actionRequired;
 
   List<WarehouseInfo> _warehouses = [];
   List<WarehouseInfo> get warehouses => _warehouses;
-
-  bool _isWarehousesLoading = false;
-  bool get isWarehousesLoading => _isWarehousesLoading;
-
-  String? _warehousesError;
-  String? get warehousesError => _warehousesError;
 
   bool _isSalesOrdersLoading = false;
   bool get isSalesOrdersLoading => _isSalesOrdersLoading;
@@ -61,10 +48,8 @@ class AppState with ChangeNotifier {
   String? get inventoryError => _inventoryError;
 
   static const String _defaultFrappeBaseUrl = 'http://apps.willshine.id:8014';
-  /// Records per API page (Frappe max ~1000); loops until all rows are loaded.
   static const int _frappePageSize = FrappeService.maxPageLength;
   static const String _prefsFrappeConfigKey = 'frappe_config';
-  // static const String _prefsFrappeCookiesKey = 'frappe_cookies';
   static const String _prefsWarehouseMapKey = 'warehouse_mappings';
 
   Map<String, String> _warehouseMappings = {};
@@ -94,8 +79,6 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Timer? _fleetTimer;
-
   AppState() {
     () async {
       await _loadPersistedWarehouseMappings();
@@ -113,11 +96,6 @@ class AppState with ChangeNotifier {
 
   void setRememberDevice(bool value) {
     _rememberDevice = value;
-    notifyListeners();
-  }
-
-  void selectWarehouse(String warehouseId) {
-    _selectedWarehouseId = warehouseId;
     notifyListeners();
   }
 
@@ -139,12 +117,6 @@ class AppState with ChangeNotifier {
       notifyListeners();
       return false;
     }
-  }
-
-  void loginWithBadge(String badgeId, String employeeName) {
-    _isAuthenticated = true;
-    _currentUser = employeeName;
-    notifyListeners();
   }
 
   void logout() {
@@ -253,14 +225,8 @@ class AppState with ChangeNotifier {
     String baseUrl = _defaultFrappeBaseUrl,
     String? username,
     String? password,
-    bool showLoading = true,
   }) async {
     _frappeService.baseUrl = baseUrl;
-    if (showLoading) {
-      _isWarehousesLoading = true;
-      _warehousesError = null;
-      notifyListeners();
-    }
 
     try {
       if (username != null && password != null) {
@@ -309,14 +275,10 @@ class AppState with ChangeNotifier {
         );
       }
       await _persistWarehouseMappings();
-      _warehousesError = null;
-    } catch (err) {
-      _warehousesError = err.toString();
+    } catch (_) {
+      // Warehouse list is optional; stock can fall back to name filters.
     } finally {
-      if (showLoading) {
-        _isWarehousesLoading = false;
-        notifyListeners();
-      }
+      notifyListeners();
     }
   }
 
@@ -328,7 +290,6 @@ class AppState with ChangeNotifier {
         .toList();
   }
 
-  /// Loads all Bin rows matching [filters] (no total cap; paginated on server).
   Future<void> fetchInventoryFromFrappe({
     String baseUrl = _defaultFrappeBaseUrl,
     String? username,
@@ -352,7 +313,6 @@ class AppState with ChangeNotifier {
           baseUrl: baseUrl,
           username: username,
           password: password,
-          showLoading: false,
         );
       }
 
@@ -515,17 +475,6 @@ class AppState with ChangeNotifier {
 
   String _mapWarehouseId(String raw) {
     return WarehouseMapper.toAreaId(raw, overrides: _warehouseMappings);
-  }
-
-  void dismissActionItem(String actionId) {
-    _actionRequired.removeWhere((a) => a.id == actionId);
-    notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _fleetTimer?.cancel();
-    super.dispose();
   }
 
   Future<List<Map<String, dynamic>>> _fetchAllResourcePages({

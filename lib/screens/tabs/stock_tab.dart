@@ -111,8 +111,6 @@ class _StockTabState extends State<StockTab> {
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
 
-    // inventory is refreshed in initState; UI will react to updates
-
     final areas = warehouseAreas[selectedWarehouseId] ?? [];
 
     final filteredInventory = appState.inventory.where((item) {

@@ -107,48 +107,15 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             tooltip: 'Notifications',
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(
-                  Icons.notifications_none_rounded,
-                  color: AppColors.primary,
-                ),
-
-                if (appState.actionRequired.isNotEmpty)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      constraints: const BoxConstraints(
-                        minWidth: 15,
-                        minHeight: 15,
-                      ),
-                      decoration: const BoxDecoration(
-                        color: Colors.redAccent,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        '${appState.actionRequired.length}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
+            icon: const Icon(
+              Icons.notifications_none_rounded,
+              color: AppColors.primary,
             ),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
+                const SnackBar(
                   backgroundColor: AppColors.primary,
-                  content: Text(
-                    'You have ${appState.actionRequired.length} unresolved action items.',
-                  ),
+                  content: Text('No new notifications.'),
                 ),
               );
             },

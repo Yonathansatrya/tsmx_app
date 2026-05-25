@@ -98,34 +98,6 @@ class FrappeService {
     }).toList();
   }
 
-  Future<List<Map<String, dynamic>>> fetchAllResources(
-    String doctype, {
-    required List<String> fields,
-    int pageSize = maxPageLength,
-    String? orderBy,
-    List<List<dynamic>>? filters,
-  }) async {
-    final all = <Map<String, dynamic>>[];
-    var start = 0;
-
-    while (true) {
-      final page = await fetchResource(
-        doctype,
-        fields: fields,
-        limit: pageSize,
-        limitStart: start,
-        orderBy: orderBy,
-        filters: filters,
-      );
-      all.addAll(page);
-      if (page.length < pageSize) break;
-      start += pageSize;
-    }
-
-    return all;
-  }
-
-  /// Fetches a single document including child tables (e.g. Sales Order items).
   Future<Map<String, dynamic>> fetchDocument(
     String doctype,
     String name,
@@ -187,7 +159,6 @@ class FrappeService {
         }
       }
 
-      // capture headers actually sent for debugging
       final sentRequestHeaders = <String, String>{};
       request.headers.forEach((name, values) {
         sentRequestHeaders[name] = values.join(',');
@@ -236,7 +207,6 @@ class FrappeService {
       }
       request.headers.removeAll(HttpHeaders.expectHeader);
 
-      // capture headers actually sent for debugging
       final sentRequestHeaders = <String, String>{};
       request.headers.forEach((name, values) {
         sentRequestHeaders[name] = values.join(',');

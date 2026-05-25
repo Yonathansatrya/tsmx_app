@@ -38,7 +38,6 @@ class WarehouseMapper {
       if (w.contains('stores') || w.contains('siap jual')) {
         return 'jakarta_stores';
       }
-      // Raw Material, Packing House, etc. — not shown in hub area tabs.
       return '';
     }
 
@@ -60,7 +59,6 @@ class WarehouseMapper {
     }
   }
 
-  /// Maps an ERPNext warehouse name to a hub id (jakarta, curug, medan).
   static String hubIdFromWarehouse(String rawWarehouse) {
     final w = rawWarehouse.toLowerCase();
     if (w.contains('curug')) return 'curug';
