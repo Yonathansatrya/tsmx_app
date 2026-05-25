@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class FrappeService {
@@ -76,13 +77,12 @@ class FrappeService {
     ).replace(queryParameters: queryParameters);
 
     final response = await _get(uri);
+    final decoded = jsonDecode(response.body);
+
     if (response.statusCode != 200) {
-      throw Exception(
-        'Frappe API error: ${response.statusCode} ${response.reasonPhrase}',
-      );
+      throw Exception(_extractFrappeError(decoded, response.statusCode));
     }
 
-    final decoded = jsonDecode(response.body);
     if (decoded is! Map || decoded['data'] is! List) {
       throw Exception('Invalid Frappe response for $doctype.');
     }
@@ -99,59 +99,161 @@ class FrappeService {
     Map<String, String>? headers,
     Object? body,
   }) async {
-    final client = http.Client();
+    final httpClient = HttpClient();
     try {
-      final mergedHeaders = <String, String>{
-        'Accept': 'application/json',
-        if (headers != null) ...headers,
-        if (_cookies.isNotEmpty) 'Cookie': _cookieHeader(),
-      };
-      final response = await client.post(
-        uri,
-        headers: mergedHeaders,
-        body: body,
+      final request = await httpClient.postUrl(uri);
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      if (headers != null) {
+        headers.forEach((key, value) {
+          if (key.toLowerCase() == HttpHeaders.expectHeader.toLowerCase()) {
+            return;
+          }
+          request.headers.set(key, value);
+        });
+      }
+      if (_cookies.isNotEmpty) {
+        request.headers.set(HttpHeaders.cookieHeader, _cookieHeader());
+      }
+      request.headers.removeAll(HttpHeaders.expectHeader);
+
+      if (body != null) {
+        if (body is Map<String, String>) {
+          request.headers.set(
+            HttpHeaders.contentTypeHeader,
+            'application/x-www-form-urlencoded',
+          );
+          request.write(Uri(queryParameters: body).query);
+        } else {
+          request.write(body.toString());
+        }
+      }
+
+      // capture headers actually sent for debugging
+      final sentRequestHeaders = <String, String>{};
+      request.headers.forEach((name, values) {
+        sentRequestHeaders[name] = values.join(',');
+      });
+
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+      _updateCookiesFromHeaders(response.headers);
+      final responseHeaders = <String, String>{};
+      response.headers.forEach((name, values) {
+        responseHeaders[name] = values.join(',');
+      });
+      if (response.statusCode >= 400) {
+        print('FrappeService POST error for ${uri.toString()}');
+        print('Sent request headers: $sentRequestHeaders');
+        print('Response status: ${response.statusCode}');
+        print('Response headers: $responseHeaders');
+        print('Response body: $responseBody');
+      }
+      return http.Response(
+        responseBody,
+        response.statusCode,
+        headers: responseHeaders,
+        reasonPhrase: response.reasonPhrase,
       );
-      _updateCookies(response);
-      return response;
     } finally {
-      client.close();
+      httpClient.close(force: true);
     }
   }
 
   Future<http.Response> _get(Uri uri, {Map<String, String>? headers}) async {
-    final client = http.Client();
+    final httpClient = HttpClient();
     try {
-      final mergedHeaders = <String, String>{
-        'Accept': 'application/json',
-        if (headers != null) ...headers,
-        if (_cookies.isNotEmpty) 'Cookie': _cookieHeader(),
-      };
-      final response = await client.get(uri, headers: mergedHeaders);
-      _updateCookies(response);
-      return response;
+      final request = await httpClient.getUrl(uri);
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      if (headers != null) {
+        headers.forEach((key, value) {
+          if (key.toLowerCase() == HttpHeaders.expectHeader.toLowerCase()) {
+            return;
+          }
+          request.headers.set(key, value);
+        });
+      }
+      if (_cookies.isNotEmpty) {
+        request.headers.set(HttpHeaders.cookieHeader, _cookieHeader());
+      }
+      request.headers.removeAll(HttpHeaders.expectHeader);
+
+      // capture headers actually sent for debugging
+      final sentRequestHeaders = <String, String>{};
+      request.headers.forEach((name, values) {
+        sentRequestHeaders[name] = values.join(',');
+      });
+
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+      _updateCookiesFromHeaders(response.headers);
+      final responseHeaders = <String, String>{};
+      response.headers.forEach((name, values) {
+        responseHeaders[name] = values.join(',');
+      });
+      if (response.statusCode >= 400) {
+        print('FrappeService GET error for ${uri.toString()}');
+        print('Sent request headers: $sentRequestHeaders');
+        print('Response status: ${response.statusCode}');
+        print('Response headers: $responseHeaders');
+        print('Response body: $responseBody');
+      }
+      return http.Response(
+        responseBody,
+        response.statusCode,
+        headers: responseHeaders,
+        reasonPhrase: response.reasonPhrase,
+      );
     } finally {
-      client.close();
+      httpClient.close(force: true);
     }
+  }
+
+  void _updateCookiesFromHeaders(HttpHeaders headers) {
+    headers.forEach((name, values) {
+      if (name.toLowerCase() != 'set-cookie') return;
+      for (final rawCookie in values) {
+        final parts = rawCookie.split(RegExp(r', (?=[^;]+=)'));
+        for (final part in parts) {
+          final cookie = part.split(';').first.trim();
+          final separatorIndex = cookie.indexOf('=');
+          if (separatorIndex <= 0) continue;
+          final key = cookie.substring(0, separatorIndex).trim();
+          final value = cookie.substring(separatorIndex + 1).trim();
+          if (key.isNotEmpty) {
+            _cookies[key] = value;
+          }
+        }
+      }
+    });
   }
 
   String _cookieHeader() {
     return _cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
   }
 
-  void _updateCookies(http.Response response) {
-    final rawCookie = response.headers['set-cookie'];
-    if (rawCookie == null || rawCookie.isEmpty) return;
+  static String _extractFrappeError(dynamic decoded, int statusCode) {
+    if (decoded is Map) {
+      final exception = decoded['exception']?.toString();
+      if (exception != null && exception.isNotEmpty) {
+        return exception;
+      }
 
-    final parts = rawCookie.split(RegExp(r', (?=[^;]+=)'));
-    for (final part in parts) {
-      final cookie = part.split(';').first.trim();
-      final separatorIndex = cookie.indexOf('=');
-      if (separatorIndex <= 0) continue;
-      final key = cookie.substring(0, separatorIndex).trim();
-      final value = cookie.substring(separatorIndex + 1).trim();
-      if (key.isNotEmpty) {
-        _cookies[key] = value;
+      final exc = decoded['exc']?.toString();
+      if (exc != null && exc.isNotEmpty) {
+        return exc;
+      }
+
+      final message = decoded['message'];
+      if (message != null) {
+        return message.toString();
+      }
+
+      final serverMessages = decoded['_server_messages']?.toString();
+      if (serverMessages != null && serverMessages.isNotEmpty) {
+        return serverMessages;
       }
     }
+
+    return 'Frappe API error: $statusCode';
   }
 }

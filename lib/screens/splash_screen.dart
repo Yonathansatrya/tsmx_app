@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../theme/app_colors.dart';
 import 'login_screen.dart';
 
@@ -30,37 +31,16 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: AppColors.white,
-      body: SafeArea(child: Center(child: _SplashContent())),
-    );
-  }
-}
-
-class _SplashContent extends StatelessWidget {
-  const _SplashContent();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.all(Radius.circular(28)),
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(14),
-            child: SizedBox(
-              width: 159,
-              height: 159,
-              child: Image(
-                image: AssetImage('assets/images/logo.png'),
-                fit: BoxFit.contain,
-              ),
-            ),
+      body: SafeArea(
+        child: Center(
+          child: Image(
+            image: AssetImage('assets/images/logo.png'),
+            width: 150,
+            height: 150,
+            fit: BoxFit.contain,
           ),
         ),
-      ],
+      ),
     );
   }
 }

@@ -7,6 +7,7 @@ import '../models/purchase_order.dart';
 import '../models/inventory_item.dart';
 import '../models/action_item.dart';
 import '../services/frappe_service.dart';
+import '../utils/warehouse_mapper.dart';
 
 class AppState with ChangeNotifier {
   bool _isAuthenticated = false;
@@ -17,9 +18,6 @@ class AppState with ChangeNotifier {
 
   bool _rememberDevice = false;
   bool get rememberDevice => _rememberDevice;
-
-  String _optimizationStepMessage = '';
-  String get optimizationStepMessage => _optimizationStepMessage;
 
   String _selectedWarehouseId = 'jakarta';
   String get selectedWarehouseId => _selectedWarehouseId;
@@ -54,7 +52,7 @@ class AppState with ChangeNotifier {
 
   static const String _defaultFrappeBaseUrl = 'http://apps.willshine.id:8014';
   static const String _prefsFrappeConfigKey = 'frappe_config';
-  static const String _prefsFrappeCookiesKey = 'frappe_cookies';
+  // static const String _prefsFrappeCookiesKey = 'frappe_cookies';
   static const String _prefsWarehouseMapKey = 'warehouse_mappings';
 
   Map<String, String> _warehouseMappings = {};
@@ -87,7 +85,6 @@ class AppState with ChangeNotifier {
   Timer? _fleetTimer;
 
   AppState() {
-    _loadInitialMockData();
     () async {
       await _loadPersistedWarehouseMappings();
       await _restoreFrappeConfig();
@@ -197,24 +194,28 @@ class AppState with ChangeNotifier {
         await _frappeService.ensureLoggedIn();
       }
 
-      final data = await _frappeService.fetchResource(
-        'Purchase Order',
-        fields: [
+      final data = await _fetchResourceWithFieldFallback(
+        doctype: 'Purchase Order',
+        fields: const [
           'name',
           'supplier',
           'supplier_name',
           'status',
-          'expected_delivery_date',
+          'transaction_date',
+          'schedule_date',
           'total_qty',
-          'rounded_total',
+          'grand_total',
+          'creation',
         ],
         limit: limit,
-        orderBy: 'creation desc',
+        orderBy: 'modified desc',
       );
 
-      _purchaseOrders = data
-          .map((item) => PurchaseOrder.fromJson(item))
-          .toList();
+      _purchaseOrders = data.map((item) {
+        return PurchaseOrder.fromJson(item);
+      }).toList();
+
+      _purchaseOrdersError = null;
     } catch (err) {
       _purchaseOrdersError = err.toString();
     } finally {
@@ -242,25 +243,46 @@ class AppState with ChangeNotifier {
         await _frappeService.ensureLoggedIn();
       }
 
-      final data = await _frappeService.fetchResource(
-        'Bin',
-        fields: ['item_code', 'item_name', 'warehouse', 'actual_qty'],
-        limit: limit,
-        filters: filters,
-      );
+      List<Map<String, dynamic>> data;
+      try {
+        data = await _fetchResourceWithFieldFallback(
+          doctype: 'Bin',
+          fields: const ['item_code', 'warehouse', 'actual_qty'],
+          limit: limit,
+          filters: filters,
+        );
+      } catch (_) {
+        data = await _fetchResourceWithFieldFallback(
+          doctype: 'Bin',
+          fields: const ['item_code', 'warehouse', 'actual_qty'],
+          limit: limit,
+        );
+      }
+
+      final hubPrefix = filters != null && filters.isNotEmpty
+          ? (filters.first.length > 2 ? filters.first[2].toString() : '')
+          : '';
 
       final List<InventoryItem> items = [];
       for (final rawItem in data) {
-        final inv = InventoryItem.fromJson(rawItem);
         final rawWarehouse =
             rawItem['warehouse']?.toString() ??
             rawItem['warehouse_id']?.toString() ??
             '';
+
+        if (hubPrefix.isNotEmpty &&
+            !rawWarehouse.toLowerCase().contains(
+              hubPrefix.replaceAll('%', '').toLowerCase(),
+            )) {
+          continue;
+        }
+
+        final inv = InventoryItem.fromJson(rawItem);
         final normalized = _mapWarehouseId(rawWarehouse);
         items.add(inv.copyWith(warehouseId: normalized));
       }
       _inventory = items;
-      notifyListeners();
+      _inventoryError = null;
     } catch (err) {
       _inventoryError = err.toString();
     } finally {
@@ -269,7 +291,6 @@ class AppState with ChangeNotifier {
     }
   }
 
-  // Fetch initial data from Frappe (fire-and-forget on init)
   Future<void> _fetchInitialFromFrappe() async {
     try {
       final cfg = await _loadFrappeConfig();
@@ -299,10 +320,10 @@ class AppState with ChangeNotifier {
   Future<void> refreshPurchaseOrders() => fetchPurchaseOrdersFromFrappe();
   Future<void> refreshInventory() => fetchInventoryFromFrappe();
 
-  Future<void> refreshInventoryForWarehouse(String warehousePrefix) =>
+  Future<void> refreshInventoryForWarehouse(String hubId) =>
       fetchInventoryFromFrappe(
         filters: [
-          ['Bin', 'warehouse', 'like', '$warehousePrefix%'],
+          ['warehouse', 'like', '${WarehouseMapper.hubFilterPrefix(hubId)}%'],
         ],
       );
 
@@ -340,59 +361,7 @@ class AppState with ChangeNotifier {
   }
 
   String _mapWarehouseId(String raw) {
-    if (raw.isEmpty) return '';
-    if (_warehouseMappings.containsKey(raw)) return _warehouseMappings[raw]!;
-    final low = raw.toLowerCase();
-    if (_warehouseMappings.containsKey(low)) return _warehouseMappings[low]!;
-    return low
-        .replaceAll(RegExp(r"[^a-z0-9_]"), '_')
-        .replaceAll(RegExp(r'_+'), '_')
-        .trim();
-  }
-
-  // Add Purchase Order Action
-  void addPurchaseOrder({
-    required String vendor,
-    required int itemsCount,
-    required double totalValue,
-    required String eta,
-  }) {
-    final nextId = 'PO-${10000 + _purchaseOrders.length + 1}';
-    final newOrder = PurchaseOrder(
-      id: nextId,
-      vendor: vendor,
-      status: PurchaseOrderStatus.pendingApproval,
-      eta: eta,
-      itemsCount: itemsCount,
-      totalValue: totalValue,
-    );
-    _purchaseOrders.insert(0, newOrder);
-
-    // Also add to Action Required
-    _actionRequired.insert(
-      0,
-      ActionItem(
-        id: 'ACT-${5000 + _actionRequired.length + 1}',
-        title: 'Approve $nextId',
-        description:
-            'New Purchase Order created for $vendor requires authorization.',
-        type: ActionType.action,
-        timeString: 'Just now',
-      ),
-    );
-    notifyListeners();
-  }
-
-  void approvePurchaseOrder(String poId) {
-    final idx = _purchaseOrders.indexWhere((p) => p.id == poId);
-    if (idx != -1) {
-      _purchaseOrders[idx] = _purchaseOrders[idx].copyWith(
-        status: PurchaseOrderStatus.inTransit,
-      );
-      // Remove corresponding action
-      _actionRequired.removeWhere((a) => a.title.contains(poId));
-      notifyListeners();
-    }
+    return WarehouseMapper.toAreaId(raw, overrides: _warehouseMappings);
   }
 
   void dismissActionItem(String actionId) {
@@ -406,278 +375,51 @@ class AppState with ChangeNotifier {
     super.dispose();
   }
 
-  // Pre-load data helper
-  void _loadInitialMockData() {
-    _salesOrders = [
-      SalesOrder(
-        id: 'SO-1001',
-        customer: 'PT. Alpha',
-        value: 12500000,
-        status: SalesOrderStatus.pending,
-        date: '2026-05-10',
-        itemsCount: 3,
-      ),
-      SalesOrder(
-        id: 'SO-1002',
-        customer: 'CV. Beta',
-        value: 2450000,
-        status: SalesOrderStatus.shipped,
-        date: '2026-05-11',
-        itemsCount: 2,
-      ),
-      SalesOrder(
-        id: 'SO-1003',
-        customer: 'PT. Gamma',
-        value: 980000,
-        status: SalesOrderStatus.delivered,
-        date: '2026-05-09',
-        itemsCount: 1,
-      ),
-      SalesOrder(
-        id: 'SO-1004',
-        customer: 'UD. Delta',
-        value: 4500000,
-        status: SalesOrderStatus.pending,
-        date: '2026-05-12',
-        itemsCount: 4,
-      ),
-      SalesOrder(
-        id: 'SO-1005',
-        customer: 'PT. Epsilon',
-        value: 15300000,
-        status: SalesOrderStatus.to_bill,
-        date: '2026-05-08',
-        itemsCount: 6,
-      ),
-      SalesOrder(
-        id: 'SO-1006',
-        customer: 'PT. Zeta',
-        value: 2100000,
-        status: SalesOrderStatus.draft,
-        date: '2026-05-07',
-        itemsCount: 2,
-      ),
-      SalesOrder(
-        id: 'SO-1007',
-        customer: 'CV. Eta',
-        value: 670000,
-        status: SalesOrderStatus.completed,
-        date: '2026-05-06',
-        itemsCount: 1,
-      ),
-      SalesOrder(
-        id: 'SO-1008',
-        customer: 'PT. Theta',
-        value: 3050000,
-        status: SalesOrderStatus.shipped,
-        date: '2026-05-05',
-        itemsCount: 3,
-      ),
-    ];
+  Future<List<Map<String, dynamic>>> _fetchResourceWithFieldFallback({
+    required String doctype,
+    required List<String> fields,
+    required int limit,
+    String? orderBy,
+    List<List<dynamic>>? filters,
+  }) async {
+    var remainingFields = List<String>.from(fields);
+    var currentOrderBy = orderBy;
 
-    _purchaseOrders = [
-      PurchaseOrder(
-        id: 'PO-90214',
-        vendor: 'Steel Alloys Corp',
-        status: PurchaseOrderStatus.pendingApproval,
-        eta: '2026-05-24',
-        itemsCount: 50,
-        totalValue: 120000000,
-      ),
-      PurchaseOrder(
-        id: 'PO-90215',
-        vendor: 'Sinotech Electronics',
-        status: PurchaseOrderStatus.inTransit,
-        eta: '2026-05-23',
-        itemsCount: 200,
-        totalValue: 340000000,
-      ),
-      PurchaseOrder(
-        id: 'PO-90216',
-        vendor: 'Paper Products Ltd',
-        status: PurchaseOrderStatus.delayed,
-        eta: '2026-05-22',
-        itemsCount: 1500,
-        totalValue: 45000000,
-      ),
-      PurchaseOrder(
-        id: 'PO-90217',
-        vendor: 'Global Logistics Parts',
-        status: PurchaseOrderStatus.completed,
-        eta: '2026-05-20',
-        itemsCount: 35,
-        totalValue: 18500000,
-      ),
-      PurchaseOrder(
-        id: 'PO-90218',
-        vendor: 'Nippon Polymers',
-        status: PurchaseOrderStatus.inTransit,
-        eta: '2026-05-26',
-        itemsCount: 80,
-        totalValue: 92000000,
-      ),
-      PurchaseOrder(
-        id: 'PO-90219',
-        vendor: 'TexChem Indonesia',
-        status: PurchaseOrderStatus.completed,
-        eta: '2026-05-18',
-        itemsCount: 120,
-        totalValue: 63000000,
-      ),
-    ];
+    while (remainingFields.isNotEmpty) {
+      try {
+        return await _frappeService.fetchResource(
+          doctype,
+          fields: remainingFields,
+          limit: limit,
+          orderBy: currentOrderBy,
+          filters: filters,
+        );
+      } catch (err) {
+        final errStr = err.toString();
 
-    _inventory = [
-      InventoryItem(
-        sku: 'BRG-001',
-        name: 'Pisang Cavendish Incoming',
-        warehouseId: 'jakarta_inbound',
-        quantity: 420,
-        minStockThreshold: 100,
-        status: StockStatus.inStock,
-      ),
+        final fieldReg = RegExp(
+          r'Field not permitted in query:\s*([a-zA-Z0-9_]+)',
+        );
+        final fieldMatch = fieldReg.firstMatch(errStr);
 
-      InventoryItem(
-        sku: 'BRG-002',
-        name: 'Jeruk Mandarin Incoming',
-        warehouseId: 'jakarta_inbound',
-        quantity: 210,
-        minStockThreshold: 80,
-        status: StockStatus.inStock,
-      ),
+        if (fieldMatch != null) {
+          final badField = fieldMatch.group(1);
+          if (badField != null && remainingFields.contains(badField)) {
+            remainingFields.remove(badField);
+            continue;
+          }
+        }
 
-      InventoryItem(
-        sku: 'BRG-003',
-        name: 'Apel Fuji Incoming',
-        warehouseId: 'jakarta_inbound',
-        quantity: 65,
-        minStockThreshold: 70,
-        status: StockStatus.lowStock,
-      ),
+        if (currentOrderBy != null &&
+            (errStr.contains('order_by') || errStr.contains('Order By'))) {
+          currentOrderBy = null;
+          continue;
+        }
 
-      InventoryItem(
-        sku: 'RIP-001',
-        name: 'Pisang Cavendish Ripening',
-        warehouseId: 'jakarta_ripening',
-        quantity: 180,
-        minStockThreshold: 90,
-        status: StockStatus.inStock,
-      ),
+        rethrow;
+      }
+    }
 
-      InventoryItem(
-        sku: 'RIP-002',
-        name: 'Pisang Barangan Ripening',
-        warehouseId: 'jakarta_ripening',
-        quantity: 55,
-        minStockThreshold: 60,
-        status: StockStatus.lowStock,
-      ),
-
-      InventoryItem(
-        sku: 'RIP-003',
-        name: 'Alpukat Hass Ripening',
-        warehouseId: 'jakarta_ripening',
-        quantity: 18,
-        minStockThreshold: 40,
-        status: StockStatus.urgent,
-      ),
-
-      InventoryItem(
-        sku: 'STR-001',
-        name: 'Pisang Cavendish Ready Sell',
-        warehouseId: 'jakarta_stores',
-        quantity: 320,
-        minStockThreshold: 120,
-        status: StockStatus.inStock,
-      ),
-
-      InventoryItem(
-        sku: 'STR-002',
-        name: 'Jeruk Mandarin Ready Sell',
-        warehouseId: 'jakarta_stores',
-        quantity: 95,
-        minStockThreshold: 100,
-        status: StockStatus.lowStock,
-      ),
-
-      InventoryItem(
-        sku: 'STR-003',
-        name: 'Anggur Shine Muscat',
-        warehouseId: 'jakarta_stores',
-        quantity: 22,
-        minStockThreshold: 50,
-        status: StockStatus.urgent,
-      ),
-
-      InventoryItem(
-        sku: 'CUR-001',
-        name: 'Melon Premium',
-        warehouseId: 'curug_stores',
-        quantity: 120,
-        minStockThreshold: 60,
-        status: StockStatus.inStock,
-      ),
-
-      InventoryItem(
-        sku: 'CUR-002',
-        name: 'Semangka Merah',
-        warehouseId: 'curug_stores',
-        quantity: 35,
-        minStockThreshold: 50,
-        status: StockStatus.lowStock,
-      ),
-
-      InventoryItem(
-        sku: 'MDN-001',
-        name: 'Pisang Barangan Medan',
-        warehouseId: 'medan_stores',
-        quantity: 260,
-        minStockThreshold: 100,
-        status: StockStatus.inStock,
-      ),
-
-      InventoryItem(
-        sku: 'MDN-002',
-        name: 'Durian Kupas Frozen',
-        warehouseId: 'medan_stores',
-        quantity: 15,
-        minStockThreshold: 40,
-        status: StockStatus.urgent,
-      ),
-    ];
-
-    _actionRequired = [
-      ActionItem(
-        id: 'ACT-5001',
-        title: 'Approve PO-90214',
-        description:
-            'Steel Alloys Corp invoice exceeds standard limit, needs manager sign-off.',
-        type: ActionType.action,
-        timeString: '2h ago',
-      ),
-      ActionItem(
-        id: 'ACT-5002',
-        title: 'Low Stock: TSX-801 (Surabaya)',
-        description:
-            'Stock level is at 12 units (Threshold: 35). Restock immediately.',
-        type: ActionType.warning,
-        timeString: '3h ago',
-      ),
-      ActionItem(
-        id: 'ACT-5003',
-        title: 'Delayed Shipment Alert',
-        description:
-            'Purchase Order PO-90216 is delayed at Belawan port due to custom clearance.',
-        type: ActionType.warning,
-        timeString: '5h ago',
-      ),
-      ActionItem(
-        id: 'ACT-5004',
-        title: 'Biometric System Update',
-        description:
-            'Employee badge authentication system underwent standard maintenance.',
-        type: ActionType.info,
-        timeString: '1d ago',
-      ),
-    ];
+    throw Exception('No permitted fields available for $doctype.');
   }
 }

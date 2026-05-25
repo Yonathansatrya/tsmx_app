@@ -73,9 +73,28 @@ class _StockTabState extends State<StockTab> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final appState = Provider.of<AppState>(context, listen: false);
-      appState.refreshInventoryForWarehouse(_warehouseFilterPrefix());
+      final appState = context.read<AppState>();
+      if (appState.inventory.isEmpty) {
+        appState.refreshInventoryForWarehouse(selectedWarehouseId);
+      }
     });
+  }
+
+  Future<void> _onPullRefresh() async {
+    await context.read<AppState>().refreshInventoryForWarehouse(
+      selectedWarehouseId,
+    );
+  }
+
+  void _onHubChanged(String? hubId) {
+    if (hubId == null) return;
+
+    setState(() {
+      selectedWarehouseId = hubId;
+      selectedAreaId = warehouseAreas[hubId]!.first['id'].toString();
+    });
+
+    context.read<AppState>().refreshInventoryForWarehouse(hubId);
   }
 
   @override
@@ -116,20 +135,14 @@ class _StockTabState extends State<StockTab> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: _onPullRefresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
           children: [
-            _buildHeader(
-              () => appState.refreshInventoryForWarehouse(
-                _warehouseFilterPrefix(),
-              ),
-              (val) {
-                if (val == null) return;
-                appState.refreshInventoryForWarehouse(_warehouseFilterPrefix());
-              },
-            ),
+            _buildHeader(),
 
             const SizedBox(height: 16),
 
@@ -146,8 +159,9 @@ class _StockTabState extends State<StockTab> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red,
+                  color: Colors.red.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.red.withOpacity(0.15)),
                 ),
                 child: Text(
                   'Unable to load stock data: ${appState.inventoryError}',
@@ -237,24 +251,17 @@ class _StockTabState extends State<StockTab> {
 
             const SizedBox(height: 10),
 
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredInventory.length,
-              itemBuilder: (context, index) {
-                return _buildInventoryCard(filteredInventory[index]);
-              },
-            ),
+            if (filteredInventory.isEmpty && !appState.isInventoryLoading)
+              const _StockEmptyState()
+            else
+              ...filteredInventory.map(_buildInventoryCard),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader(
-    VoidCallback onRefresh,
-    ValueChanged<String?> onWarehouseChanged,
-  ) {
+  Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -303,7 +310,7 @@ class _StockTabState extends State<StockTab> {
           ),
           Expanded(
             child: Container(
-              height: 38,
+              height: 18,
               padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
                 color: AppColors.softGreen,
@@ -330,15 +337,7 @@ class _StockTabState extends State<StockTab> {
                       child: Text(w.value),
                     );
                   }).toList(),
-                  onChanged: (val) {
-                    if (val == null) return;
-
-                    setState(() {
-                      selectedWarehouseId = val;
-                      selectedAreaId = warehouseAreas[val]!.first['id'];
-                    });
-                    onWarehouseChanged(val);
-                  },
+                  onChanged: _onHubChanged,
                 ),
               ),
             ),
@@ -583,18 +582,6 @@ class _StockTabState extends State<StockTab> {
     return selected['title'];
   }
 
-  String _warehouseFilterPrefix() {
-    switch (selectedWarehouseId) {
-      case 'curug':
-        return 'Curug';
-      case 'medan':
-        return 'Medan';
-      case 'jakarta':
-      default:
-        return 'Jakarta';
-    }
-  }
-
   Widget _buildStatusBadge({
     required String label,
     required int value,
@@ -650,5 +637,36 @@ class _StockTabState extends State<StockTab> {
     }
 
     return buffer.toString().split('').reversed.join('');
+  }
+}
+
+class _StockEmptyState extends StatelessWidget {
+  const _StockEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      child: const Column(
+        children: [
+          Icon(Icons.inventory_2_outlined, size: 48, color: AppColors.slate),
+          SizedBox(height: 12),
+          Text(
+            'No stock items in this area',
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: AppColors.navy,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Try another warehouse area or pull down to refresh.',
+            style: TextStyle(color: AppColors.slate, fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
   }
 }

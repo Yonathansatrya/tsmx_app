@@ -1,15 +1,10 @@
+import '../utils/warehouse_mapper.dart';
+
 enum StockStatus { inStock, lowStock, urgent }
 
 class InventoryItem {
   final String sku;
   final String name;
-
-  // contoh:
-  // jakarta_inbound
-  // jakarta_ripening
-  // jakarta_stores
-  // curug_stores
-  // medan_stores
   final String warehouseId;
 
   final int quantity;
@@ -48,14 +43,9 @@ class InventoryItem {
     final name =
         json['item_name']?.toString() ?? json['name']?.toString() ?? sku;
 
-    String warehouseRaw =
+    final warehouseRaw =
         json['warehouse']?.toString() ?? json['warehouse_id']?.toString() ?? '';
-    // normalize warehouse id to simple form: lowercase, spaces and - => _
-    String warehouseId = warehouseRaw
-        .toLowerCase()
-        .replaceAll(RegExp(r"[^a-z0-9_]"), '_')
-        .replaceAll(RegExp(r'_+'), '_')
-        .trim();
+    final warehouseId = WarehouseMapper.toAreaId(warehouseRaw);
 
     final qtyDouble =
         double.tryParse(

@@ -60,11 +60,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Scaffold(
-      // backgroundColor: AppColors.background,
-
+      backgroundColor: AppColors.background,
+      floatingActionButton: _buildFloatingActionButton(context, appState),
       appBar: AppBar(
         backgroundColor: AppColors.white,
-        elevation: 0,
+        elevation: 1,
+        shadowColor: Colors.black.withOpacity(0.08),
         centerTitle: false,
         titleSpacing: 16,
 
@@ -240,6 +241,157 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget? _buildFloatingActionButton(BuildContext context, AppState appState) {
+    switch (_currentIndex) {
+      case 1:
+        return FloatingActionButton.extended(
+          onPressed: () {
+            _showCreateSalesOrderSheet(context);
+          },
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text(
+            'Sell',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+        );
+
+      case 2:
+        return FloatingActionButton.extended(
+          onPressed: () {
+            _showCreatePurchaseOrderSheet(context);
+          },
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text(
+            'Buy',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+        );
+
+      case 3:
+        return FloatingActionButton.extended(
+          onPressed: () {
+            _showCreateStockEntrySheet(context);
+          },
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text(
+            'Stock',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+        );
+
+      default:
+        return null;
+    }
+  }
+
+  void _showCreateSalesOrderSheet(BuildContext context) {
+    _showComingSoonSheet(
+      context,
+      title: 'Create Sales Order',
+      message: 'Form create Sales Order akan dibuat di tahap berikutnya.',
+    );
+  }
+
+  void _showCreatePurchaseOrderSheet(BuildContext context) {
+    _showComingSoonSheet(
+      context,
+      title: 'Create Purchase Order',
+      message:
+          'Form create Purchase Order akan dibuat setelah Sales Order selesai.',
+    );
+  }
+
+  void _showCreateStockEntrySheet(BuildContext context) {
+    _showComingSoonSheet(
+      context,
+      title: 'Create Stock Entry',
+      message:
+          'Form Stock Entry akan dibuat setelah modul Sales dan Purchase rapi.',
+    );
+  }
+
+  void _showComingSoonSheet(
+    BuildContext context, {
+    required String title,
+    required String message,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              Text(
+                message,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.slate,
+                  height: 1.4,
+                ),
+              ),
+
+              const SizedBox(height: 22),
+
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text(
+                  'OK',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

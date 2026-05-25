@@ -1,12 +1,16 @@
 enum SalesOrderStatus {
   draft,
   pending,
+  toReceive,
+  toBill,
+  toReceiveAndBill,
+  delayed,
+  completed,
+  closed,
+  cancelled,
   overdue,
-  to_bill,
   shipped,
   delivered,
-  closed,
-  completed,
 }
 
 class SalesOrderItem {
@@ -92,7 +96,7 @@ class SalesOrder {
       status = SalesOrderStatus.overdue;
     } else if (statusLower.contains('to bill') ||
         statusLower.contains('tobill')) {
-      status = SalesOrderStatus.to_bill;
+      status = SalesOrderStatus.toBill;
     } else if (statusLower.contains('closed')) {
       status = SalesOrderStatus.closed;
     } else if (statusLower.contains('completed')) {
