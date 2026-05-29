@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../state/app_state.dart';
 import '../theme/app_colors.dart';
+import 'home_screen.dart';
 import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -18,13 +21,22 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _startApp() async {
-    await Future.delayed(const Duration(seconds: 3));
+    final appState = context.read<AppState>();
+
+    await Future.wait([
+      Future.delayed(const Duration(milliseconds: 1200)),
+      appState.initApp(),
+    ]);
 
     if (!mounted) return;
 
-    Navigator.of(
-      context,
-    ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
+    final destination = appState.isAuthenticated
+        ? const HomeScreen()
+        : const LoginScreen();
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => destination),
+    );
   }
 
   @override

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../models/inventory_item.dart';
+import '../../models/stock_area_option.dart';
 import '../../widgets/warehouse_gauge.dart';
 
 class StockTab extends StatefulWidget {
@@ -13,123 +14,143 @@ class StockTab extends StatefulWidget {
 }
 
 class _StockTabState extends State<StockTab> {
-  String selectedWarehouseId = 'jakarta';
-  String selectedAreaId = 'jakarta_inbound';
-
-  final Map<String, String> warehouses = {
-    'jakarta': 'Jakarta Distribution Hub',
-    'curug': 'Curug Logistics Hub',
-    'medan': 'Sumatra Depot Medan',
-  };
-
-  final Map<String, List<Map<String, dynamic>>> warehouseAreas = {
-    'jakarta': [
-      {
-        'id': 'jakarta_inbound',
-        'title': 'Inbound',
-        'subtitle': 'Barang pertama masuk',
-        'icon': Icons.input_rounded,
-      },
-      {
-        'id': 'jakarta_ripening',
-        'title': 'Ripening',
-        'subtitle': 'Pematangan buah',
-        'icon': Icons.spa_rounded,
-      },
-      {
-        'id': 'jakarta_stores',
-        'title': 'Stores',
-        'subtitle': 'Stok siap jual',
-        'icon': Icons.storefront_rounded,
-      },
-    ],
-    'curug': [
-      {
-        'id': 'curug_stores',
-        'title': 'Stores',
-        'subtitle': 'Stok gudang Curug',
-        'icon': Icons.storefront_rounded,
-      },
-    ],
-    'medan': [
-      {
-        'id': 'medan_stores',
-        'title': 'Stores',
-        'subtitle': 'Stok gudang Medan',
-        'icon': Icons.storefront_rounded,
-      },
-    ],
-  };
-
-  final Map<String, int> warehouseMaxCapacities = {
-    'jakarta_inbound': 1200,
-    'jakarta_ripening': 800,
-    'jakarta_stores': 1500,
-    'curug_stores': 1000,
-    'medan_stores': 1500,
-  };
+  String? _selectedHubId;
+  String? _selectedAreaId;
+  bool _selectionInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final appState = context.read<AppState>();
-      if (appState.warehouses.isEmpty) {
-        await appState.refreshWarehouses();
-      }
-      if (appState.inventory.isEmpty) {
-        await appState.refreshInventoryForWarehouse(selectedWarehouseId);
-      }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+  }
+
+  Future<void> _bootstrap() async {
+    final appState = context.read<AppState>();
+    if (appState.warehouses.isEmpty) {
+      await appState.refreshWarehouses();
+    }
+    if (!mounted) return;
+
+    _applyDefaultSelection(appState);
+
+    if (appState.inventory.isEmpty && _selectedHubId != null) {
+      await appState.refreshInventoryForWarehouse(_selectedHubId!);
+    }
+
+    if (appState.stockEntries.isEmpty) {
+      await appState.refreshStockEntries();
+    }
+  }
+
+  void _applyDefaultSelection(AppState appState) {
+    final hubs = appState.stockHubs;
+    if (hubs.isEmpty) return;
+
+    final hubId = _selectedHubId ?? hubs.first.key;
+    final areas = appState.stockAreasForHub(hubId);
+    final areaId = _selectedAreaId ??
+        (areas.isNotEmpty ? areas.first.areaId : null);
+
+    setState(() {
+      _selectedHubId = hubId;
+      _selectedAreaId = areaId;
+      _selectionInitialized = true;
     });
   }
 
   Future<void> _onPullRefresh() async {
     final appState = context.read<AppState>();
     await appState.refreshWarehouses();
-    await appState.refreshInventoryForWarehouse(selectedWarehouseId);
+    if (!mounted) return;
+    _applyDefaultSelection(appState);
+    if (_selectedHubId != null) {
+      await appState.refreshInventoryForWarehouse(_selectedHubId!);
+    }
   }
 
   void _onHubChanged(String? hubId) {
     if (hubId == null) return;
 
+    final appState = context.read<AppState>();
+    final areas = appState.stockAreasForHub(hubId);
+
     setState(() {
-      selectedWarehouseId = hubId;
-      selectedAreaId = warehouseAreas[hubId]!.first['id'].toString();
+      _selectedHubId = hubId;
+      _selectedAreaId =
+          areas.isNotEmpty ? areas.first.areaId : _selectedAreaId;
     });
 
-    final appState = context.read<AppState>();
-    if (appState.warehouses.isEmpty) {
-      appState.refreshWarehouses().then((_) {
-        appState.refreshInventoryForWarehouse(hubId);
-      });
-    } else {
-      appState.refreshInventoryForWarehouse(hubId);
-    }
+    appState.refreshInventoryForWarehouse(hubId);
+  }
+
+  List<InventoryItem> _inventoryForHub(AppState appState, String hubId) {
+    final areaIds =
+        appState.stockAreasForHub(hubId).map((a) => a.areaId).toSet();
+    if (areaIds.isEmpty) return appState.inventory;
+
+    return appState.inventory
+        .where((item) => areaIds.contains(item.warehouseId))
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
+    final hubs = appState.stockHubs;
 
-    final areas = warehouseAreas[selectedWarehouseId] ?? [];
+    if (!_selectionInitialized && hubs.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _applyDefaultSelection(appState);
+      });
+    }
 
-    final filteredInventory = appState.inventory.where((item) {
-      return item.warehouseId == selectedAreaId;
-    }).toList();
+    final selectedHubId = _selectedHubId;
+    final areas = selectedHubId != null
+        ? appState.stockAreasForHub(selectedHubId)
+        : <StockAreaOption>[];
+
+    if (selectedHubId != null &&
+        areas.isNotEmpty &&
+        (_selectedAreaId == null ||
+            !areas.any((a) => a.areaId == _selectedAreaId))) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _selectedAreaId = areas.first.areaId);
+      });
+    }
+
+    final selectedAreaId = _selectedAreaId;
+
+    final filteredInventory = selectedAreaId == null
+        ? <InventoryItem>[]
+        : appState.inventory
+            .where((item) => item.warehouseId == selectedAreaId)
+            .toList();
+
+    final hubInventory = selectedHubId != null
+        ? _inventoryForHub(appState, selectedHubId)
+        : <InventoryItem>[];
 
     final totalUnitsInStock = filteredInventory.fold<int>(
       0,
       (sum, item) => sum + item.quantity,
     );
 
-    final maxCapacity = warehouseMaxCapacities[selectedAreaId] ?? 1000;
-
-    final capacityPercentage = (totalUnitsInStock / maxCapacity).clamp(
-      0.0,
-      1.0,
+    final hubTotalUnits = hubInventory.fold<int>(
+      0,
+      (sum, item) => sum + item.quantity,
     );
 
-    final double stockValue = totalUnitsInStock * 350000;
+    final capacityPercentage = hubTotalUnits > 0
+        ? (totalUnitsInStock / hubTotalUnits).clamp(0.0, 1.0)
+        : 0.0;
+
+    final stockValue = filteredInventory.fold<double>(
+      0,
+      (sum, item) => sum + item.quantity * item.unitValue,
+    );
+
+    final hasValuation = filteredInventory.any((item) => item.unitValue > 0);
 
     final urgentCount = filteredInventory
         .where((item) => item.status == StockStatus.urgent)
@@ -150,11 +171,19 @@ class _StockTabState extends State<StockTab> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
           children: [
-            _buildHeader(),
+            _buildHeader(appState, hubs),
 
             const SizedBox(height: 16),
 
-            _buildAreaSelector(areas),
+            if (areas.isNotEmpty) _buildAreaSelector(areas),
+
+            if (areas.isEmpty && !appState.isInventoryLoading) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'No warehouses loaded from ERP. Pull down to refresh.',
+                style: TextStyle(fontSize: 12, color: AppColors.slate),
+              ),
+            ],
 
             const SizedBox(height: 16),
 
@@ -218,15 +247,16 @@ class _StockTabState extends State<StockTab> {
                 Expanded(
                   child: _buildValuationCard(
                     stockValue: stockValue,
+                    hasValuation: hasValuation,
                     totalUnitsInStock: totalUnitsInStock,
-                    maxCapacity: maxCapacity,
+                    hubTotalUnits: hubTotalUnits,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: WarehouseGauge(
                     percentage: capacityPercentage,
-                    label: _getSelectedAreaTitle(),
+                    label: _selectedAreaTitle(areas),
                   ),
                 ),
               ],
@@ -263,13 +293,97 @@ class _StockTabState extends State<StockTab> {
               const _StockEmptyState()
             else
               ...filteredInventory.map(_buildInventoryCard),
+
+            const SizedBox(height: 24),
+            _buildStockEntriesSection(appState),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildStockEntriesSection(AppState appState) {
+    final entries = appState.stockEntries.take(8).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Recent Stock Entries',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            color: AppColors.navy,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (appState.isStockEntriesLoading)
+          const LinearProgressIndicator()
+        else if (appState.stockEntriesError != null)
+          Text(
+            appState.stockEntriesError!,
+            style: const TextStyle(fontSize: 12, color: Colors.red),
+          )
+        else if (entries.isEmpty)
+          const Text(
+            'No stock entries loaded.',
+            style: TextStyle(fontSize: 12, color: AppColors.slate),
+          )
+        else
+          ...entries.map(
+            (e) => Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.primary.withOpacity(0.08)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          e.id,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${e.stockEntryType} · ${e.date}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.slate,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    e.statusText,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildHeader(AppState appState, List<MapEntry<String, String>> hubs) {
+    final hubId = _selectedHubId;
+    final hubValid = hubId != null && hubs.any((h) => h.key == hubId);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -301,53 +415,69 @@ class _StockTabState extends State<StockTab> {
           ),
           const SizedBox(width: 12),
           const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Warehouse',
-                  style: TextStyle(
-                    fontFamily: 'HankenGrotesk',
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.navy,
-                  ),
+            flex: 3,
+            child: Padding(
+              padding: EdgeInsets.only(right: 8.0),
+              child: Text(
+                'Warehouse',
+                style: TextStyle(
+                  fontFamily: 'HankenGrotesk',
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.navy,
                 ),
-              ],
+              ),
             ),
           ),
           Expanded(
+            flex: 5,
             child: Container(
-              height: 18,
+              constraints: const BoxConstraints(minHeight: 32, maxHeight: 36),
               padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
                 color: AppColors.softGreen,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: selectedWarehouseId,
-                  isDense: true,
-                  dropdownColor: AppColors.white,
-                  icon: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.primary,
-                  ),
-                  style: const TextStyle(
-                    fontFamily: 'HankenGrotesk',
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
-                    fontSize: 12,
-                  ),
-                  items: warehouses.entries.map((w) {
-                    return DropdownMenuItem<String>(
-                      value: w.key,
-                      child: Text(w.value),
-                    );
-                  }).toList(),
-                  onChanged: _onHubChanged,
-                ),
-              ),
+              alignment: Alignment.centerLeft,
+              child: hubs.isEmpty
+                  ? const Text(
+                      'Loading…',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.slate,
+                      ),
+                    )
+                  : DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: hubValid ? hubId : hubs.first.key,
+                        isDense: true,
+                        isExpanded: true,
+                        dropdownColor: AppColors.white,
+                        icon: const Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          color: AppColors.primary,
+                        ),
+                        style: const TextStyle(
+                          fontFamily: 'HankenGrotesk',
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primary,
+                          fontSize: 12,
+                        ),
+                        items: hubs.map((h) {
+                          return DropdownMenuItem<String>(
+                            value: h.key,
+                            child: Text(
+                              h.value,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: _onHubChanged,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -355,7 +485,7 @@ class _StockTabState extends State<StockTab> {
     );
   }
 
-  Widget _buildAreaSelector(List<Map<String, dynamic>> areas) {
+  Widget _buildAreaSelector(List<StockAreaOption> areas) {
     return SizedBox(
       height: 92,
       child: ListView.builder(
@@ -363,13 +493,11 @@ class _StockTabState extends State<StockTab> {
         itemCount: areas.length,
         itemBuilder: (context, index) {
           final area = areas[index];
-          final isSelected = selectedAreaId == area['id'];
+          final isSelected = _selectedAreaId == area.areaId;
 
           return GestureDetector(
             onTap: () {
-              setState(() {
-                selectedAreaId = area['id'];
-              });
+              setState(() => _selectedAreaId = area.areaId);
             },
             child: Container(
               width: 155,
@@ -395,13 +523,15 @@ class _StockTabState extends State<StockTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    area['icon'],
+                    area.icon,
                     size: 22,
                     color: isSelected ? AppColors.white : AppColors.primary,
                   ),
                   const Spacer(),
                   Text(
-                    area['title'],
+                    area.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w900,
@@ -410,7 +540,9 @@ class _StockTabState extends State<StockTab> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    area['subtitle'],
+                    area.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.w600,
@@ -430,8 +562,9 @@ class _StockTabState extends State<StockTab> {
 
   Widget _buildValuationCard({
     required double stockValue,
+    required bool hasValuation,
     required int totalUnitsInStock,
-    required int maxCapacity,
+    required int hubTotalUnits,
   }) {
     return Container(
       height: 184,
@@ -453,7 +586,7 @@ class _StockTabState extends State<StockTab> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           const Text(
-            'ESTIMATED STOCK VALUATION',
+            'STOCK VALUATION',
             style: TextStyle(
               fontSize: 8,
               fontWeight: FontWeight.w900,
@@ -462,7 +595,7 @@ class _StockTabState extends State<StockTab> {
             ),
           ),
           Text(
-            'Rp ${_formatCurrency(stockValue)}',
+            hasValuation ? 'Rp ${_formatCurrency(stockValue)}' : '—',
             style: const TextStyle(
               fontFamily: 'HankenGrotesk',
               fontSize: 18,
@@ -474,7 +607,7 @@ class _StockTabState extends State<StockTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Units Stored: $totalUnitsInStock',
+                'Units in area: $totalUnitsInStock',
                 style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -483,7 +616,9 @@ class _StockTabState extends State<StockTab> {
               ),
               const SizedBox(height: 2),
               Text(
-                'Capacity limit: $maxCapacity units',
+                hubTotalUnits > 0
+                    ? 'Hub total: $hubTotalUnits units'
+                    : 'No stock in hub',
                 style: const TextStyle(fontSize: 10, color: AppColors.slate),
               ),
             ],
@@ -539,7 +674,9 @@ class _StockTabState extends State<StockTab> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Min stock: ${item.minStockThreshold} units',
+                  item.minStockThreshold > 0
+                      ? 'Reorder level: ${item.minStockThreshold} units'
+                      : 'Reorder level not set',
                   style: const TextStyle(fontSize: 9, color: AppColors.slate),
                 ),
               ],
@@ -579,15 +716,11 @@ class _StockTabState extends State<StockTab> {
     );
   }
 
-  String _getSelectedAreaTitle() {
-    final areas = warehouseAreas[selectedWarehouseId] ?? [];
-
-    final selected = areas.firstWhere(
-      (area) => area['id'] == selectedAreaId,
-      orElse: () => {'title': 'Warehouse'},
-    );
-
-    return selected['title'];
+  String _selectedAreaTitle(List<StockAreaOption> areas) {
+    for (final area in areas) {
+      if (area.areaId == _selectedAreaId) return area.title;
+    }
+    return 'Warehouse';
   }
 
   Widget _buildStatusBadge({

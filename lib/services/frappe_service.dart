@@ -125,6 +125,176 @@ class FrappeService {
         : Map<String, dynamic>.from(data as Map);
   }
 
+  Future<Map<String, dynamic>> createDocument(
+    String doctype,
+    Map<String, dynamic> data,
+  ) async {
+    await ensureLoggedIn();
+
+    final encodedDoctype = Uri.encodeComponent(doctype);
+    final uri = Uri.parse('$baseUrl/api/resource/$encodedDoctype');
+
+    final response = await _post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(data),
+    );
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractFrappeError(decoded, response.statusCode));
+    }
+
+    if (decoded is! Map || decoded['data'] is! Map) {
+      throw Exception('Invalid create response for $doctype.');
+    }
+
+    final payload = decoded['data'];
+    return payload is Map<String, dynamic>
+        ? payload
+        : Map<String, dynamic>.from(payload as Map);
+  }
+
+  Future<void> updateDocument(
+    String doctype,
+    String name,
+    Map<String, dynamic> data,
+  ) async {
+    await ensureLoggedIn();
+
+    final encodedDoctype = Uri.encodeComponent(doctype);
+    final encodedName = Uri.encodeComponent(name);
+    final uri = Uri.parse(
+      '$baseUrl/api/resource/$encodedDoctype/$encodedName',
+    );
+
+    final response = await _put(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(data),
+    );
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractFrappeError(decoded, response.statusCode));
+    }
+  }
+
+  Future<dynamic> callMethod(
+    String method, {
+    Map<String, dynamic>? args,
+  }) async {
+    await ensureLoggedIn();
+
+    final uri = Uri.parse('$baseUrl/api/method/$method');
+    final response = await _post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(args ?? {}),
+    );
+    final decoded = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractFrappeError(decoded, response.statusCode));
+    }
+
+    if (decoded is Map && decoded['exc'] != null) {
+      throw Exception(decoded['exc'].toString());
+    }
+
+    if (decoded is Map) {
+      return decoded['message'];
+    }
+    return decoded;
+  }
+
+  Future<Map<String, dynamic>> submitDocument(
+    String doctype,
+    String name,
+  ) async {
+    final doc = await fetchDocument(doctype, name);
+    final result = await callMethod(
+      'frappe.client.submit',
+      args: {'doc': doc},
+    );
+    if (result is Map<String, dynamic>) return result;
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return fetchDocument(doctype, name);
+  }
+
+  Future<Map<String, dynamic>> cancelDocument(
+    String doctype,
+    String name,
+  ) async {
+    final doc = await fetchDocument(doctype, name);
+    final result = await callMethod(
+      'frappe.client.cancel',
+      args: {'doc': doc},
+    );
+    if (result is Map<String, dynamic>) return result;
+    if (result is Map) return Map<String, dynamic>.from(result);
+    return fetchDocument(doctype, name);
+  }
+
+  Future<void> deleteDocument(String doctype, String name) async {
+    await ensureLoggedIn();
+
+    final encodedDoctype = Uri.encodeComponent(doctype);
+    final encodedName = Uri.encodeComponent(name);
+    final uri = Uri.parse('$baseUrl/api/resource/$encodedDoctype/$encodedName');
+
+    final response = await _delete(uri);
+    final decoded = response.body.isNotEmpty ? jsonDecode(response.body) : null;
+
+    if (response.statusCode != 200 && response.statusCode != 202) {
+      throw Exception(_extractFrappeError(decoded, response.statusCode));
+    }
+  }
+
+  Future<http.Response> _put(
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+  }) async {
+    final httpClient = HttpClient();
+    try {
+      final request = await httpClient.putUrl(uri);
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      if (headers != null) {
+        headers.forEach((key, value) {
+          if (key.toLowerCase() == HttpHeaders.expectHeader.toLowerCase()) {
+            return;
+          }
+          request.headers.set(key, value);
+        });
+      }
+      if (_cookies.isNotEmpty) {
+        request.headers.set(HttpHeaders.cookieHeader, _cookieHeader());
+      }
+      request.headers.removeAll(HttpHeaders.expectHeader);
+
+      if (body != null) {
+        request.write(body.toString());
+      }
+
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+      _updateCookiesFromHeaders(response.headers);
+      final responseHeaders = <String, String>{};
+      response.headers.forEach((name, values) {
+        responseHeaders[name] = values.join(',');
+      });
+      return http.Response(
+        responseBody,
+        response.statusCode,
+        headers: responseHeaders,
+        reasonPhrase: response.reasonPhrase,
+      );
+    } finally {
+      httpClient.close(force: true);
+    }
+  }
+
   Future<http.Response> _post(
     Uri uri, {
     Map<String, String>? headers,
@@ -226,6 +396,45 @@ class FrappeService {
         print('Response headers: $responseHeaders');
         print('Response body: $responseBody');
       }
+      return http.Response(
+        responseBody,
+        response.statusCode,
+        headers: responseHeaders,
+        reasonPhrase: response.reasonPhrase,
+      );
+    } finally {
+      httpClient.close(force: true);
+    }
+  }
+
+  Future<http.Response> _delete(
+    Uri uri, {
+    Map<String, String>? headers,
+  }) async {
+    final httpClient = HttpClient();
+    try {
+      final request = await httpClient.deleteUrl(uri);
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      if (headers != null) {
+        headers.forEach((key, value) {
+          if (key.toLowerCase() == HttpHeaders.expectHeader.toLowerCase()) {
+            return;
+          }
+          request.headers.set(key, value);
+        });
+      }
+      if (_cookies.isNotEmpty) {
+        request.headers.set(HttpHeaders.cookieHeader, _cookieHeader());
+      }
+      request.headers.removeAll(HttpHeaders.expectHeader);
+
+      final response = await request.close();
+      final responseBody = await response.transform(utf8.decoder).join();
+      _updateCookiesFromHeaders(response.headers);
+      final responseHeaders = <String, String>{};
+      response.headers.forEach((name, values) {
+        responseHeaders[name] = values.join(',');
+      });
       return http.Response(
         responseBody,
         response.statusCode,

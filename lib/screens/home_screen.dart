@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import '../widgets/notifications/notification_sheet.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import 'login_screen.dart';
@@ -8,8 +8,8 @@ import 'profile_screen.dart';
 
 // tabs menu
 import 'tabs/dashboard_tab.dart';
-import 'tabs/purchase_tab.dart';
-import 'tabs/sales_tab.dart';
+import 'tabs/buying_tab.dart';
+import 'tabs/selling_tab.dart';
 import 'tabs/stock_tab.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -21,12 +21,23 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  final _sellingTabKey = GlobalKey<SellingTabState>();
+  final _buyingTabKey = GlobalKey<BuyingTabState>();
 
-  final List<Widget> _tabs = const [
-    DashboardTab(),
-    SalesTab(),
-    PurchaseTab(),
-    StockTab(),
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<AppState>().refreshNotifications(silent: true);
+    });
+  }
+
+  late final List<Widget> _tabs = [
+    const DashboardTab(),
+    SellingTab(key: _sellingTabKey),
+    BuyingTab(key: _buyingTabKey),
+    const StockTab(),
   ];
 
   void _changeTab(int index) {
@@ -107,16 +118,39 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(
             tooltip: 'Notifications',
-            icon: const Icon(
-              Icons.notifications_none_rounded,
-              color: AppColors.primary,
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(
+                  Icons.notifications_none_rounded,
+                  color: AppColors.primary,
+                ),
+
+                if (appState.hasUnreadNotifications)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 9,
+                      height: 9,
+                      decoration: const BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
             ),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  backgroundColor: AppColors.primary,
-                  content: Text('No new notifications.'),
-                ),
+              NotificationSheet.show(
+                context,
+                notifications: appState.notifications,
+                onMarkAllRead: () async {
+                  await appState.markAllNotificationsRead();
+                },
+                onNotificationTap: (notification) {
+                  appState.markNotificationRead(notification.id);
+                },
               );
             },
           ),
@@ -214,45 +248,39 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget? _buildFloatingActionButton(BuildContext context, AppState appState) {
     switch (_currentIndex) {
       case 1:
-        return FloatingActionButton.extended(
+        if (_sellingTabKey.currentState?.currentSegment != 'so') {
+          return null;
+        }
+        return FloatingActionButton(
           onPressed: () {
             _showCreateSalesOrderSheet(context);
           },
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text(
-            'Sell',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
+          child: const Icon(Icons.add_rounded),
         );
 
       case 2:
-        return FloatingActionButton.extended(
+        if (_buyingTabKey.currentState?.currentSegment != 'po') {
+          return null;
+        }
+        return FloatingActionButton(
           onPressed: () {
             _showCreatePurchaseOrderSheet(context);
           },
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text(
-            'Buy',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
+          child: const Icon(Icons.add_rounded),
         );
 
       case 3:
-        return FloatingActionButton.extended(
+        return FloatingActionButton(
           onPressed: () {
             _showCreateStockEntrySheet(context);
           },
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text(
-            'Stock',
-            style: TextStyle(fontWeight: FontWeight.w800),
-          ),
+          child: const Icon(Icons.add_rounded),
         );
 
       default:
@@ -261,19 +289,351 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showCreateSalesOrderSheet(BuildContext context) {
-    _showComingSoonSheet(
-      context,
-      title: 'Create Sales Order',
-      message: 'Form create Sales Order akan dibuat di tahap berikutnya.',
+    final appState = context.read<AppState>();
+    final customerCtrl = TextEditingController();
+    final itemCodeCtrl = TextEditingController();
+    final qtyCtrl = TextEditingController(text: '1');
+    final rateCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    String? selectedWarehouse = appState.warehouses.isNotEmpty
+        ? appState.warehouses.first.name
+        : null;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+          ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Create Sales Order',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.navy,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(sheetContext),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: customerCtrl,
+                  decoration: const InputDecoration(labelText: 'Customer ID'),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Customer wajib diisi'
+                      : null,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: itemCodeCtrl,
+                  decoration: const InputDecoration(labelText: 'Item Code'),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Item code wajib diisi'
+                      : null,
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: qtyCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(labelText: 'Quantity'),
+                  validator: (v) {
+                    final q = double.tryParse(v?.trim() ?? '');
+                    if (q == null || q <= 0) return 'Qty harus > 0';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 10),
+                if (appState.warehouses.isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    value: selectedWarehouse,
+                    decoration: const InputDecoration(
+                      labelText: 'Warehouse (optional)',
+                    ),
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('— None —'),
+                      ),
+                      ...appState.warehouses.map(
+                        (w) => DropdownMenuItem(
+                          value: w.name,
+                          child: Text(
+                            w.displayName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setSheetState(() => selectedWarehouse = value);
+                    },
+                  )
+                else
+                  const Text(
+                    'Warehouse list unavailable — refresh Stock tab first.',
+                    style: TextStyle(fontSize: 12, color: AppColors.slate),
+                  ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: rateCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(labelText: 'Rate (optional)'),
+                ),
+                const SizedBox(height: 18),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+                    try {
+                      final appState = context.read<AppState>();
+                      final qty = double.parse(qtyCtrl.text.trim());
+                      final rate = double.tryParse(rateCtrl.text.trim());
+                      await appState.createSalesOrder(
+                        customer: customerCtrl.text.trim(),
+                        itemCode: itemCodeCtrl.text.trim(),
+                        qty: qty,
+                        warehouse: selectedWarehouse,
+                        rate: rate,
+                      );
+                      if (!sheetContext.mounted) return;
+                      Navigator.pop(sheetContext);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Sales Order berhasil dibuat'),
+                          backgroundColor: AppColors.primary,
+                        ),
+                      );
+                    } catch (e) {
+                      if (!sheetContext.mounted) return;
+                      ScaffoldMessenger.of(sheetContext).showSnackBar(
+                        SnackBar(
+                          content: Text('Gagal create SO: $e'),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'Create',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+          },
+        );
+      },
     );
   }
 
   void _showCreatePurchaseOrderSheet(BuildContext context) {
-    _showComingSoonSheet(
-      context,
-      title: 'Create Purchase Order',
-      message:
-          'Form create Purchase Order akan dibuat setelah Sales Order selesai.',
+    final appState = context.read<AppState>();
+    final supplierCtrl = TextEditingController();
+    final itemCodeCtrl = TextEditingController();
+    final qtyCtrl = TextEditingController(text: '1');
+    final rateCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    String? selectedWarehouse = appState.warehouses.isNotEmpty
+        ? appState.warehouses.first.name
+        : null;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 24,
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
+              ),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Create Purchase Order',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(sheetContext),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: supplierCtrl,
+                      decoration: const InputDecoration(labelText: 'Supplier ID'),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Supplier wajib diisi'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: itemCodeCtrl,
+                      decoration: const InputDecoration(labelText: 'Item Code'),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Item code wajib diisi'
+                          : null,
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: qtyCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(labelText: 'Quantity'),
+                      validator: (v) {
+                        final q = double.tryParse(v?.trim() ?? '');
+                        if (q == null || q <= 0) return 'Qty harus > 0';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    if (appState.warehouses.isNotEmpty)
+                      DropdownButtonFormField<String>(
+                        value: selectedWarehouse,
+                        decoration: const InputDecoration(
+                          labelText: 'Warehouse (optional)',
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: null,
+                            child: Text('— None —'),
+                          ),
+                          ...appState.warehouses.map(
+                            (w) => DropdownMenuItem(
+                              value: w.name,
+                              child: Text(
+                                w.displayName,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setSheetState(() => selectedWarehouse = value);
+                        },
+                      )
+                    else
+                      const Text(
+                        'Warehouse list unavailable — refresh Stock tab first.',
+                        style: TextStyle(fontSize: 12, color: AppColors.slate),
+                      ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: rateCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(labelText: 'Rate (optional)'),
+                    ),
+                    const SizedBox(height: 18),
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (!formKey.currentState!.validate()) return;
+                        try {
+                          final qty = double.parse(qtyCtrl.text.trim());
+                          final rate = double.tryParse(rateCtrl.text.trim());
+                          await appState.createPurchaseOrder(
+                            supplier: supplierCtrl.text.trim(),
+                            itemCode: itemCodeCtrl.text.trim(),
+                            qty: qty,
+                            warehouse: selectedWarehouse,
+                            rate: rate,
+                          );
+                          if (!sheetContext.mounted) return;
+                          Navigator.pop(sheetContext);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Purchase Order berhasil dibuat'),
+                              backgroundColor: AppColors.primary,
+                            ),
+                          );
+                        } catch (e) {
+                          if (!sheetContext.mounted) return;
+                          ScaffoldMessenger.of(sheetContext).showSnackBar(
+                            SnackBar(
+                              content: Text('Gagal create PO: $e'),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text(
+                        'Create',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

@@ -124,8 +124,9 @@ class ProfileScreen extends StatelessWidget {
               width: double.infinity,
               height: 48,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  appState.logout();
+                onPressed: () async {
+                  await appState.logout();
+                  if (!context.mounted) return;
                   Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(

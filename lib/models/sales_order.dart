@@ -1,19 +1,8 @@
+import '../utils/frappe_status.dart';
 import '../utils/num_parse.dart';
 
-enum SalesOrderStatus {
-  draft,
-  pending,
-  toReceive,
-  toBill,
-  toReceiveAndBill,
-  delayed,
-  completed,
-  closed,
-  cancelled,
-  overdue,
-  shipped,
-  delivered,
-}
+export '../utils/frappe_status.dart'
+    show SalesOrderStatusKey, parseSalesOrderStatus;
 
 class SalesOrderItem {
   final String itemName;
@@ -42,7 +31,11 @@ class SalesOrder {
   final String id;
   final String customer;
   final double value;
-  final SalesOrderStatus status;
+  final SalesOrderStatusKey statusKey;
+  final String statusText;
+  final int docStatus;
+  final double perDelivered;
+  final double perBilled;
   final String date;
   final int itemsCount;
   final List<SalesOrderItem> items;
@@ -51,7 +44,11 @@ class SalesOrder {
     required this.id,
     required this.customer,
     required this.value,
-    required this.status,
+    required this.statusKey,
+    required this.statusText,
+    this.docStatus = 0,
+    this.perDelivered = 0,
+    this.perBilled = 0,
     required this.date,
     required this.itemsCount,
     this.items = const [],
@@ -75,37 +72,16 @@ class SalesOrder {
         json['creation']?.toString() ??
         '';
 
-    final itemsCount = NumParse.asInt(
-      json['total_qty'] ?? json['items_count'],
+    final itemsCount = NumParse.asInt(json['total_qty'] ?? json['items_count']);
+
+    final docstatus = NumParse.asInt(json['docstatus']);
+    final statusText = normalizeStatusText(
+      json['status']?.toString(),
+      docstatus: docstatus,
     );
-
-    final statusText = json['status']?.toString() ?? '';
-    final statusLower = statusText.toLowerCase();
-
-    SalesOrderStatus status = SalesOrderStatus.pending;
-
-    if (statusLower.contains('draft')) {
-      status = SalesOrderStatus.draft;
-    } else if (statusLower.contains('overdue')) {
-      status = SalesOrderStatus.overdue;
-    } else if (statusLower.contains('to bill') ||
-        statusLower.contains('tobill')) {
-      status = SalesOrderStatus.toBill;
-    } else if (statusLower.contains('closed')) {
-      status = SalesOrderStatus.closed;
-    } else if (statusLower.contains('completed')) {
-      status = SalesOrderStatus.completed;
-    } else if (statusLower.contains('delivered')) {
-      status = SalesOrderStatus.delivered;
-    } else if (statusLower.contains('shipped') ||
-        statusLower.contains('packed') ||
-        statusLower.contains('transit') ||
-        statusLower.contains('delivery')) {
-      status = SalesOrderStatus.shipped;
-    }
+    final statusKey = parseSalesOrderStatus(statusText, docstatus: docstatus);
 
     final rawItems = json['items'];
-
     final items = rawItems is List
         ? rawItems
               .map((e) => SalesOrderItem.fromJson(Map<String, dynamic>.from(e)))
@@ -116,7 +92,11 @@ class SalesOrder {
       id: id,
       customer: customer,
       value: value,
-      status: status,
+      statusKey: statusKey,
+      statusText: statusText,
+      docStatus: NumParse.asInt(json['docstatus']),
+      perDelivered: NumParse.asDouble(json['per_delivered']),
+      perBilled: NumParse.asDouble(json['per_billed']),
       date: date,
       itemsCount: itemsCount,
       items: items,
@@ -127,7 +107,8 @@ class SalesOrder {
     String? id,
     String? customer,
     double? value,
-    SalesOrderStatus? status,
+    SalesOrderStatusKey? statusKey,
+    String? statusText,
     String? date,
     int? itemsCount,
     List<SalesOrderItem>? items,
@@ -136,7 +117,8 @@ class SalesOrder {
       id: id ?? this.id,
       customer: customer ?? this.customer,
       value: value ?? this.value,
-      status: status ?? this.status,
+      statusKey: statusKey ?? this.statusKey,
+      statusText: statusText ?? this.statusText,
       date: date ?? this.date,
       itemsCount: itemsCount ?? this.itemsCount,
       items: items ?? this.items,

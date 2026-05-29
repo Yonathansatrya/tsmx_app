@@ -39,6 +39,18 @@ class _DashboardTabState extends State<DashboardTab> {
       if (appState.inventory.isEmpty) {
         appState.refreshInventory();
       }
+
+      if (appState.salesInvoices.isEmpty) {
+        appState.refreshSalesInvoices();
+      }
+
+      if (appState.purchaseInvoices.isEmpty) {
+        appState.refreshPurchaseInvoices();
+      }
+
+      if (appState.paymentEntries.isEmpty) {
+        appState.refreshPaymentEntries();
+      }
     });
   }
 
@@ -46,20 +58,23 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
 
-    final activeSalesCount = appState.salesOrders.length;
-
     final pendingPurchasesCount = appState.purchaseOrders
-        .where((po) => po.status != PurchaseOrderStatus.completed)
+        .where((po) => po.statusKey != PurchaseOrderStatusKey.completed)
         .length;
 
     final lowStockCount = appState.inventory
         .where((item) => item.status != StockStatus.inStock)
         .length;
 
+    final unpaidSiCount = appState.unpaidSalesInvoicesCount;
+    final overduePiCount = appState.overduePurchaseInvoicesCount;
+
     final recentSales = appState.salesOrders.take(3).toList();
 
+    final recentPayments = appState.paymentEntries.take(3).toList();
+
     final pendingPurchaseOrders = appState.purchaseOrders
-        .where((po) => po.status != PurchaseOrderStatus.completed)
+        .where((po) => po.statusKey != PurchaseOrderStatusKey.completed)
         .take(3)
         .toList();
 
@@ -74,6 +89,9 @@ class _DashboardTabState extends State<DashboardTab> {
         await Future.wait([
           appState.refreshSalesOrders(),
           appState.refreshPurchaseOrders(),
+          appState.refreshSalesInvoices(),
+          appState.refreshPurchaseInvoices(),
+          appState.refreshPaymentEntries(),
           appState.refreshInventory(),
         ]);
       },
@@ -88,20 +106,34 @@ class _DashboardTabState extends State<DashboardTab> {
             const SizedBox(height: 20),
 
             GridView.count(
-              crossAxisCount: 3,
+              crossAxisCount: 2,
               crossAxisSpacing: 8,
               mainAxisSpacing: 8,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 1.15,
+              childAspectRatio: 1.35,
               children: [
                 DashboardKpiCard(
-                  title: 'ACTIVE SALES',
-                  value: '$activeSalesCount',
-                  trend: '+12%',
-                  trendColor: AppColors.tertiary,
-                  icon: Icons.analytics_outlined,
+                  title: 'UNPAID SI',
+                  value: '$unpaidSiCount',
+                  trend: unpaidSiCount > 0 ? 'Open' : 'Clear',
+                  trendColor: unpaidSiCount > 0
+                      ? Colors.orange
+                      : AppColors.tertiary,
+                  icon: Icons.receipt_long_outlined,
                   iconColor: AppColors.primary,
+                ),
+                DashboardKpiCard(
+                  title: 'OVERDUE PI',
+                  value: '$overduePiCount',
+                  trend: overduePiCount > 0 ? 'Due' : 'Clear',
+                  trendColor: overduePiCount > 0
+                      ? Colors.red
+                      : AppColors.tertiary,
+                  icon: Icons.payments_outlined,
+                  iconColor: overduePiCount > 0
+                      ? Colors.red
+                      : const Color(0xFFCA8A04),
                 ),
                 DashboardKpiCard(
                   title: 'PENDING PO',
@@ -129,6 +161,24 @@ class _DashboardTabState extends State<DashboardTab> {
             const SizedBox(height: 20),
 
             DashboardDataSection(
+              title: 'Recent Payment Entries',
+              child: recentPayments.isNotEmpty
+                  ? Column(
+                      children: recentPayments.map((pe) {
+                        return _DashboardOrderRow(
+                          label: pe.id,
+                          value: 'Rp ${pe.amount.toStringAsFixed(0)}',
+                          subtitle: '${pe.paymentType} · ${pe.party}',
+                          status: pe.statusText,
+                        );
+                      }).toList(),
+                    )
+                  : const _EmptySectionText('No payment entries loaded yet.'),
+            ),
+
+            const SizedBox(height: 14),
+
+            DashboardDataSection(
               title: 'Recent Sales Orders',
               child: recentSales.isNotEmpty
                   ? Column(
@@ -137,7 +187,7 @@ class _DashboardTabState extends State<DashboardTab> {
                           label: order.id,
                           value: 'Rp ${order.value.toStringAsFixed(0)}',
                           subtitle: order.customer,
-                          status: _formatEnumStatus(order.status.name),
+                          status: order.statusText,
                         );
                       }).toList(),
                     )
@@ -155,7 +205,7 @@ class _DashboardTabState extends State<DashboardTab> {
                           label: po.id,
                           value: 'Qty ${po.itemsCount}',
                           subtitle: po.vendor,
-                          status: _formatEnumStatus(po.status.name),
+                          status: po.isDelayed ? 'Delayed' : po.statusText,
                         );
                       }).toList(),
                     )
@@ -267,24 +317,6 @@ class _EmptySectionText extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatEnumStatus(String raw) {
-  if (raw.isEmpty) return 'Unknown';
-
-  final buffer = StringBuffer();
-  for (var i = 0; i < raw.length; i++) {
-    final char = raw[i];
-    final isUpper =
-        char == char.toUpperCase() && char != char.toLowerCase();
-
-    if (i > 0 && isUpper) {
-      buffer.write(' ');
-    }
-    buffer.write(i == 0 ? char.toUpperCase() : char);
-  }
-
-  return buffer.toString();
 }
 
 class _DashboardOrderRow extends StatelessWidget {

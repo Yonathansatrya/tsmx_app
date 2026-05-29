@@ -10,6 +10,7 @@ class InventoryItem {
 
   final int quantity;
   final int minStockThreshold;
+  final double unitValue;
   final StockStatus status;
 
   InventoryItem({
@@ -18,6 +19,7 @@ class InventoryItem {
     required this.warehouseId,
     required this.quantity,
     required this.minStockThreshold,
+    this.unitValue = 0,
     required this.status,
   });
 
@@ -27,6 +29,7 @@ class InventoryItem {
     String? warehouseId,
     int? quantity,
     int? minStockThreshold,
+    double? unitValue,
     StockStatus? status,
   }) {
     return InventoryItem(
@@ -35,8 +38,27 @@ class InventoryItem {
       warehouseId: warehouseId ?? this.warehouseId,
       quantity: quantity ?? this.quantity,
       minStockThreshold: minStockThreshold ?? this.minStockThreshold,
+      unitValue: unitValue ?? this.unitValue,
       status: status ?? this.status,
     );
+  }
+
+  InventoryItem withRecalculatedStatus() {
+    if (minStockThreshold <= 0) {
+      return copyWith(
+        status: quantity > 0 ? StockStatus.inStock : StockStatus.urgent,
+      );
+    }
+
+    StockStatus next;
+    if (quantity <= (minStockThreshold * 0.25)) {
+      next = StockStatus.urgent;
+    } else if (quantity <= minStockThreshold) {
+      next = StockStatus.lowStock;
+    } else {
+      next = StockStatus.inStock;
+    }
+    return copyWith(status: next);
   }
 
   factory InventoryItem.fromJson(Map<String, dynamic> json) {
@@ -53,12 +75,14 @@ class InventoryItem {
     );
 
     final minThreshold = NumParse.asInt(
-      json['min_stock_threshold'],
-      fallback: 50,
+      json['min_stock_threshold'] ?? json['reorder_level'],
+      fallback: 0,
     );
 
     StockStatus status;
-    if (quantity <= (minThreshold * 0.25)) {
+    if (minThreshold <= 0) {
+      status = quantity > 0 ? StockStatus.inStock : StockStatus.urgent;
+    } else if (quantity <= (minThreshold * 0.25)) {
       status = StockStatus.urgent;
     } else if (quantity <= minThreshold) {
       status = StockStatus.lowStock;
@@ -66,12 +90,17 @@ class InventoryItem {
       status = StockStatus.inStock;
     }
 
+    final unitValue = NumParse.asDouble(
+      json['valuation_rate'] ?? json['stock_value'],
+    );
+
     return InventoryItem(
       sku: sku,
       name: name,
       warehouseId: warehouseId,
       quantity: quantity,
       minStockThreshold: minThreshold,
+      unitValue: unitValue,
       status: status,
     );
   }

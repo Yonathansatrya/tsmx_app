@@ -43,17 +43,9 @@ class _LoginScreenState extends State<LoginScreen> {
         baseUrl: 'http://apps.willshine.id:8014',
         username: username,
         password: password,
-        savePassword: appState.rememberDevice,
       );
 
-      try {
-        await appState.refreshWarehouses();
-        await appState.refreshSalesOrders();
-        await appState.refreshPurchaseOrders();
-        await appState.refreshInventory();
-      } catch (_) {
-        // Ignore fetch failures until app is running.
-      }
+      await appState.prefetchInitialData();
 
       if (!mounted) return;
       Navigator.of(

@@ -1,4 +1,8 @@
+import '../utils/frappe_status.dart';
 import '../utils/num_parse.dart';
+
+export '../utils/frappe_status.dart'
+    show PurchaseOrderStatusKey, parsePurchaseOrderStatus;
 
 class PurchaseOrderItem {
   final String itemName;
@@ -23,23 +27,14 @@ class PurchaseOrderItem {
   }
 }
 
-enum PurchaseOrderStatus {
-  draft,
-  pending,
-  toReceive,
-  toBill,
-  toReceiveAndBill,
-  delayed,
-  completed,
-  closed,
-  cancelled,
-}
-
 class PurchaseOrder {
   final String id;
   final String vendor;
-  final PurchaseOrderStatus status;
+  final PurchaseOrderStatusKey statusKey;
   final String statusText;
+  final int docStatus;
+  final double perReceived;
+  final double perBilled;
   final String eta;
   final int itemsCount;
   final double totalValue;
@@ -48,18 +43,23 @@ class PurchaseOrder {
   PurchaseOrder({
     required this.id,
     required this.vendor,
-    required this.status,
+    required this.statusKey,
     required this.statusText,
+    this.docStatus = 0,
+    this.perReceived = 0,
+    this.perBilled = 0,
     required this.eta,
     required this.itemsCount,
     required this.totalValue,
     this.items = const [],
   });
 
+  bool get isDelayed => statusKey == PurchaseOrderStatusKey.delayed;
+
   PurchaseOrder copyWith({
     String? id,
     String? vendor,
-    PurchaseOrderStatus? status,
+    PurchaseOrderStatusKey? statusKey,
     String? statusText,
     String? eta,
     int? itemsCount,
@@ -69,7 +69,7 @@ class PurchaseOrder {
     return PurchaseOrder(
       id: id ?? this.id,
       vendor: vendor ?? this.vendor,
-      status: status ?? this.status,
+      statusKey: statusKey ?? this.statusKey,
       statusText: statusText ?? this.statusText,
       eta: eta ?? this.eta,
       itemsCount: itemsCount ?? this.itemsCount,
@@ -98,9 +98,28 @@ class PurchaseOrder {
       json['rounded_total'] ?? json['grand_total'],
     );
 
-    final statusText = json['status']?.toString() ?? 'Unknown';
+    final docstatus = NumParse.asInt(json['docstatus']);
+    final statusText = normalizeStatusText(
+      json['status']?.toString(),
+      docstatus: docstatus,
+    );
 
-    final status = _mapStatus(statusText: statusText, eta: eta);
+    final etaDate = _parseEta(eta);
+    final today = DateTime.now();
+    final isOverdue =
+        etaDate != null &&
+        etaDate.isBefore(DateTime(today.year, today.month, today.day));
+    final isDelayed =
+        isOverdue &&
+        !statusText.toLowerCase().contains('completed') &&
+        !statusText.toLowerCase().contains('cancel') &&
+        !statusText.toLowerCase().contains('closed');
+
+    final statusKey = parsePurchaseOrderStatus(
+      statusText,
+      docstatus: docstatus,
+      isDelayed: isDelayed,
+    );
 
     final rawItems = json['items'];
     final items = rawItems is List
@@ -116,8 +135,11 @@ class PurchaseOrder {
     return PurchaseOrder(
       id: id,
       vendor: vendor,
-      status: status,
+      statusKey: statusKey,
       statusText: statusText,
+      docStatus: NumParse.asInt(json['docstatus']),
+      perReceived: NumParse.asDouble(json['per_received']),
+      perBilled: NumParse.asDouble(json['per_billed']),
       eta: eta,
       itemsCount: itemsCount,
       totalValue: totalValue,
@@ -136,54 +158,6 @@ class PurchaseOrder {
     final day = parsed.day.toString().padLeft(2, '0');
     final month = parsed.month.toString().padLeft(2, '0');
     return '$day/${month}/${parsed.year}';
-  }
-
-  static PurchaseOrderStatus _mapStatus({
-    required String statusText,
-    required String eta,
-  }) {
-    final s = statusText.toLowerCase();
-
-    final etaDate = _parseEta(eta);
-    final today = DateTime.now();
-
-    final isOverdue =
-        etaDate != null &&
-        etaDate.isBefore(DateTime(today.year, today.month, today.day));
-
-    if (s.contains('cancel')) {
-      return PurchaseOrderStatus.cancelled;
-    }
-
-    if (s.contains('closed')) {
-      return PurchaseOrderStatus.closed;
-    }
-
-    if (s.contains('completed')) {
-      return PurchaseOrderStatus.completed;
-    }
-
-    if (isOverdue && !s.contains('completed')) {
-      return PurchaseOrderStatus.delayed;
-    }
-
-    if (s.contains('to receive and bill')) {
-      return PurchaseOrderStatus.toReceiveAndBill;
-    }
-
-    if (s.contains('to receive')) {
-      return PurchaseOrderStatus.toReceive;
-    }
-
-    if (s.contains('to bill')) {
-      return PurchaseOrderStatus.toBill;
-    }
-
-    if (s.contains('draft')) {
-      return PurchaseOrderStatus.draft;
-    }
-
-    return PurchaseOrderStatus.pending;
   }
 
   static DateTime? _parseEta(String eta) {

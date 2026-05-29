@@ -38,7 +38,6 @@ class WarehouseMapper {
       if (w.contains('stores') || w.contains('siap jual')) {
         return 'jakarta_stores';
       }
-      return '';
     }
 
     return w
@@ -73,10 +72,24 @@ class WarehouseMapper {
 
   static bool warehouseMatchesHub(String warehouseName, String hubId) {
     if (hubId.isEmpty) return true;
+    if (warehouseName == hubId) return true;
     final mapped = hubIdFromWarehouse(warehouseName);
     if (mapped.isNotEmpty) return mapped == hubId;
     return warehouseName.toLowerCase().contains(
       hubFilterPrefix(hubId).toLowerCase(),
     );
+  }
+
+  static String hubDisplayName(String hubId) {
+    switch (hubId) {
+      case 'jakarta':
+        return 'Jakarta Distribution Hub';
+      case 'curug':
+        return 'Curug Hub';
+      case 'medan':
+        return 'Medan Hub';
+      default:
+        return hubId;
+    }
   }
 }
