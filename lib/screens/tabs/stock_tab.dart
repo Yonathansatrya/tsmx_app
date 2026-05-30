@@ -5,6 +5,7 @@ import '../../theme/app_colors.dart';
 import '../../models/inventory_item.dart';
 import '../../models/stock_area_option.dart';
 import '../../widgets/warehouse_gauge.dart';
+import '../item_stock_detail_screen.dart';
 
 class StockTab extends StatefulWidget {
   const StockTab({super.key});
@@ -48,8 +49,8 @@ class _StockTabState extends State<StockTab> {
 
     final hubId = _selectedHubId ?? hubs.first.key;
     final areas = appState.stockAreasForHub(hubId);
-    final areaId = _selectedAreaId ??
-        (areas.isNotEmpty ? areas.first.areaId : null);
+    final areaId =
+        _selectedAreaId ?? (areas.isNotEmpty ? areas.first.areaId : null);
 
     setState(() {
       _selectedHubId = hubId;
@@ -76,16 +77,17 @@ class _StockTabState extends State<StockTab> {
 
     setState(() {
       _selectedHubId = hubId;
-      _selectedAreaId =
-          areas.isNotEmpty ? areas.first.areaId : _selectedAreaId;
+      _selectedAreaId = areas.isNotEmpty ? areas.first.areaId : _selectedAreaId;
     });
 
     appState.refreshInventoryForWarehouse(hubId);
   }
 
   List<InventoryItem> _inventoryForHub(AppState appState, String hubId) {
-    final areaIds =
-        appState.stockAreasForHub(hubId).map((a) => a.areaId).toSet();
+    final areaIds = appState
+        .stockAreasForHub(hubId)
+        .map((a) => a.areaId)
+        .toSet();
     if (areaIds.isEmpty) return appState.inventory;
 
     return appState.inventory
@@ -124,8 +126,8 @@ class _StockTabState extends State<StockTab> {
     final filteredInventory = selectedAreaId == null
         ? <InventoryItem>[]
         : appState.inventory
-            .where((item) => item.warehouseId == selectedAreaId)
-            .toList();
+              .where((item) => item.warehouseId == selectedAreaId)
+              .toList();
 
     final hubInventory = selectedHubId != null
         ? _inventoryForHub(appState, selectedHubId)
@@ -292,7 +294,13 @@ class _StockTabState extends State<StockTab> {
             if (filteredInventory.isEmpty && !appState.isInventoryLoading)
               const _StockEmptyState()
             else
-              ...filteredInventory.map(_buildInventoryCard),
+              ...filteredInventory.map(
+                (item) => _buildInventoryCard(
+                  item,
+                  hubLabel: _hubTitle(hubs, selectedHubId),
+                  areaLabel: _selectedAreaTitle(areas),
+                ),
+              ),
 
             const SizedBox(height: 24),
             _buildStockEntriesSection(appState),
@@ -628,7 +636,35 @@ class _StockTabState extends State<StockTab> {
     );
   }
 
-  Widget _buildInventoryCard(InventoryItem item) {
+  String? _hubTitle(List<MapEntry<String, String>> hubs, String? hubId) {
+    if (hubId == null) return null;
+    for (final hub in hubs) {
+      if (hub.key == hubId) return hub.value;
+    }
+    return hubId;
+  }
+
+  void _openItemDetail(
+    InventoryItem item, {
+    String? hubLabel,
+    String? areaLabel,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ItemStockDetailScreen(
+          item: item,
+          hubLabel: hubLabel,
+          areaLabel: areaLabel,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInventoryCard(
+    InventoryItem item, {
+    String? hubLabel,
+    String? areaLabel,
+  }) {
     Color badgeColor = Colors.green;
     String badgeLabel = 'IN STOCK';
 
@@ -640,60 +676,71 @@ class _StockTabState extends State<StockTab> {
       badgeLabel = 'URGENT';
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () =>
+            _openItemDetail(item, hubLabel: hubLabel, areaLabel: areaLabel),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primary.withOpacity(0.06)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.primary.withOpacity(0.06)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _smallBadge(item.sku, AppColors.slate),
-                    const SizedBox(width: 6),
-                    _smallBadge(badgeLabel, badgeColor),
+                    Row(
+                      children: [
+                        _smallBadge(item.sku, AppColors.slate),
+                        const SizedBox(width: 6),
+                        _smallBadge(badgeLabel, badgeColor),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      item.name,
+                      style: const TextStyle(
+                        fontFamily: 'HankenGrotesk',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.navy,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      item.minStockThreshold > 0
+                          ? 'Reorder level: ${item.minStockThreshold} units'
+                          : 'Reorder level not set',
+                      style: const TextStyle(
+                        fontSize: 9,
+                        color: AppColors.slate,
+                      ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  item.name,
-                  style: const TextStyle(
-                    fontFamily: 'HankenGrotesk',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.navy,
-                  ),
-                  overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                '${item.quantity}',
+                style: TextStyle(
+                  fontFamily: 'HankenGrotesk',
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: item.status == StockStatus.urgent
+                      ? Colors.red
+                      : AppColors.navy,
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  item.minStockThreshold > 0
-                      ? 'Reorder level: ${item.minStockThreshold} units'
-                      : 'Reorder level not set',
-                  style: const TextStyle(fontSize: 9, color: AppColors.slate),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Text(
-            '${item.quantity}',
-            style: TextStyle(
-              fontFamily: 'HankenGrotesk',
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-              color: item.status == StockStatus.urgent
-                  ? Colors.red
-                  : AppColors.navy,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

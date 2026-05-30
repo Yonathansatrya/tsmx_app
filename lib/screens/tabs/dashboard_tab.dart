@@ -111,12 +111,12 @@ class _DashboardTabState extends State<DashboardTab> {
               mainAxisSpacing: 8,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 1.35,
+              childAspectRatio: 1.5,
               children: [
                 DashboardKpiCard(
-                  title: 'UNPAID SI',
+                  title: 'UNPAID SALES INVOICES',
                   value: '$unpaidSiCount',
-                  trend: unpaidSiCount > 0 ? 'Open' : 'Clear',
+                  trend: unpaidSiCount > 0 ? 'Unpaid' : 'Clear',
                   trendColor: unpaidSiCount > 0
                       ? Colors.orange
                       : AppColors.tertiary,
@@ -124,9 +124,9 @@ class _DashboardTabState extends State<DashboardTab> {
                   iconColor: AppColors.primary,
                 ),
                 DashboardKpiCard(
-                  title: 'OVERDUE PI',
+                  title: 'OVERDUE PURCHASE INVOICES',
                   value: '$overduePiCount',
-                  trend: overduePiCount > 0 ? 'Due' : 'Clear',
+                  trend: overduePiCount > 0 ? 'Overdue' : 'Clear',
                   trendColor: overduePiCount > 0
                       ? Colors.red
                       : AppColors.tertiary,
@@ -136,9 +136,9 @@ class _DashboardTabState extends State<DashboardTab> {
                       : const Color(0xFFCA8A04),
                 ),
                 DashboardKpiCard(
-                  title: 'PENDING PO',
+                  title: 'PENDING PURCHASE ORDERS',
                   value: '$pendingPurchasesCount',
-                  trend: 'Active',
+                  trend: 'Pending',
                   trendColor: AppColors.accentYellow,
                   icon: Icons.local_shipping_outlined,
                   iconColor: const Color(0xFFCA8A04),
@@ -146,7 +146,7 @@ class _DashboardTabState extends State<DashboardTab> {
                 DashboardKpiCard(
                   title: 'STOCK ALERTS',
                   value: '$lowStockCount',
-                  trend: lowStockCount > 0 ? 'Urgent' : 'Clear',
+                  trend: lowStockCount > 0 ? 'Low Stock' : 'Clear',
                   trendColor: lowStockCount > 0
                       ? Colors.red
                       : AppColors.tertiary,
@@ -359,10 +359,7 @@ class _DashboardOrderRow extends StatelessWidget {
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.slate,
-                  ),
+                  style: const TextStyle(fontSize: 12, color: AppColors.slate),
                 ),
               ],
             ),

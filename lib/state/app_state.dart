@@ -12,7 +12,9 @@ import '../models/quotation.dart';
 import '../models/payment_entry.dart';
 import '../models/stock_entry.dart';
 import '../models/material_request.dart';
+import '../models/stock_ledger_movement.dart';
 import '../models/inventory_item.dart';
+import '../utils/date_range_presets.dart';
 import '../models/warehouse_info.dart';
 import '../models/stock_area_option.dart';
 import '../services/frappe_service.dart';
@@ -471,8 +473,10 @@ class AppState with ChangeNotifier {
 
     final payload = <String, dynamic>{
       'customer': customer,
-      'transaction_date':
-          (transactionDate ?? DateTime.now()).toIso8601String().split('T').first,
+      'transaction_date': (transactionDate ?? DateTime.now())
+          .toIso8601String()
+          .split('T')
+          .first,
       'items': [
         {
           'item_code': itemCode,
@@ -514,7 +518,10 @@ class AppState with ChangeNotifier {
     }
 
     await _frappeService.updateDocument('Sales Order', orderId, updates);
-    final updatedDoc = await _frappeService.fetchDocument('Sales Order', orderId);
+    final updatedDoc = await _frappeService.fetchDocument(
+      'Sales Order',
+      orderId,
+    );
     final updatedOrder = SalesOrder.fromJson(updatedDoc);
     _salesOrders = _salesOrders
         .map((o) => o.id == orderId ? updatedOrder : o)
@@ -574,8 +581,10 @@ class AppState with ChangeNotifier {
 
     final payload = <String, dynamic>{
       'supplier': supplier,
-      'transaction_date':
-          (transactionDate ?? DateTime.now()).toIso8601String().split('T').first,
+      'transaction_date': (transactionDate ?? DateTime.now())
+          .toIso8601String()
+          .split('T')
+          .first,
       'items': [
         {
           'item_code': itemCode,
@@ -587,8 +596,10 @@ class AppState with ChangeNotifier {
       ],
     };
 
-    final created =
-        await _frappeService.createDocument('Purchase Order', payload);
+    final created = await _frappeService.createDocument(
+      'Purchase Order',
+      payload,
+    );
     final order = PurchaseOrder.fromJson(created);
     _purchaseOrders = [order, ..._purchaseOrders];
     notifyListeners();
@@ -671,7 +682,9 @@ class AppState with ChangeNotifier {
         orderBy: 'modified desc',
       );
 
-      _purchaseOrders = data.map((item) => PurchaseOrder.fromJson(item)).toList();
+      _purchaseOrders = data
+          .map((item) => PurchaseOrder.fromJson(item))
+          .toList();
 
       _purchaseOrdersError = null;
     } catch (err) {
@@ -766,8 +779,7 @@ class AppState with ChangeNotifier {
         ],
         orderBy: 'posting_date desc',
       );
-      _purchaseReceipts =
-          data.map((e) => PurchaseReceipt.fromJson(e)).toList();
+      _purchaseReceipts = data.map((e) => PurchaseReceipt.fromJson(e)).toList();
       _purchaseReceiptsError = null;
     } catch (err) {
       _purchaseReceiptsError = err.toString();
@@ -799,8 +811,7 @@ class AppState with ChangeNotifier {
         ],
         orderBy: 'posting_date desc',
       );
-      _purchaseInvoices =
-          data.map((e) => PurchaseInvoice.fromJson(e)).toList();
+      _purchaseInvoices = data.map((e) => PurchaseInvoice.fromJson(e)).toList();
       _purchaseInvoicesError = null;
     } catch (err) {
       _purchaseInvoicesError = err.toString();
@@ -924,8 +935,7 @@ class AppState with ChangeNotifier {
         ],
         orderBy: 'transaction_date desc',
       );
-      _materialRequests =
-          data.map((e) => MaterialRequest.fromJson(e)).toList();
+      _materialRequests = data.map((e) => MaterialRequest.fromJson(e)).toList();
       _materialRequestsError = null;
     } catch (err) {
       _materialRequestsError = err.toString();
@@ -1196,8 +1206,10 @@ class AppState with ChangeNotifier {
       'items': items,
     };
 
-    final created =
-        await _frappeService.createDocument('Delivery Note', payload);
+    final created = await _frappeService.createDocument(
+      'Delivery Note',
+      payload,
+    );
     await refreshDeliveryNotes();
     await refreshSalesOrders();
     return DeliveryNote.fromJson(created);
@@ -1217,8 +1229,10 @@ class AppState with ChangeNotifier {
       'items': items,
     };
 
-    final created =
-        await _frappeService.createDocument('Sales Invoice', payload);
+    final created = await _frappeService.createDocument(
+      'Sales Invoice',
+      payload,
+    );
     await refreshSalesInvoices();
     await refreshSalesOrders();
     return SalesInvoice.fromJson(created);
@@ -1240,8 +1254,10 @@ class AppState with ChangeNotifier {
       'items': items,
     };
 
-    final created =
-        await _frappeService.createDocument('Purchase Receipt', payload);
+    final created = await _frappeService.createDocument(
+      'Purchase Receipt',
+      payload,
+    );
     await refreshPurchaseReceipts();
     await refreshPurchaseOrders();
     return PurchaseReceipt.fromJson(created);
@@ -1263,18 +1279,31 @@ class AppState with ChangeNotifier {
       'items': items,
     };
 
-    final created =
-        await _frappeService.createDocument('Purchase Invoice', payload);
+    final created = await _frappeService.createDocument(
+      'Purchase Invoice',
+      payload,
+    );
     await refreshPurchaseInvoices();
     await refreshPurchaseOrders();
     return PurchaseInvoice.fromJson(created);
   }
 
-  Future<List<DeliveryNote>> fetchDeliveryNotesForSalesOrder(String soId) async {
+  Future<List<DeliveryNote>> fetchDeliveryNotesForSalesOrder(
+    String soId,
+  ) async {
     await _frappeService.ensureLoggedIn();
     final data = await _fetchAllResourcePages(
       doctype: 'Delivery Note',
-      fields: const ['name', 'customer', 'customer_name', 'status', 'docstatus', 'posting_date', 'grand_total', 'total_qty'],
+      fields: const [
+        'name',
+        'customer',
+        'customer_name',
+        'status',
+        'docstatus',
+        'posting_date',
+        'grand_total',
+        'total_qty',
+      ],
       filters: [
         ['Delivery Note Item', 'against_sales_order', '=', soId],
       ],
@@ -1282,7 +1311,9 @@ class AppState with ChangeNotifier {
     return data.map((e) => DeliveryNote.fromJson(e)).toList();
   }
 
-  Future<List<SalesInvoice>> fetchSalesInvoicesForSalesOrder(String soId) async {
+  Future<List<SalesInvoice>> fetchSalesInvoicesForSalesOrder(
+    String soId,
+  ) async {
     await _frappeService.ensureLoggedIn();
     try {
       final data = await _fetchAllResourcePages(
@@ -1320,6 +1351,41 @@ class AppState with ChangeNotifier {
   int get overduePurchaseInvoicesCount => _purchaseInvoices
       .where((i) => i.statusKey == InvoiceStatusKey.overdue)
       .length;
+
+  Future<StockLedgerResult> fetchStockLedgerForItem({
+    required String itemCode,
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+
+    final fromDate = DateRangePresets.toFrappeDate(from);
+    final toDate = DateRangePresets.toFrappeDate(to);
+
+    final data = await _fetchAllResourcePages(
+      doctype: 'Stock Ledger Entry',
+      fields: const [
+        'posting_date',
+        'posting_time',
+        'item_code',
+        'warehouse',
+        'actual_qty',
+        'qty_after_transaction',
+        'voucher_type',
+        'voucher_no',
+        'stock_value_difference',
+      ],
+      orderBy: 'posting_date desc, posting_time desc',
+      filters: [
+        ['item_code', '=', itemCode],
+        ['posting_date', '>=', fromDate],
+        ['posting_date', '<=', toDate],
+      ],
+    );
+
+    final movements = data.map((e) => StockLedgerMovement.fromJson(e)).toList();
+    return StockLedgerResult.fromMovements(movements);
+  }
 
   Future<void> refreshSalesOrders() => fetchSalesOrdersFromFrappe();
   Future<void> refreshPurchaseOrders() => fetchPurchaseOrdersFromFrappe();
@@ -1502,7 +1568,8 @@ class AppState with ChangeNotifier {
     if (itemCodes.isEmpty) return {};
 
     final codes = itemCodes.toList();
-    final meta = <String, ({String name, int reorderLevel, double valuationRate})>{};
+    final meta =
+        <String, ({String name, int reorderLevel, double valuationRate})>{};
 
     for (var i = 0; i < codes.length; i += 80) {
       final chunk = codes.sublist(
@@ -1521,7 +1588,7 @@ class AppState with ChangeNotifier {
           limit: chunk.length,
           filters: [
             ['name', 'in', chunk],
-        ],
+          ],
         );
         for (final row in data) {
           final code = row['name']?.toString() ?? '';
@@ -1571,6 +1638,4 @@ class AppState with ChangeNotifier {
     }
     return Icons.inventory_2_outlined;
   }
-
 }
-
