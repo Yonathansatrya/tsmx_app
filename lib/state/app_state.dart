@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sales_order.dart';
 import '../models/purchase_order.dart';
 import '../models/delivery_note.dart';
+import '../models/delivery_trip.dart';
 import '../models/sales_invoice.dart';
 import '../models/purchase_receipt.dart';
 import '../models/purchase_invoice.dart';
@@ -40,6 +41,7 @@ class AppState with ChangeNotifier {
   List<SalesOrder> _salesOrders = [];
   List<PurchaseOrder> _purchaseOrders = [];
   List<DeliveryNote> _deliveryNotes = [];
+  List<DeliveryTrip> _deliveryTrips = [];
   List<SalesInvoice> _salesInvoices = [];
   List<PurchaseReceipt> _purchaseReceipts = [];
   List<PurchaseInvoice> _purchaseInvoices = [];
@@ -55,6 +57,7 @@ class AppState with ChangeNotifier {
   List<SalesInvoice> get salesInvoices => _salesInvoices;
   List<PurchaseReceipt> get purchaseReceipts => _purchaseReceipts;
   List<PurchaseInvoice> get purchaseInvoices => _purchaseInvoices;
+  List<DeliveryTrip> get deliveryTrips => _deliveryTrips;
   List<Quotation> get quotations => _quotations;
   List<PaymentEntry> get paymentEntries => _paymentEntries;
   List<StockEntry> get stockEntries => _stockEntries;
@@ -91,6 +94,11 @@ class AppState with ChangeNotifier {
   bool get isDeliveryNotesLoading => _isDeliveryNotesLoading;
   String? _deliveryNotesError;
   String? get deliveryNotesError => _deliveryNotesError;
+
+  bool _isDeliveryTripsLoading = false;
+  bool get isDeliveryTripsLoading => _isDeliveryTripsLoading;
+  String? _deliveryTripsError;
+  String? get deliveryTripsError => _deliveryTripsError;
 
   bool _isSalesInvoicesLoading = false;
   bool get isSalesInvoicesLoading => _isSalesInvoicesLoading;
@@ -726,6 +734,40 @@ class AppState with ChangeNotifier {
     }
   }
 
+  Future<void> fetchDeliveryTripsFromFrappe() async {
+    _isDeliveryTripsLoading = true;
+    _deliveryTripsError = null;
+    notifyListeners();
+
+    try {
+      await _frappeService.ensureLoggedIn();
+      final data = await _fetchAllResourcePages(
+        doctype: 'Delivery Trip',
+        fields: const [
+          'name',
+          'status',
+          'docstatus',
+          'vehicle',
+          'trip_number',
+          'route',
+          'total_distance',
+          'distance',
+          'posting_date',
+          'modified',
+          'creation',
+        ],
+        orderBy: 'modified desc',
+      );
+      _deliveryTrips = data.map((e) => DeliveryTrip.fromJson(e)).toList();
+      _deliveryTripsError = null;
+    } catch (err) {
+      _deliveryTripsError = err.toString();
+    } finally {
+      _isDeliveryTripsLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> fetchSalesInvoicesFromFrappe() async {
     _isSalesInvoicesLoading = true;
     _salesInvoicesError = null;
@@ -884,6 +926,7 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> refreshDeliveryNotes() => fetchDeliveryNotesFromFrappe();
+  Future<void> refreshDeliveryTrips() => fetchDeliveryTripsFromFrappe();
   Future<void> refreshSalesInvoices() => fetchSalesInvoicesFromFrappe();
   Future<void> refreshPurchaseReceipts() => fetchPurchaseReceiptsFromFrappe();
   Future<void> refreshPurchaseInvoices() => fetchPurchaseInvoicesFromFrappe();
