@@ -15,7 +15,7 @@ class StockTab extends StatefulWidget {
 }
 
 class _StockTabState extends State<StockTab> {
-  String? _selectedHubId;
+  String? _selectedCompany;
   String? _selectedAreaId;
   bool _selectionInitialized = false;
 
@@ -34,8 +34,8 @@ class _StockTabState extends State<StockTab> {
 
     _applyDefaultSelection(appState);
 
-    if (appState.inventory.isEmpty && _selectedHubId != null) {
-      await appState.refreshInventoryForWarehouse(_selectedHubId!);
+    if (appState.inventory.isEmpty && _selectedCompany != null) {
+      await appState.refreshInventoryForCompany(_selectedCompany!);
     }
 
     if (appState.stockEntries.isEmpty) {
@@ -44,16 +44,16 @@ class _StockTabState extends State<StockTab> {
   }
 
   void _applyDefaultSelection(AppState appState) {
-    final hubs = appState.stockHubs;
-    if (hubs.isEmpty) return;
+    final companies = appState.stockCompanies;
+    if (companies.isEmpty) return;
 
-    final hubId = _selectedHubId ?? hubs.first.key;
-    final areas = appState.stockAreasForHub(hubId);
+    final company = _selectedCompany ?? companies.first.key;
+    final areas = appState.stockWarehousesForCompany(company);
     final areaId =
         _selectedAreaId ?? (areas.isNotEmpty ? areas.first.areaId : null);
 
     setState(() {
-      _selectedHubId = hubId;
+      _selectedCompany = company;
       _selectedAreaId = areaId;
       _selectionInitialized = true;
     });
@@ -64,28 +64,28 @@ class _StockTabState extends State<StockTab> {
     await appState.refreshWarehouses();
     if (!mounted) return;
     _applyDefaultSelection(appState);
-    if (_selectedHubId != null) {
-      await appState.refreshInventoryForWarehouse(_selectedHubId!);
+    if (_selectedCompany != null) {
+      await appState.refreshInventoryForCompany(_selectedCompany!);
     }
   }
 
-  void _onHubChanged(String? hubId) {
-    if (hubId == null) return;
+  void _onCompanyChanged(String? company) {
+    if (company == null) return;
 
     final appState = context.read<AppState>();
-    final areas = appState.stockAreasForHub(hubId);
+    final areas = appState.stockWarehousesForCompany(company);
 
     setState(() {
-      _selectedHubId = hubId;
+      _selectedCompany = company;
       _selectedAreaId = areas.isNotEmpty ? areas.first.areaId : _selectedAreaId;
     });
 
-    appState.refreshInventoryForWarehouse(hubId);
+    appState.refreshInventoryForCompany(company);
   }
 
-  List<InventoryItem> _inventoryForHub(AppState appState, String hubId) {
+  List<InventoryItem> _inventoryForCompany(AppState appState, String company) {
     final areaIds = appState
-        .stockAreasForHub(hubId)
+        .stockWarehousesForCompany(company)
         .map((a) => a.areaId)
         .toSet();
     if (areaIds.isEmpty) return appState.inventory;
@@ -98,20 +98,20 @@ class _StockTabState extends State<StockTab> {
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
-    final hubs = appState.stockHubs;
+    final companies = appState.stockCompanies;
 
-    if (!_selectionInitialized && hubs.isNotEmpty) {
+    if (!_selectionInitialized && companies.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _applyDefaultSelection(appState);
       });
     }
 
-    final selectedHubId = _selectedHubId;
-    final areas = selectedHubId != null
-        ? appState.stockAreasForHub(selectedHubId)
+    final selectedCompany = _selectedCompany;
+    final areas = selectedCompany != null
+        ? appState.stockWarehousesForCompany(selectedCompany)
         : <StockAreaOption>[];
 
-    if (selectedHubId != null &&
+    if (selectedCompany != null &&
         areas.isNotEmpty &&
         (_selectedAreaId == null ||
             !areas.any((a) => a.areaId == _selectedAreaId))) {
@@ -129,8 +129,8 @@ class _StockTabState extends State<StockTab> {
               .where((item) => item.warehouseId == selectedAreaId)
               .toList();
 
-    final hubInventory = selectedHubId != null
-        ? _inventoryForHub(appState, selectedHubId)
+    final companyInventory = selectedCompany != null
+        ? _inventoryForCompany(appState, selectedCompany)
         : <InventoryItem>[];
 
     final totalUnitsInStock = filteredInventory.fold<int>(
@@ -138,13 +138,13 @@ class _StockTabState extends State<StockTab> {
       (sum, item) => sum + item.quantity,
     );
 
-    final hubTotalUnits = hubInventory.fold<int>(
+    final companyTotalUnits = companyInventory.fold<int>(
       0,
       (sum, item) => sum + item.quantity,
     );
 
-    final capacityPercentage = hubTotalUnits > 0
-        ? (totalUnitsInStock / hubTotalUnits).clamp(0.0, 1.0)
+    final capacityPercentage = companyTotalUnits > 0
+        ? (totalUnitsInStock / companyTotalUnits).clamp(0.0, 1.0)
         : 0.0;
 
     final stockValue = filteredInventory.fold<double>(
@@ -173,7 +173,7 @@ class _StockTabState extends State<StockTab> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
           children: [
-            _buildHeader(appState, hubs),
+            _buildHeader(companies),
 
             const SizedBox(height: 16),
 
@@ -251,7 +251,7 @@ class _StockTabState extends State<StockTab> {
                     stockValue: stockValue,
                     hasValuation: hasValuation,
                     totalUnitsInStock: totalUnitsInStock,
-                    hubTotalUnits: hubTotalUnits,
+                    companyTotalUnits: companyTotalUnits,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -297,7 +297,7 @@ class _StockTabState extends State<StockTab> {
               ...filteredInventory.map(
                 (item) => _buildInventoryCard(
                   item,
-                  hubLabel: _hubTitle(hubs, selectedHubId),
+                  companyLabel: _companyTitle(companies, selectedCompany),
                   areaLabel: _selectedAreaTitle(areas),
                 ),
               ),
@@ -388,9 +388,10 @@ class _StockTabState extends State<StockTab> {
     );
   }
 
-  Widget _buildHeader(AppState appState, List<MapEntry<String, String>> hubs) {
-    final hubId = _selectedHubId;
-    final hubValid = hubId != null && hubs.any((h) => h.key == hubId);
+  Widget _buildHeader(List<MapEntry<String, String>> companies) {
+    final company = _selectedCompany;
+    final companyValid =
+        company != null && companies.any((entry) => entry.key == company);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -447,7 +448,7 @@ class _StockTabState extends State<StockTab> {
                 borderRadius: BorderRadius.circular(12),
               ),
               alignment: Alignment.centerLeft,
-              child: hubs.isEmpty
+              child: companies.isEmpty
                   ? const Text(
                       'Loading…',
                       style: TextStyle(
@@ -458,7 +459,7 @@ class _StockTabState extends State<StockTab> {
                     )
                   : DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
-                        value: hubValid ? hubId : hubs.first.key,
+                        value: companyValid ? company : companies.first.key,
                         isDense: true,
                         isExpanded: true,
                         dropdownColor: AppColors.white,
@@ -472,18 +473,18 @@ class _StockTabState extends State<StockTab> {
                           color: AppColors.primary,
                           fontSize: 12,
                         ),
-                        items: hubs.map((h) {
+                        items: companies.map((entry) {
                           return DropdownMenuItem<String>(
-                            value: h.key,
+                            value: entry.key,
                             child: Text(
-                              h.value,
+                              entry.value,
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
                               style: const TextStyle(fontSize: 12),
                             ),
                           );
                         }).toList(),
-                        onChanged: _onHubChanged,
+                        onChanged: _onCompanyChanged,
                       ),
                     ),
             ),
@@ -572,7 +573,7 @@ class _StockTabState extends State<StockTab> {
     required double stockValue,
     required bool hasValuation,
     required int totalUnitsInStock,
-    required int hubTotalUnits,
+    required int companyTotalUnits,
   }) {
     return Container(
       height: 184,
@@ -624,9 +625,9 @@ class _StockTabState extends State<StockTab> {
               ),
               const SizedBox(height: 2),
               Text(
-                hubTotalUnits > 0
-                    ? 'Hub total: $hubTotalUnits units'
-                    : 'No stock in hub',
+                companyTotalUnits > 0
+                    ? 'Company total: $companyTotalUnits units'
+                    : 'No stock in company',
                 style: const TextStyle(fontSize: 10, color: AppColors.slate),
               ),
             ],
@@ -636,24 +637,27 @@ class _StockTabState extends State<StockTab> {
     );
   }
 
-  String? _hubTitle(List<MapEntry<String, String>> hubs, String? hubId) {
-    if (hubId == null) return null;
-    for (final hub in hubs) {
-      if (hub.key == hubId) return hub.value;
+  String? _companyTitle(
+    List<MapEntry<String, String>> companies,
+    String? company,
+  ) {
+    if (company == null) return null;
+    for (final entry in companies) {
+      if (entry.key == company) return entry.value;
     }
-    return hubId;
+    return company;
   }
 
   void _openItemDetail(
     InventoryItem item, {
-    String? hubLabel,
+    String? companyLabel,
     String? areaLabel,
   }) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ItemStockDetailScreen(
           item: item,
-          hubLabel: hubLabel,
+          companyLabel: companyLabel,
           areaLabel: areaLabel,
         ),
       ),
@@ -662,7 +666,7 @@ class _StockTabState extends State<StockTab> {
 
   Widget _buildInventoryCard(
     InventoryItem item, {
-    String? hubLabel,
+    String? companyLabel,
     String? areaLabel,
   }) {
     Color badgeColor = Colors.green;
@@ -679,8 +683,11 @@ class _StockTabState extends State<StockTab> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () =>
-            _openItemDetail(item, hubLabel: hubLabel, areaLabel: areaLabel),
+        onTap: () => _openItemDetail(
+          item,
+          companyLabel: companyLabel,
+          areaLabel: areaLabel,
+        ),
         borderRadius: BorderRadius.circular(16),
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),

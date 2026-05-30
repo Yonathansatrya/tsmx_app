@@ -22,7 +22,6 @@ import '../services/frappe_service.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/frappe_status.dart';
 import '../utils/num_parse.dart';
-import '../utils/warehouse_mapper.dart';
 import '../widgets/notifications/notification_model.dart';
 
 class AppState with ChangeNotifier {
@@ -144,23 +143,10 @@ class AppState with ChangeNotifier {
   static const String _defaultFrappeBaseUrl = 'http://apps.willshine.id:8014';
   static const int _frappePageSize = FrappeService.maxPageLength;
   static const String _prefsFrappeConfigKey = 'frappe_config';
-  static const String _prefsWarehouseMapKey = 'warehouse_mappings';
 
-  Map<String, String> _warehouseMappings = {};
   final FrappeService _frappeService = FrappeService();
 
   FrappeService get frappeService => _frappeService;
-
-  Future<void> _loadPersistedWarehouseMappings() async {
-    try {
-      final sp = await SharedPreferences.getInstance();
-      final raw = sp.getString(_prefsWarehouseMapKey);
-      if (raw != null && raw.isNotEmpty) {
-        final decoded = jsonDecode(raw) as Map<String, dynamic>;
-        _warehouseMappings = decoded.map((k, v) => MapEntry(k, v.toString()));
-      }
-    } catch (_) {}
-  }
 
   Future<void> _restoreFrappeConfig() async {
     final cfg = await _loadFrappeConfig();
@@ -177,7 +163,6 @@ class AppState with ChangeNotifier {
 
   AppState() {
     () async {
-      await _loadPersistedWarehouseMappings();
       await _restoreFrappeConfig();
       _isInitializing = false;
       notifyListeners();
@@ -197,7 +182,6 @@ class AppState with ChangeNotifier {
   }
 
   Future<bool> restoreSession() async {
-    await _loadPersistedWarehouseMappings();
     await _restoreFrappeConfig();
 
     final cfg = await _loadFrappeConfig();
@@ -250,13 +234,6 @@ class AppState with ChangeNotifier {
     } catch (_) {}
     _frappeService.username = null;
     _frappeService.password = null;
-  }
-
-  Future<void> _persistWarehouseMappings() async {
-    try {
-      final sp = await SharedPreferences.getInstance();
-      await sp.setString(_prefsWarehouseMapKey, jsonEncode(_warehouseMappings));
-    } catch (_) {}
   }
 
   void setRememberDevice(bool value) {
@@ -1022,6 +999,7 @@ class AppState with ChangeNotifier {
           fields: const [
             'name',
             'warehouse_name',
+            'company',
             'parent_warehouse',
             'is_group',
           ],
@@ -1034,9 +1012,9 @@ class AppState with ChangeNotifier {
         data = await _fetchAllResourcePages(
           doctype: 'Warehouse',
           fields: const [
-            'id',
             'name',
             'warehouse_name',
+            'company',
             'parent_warehouse',
             'is_group',
           ],
@@ -1048,14 +1026,6 @@ class AppState with ChangeNotifier {
           .map((row) => WarehouseInfo.fromJson(row))
           .where((w) => w.name.isNotEmpty && !w.isGroup)
           .toList();
-
-      for (final w in _warehouses) {
-        _warehouseMappings[w.name] = WarehouseMapper.toAreaId(
-          w.name,
-          overrides: _warehouseMappings,
-        );
-      }
-      await _persistWarehouseMappings();
     } catch (_) {
       // Warehouse list is optional; stock can fall back to name filters.
     } finally {
@@ -1063,37 +1033,29 @@ class AppState with ChangeNotifier {
     }
   }
 
-  String hubIdForWarehouse(String warehouseName) {
-    final hub = WarehouseMapper.hubIdFromWarehouse(warehouseName);
-    return hub.isNotEmpty ? hub : warehouseName;
-  }
-
-  bool warehouseInHub(String warehouseName, String hubId) {
-    return WarehouseMapper.warehouseMatchesHub(warehouseName, hubId);
-  }
-
-  List<MapEntry<String, String>> get stockHubs {
+  List<MapEntry<String, String>> get stockCompanies {
     final labels = <String, String>{};
     for (final w in _warehouses) {
-      final hubId = hubIdForWarehouse(w.name);
-      labels.putIfAbsent(
-        hubId,
-        () => WarehouseMapper.hubDisplayName(hubId) == hubId
-            ? w.displayName
-            : WarehouseMapper.hubDisplayName(hubId),
-      );
+      if (w.company.isEmpty) continue;
+      labels.putIfAbsent(w.company, () => w.company);
     }
     final entries = labels.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
     return entries;
   }
 
-  List<StockAreaOption> stockAreasForHub(String hubId) {
+  bool _warehouseBelongsToCompany(WarehouseInfo warehouse, String company) {
+    return warehouse.company == company;
+  }
+
+  List<StockAreaOption> stockWarehousesForCompany(String company) {
     final seen = <String>{};
     final areas = <StockAreaOption>[];
 
-    for (final w in _warehouses.where((w) => warehouseInHub(w.name, hubId))) {
-      final areaId = _mapWarehouseId(w.name);
+    for (final w in _warehouses.where(
+      (w) => _warehouseBelongsToCompany(w, company),
+    )) {
+      final areaId = w.name;
       if (areaId.isEmpty || seen.contains(areaId)) continue;
       seen.add(areaId);
       areas.add(
@@ -1109,10 +1071,10 @@ class AppState with ChangeNotifier {
     return areas;
   }
 
-  List<String> erpWarehouseNamesForHub(String hubId) {
+  List<String> erpWarehouseNamesForCompany(String company) {
     if (_warehouses.isEmpty) return [];
     return _warehouses
-        .where((w) => warehouseInHub(w.name, hubId))
+        .where((w) => _warehouseBelongsToCompany(w, company))
         .map((w) => w.name)
         .toList();
   }
@@ -1164,8 +1126,6 @@ class AppState with ChangeNotifier {
         );
       }
 
-      final hubWarehouseFilter = _hubIdFromFilters(filters);
-
       final List<InventoryItem> items = [];
       for (final rawItem in data) {
         final rawWarehouse =
@@ -1173,18 +1133,9 @@ class AppState with ChangeNotifier {
             rawItem['warehouse_id']?.toString() ??
             '';
 
-        if (hubWarehouseFilter != null &&
-            !WarehouseMapper.warehouseMatchesHub(
-              rawWarehouse,
-              hubWarehouseFilter,
-            )) {
-          continue;
-        }
-
         final inv = InventoryItem.fromJson(rawItem);
-        final normalized = _mapWarehouseId(rawWarehouse);
-        if (normalized.isEmpty) continue;
-        items.add(inv.copyWith(warehouseId: normalized));
+        if (rawWarehouse.isEmpty) continue;
+        items.add(inv.copyWith(warehouseId: rawWarehouse));
       }
 
       final itemMeta = await _fetchItemMeta(
@@ -1445,12 +1396,12 @@ class AppState with ChangeNotifier {
 
   Future<void> refreshWarehouses() => fetchWarehousesFromFrappe();
 
-  Future<void> refreshInventoryForWarehouse(String hubId) async {
+  Future<void> refreshInventoryForCompany(String company) async {
     if (_warehouses.isEmpty) {
       await fetchWarehousesFromFrappe();
     }
 
-    final erpNames = erpWarehouseNamesForHub(hubId);
+    final erpNames = erpWarehouseNamesForCompany(company);
     if (erpNames.isNotEmpty) {
       await fetchInventoryFromFrappe(
         filters: [
@@ -1460,21 +1411,8 @@ class AppState with ChangeNotifier {
       return;
     }
 
-    final direct = _warehouses.any((w) => w.name == hubId);
-    if (direct) {
-      await fetchInventoryFromFrappe(
-        filters: [
-          ['warehouse', '=', hubId],
-        ],
-      );
-      return;
-    }
-
-    await fetchInventoryFromFrappe(
-      filters: [
-        ['warehouse', 'like', WarehouseMapper.hubFilterPrefix(hubId)],
-      ],
-    );
+    _inventory = [];
+    notifyListeners();
   }
 
   Future<void> saveFrappeConfig({
@@ -1510,10 +1448,6 @@ class AppState with ChangeNotifier {
     } catch (_) {
       return null;
     }
-  }
-
-  String _mapWarehouseId(String raw) {
-    return WarehouseMapper.toAreaId(raw, overrides: _warehouseMappings);
   }
 
   Future<List<Map<String, dynamic>>> _fetchAllResourcePages({
@@ -1590,29 +1524,6 @@ class AppState with ChangeNotifier {
     }
 
     throw Exception('No permitted fields available for $doctype.');
-  }
-
-  String? _hubIdFromFilters(List<List<dynamic>>? filters) {
-    if (filters == null || filters.isEmpty) return null;
-    final first = filters.first;
-    if (first.length < 3) return null;
-    final field = first[0]?.toString() ?? '';
-    if (field != 'warehouse') return null;
-
-    final op = first[1]?.toString() ?? '';
-    final value = first[2];
-    if (op == 'like' && value is String) {
-      final prefix = value.replaceAll('%', '').toLowerCase();
-      if (prefix.contains('jakarta') || prefix.contains('jkt')) {
-        return 'jakarta';
-      }
-      if (prefix.contains('curug')) return 'curug';
-      if (prefix.contains('medan')) return 'medan';
-    }
-    if (op == 'in' && value is List && value.isNotEmpty) {
-      return WarehouseMapper.hubIdFromWarehouse(value.first.toString());
-    }
-    return null;
   }
 
   Future<Map<String, ({String name, int reorderLevel, double valuationRate})>>

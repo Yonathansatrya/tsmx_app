@@ -1,12 +1,14 @@
 class WarehouseInfo {
   final String name;
   final String displayName;
+  final String company;
   final String? parentWarehouse;
   final bool isGroup;
 
   WarehouseInfo({
     required this.name,
     required this.displayName,
+    this.company = '',
     this.parentWarehouse,
     this.isGroup = false,
   });
@@ -19,6 +21,7 @@ class WarehouseInfo {
           json['warehouse_name']?.toString() ??
           json['name']?.toString() ??
           name,
+      company: json['company']?.toString() ?? '',
       parentWarehouse: json['parent_warehouse']?.toString(),
       isGroup: json['is_group'] == 1 || json['is_group'] == true,
     );

@@ -1,5 +1,4 @@
 import '../utils/num_parse.dart';
-import '../utils/warehouse_mapper.dart';
 
 enum StockStatus { inStock, lowStock, urgent }
 
@@ -68,7 +67,6 @@ class InventoryItem {
 
     final warehouseRaw =
         json['warehouse']?.toString() ?? json['warehouse_id']?.toString() ?? '';
-    final warehouseId = WarehouseMapper.toAreaId(warehouseRaw);
 
     final quantity = NumParse.asInt(
       json['actual_qty'] ?? json['quantity'] ?? json['projected_qty'],
@@ -97,7 +95,7 @@ class InventoryItem {
     return InventoryItem(
       sku: sku,
       name: name,
-      warehouseId: warehouseId,
+      warehouseId: warehouseRaw,
       quantity: quantity,
       minStockThreshold: minThreshold,
       unitValue: unitValue,

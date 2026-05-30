@@ -9,13 +9,13 @@ import '../utils/date_range_presets.dart';
 
 class ItemStockDetailScreen extends StatefulWidget {
   final InventoryItem item;
-  final String? hubLabel;
+  final String? companyLabel;
   final String? areaLabel;
 
   const ItemStockDetailScreen({
     super.key,
     required this.item,
-    this.hubLabel,
+    this.companyLabel,
     this.areaLabel,
   });
 
@@ -119,8 +119,8 @@ class _ItemStockDetailScreenState extends State<ItemStockDetailScreen> {
   Widget build(BuildContext context) {
     final result = _result;
     final contextLabel = [
-      if (widget.hubLabel != null && widget.hubLabel!.isNotEmpty)
-        widget.hubLabel,
+      if (widget.companyLabel != null && widget.companyLabel!.isNotEmpty)
+        widget.companyLabel,
       if (widget.areaLabel != null && widget.areaLabel!.isNotEmpty)
         widget.areaLabel,
     ].join(' · ');
