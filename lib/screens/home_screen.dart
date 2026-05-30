@@ -11,6 +11,7 @@ import 'tabs/dashboard_tab.dart';
 import 'tabs/buying_tab.dart';
 import 'tabs/selling_tab.dart';
 import 'tabs/stock_tab.dart';
+import 'create_sales_order_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -253,7 +254,9 @@ class _HomeScreenState extends State<HomeScreen> {
         }
         return FloatingActionButton(
           onPressed: () {
-            _showCreateSalesOrderSheet(context);
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CreateSalesOrderScreen()),
+            );
           },
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
@@ -286,181 +289,6 @@ class _HomeScreenState extends State<HomeScreen> {
       default:
         return null;
     }
-  }
-
-  void _showCreateSalesOrderSheet(BuildContext context) {
-    final appState = context.read<AppState>();
-    final customerCtrl = TextEditingController();
-    final itemCodeCtrl = TextEditingController();
-    final qtyCtrl = TextEditingController(text: '1');
-    final rateCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    String? selectedWarehouse = appState.warehouses.isNotEmpty
-        ? appState.warehouses.first.name
-        : null;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
-          ),
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Create Sales Order',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.navy,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(sheetContext),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: customerCtrl,
-                  decoration: const InputDecoration(labelText: 'Customer ID'),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Customer wajib diisi'
-                      : null,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: itemCodeCtrl,
-                  decoration: const InputDecoration(labelText: 'Item Code'),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Item code wajib diisi'
-                      : null,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: qtyCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(labelText: 'Quantity'),
-                  validator: (v) {
-                    final q = double.tryParse(v?.trim() ?? '');
-                    if (q == null || q <= 0) return 'Qty harus > 0';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 10),
-                if (appState.warehouses.isNotEmpty)
-                  DropdownButtonFormField<String>(
-                    value: selectedWarehouse,
-                    decoration: const InputDecoration(
-                      labelText: 'Warehouse (optional)',
-                    ),
-                    items: [
-                      const DropdownMenuItem(
-                        value: null,
-                        child: Text('— None —'),
-                      ),
-                      ...appState.warehouses.map(
-                        (w) => DropdownMenuItem(
-                          value: w.name,
-                          child: Text(
-                            w.displayName,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      setSheetState(() => selectedWarehouse = value);
-                    },
-                  )
-                else
-                  const Text(
-                    'Warehouse list unavailable — refresh Stock tab first.',
-                    style: TextStyle(fontSize: 12, color: AppColors.slate),
-                  ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: rateCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(labelText: 'Rate (optional)'),
-                ),
-                const SizedBox(height: 18),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (!formKey.currentState!.validate()) return;
-                    try {
-                      final appState = context.read<AppState>();
-                      final qty = double.parse(qtyCtrl.text.trim());
-                      final rate = double.tryParse(rateCtrl.text.trim());
-                      await appState.createSalesOrder(
-                        customer: customerCtrl.text.trim(),
-                        itemCode: itemCodeCtrl.text.trim(),
-                        qty: qty,
-                        warehouse: selectedWarehouse,
-                        rate: rate,
-                      );
-                      if (!sheetContext.mounted) return;
-                      Navigator.pop(sheetContext);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Sales Order berhasil dibuat'),
-                          backgroundColor: AppColors.primary,
-                        ),
-                      );
-                    } catch (e) {
-                      if (!sheetContext.mounted) return;
-                      ScaffoldMessenger.of(sheetContext).showSnackBar(
-                        SnackBar(
-                          content: Text('Gagal create SO: $e'),
-                          backgroundColor: Colors.redAccent,
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: const Text(
-                    'Create',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-          },
-        );
-      },
-    );
   }
 
   void _showCreatePurchaseOrderSheet(BuildContext context) {
@@ -517,7 +345,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: supplierCtrl,
-                      decoration: const InputDecoration(labelText: 'Supplier ID'),
+                      decoration: const InputDecoration(
+                        labelText: 'Supplier ID',
+                      ),
                       validator: (v) => (v == null || v.trim().isEmpty)
                           ? 'Supplier wajib diisi'
                           : null,
@@ -580,7 +410,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      decoration: const InputDecoration(labelText: 'Rate (optional)'),
+                      decoration: const InputDecoration(
+                        labelText: 'Rate (optional)',
+                      ),
                     ),
                     const SizedBox(height: 18),
                     ElevatedButton(

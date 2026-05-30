@@ -34,9 +34,9 @@ class SellingTabState extends State<SellingTab> {
   Future<void> refreshCurrent() async {
     final appState = context.read<AppState>();
     switch (_segment) {
-      case 'p':
-        await appState.refreshPaymentEntries();
-        break;
+      // case 'p':
+      //   await appState.refreshPaymentEntries();
+      //   break;
       case 'dt':
         await appState.refreshDeliveryTrips();
         break;
@@ -91,11 +91,11 @@ class SellingTabState extends State<SellingTab> {
                     appState.refreshQuotations();
                   }
                   break;
-                case 'p':
-                  if (appState.paymentEntries.isEmpty) {
-                    appState.refreshPaymentEntries();
-                  }
-                  break;
+                // case 'p':
+                //   if (appState.paymentEntries.isEmpty) {
+                //     appState.refreshPaymentEntries();
+                //   }
+                //   break;
                 case 'so':
                 default:
                   if (appState.salesOrders.isEmpty) {

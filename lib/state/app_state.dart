@@ -149,6 +149,8 @@ class AppState with ChangeNotifier {
   Map<String, String> _warehouseMappings = {};
   final FrappeService _frappeService = FrappeService();
 
+  FrappeService get frappeService => _frappeService;
+
   Future<void> _loadPersistedWarehouseMappings() async {
     try {
       final sp = await SharedPreferences.getInstance();
@@ -475,6 +477,8 @@ class AppState with ChangeNotifier {
     required double qty,
     String? warehouse,
     double? rate,
+    String? series,
+    String? costCenter,
     DateTime? transactionDate,
   }) async {
     await _frappeService.ensureLoggedIn();
@@ -485,6 +489,10 @@ class AppState with ChangeNotifier {
           .toIso8601String()
           .split('T')
           .first,
+      if (series != null && series.trim().isNotEmpty)
+        'naming_series': series.trim(),
+      if (costCenter != null && costCenter.trim().isNotEmpty)
+        'cost_center': costCenter.trim(),
       'items': [
         {
           'item_code': itemCode,
@@ -1017,7 +1025,7 @@ class AppState with ChangeNotifier {
             'parent_warehouse',
             'is_group',
           ],
-          orderBy: 'warehouse_name asc',
+          orderBy: 'name asc',
           filters: [
             ['is_group', '=', 0],
           ],
@@ -1026,12 +1034,13 @@ class AppState with ChangeNotifier {
         data = await _fetchAllResourcePages(
           doctype: 'Warehouse',
           fields: const [
+            'id',
             'name',
             'warehouse_name',
             'parent_warehouse',
             'is_group',
           ],
-          orderBy: 'warehouse_name asc',
+          orderBy: 'name asc',
         );
       }
 
@@ -1090,8 +1099,8 @@ class AppState with ChangeNotifier {
       areas.add(
         StockAreaOption(
           areaId: areaId,
-          title: w.displayName,
-          subtitle: w.name,
+          title: w.name,
+          subtitle: w.displayName == w.name ? '' : w.displayName,
           icon: _iconForWarehouseName(w.name),
         ),
       );
