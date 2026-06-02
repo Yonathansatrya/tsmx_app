@@ -634,6 +634,30 @@ class AppState with ChangeNotifier {
     return order;
   }
 
+  Future<StockEntry> createStockEntry({
+    required String stockEntryType,
+    required List<Map<String, dynamic>> items,
+    DateTime? postingDate,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+
+    final payload = <String, dynamic>{
+      'stock_entry_type': stockEntryType,
+      'posting_date': (postingDate ?? DateTime.now())
+          .toIso8601String()
+          .split('T')
+          .first,
+      'items': items,
+    };
+
+    final created = await _frappeService.createDocument('Stock Entry', payload);
+    final entry = StockEntry.fromJson(created);
+    _stockEntries = [entry, ..._stockEntries];
+    notifyListeners();
+    await refreshStockEntries();
+    return entry;
+  }
+
   Future<void> fetchSalesOrdersFromFrappe({
     String baseUrl = _defaultFrappeBaseUrl,
     String? username,

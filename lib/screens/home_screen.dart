@@ -13,6 +13,7 @@ import 'tabs/selling_tab.dart';
 import 'tabs/stock_tab.dart';
 import 'create_purchase_order_screen.dart';
 import 'create_sales_order_screen.dart';
+import 'create_stock_entry_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -284,7 +285,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case 3:
         return FloatingActionButton(
           onPressed: () {
-            _showCreateStockEntrySheet(context);
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CreateStockEntryScreen()),
+            );
           },
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
@@ -294,90 +297,5 @@ class _HomeScreenState extends State<HomeScreen> {
       default:
         return null;
     }
-  }
-
-  void _showCreateStockEntrySheet(BuildContext context) {
-    _showComingSoonSheet(
-      context,
-      title: 'Create Stock Entry',
-      message:
-          'Form Stock Entry akan dibuat setelah modul Sales dan Purchase rapi.',
-    );
-  }
-
-  void _showComingSoonSheet(
-    BuildContext context, {
-    required String title,
-    required String message,
-  }) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.navy,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              Text(
-                message,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.slate,
-                  height: 1.4,
-                ),
-              ),
-
-              const SizedBox(height: 22),
-
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: const Text(
-                  'OK',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
   }
 }
