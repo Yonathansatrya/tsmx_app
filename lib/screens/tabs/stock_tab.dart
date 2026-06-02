@@ -83,18 +83,6 @@ class _StockTabState extends State<StockTab> {
     appState.refreshInventoryForCompany(company);
   }
 
-  List<InventoryItem> _inventoryForCompany(AppState appState, String company) {
-    final areaIds = appState
-        .stockWarehousesForCompany(company)
-        .map((a) => a.areaId)
-        .toSet();
-    if (areaIds.isEmpty) return appState.inventory;
-
-    return appState.inventory
-        .where((item) => areaIds.contains(item.warehouseId))
-        .toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
@@ -129,30 +117,18 @@ class _StockTabState extends State<StockTab> {
               .where((item) => item.warehouseId == selectedAreaId)
               .toList();
 
-    final companyInventory = selectedCompany != null
-        ? _inventoryForCompany(appState, selectedCompany)
-        : <InventoryItem>[];
-
-    final totalUnitsInStock = filteredInventory.fold<int>(
+    final totalBoxesInStock = filteredInventory.fold<int>(
       0,
       (sum, item) => sum + item.quantity,
     );
 
-    final companyTotalUnits = companyInventory.fold<int>(
-      0,
-      (sum, item) => sum + item.quantity,
-    );
+    const int boxesPerSmallRoom = 900;
+    const int smallRoomsUsed = 3;
+    final int estimatedMaxBoxCapacity = boxesPerSmallRoom * smallRoomsUsed;
 
-    final capacityPercentage = companyTotalUnits > 0
-        ? (totalUnitsInStock / companyTotalUnits).clamp(0.0, 1.0)
+    final capacityPercentage = estimatedMaxBoxCapacity > 0
+        ? (totalBoxesInStock / estimatedMaxBoxCapacity).clamp(0.0, 1.0)
         : 0.0;
-
-    final stockValue = filteredInventory.fold<double>(
-      0,
-      (sum, item) => sum + item.quantity * item.unitValue,
-    );
-
-    final hasValuation = filteredInventory.any((item) => item.unitValue > 0);
 
     final urgentCount = filteredInventory
         .where((item) => item.status == StockStatus.urgent)
@@ -164,147 +140,135 @@ class _StockTabState extends State<StockTab> {
         .where((item) => item.status == StockStatus.inStock)
         .length;
 
+    const double extraBottomSpace = 140;
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: RefreshIndicator(
-        color: AppColors.primary,
-        onRefresh: _onPullRefresh,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-          children: [
-            _buildHeader(companies),
+      body: SafeArea(
+        bottom: true,
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: _onPullRefresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, extraBottomSpace),
+            children: [
+              _buildHeader(companies),
 
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            if (areas.isNotEmpty) _buildAreaSelector(areas),
+              if (areas.isNotEmpty) _buildAreaSelector(areas),
 
-            if (areas.isEmpty && !appState.isInventoryLoading) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'No warehouses loaded from ERP. Pull down to refresh.',
-                style: TextStyle(fontSize: 12, color: AppColors.slate),
-              ),
-            ],
-
-            const SizedBox(height: 16),
-
-            if (appState.isInventoryLoading) ...[
-              const LinearProgressIndicator(),
-              const SizedBox(height: 12),
-            ],
-            if (appState.inventoryError != null) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.red.withOpacity(0.15)),
-                ),
-                child: Text(
-                  'Unable to load stock data: ${appState.inventoryError}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.red,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatusBadge(
-                    label: 'Urgent',
-                    value: urgentCount,
-                    color: Colors.red,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildStatusBadge(
-                    label: 'Low Stock',
-                    value: lowStockCount,
-                    color: Colors.orange,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildStatusBadge(
-                    label: 'Healthy',
-                    value: normalCount,
-                    color: Colors.green,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _buildValuationCard(
-                    stockValue: stockValue,
-                    hasValuation: hasValuation,
-                    totalUnitsInStock: totalUnitsInStock,
-                    companyTotalUnits: companyTotalUnits,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: WarehouseGauge(
-                    percentage: capacityPercentage,
-                    label: _selectedAreaTitle(areas),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 22),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
+              if (areas.isEmpty && !appState.isInventoryLoading) ...[
+                const SizedBox(height: 8),
                 const Text(
-                  'Stock Inventory List',
-                  style: TextStyle(
-                    fontFamily: 'HankenGrotesk',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.navy,
-                  ),
-                ),
-                Text(
-                  '${filteredInventory.length} items logged',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.slate,
-                  ),
+                  'No warehouses loaded from ERP. Pull down to refresh.',
+                  style: TextStyle(fontSize: 12, color: AppColors.slate),
                 ),
               ],
-            ),
 
-            const SizedBox(height: 10),
+              const SizedBox(height: 16),
 
-            if (filteredInventory.isEmpty && !appState.isInventoryLoading)
-              const _StockEmptyState()
-            else
-              ...filteredInventory.map(
-                (item) => _buildInventoryCard(
-                  item,
-                  companyLabel: _companyTitle(companies, selectedCompany),
-                  areaLabel: _selectedAreaTitle(areas),
+              if (appState.isInventoryLoading) ...[
+                const LinearProgressIndicator(),
+                const SizedBox(height: 12),
+              ],
+              if (appState.inventoryError != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.red.withOpacity(0.15)),
+                  ),
+                  child: Text(
+                    'Unable to load stock data: ${appState.inventoryError}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.red,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
+                const SizedBox(height: 12),
+              ],
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatusBadge(
+                      label: 'Urgent',
+                      value: urgentCount,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildStatusBadge(
+                      label: 'Low Stock',
+                      value: lowStockCount,
+                      color: Colors.orange,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildStatusBadge(
+                      label: 'Healthy',
+                      value: normalCount,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
               ),
 
-            const SizedBox(height: 24),
-            _buildStockEntriesSection(appState),
-          ],
+              const SizedBox(height: 16),
+              WarehouseGauge(
+                percentage: capacityPercentage,
+                label: _selectedAreaTitle(areas),
+              ),
+              const SizedBox(height: 22),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Stock Inventory List',
+                    style: TextStyle(
+                      fontFamily: 'HankenGrotesk',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                  Text(
+                    '${filteredInventory.length} items logged',
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.slate,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              if (filteredInventory.isEmpty && !appState.isInventoryLoading)
+                const _StockEmptyState()
+              else
+                ...filteredInventory.map(
+                  (item) => _buildInventoryCard(
+                    item,
+                    companyLabel: _companyTitle(companies, selectedCompany),
+                    areaLabel: _selectedAreaTitle(areas),
+                  ),
+                ),
+
+              const SizedBox(height: 24),
+              _buildStockEntriesSection(appState),
+            ],
+          ),
         ),
       ),
     );
@@ -496,7 +460,7 @@ class _StockTabState extends State<StockTab> {
 
   Widget _buildAreaSelector(List<StockAreaOption> areas) {
     return SizedBox(
-      height: 92,
+      height: 125,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: areas.length,
@@ -506,133 +470,119 @@ class _StockTabState extends State<StockTab> {
 
           return GestureDetector(
             onTap: () {
-              setState(() => _selectedAreaId = area.areaId);
+              setState(() {
+                _selectedAreaId = area.areaId;
+              });
             },
-            child: Container(
-              width: 155,
-              margin: const EdgeInsets.only(right: 10),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : AppColors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: isSelected
-                      ? AppColors.primary
-                      : AppColors.primary.withOpacity(0.08),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryDark.withOpacity(0.05),
-                    blurRadius: 12,
-                    offset: const Offset(0, 5),
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              scale: isSelected ? 1.03 : 1.0,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOut,
+                width: 185,
+                margin: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppColors.primary : AppColors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isSelected
+                        ? AppColors.primary
+                        : AppColors.primary.withOpacity(0.08),
+                    width: isSelected ? 2 : 1,
                   ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    area.icon,
-                    size: 22,
-                    color: isSelected ? AppColors.white : AppColors.primary,
-                  ),
-                  const Spacer(),
-                  Text(
-                    area.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      color: isSelected ? AppColors.white : AppColors.navy,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    area.subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w600,
+                  boxShadow: [
+                    BoxShadow(
                       color: isSelected
-                          ? AppColors.white.withOpacity(0.75)
-                          : AppColors.slate,
+                          ? AppColors.primary.withOpacity(0.24)
+                          : AppColors.primaryDark.withOpacity(0.05),
+                      blurRadius: isSelected ? 18 : 10,
+                      offset: const Offset(0, 6),
                     ),
-                  ),
-                ],
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.warehouse_rounded,
+                          size: 20,
+                          color: isSelected
+                              ? AppColors.white
+                              : AppColors.primary,
+                        ),
+
+                        const Spacer(),
+
+                        AnimatedOpacity(
+                          duration: const Duration(milliseconds: 180),
+                          opacity: isSelected ? 1 : 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: AppColors.white,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.check_rounded,
+                              size: 14,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    Expanded(
+                      child: Tooltip(
+                        message: area.title,
+                        waitDuration: const Duration(milliseconds: 500),
+                        child: Text(
+                          area.title,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.15,
+                            fontWeight: FontWeight.w900,
+                            color: isSelected
+                                ? AppColors.white
+                                : AppColors.navy,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    Tooltip(
+                      message: area.subtitle,
+                      waitDuration: const Duration(milliseconds: 500),
+                      child: Text(
+                        area.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? AppColors.white.withOpacity(0.78)
+                              : AppColors.slate,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildValuationCard({
-    required double stockValue,
-    required bool hasValuation,
-    required int totalUnitsInStock,
-    required int companyTotalUnits,
-  }) {
-    return Container(
-      height: 184,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withOpacity(0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryDark.withOpacity(0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            'STOCK VALUATION',
-            style: TextStyle(
-              fontSize: 8,
-              fontWeight: FontWeight.w900,
-              color: AppColors.slate,
-              letterSpacing: 0.6,
-            ),
-          ),
-          Text(
-            hasValuation ? 'Rp ${_formatCurrency(stockValue)}' : '—',
-            style: const TextStyle(
-              fontFamily: 'HankenGrotesk',
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-              color: AppColors.primary,
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Units in area: $totalUnitsInStock',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.navy,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                companyTotalUnits > 0
-                    ? 'Company total: $companyTotalUnits units'
-                    : 'No stock in company',
-                style: const TextStyle(fontSize: 10, color: AppColors.slate),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -814,24 +764,6 @@ class _StockTabState extends State<StockTab> {
         ],
       ),
     );
-  }
-
-  String _formatCurrency(double val) {
-    final strVal = val.toInt().toString();
-    final buffer = StringBuffer();
-    int count = 0;
-
-    for (int i = strVal.length - 1; i >= 0; i--) {
-      buffer.write(strVal[i]);
-      count++;
-
-      if (count == 3 && i > 0) {
-        buffer.write('.');
-        count = 0;
-      }
-    }
-
-    return buffer.toString().split('').reversed.join('');
   }
 }
 
