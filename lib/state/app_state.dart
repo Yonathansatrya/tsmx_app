@@ -456,12 +456,15 @@ class AppState with ChangeNotifier {
     double? rate,
     String? series,
     String? costCenter,
+    String? company,
     DateTime? transactionDate,
   }) async {
     await _frappeService.ensureLoggedIn();
 
     final payload = <String, dynamic>{
       'customer': customer,
+      if (company != null && company.trim().isNotEmpty)
+        'company': company.trim(),
       'transaction_date': (transactionDate ?? DateTime.now())
           .toIso8601String()
           .split('T')
@@ -477,6 +480,8 @@ class AppState with ChangeNotifier {
           if (rate != null && rate > 0) 'rate': rate,
           if (warehouse != null && warehouse.trim().isNotEmpty)
             'warehouse': warehouse.trim(),
+          if (costCenter != null && costCenter.trim().isNotEmpty)
+            'cost_center': costCenter.trim(),
         },
       ],
       if (warehouse != null && warehouse.trim().isNotEmpty)
@@ -489,6 +494,35 @@ class AppState with ChangeNotifier {
     notifyListeners();
     await refreshSalesOrders();
     return order;
+  }
+
+  Future<Map<String, dynamic>> createCustomer({
+    required String customerName,
+    required String customerType,
+    required String namingSeries,
+    required String paymentTerms,
+    required String company,
+    String? customerGroup,
+    String? territory,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+
+    final payload = <String, dynamic>{
+      'naming_series': namingSeries.trim(),
+      'customer_name': customerName.trim(),
+      'customer_type': customerType.trim(),
+      'payment_terms': paymentTerms.trim(),
+      if (customerGroup != null && customerGroup.trim().isNotEmpty)
+        'customer_group': customerGroup.trim(),
+      if (territory != null && territory.trim().isNotEmpty)
+        'territory': territory.trim(),
+      if (company.trim().isNotEmpty)
+        'accounts': [
+          {'company': company.trim()},
+        ],
+    };
+
+    return _frappeService.createDocument('Customer', payload);
   }
 
   Future<SalesOrder> updateSalesOrder({
