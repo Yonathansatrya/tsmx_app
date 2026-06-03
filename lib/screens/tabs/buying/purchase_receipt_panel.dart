@@ -32,8 +32,14 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
       label: 'Partly Billed',
       value: DeliveryNoteStatusKey.partiallyBilled,
     ),
-    const ErpStatusChip(label: 'Completed', value: DeliveryNoteStatusKey.completed),
-    const ErpStatusChip(label: 'Cancelled', value: DeliveryNoteStatusKey.cancelled),
+    const ErpStatusChip(
+      label: 'Completed',
+      value: DeliveryNoteStatusKey.completed,
+    ),
+    const ErpStatusChip(
+      label: 'Cancelled',
+      value: DeliveryNoteStatusKey.cancelled,
+    ),
   ];
 
   @override
@@ -60,7 +66,9 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
   }
 
   Future<void> _openDetail(PurchaseReceipt doc) async {
-    final detail = await context.read<AppState>().loadPurchaseReceiptDetail(doc.id);
+    final detail = await context.read<AppState>().loadPurchaseReceiptDetail(
+      doc.id,
+    );
     if (!mounted) return;
 
     final canSubmit = isDocDraft(detail.docStatus);
@@ -98,9 +106,11 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
     )) {
       return;
     }
+    if (!mounted) return;
     final ok = await runErpWorkflowAction(
       context,
-      action: () => context.read<AppState>().submitDocument('Purchase Receipt', id),
+      action: () =>
+          context.read<AppState>().submitDocument('Purchase Receipt', id),
       successMessage: 'Purchase Receipt submitted',
     );
     if (ok && mounted) Navigator.pop(context);
@@ -132,11 +142,15 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
             fillColor: AppColors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+              borderSide: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.1),
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+              borderSide: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.1),
+              ),
             ),
           ),
         ),

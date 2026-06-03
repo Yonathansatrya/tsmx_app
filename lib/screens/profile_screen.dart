@@ -43,10 +43,12 @@ class ProfileScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.white,
                 borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: AppColors.primary.withOpacity(0.08)),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.08),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primaryDark.withOpacity(0.05),
+                    color: AppColors.primaryDark.withValues(alpha: 0.05),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -61,7 +63,7 @@ class ProfileScreen extends StatelessWidget {
                       color: AppColors.softGreen,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: AppColors.primary.withOpacity(0.15),
+                        color: AppColors.primary.withValues(alpha: 0.15),
                         width: 2,
                       ),
                     ),
@@ -131,7 +133,7 @@ class ProfileScreen extends StatelessWidget {
                 },
                 style: ElevatedButton.styleFrom(
                   elevation: 0,
-                  backgroundColor: Colors.red.withOpacity(0.08),
+                  backgroundColor: Colors.red.withValues(alpha: 0.08),
                   foregroundColor: Colors.red,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
@@ -161,7 +163,7 @@ class ProfileScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primary.withOpacity(0.06)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
       ),
       child: Row(
         children: [

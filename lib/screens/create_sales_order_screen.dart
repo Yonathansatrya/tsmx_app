@@ -949,7 +949,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.white,
         elevation: 1,
-        shadowColor: Colors.black.withOpacity(0.08),
+        shadowColor: Colors.black.withValues(alpha: 0.08),
         centerTitle: false,
         titleSpacing: 16,
         title: const Text(
@@ -979,7 +979,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -1013,7 +1013,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(
-                            color: AppColors.primary.withOpacity(0.2),
+                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
                       ),
@@ -1052,7 +1052,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                           color: AppColors.background,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                            color: AppColors.primary.withOpacity(0.2),
+                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
                         padding: const EdgeInsets.symmetric(
@@ -1101,7 +1101,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(
-                            color: AppColors.primary.withOpacity(0.2),
+                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
                         contentPadding: const EdgeInsets.symmetric(
@@ -1141,7 +1141,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(
-                            color: AppColors.primary.withOpacity(0.2),
+                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
                         contentPadding: const EdgeInsets.symmetric(
@@ -1174,7 +1174,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -1238,7 +1238,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(10),
                                   borderSide: BorderSide(
-                                    color: AppColors.primary.withOpacity(0.2),
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.2,
+                                    ),
                                   ),
                                 ),
                                 contentPadding: const EdgeInsets.symmetric(
@@ -1293,7 +1295,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide(
-                                  color: AppColors.primary.withOpacity(0.2),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.2,
+                                  ),
                                 ),
                               ),
                               contentPadding: const EdgeInsets.symmetric(
@@ -1322,7 +1326,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(10),
                                 borderSide: BorderSide(
-                                  color: AppColors.primary.withOpacity(0.2),
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.2,
+                                  ),
                                 ),
                               ),
                               contentPadding: const EdgeInsets.symmetric(
@@ -1346,7 +1352,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                         color: AppColors.background,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: AppColors.primary.withOpacity(0.2),
+                          color: AppColors.primary.withValues(alpha: 0.2),
                         ),
                       ),
                       padding: const EdgeInsets.symmetric(
@@ -1387,7 +1393,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -1423,7 +1429,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide(
-                              color: AppColors.primary.withOpacity(0.2),
+                              color: AppColors.primary.withValues(alpha: 0.2),
                             ),
                           ),
                           contentPadding: const EdgeInsets.symmetric(
@@ -1464,10 +1470,10 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                     else
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
+                          color: Colors.orange.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                            color: Colors.orange.withOpacity(0.5),
+                            color: Colors.orange.withValues(alpha: 0.5),
                           ),
                         ),
                         padding: const EdgeInsets.all(12),

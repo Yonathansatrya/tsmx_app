@@ -6,7 +6,6 @@ import '../theme/app_colors.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
 
-// tabs menu
 import 'tabs/dashboard_tab.dart';
 import 'tabs/buying_tab.dart';
 import 'tabs/selling_tab.dart';
@@ -78,46 +77,53 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: _buildFloatingActionButton(context, appState),
       appBar: AppBar(
         backgroundColor: AppColors.white,
-        elevation: 1,
-        shadowColor: Colors.black.withValues(alpha: 0.08),
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        titleSpacing: 16,
-
+        titleSpacing: 14,
         title: Row(
           children: [
-            SizedBox(
-              width: 36,
-              height: 36,
+            Container(
+              width: 38,
+              height: 38,
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                color: AppColors.softGreen,
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
             ),
-
             const SizedBox(width: 10),
-
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'PT. Tani Mandiri Sukses',
-                  style: TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1.3,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'TMSX ERP',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.4,
+                    ),
                   ),
-                ),
-                Text(
-                  appState.currentUser ?? 'Operator',
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
+                  Text(
+                    '${appState.currentUser ?? 'Operator'} - PT. Tani Mandiri Sukses',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
-
         actions: [
           IconButton(
             tooltip: 'Notifications',
@@ -128,7 +134,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   Icons.notifications_none_rounded,
                   color: AppColors.primary,
                 ),
-
                 if (appState.hasUnreadNotifications)
                   Positioned(
                     right: -2,
@@ -157,7 +162,6 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
-
           IconButton(
             tooltip: 'Profile',
             icon: const Icon(
@@ -172,74 +176,46 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
-
           const SizedBox(width: 8),
         ],
       ),
-
       body: IndexedStack(index: _currentIndex, children: _tabs),
-
       bottomNavigationBar: Container(
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
         decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.12),
-              blurRadius: 18,
-              offset: const Offset(0, -6),
-            ),
-          ],
+          color: AppColors.white,
+          border: Border(
+            top: BorderSide(color: AppColors.primary.withValues(alpha: 0.06)),
+          ),
+          boxShadow: AppColors.cardShadow,
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: _changeTab,
-
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
+        child: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: _changeTab,
+          height: 64,
           elevation: 0,
-
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: AppColors.slate,
-
-          selectedIconTheme: const IconThemeData(
-            color: AppColors.primary,
-            size: 26,
-          ),
-
-          unselectedIconTheme: const IconThemeData(
-            color: AppColors.slate,
-            size: 23,
-          ),
-
-          selectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w800,
-            fontSize: 11,
-          ),
-
-          unselectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.w500,
-            fontSize: 10,
-          ),
-
-          items: const [
-            BottomNavigationBarItem(
+          backgroundColor: AppColors.white,
+          indicatorColor: AppColors.softGreen,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: const [
+            NavigationDestination(
               icon: Icon(Icons.dashboard_outlined),
-              activeIcon: Icon(Icons.dashboard_rounded),
+              selectedIcon: Icon(Icons.dashboard_rounded),
               label: 'Dashboard',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.analytics_outlined),
-              activeIcon: Icon(Icons.analytics_rounded),
-              label: 'Sell',
+            NavigationDestination(
+              icon: Icon(Icons.point_of_sale_outlined),
+              selectedIcon: Icon(Icons.point_of_sale_rounded),
+              label: 'Sales',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.local_shipping_outlined),
-              activeIcon: Icon(Icons.local_shipping_rounded),
-              label: 'Buy',
+            NavigationDestination(
+              icon: Icon(Icons.shopping_bag_outlined),
+              selectedIcon: Icon(Icons.shopping_bag_rounded),
+              label: 'Buying',
             ),
-            BottomNavigationBarItem(
+            NavigationDestination(
               icon: Icon(Icons.inventory_2_outlined),
-              activeIcon: Icon(Icons.inventory_2_rounded),
+              selectedIcon: Icon(Icons.inventory_2_rounded),
               label: 'Stock',
             ),
           ],
@@ -254,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (_sellingTabKey.currentState?.currentSegment != 'so') {
           return null;
         }
-        return FloatingActionButton(
+        return FloatingActionButton.extended(
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const CreateSalesOrderScreen()),
@@ -262,14 +238,15 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          child: const Icon(Icons.add_rounded),
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Sales Order'),
         );
 
       case 2:
         if (_buyingTabKey.currentState?.currentSegment != 'po') {
           return null;
         }
-        return FloatingActionButton(
+        return FloatingActionButton.extended(
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute(
@@ -279,11 +256,12 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          child: const Icon(Icons.add_rounded),
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Purchase Order'),
         );
 
       case 3:
-        return FloatingActionButton(
+        return FloatingActionButton.extended(
           onPressed: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const CreateStockEntryScreen()),
@@ -291,7 +269,8 @@ class _HomeScreenState extends State<HomeScreen> {
           },
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
-          child: const Icon(Icons.add_rounded),
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Stock Entry'),
         );
 
       default:

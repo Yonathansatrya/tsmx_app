@@ -7,11 +7,7 @@ class NotificationCard extends StatelessWidget {
   final AppNotification item;
   final VoidCallback onTap;
 
-  const NotificationCard({
-    super.key,
-    required this.item,
-    required this.onTap,
-  });
+  const NotificationCard({super.key, required this.item, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -29,8 +25,8 @@ class NotificationCard extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: style.color.withOpacity(0.14)),
-              color: style.color.withOpacity(0.04),
+              border: Border.all(color: style.color.withValues(alpha: 0.14)),
+              color: style.color.withValues(alpha: 0.04),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,7 +35,7 @@ class NotificationCard extends StatelessWidget {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: style.color.withOpacity(0.12),
+                    color: style.color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(style.icon, color: style.color, size: 20),
@@ -94,7 +90,7 @@ class NotificationCard extends StatelessWidget {
                         item.timeString,
                         style: TextStyle(
                           fontSize: 10,
-                          color: AppColors.slate.withOpacity(0.8),
+                          color: AppColors.slate.withValues(alpha: 0.8),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -120,10 +116,7 @@ class NotificationVisualStyle {
   final Color color;
   final IconData icon;
 
-  const NotificationVisualStyle({
-    required this.color,
-    required this.icon,
-  });
+  const NotificationVisualStyle({required this.color, required this.icon});
 }
 
 NotificationVisualStyle notificationStyle(NotificationType type) {

@@ -75,7 +75,9 @@ class NotificationSheet extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    unread > 0 ? '$unread unread' : '${notifications.length} items',
+                    unread > 0
+                        ? '$unread unread'
+                        : '${notifications.length} items',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.slate,

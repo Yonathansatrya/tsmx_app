@@ -25,80 +25,85 @@ class ErpDocumentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.primary.withOpacity(0.06)),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryDark.withOpacity(0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.06),
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    id,
-                    style: const TextStyle(
-                      fontFamily: 'HankenGrotesk',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.navy,
+            boxShadow: AppColors.cardShadow,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      id,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'HankenGrotesk',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.navy,
+                      ),
                     ),
                   ),
-                ),
-                ErpStatusBadge(statusText: statusText),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              party,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.slate,
+                  ErpStatusBadge(statusText: statusText),
+                ],
               ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  date.isEmpty ? '—' : date,
-                  style: const TextStyle(fontSize: 10, color: AppColors.slate),
-                ),
-                Text(
-                  'Rp ${formatErpCurrency(value)}',
-                  style: const TextStyle(
-                    fontFamily: 'HankenGrotesk',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ],
-            ),
-            if (trailing != null) ...[
               const SizedBox(height: 6),
               Text(
-                trailing!,
-                style: const TextStyle(fontSize: 9, color: AppColors.slate),
+                party,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.slate,
+                ),
               ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    date.isEmpty ? '-' : date,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AppColors.slate,
+                    ),
+                  ),
+                  Text(
+                    'Rp ${formatErpCurrency(value)}',
+                    style: const TextStyle(
+                      fontFamily: 'HankenGrotesk',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+              if (trailing != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  trailing!,
+                  style: const TextStyle(fontSize: 9, color: AppColors.slate),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

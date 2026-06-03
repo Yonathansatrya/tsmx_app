@@ -32,9 +32,18 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
       label: 'Partly Billed',
       value: DeliveryNoteStatusKey.partiallyBilled,
     ),
-    const ErpStatusChip(label: 'Completed', value: DeliveryNoteStatusKey.completed),
-    const ErpStatusChip(label: 'Return', value: DeliveryNoteStatusKey.returnDoc),
-    const ErpStatusChip(label: 'Cancelled', value: DeliveryNoteStatusKey.cancelled),
+    const ErpStatusChip(
+      label: 'Completed',
+      value: DeliveryNoteStatusKey.completed,
+    ),
+    const ErpStatusChip(
+      label: 'Return',
+      value: DeliveryNoteStatusKey.returnDoc,
+    ),
+    const ErpStatusChip(
+      label: 'Cancelled',
+      value: DeliveryNoteStatusKey.cancelled,
+    ),
     const ErpStatusChip(label: 'Closed', value: DeliveryNoteStatusKey.closed),
   ];
 
@@ -62,7 +71,9 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
   }
 
   Future<void> _openDetail(DeliveryNote doc) async {
-    final detail = await context.read<AppState>().loadDeliveryNoteDetail(doc.id);
+    final detail = await context.read<AppState>().loadDeliveryNoteDetail(
+      doc.id,
+    );
     if (!mounted) return;
 
     final canSubmit = isDocDraft(detail.docStatus);
@@ -100,9 +111,11 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
     )) {
       return;
     }
+    if (!mounted) return;
     final ok = await runErpWorkflowAction(
       context,
-      action: () => context.read<AppState>().submitDocument('Delivery Note', id),
+      action: () =>
+          context.read<AppState>().submitDocument('Delivery Note', id),
       successMessage: 'Delivery Note submitted',
     );
     if (ok && mounted) Navigator.pop(context);
@@ -134,11 +147,15 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
             fillColor: AppColors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+              borderSide: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.1),
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+              borderSide: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.1),
+              ),
             ),
           ),
         ),

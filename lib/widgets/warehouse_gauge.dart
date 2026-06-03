@@ -15,7 +15,8 @@ class WarehouseGauge extends StatefulWidget {
   State<WarehouseGauge> createState() => _WarehouseGaugeState();
 }
 
-class _WarehouseGaugeState extends State<WarehouseGauge> with SingleTickerProviderStateMixin {
+class _WarehouseGaugeState extends State<WarehouseGauge>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _percentageAnimation;
 
@@ -26,9 +27,10 @@ class _WarehouseGaugeState extends State<WarehouseGauge> with SingleTickerProvid
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     );
-    _percentageAnimation = Tween<double>(begin: 0.0, end: widget.percentage).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutBack),
-    );
+    _percentageAnimation = Tween<double>(begin: 0.0, end: widget.percentage)
+        .animate(
+          CurvedAnimation(parent: _animController, curve: Curves.easeOutBack),
+        );
     _animController.forward();
   }
 
@@ -36,12 +38,16 @@ class _WarehouseGaugeState extends State<WarehouseGauge> with SingleTickerProvid
   void didUpdateWidget(covariant WarehouseGauge oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.percentage != widget.percentage) {
-      _percentageAnimation = Tween<double>(
-        begin: oldWidget.percentage,
-        end: widget.percentage,
-      ).animate(
-        CurvedAnimation(parent: _animController, curve: Curves.easeInOutCubic),
-      );
+      _percentageAnimation =
+          Tween<double>(
+            begin: oldWidget.percentage,
+            end: widget.percentage,
+          ).animate(
+            CurvedAnimation(
+              parent: _animController,
+              curve: Curves.easeInOutCubic,
+            ),
+          );
       _animController.reset();
       _animController.forward();
     }
@@ -66,7 +72,7 @@ class _WarehouseGaugeState extends State<WarehouseGauge> with SingleTickerProvid
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.grey.withOpacity(0.08),
+                color: Colors.grey.withValues(alpha: 0.08),
                 spreadRadius: 2,
                 blurRadius: 10,
                 offset: const Offset(0, 4),
@@ -197,6 +203,7 @@ class GaugePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant GaugePainter oldDelegate) {
-    return oldDelegate.percentage != percentage || oldDelegate.activeColor != activeColor;
+    return oldDelegate.percentage != percentage ||
+        oldDelegate.activeColor != activeColor;
   }
 }

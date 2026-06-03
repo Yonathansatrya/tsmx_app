@@ -29,7 +29,10 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
     const ErpStatusChip(label: 'All', value: null),
     const ErpStatusChip(label: 'Draft', value: InvoiceStatusKey.draft),
     const ErpStatusChip(label: 'Unpaid', value: InvoiceStatusKey.unpaid),
-    const ErpStatusChip(label: 'Partly Paid', value: InvoiceStatusKey.partlyPaid),
+    const ErpStatusChip(
+      label: 'Partly Paid',
+      value: InvoiceStatusKey.partlyPaid,
+    ),
     const ErpStatusChip(label: 'Paid', value: InvoiceStatusKey.paid),
     const ErpStatusChip(label: 'Overdue', value: InvoiceStatusKey.overdue),
     const ErpStatusChip(label: 'Cancelled', value: InvoiceStatusKey.cancelled),
@@ -59,7 +62,9 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
   }
 
   Future<void> _openDetail(PurchaseInvoice doc) async {
-    final detail = await context.read<AppState>().loadPurchaseInvoiceDetail(doc.id);
+    final detail = await context.read<AppState>().loadPurchaseInvoiceDetail(
+      doc.id,
+    );
     if (!mounted) return;
 
     final canSubmit = isDocDraft(detail.docStatus);
@@ -72,7 +77,10 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
       rows: [
         docStatusRow(detail.docStatus),
         ErpDetailRow(label: 'Posting Date', value: detail.date),
-        ErpDetailRow(label: 'Due Date', value: detail.dueDate.isEmpty ? '—' : detail.dueDate),
+        ErpDetailRow(
+          label: 'Due Date',
+          value: detail.dueDate.isEmpty ? '—' : detail.dueDate,
+        ),
         ErpDetailRow(
           label: 'Grand Total',
           value: 'Rp ${formatErpCurrency(detail.value)}',
@@ -101,9 +109,11 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
     )) {
       return;
     }
+    if (!mounted) return;
     final ok = await runErpWorkflowAction(
       context,
-      action: () => context.read<AppState>().submitDocument('Purchase Invoice', id),
+      action: () =>
+          context.read<AppState>().submitDocument('Purchase Invoice', id),
       successMessage: 'Purchase Invoice submitted',
     );
     if (ok && mounted) Navigator.pop(context);
@@ -135,11 +145,15 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
             fillColor: AppColors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+              borderSide: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.1),
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+              borderSide: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.1),
+              ),
             ),
           ),
         ),

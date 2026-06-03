@@ -6,10 +6,7 @@ import '../../theme/app_colors.dart';
 class DashboardStockAlertRow extends StatelessWidget {
   final InventoryItem item;
 
-  const DashboardStockAlertRow({
-    super.key,
-    required this.item,
-  });
+  const DashboardStockAlertRow({super.key, required this.item});
 
   @override
   Widget build(BuildContext context) {
@@ -21,23 +18,16 @@ class DashboardStockAlertRow extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(
-        vertical: 10,
-        horizontal: 12,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFDF7F2),
+        color: alertColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: alertColor.withValues(alpha: 0.12)),
       ),
       child: Row(
         children: [
-          Expanded(
-            child: _StockInfo(item: item),
-          ),
-          _StockBadge(
-            label: label,
-            color: alertColor,
-          ),
+          Expanded(child: _StockInfo(item: item)),
+          _StockBadge(label: label, color: alertColor),
         ],
       ),
     );
@@ -47,9 +37,7 @@ class DashboardStockAlertRow extends StatelessWidget {
 class _StockInfo extends StatelessWidget {
   final InventoryItem item;
 
-  const _StockInfo({
-    required this.item,
-  });
+  const _StockInfo({required this.item});
 
   @override
   Widget build(BuildContext context) {
@@ -67,13 +55,10 @@ class _StockInfo extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '${item.warehouseId} • ${item.quantity} units',
+          '${item.warehouseId} - ${item.quantity} units',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.slate,
-          ),
+          style: const TextStyle(fontSize: 12, color: AppColors.slate),
         ),
       ],
     );
@@ -84,20 +69,14 @@ class _StockBadge extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _StockBadge({
-    required this.label,
-    required this.color,
-  });
+  const _StockBadge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 10,
-        vertical: 4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.14),
+        color: color.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(

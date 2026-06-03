@@ -138,12 +138,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.96),
+                    color: Colors.white.withValues(alpha: 0.96),
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withOpacity(0.7)),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.16),
+                        color: Colors.black.withValues(alpha: 0.16),
                         blurRadius: 30,
                         offset: const Offset(0, 14),
                       ),
@@ -233,7 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     scale: 0.78,
                                     child: Switch(
                                       value: appState.rememberDevice,
-                                      activeColor: Colors.white,
+                                      activeThumbColor: Colors.white,
                                       activeTrackColor: AppColors.primary,
                                       inactiveThumbColor: Colors.white,
                                       inactiveTrackColor: AppColors.softGreen,
@@ -258,8 +260,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextButton(
                               style: TextButton.styleFrom(
                                 foregroundColor: AppColors.primary,
-                                overlayColor: AppColors.primary.withOpacity(
-                                  0.08,
+                                overlayColor: AppColors.primary.withValues(
+                                  alpha: 0.08,
                                 ),
                               ),
                               onPressed: () {
@@ -290,7 +292,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
-                                shadowColor: AppColors.primary.withOpacity(0.4),
+                                shadowColor: AppColors.primary.withValues(
+                                  alpha: 0.4,
+                                ),
                                 elevation: 5,
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 16,
@@ -300,7 +304,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ).copyWith(
                                 overlayColor: WidgetStateProperty.all(
-                                  AppColors.accentYellow.withOpacity(0.25),
+                                  AppColors.accentYellow.withValues(
+                                    alpha: 0.25,
+                                  ),
                                 ),
                               ),
                           child: _isLoading

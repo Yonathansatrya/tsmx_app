@@ -42,20 +42,15 @@ class AppNotification {
 
   factory AppNotification.fromNotificationLog(Map<String, dynamic> json) {
     final typeRaw =
-        json['type']?.toString() ??
-        json['notification_type']?.toString() ??
-        '';
+        json['type']?.toString() ?? json['notification_type']?.toString() ?? '';
 
     return AppNotification(
       id: json['name']?.toString() ?? '',
-      title:
-          json['subject']?.toString().trim().isNotEmpty == true
-              ? json['subject'].toString()
-              : _defaultTitle(json),
+      title: json['subject']?.toString().trim().isNotEmpty == true
+          ? json['subject'].toString()
+          : _defaultTitle(json),
       description: _plainText(
-        json['email_content']?.toString() ??
-            json['message']?.toString() ??
-            '',
+        json['email_content']?.toString() ?? json['message']?.toString() ?? '',
       ),
       type: _mapType(typeRaw, json),
       timeString: _formatTime(json['modified'] ?? json['creation']),
@@ -96,10 +91,7 @@ class AppNotification {
     return DateTime.tryParse(raw.toString());
   }
 
-  static NotificationType _mapType(
-    String typeRaw,
-    Map<String, dynamic> json,
-  ) {
+  static NotificationType _mapType(String typeRaw, Map<String, dynamic> json) {
     final t = typeRaw.toLowerCase();
     if (t.contains('alert') ||
         t.contains('warning') ||
@@ -113,8 +105,8 @@ class AppNotification {
       return NotificationType.action;
     }
 
-    final subject =
-        '${json['subject'] ?? ''} ${json['email_content'] ?? ''}'.toLowerCase();
+    final subject = '${json['subject'] ?? ''} ${json['email_content'] ?? ''}'
+        .toLowerCase();
     if (subject.contains('deleted') ||
         subject.contains('cancelled') ||
         subject.contains('removed')) {

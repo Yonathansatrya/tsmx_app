@@ -27,17 +27,18 @@ class ErpStatusChipBar<T> extends StatelessWidget {
               selected: isSelected,
               showCheckmark: false,
               onSelected: (_) => onSelected(chip.value),
+              visualDensity: VisualDensity.compact,
               labelStyle: TextStyle(
                 fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: isSelected ? AppColors.white : AppColors.navy,
+                fontWeight: FontWeight.w900,
+                color: isSelected ? AppColors.white : AppColors.primary,
               ),
               selectedColor: AppColors.primary,
-              backgroundColor: AppColors.white,
+              backgroundColor: AppColors.softGreen,
               side: BorderSide(
                 color: isSelected
                     ? AppColors.primary
-                    : AppColors.primary.withOpacity(0.12),
+                    : AppColors.primary.withValues(alpha: 0.12),
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),

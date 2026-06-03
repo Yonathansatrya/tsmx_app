@@ -15,7 +15,7 @@ class _CreateStockEntryScreenState extends State<CreateStockEntryScreen> {
   final _formKey = GlobalKey<FormState>();
   final _itemCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
-  DateTime _postingDate = DateTime.now();
+  final DateTime _postingDate = DateTime.now();
 
   List<WarehouseInfo> _warehouses = [];
   bool _loading = true;

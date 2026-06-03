@@ -27,17 +27,9 @@ class DashboardKpiCard extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppColors.primary.withOpacity(0.08),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryDark.withOpacity(0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        boxShadow: AppColors.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -46,14 +38,8 @@ class DashboardKpiCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _IconBox(
-                icon: icon,
-                iconColor: iconColor,
-              ),
-              _TrendBadge(
-                label: trend,
-                color: trendColor,
-              ),
+              _IconBox(icon: icon, iconColor: iconColor),
+              _TrendBadge(label: trend, color: trendColor),
             ],
           ),
 
@@ -79,7 +65,7 @@ class DashboardKpiCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 8,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.slate.withOpacity(0.85),
+                  color: AppColors.slate.withValues(alpha: 0.85),
                   letterSpacing: 0.5,
                 ),
               ),
@@ -95,10 +81,7 @@ class _IconBox extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
 
-  const _IconBox({
-    required this.icon,
-    required this.iconColor,
-  });
+  const _IconBox({required this.icon, required this.iconColor});
 
   @override
   Widget build(BuildContext context) {
@@ -106,14 +89,10 @@ class _IconBox extends StatelessWidget {
       width: 30,
       height: 30,
       decoration: BoxDecoration(
-        color: iconColor.withOpacity(0.12),
+        color: iconColor.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Icon(
-        icon,
-        color: iconColor,
-        size: 18,
-      ),
+      child: Icon(icon, color: iconColor, size: 18),
     );
   }
 }
@@ -122,20 +101,14 @@ class _TrendBadge extends StatelessWidget {
   final String label;
   final Color color;
 
-  const _TrendBadge({
-    required this.label,
-    required this.color,
-  });
+  const _TrendBadge({required this.label, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 6,
-        vertical: 3,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(

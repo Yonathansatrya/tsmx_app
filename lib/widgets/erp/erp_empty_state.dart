@@ -15,10 +15,22 @@ class ErpEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      padding: const EdgeInsets.symmetric(vertical: 42, horizontal: 24),
       child: Column(
         children: [
-          const Icon(Icons.inbox_outlined, size: 48, color: AppColors.slate),
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: AppColors.softGreen,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.inbox_outlined,
+              size: 30,
+              color: AppColors.primary,
+            ),
+          ),
           const SizedBox(height: 12),
           Text(
             title,

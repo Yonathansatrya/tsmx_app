@@ -77,11 +77,15 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
             fillColor: AppColors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+              borderSide: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.1),
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+              borderSide: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.1),
+              ),
             ),
           ),
         ),

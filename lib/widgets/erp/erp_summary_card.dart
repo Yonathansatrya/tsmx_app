@@ -27,15 +27,9 @@ class ErpSummaryCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withOpacity(0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primaryDark.withOpacity(0.05),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        boxShadow: AppColors.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -46,7 +40,7 @@ class ErpSummaryCard extends StatelessWidget {
               fontSize: 9,
               fontWeight: FontWeight.w900,
               color: AppColors.slate,
-              letterSpacing: 0.8,
+              letterSpacing: 0.6,
             ),
           ),
           const SizedBox(height: 8),

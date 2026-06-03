@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/inventory_item.dart';
 import '../../models/purchase_order.dart';
+import '../../models/sales_order.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard/dashboard_data_section.dart';
@@ -61,6 +62,9 @@ class _DashboardTabState extends State<DashboardTab> {
     final pendingPurchasesCount = appState.purchaseOrders
         .where((po) => po.statusKey != PurchaseOrderStatusKey.completed)
         .length;
+    final openSalesCount = appState.salesOrders
+        .where((so) => so.statusKey != SalesOrderStatusKey.completed)
+        .length;
 
     final lowStockCount = appState.inventory
         .where((item) => item.status != StockStatus.inStock)
@@ -103,7 +107,16 @@ class _DashboardTabState extends State<DashboardTab> {
           children: [
             _DashboardHeader(userName: appState.currentUser),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
+
+            _OperationsSnapshot(
+              openSales: openSalesCount,
+              unpaidInvoices: unpaidSiCount,
+              pendingPurchases: pendingPurchasesCount,
+              stockAlerts: lowStockCount,
+            ),
+
+            const SizedBox(height: 18),
 
             GridView.count(
               crossAxisCount: 2,
@@ -241,29 +254,34 @@ class _DashboardHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Hello',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: AppColors.primary,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Halo, ${userName ?? 'Operator'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.primary,
+                ),
               ),
-            ),
-            SizedBox(height: 2),
-            Text(
-              'Dashboard overview',
-              style: TextStyle(fontSize: 12, color: AppColors.primaryLight),
-            ),
-          ],
+              const SizedBox(height: 2),
+              const Text(
+                'Ringkasan operasional ERP',
+                style: TextStyle(fontSize: 12, color: AppColors.primaryLight),
+              ),
+            ],
+          ),
         ),
 
+        const SizedBox(width: 10),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: AppColors.primary.withOpacity(0.1),
+            color: AppColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(20),
           ),
           child: const Row(
@@ -298,6 +316,151 @@ class _LiveDot extends StatelessWidget {
         color: AppColors.primary,
         shape: BoxShape.circle,
       ),
+    );
+  }
+}
+
+class _OperationsSnapshot extends StatelessWidget {
+  final int openSales;
+  final int unpaidInvoices;
+  final int pendingPurchases;
+  final int stockAlerts;
+
+  const _OperationsSnapshot({
+    required this.openSales,
+    required this.unpaidInvoices,
+    required this.pendingPurchases,
+    required this.stockAlerts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Prioritas Hari Ini',
+            style: TextStyle(
+              color: AppColors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _priorityMessage,
+            style: TextStyle(
+              color: AppColors.white.withValues(alpha: 0.8),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _SnapshotMetric(
+                  icon: Icons.point_of_sale_rounded,
+                  label: 'Open SO',
+                  value: openSales,
+                ),
+              ),
+              Expanded(
+                child: _SnapshotMetric(
+                  icon: Icons.receipt_long_rounded,
+                  label: 'Unpaid',
+                  value: unpaidInvoices,
+                ),
+              ),
+              Expanded(
+                child: _SnapshotMetric(
+                  icon: Icons.shopping_bag_rounded,
+                  label: 'Pending PO',
+                  value: pendingPurchases,
+                ),
+              ),
+              Expanded(
+                child: _SnapshotMetric(
+                  icon: Icons.warning_amber_rounded,
+                  label: 'Stock',
+                  value: stockAlerts,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String get _priorityMessage {
+    if (stockAlerts > 0) {
+      return 'Cek stok kritis sebelum membuat transaksi baru.';
+    }
+    if (unpaidInvoices > 0) {
+      return 'Ada invoice sales yang perlu ditindaklanjuti.';
+    }
+    if (pendingPurchases > 0) {
+      return 'Pantau PO yang belum selesai dan jadwal penerimaan.';
+    }
+    return 'Operasional terlihat aman. Tarik layar untuk sinkronisasi.';
+  }
+}
+
+class _SnapshotMetric extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final int value;
+
+  const _SnapshotMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppColors.white.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: AppColors.white, size: 18),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          '$value',
+          style: const TextStyle(
+            color: AppColors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            height: 1,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: AppColors.white.withValues(alpha: 0.72),
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -381,7 +544,7 @@ class _DashboardOrderRow extends StatelessWidget {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.08),
+                  color: AppColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(

@@ -11,9 +11,9 @@ Future<bool> runErpWorkflowAction(
   try {
     await action();
     if (!context.mounted) return false;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(successMessage)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(successMessage)));
     return true;
   } catch (e) {
     if (!context.mounted) return false;
@@ -38,8 +38,14 @@ Future<bool> confirmErpAction(
       title: Text(title),
       content: Text(message),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirm')),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Confirm'),
+        ),
       ],
     ),
   );
@@ -53,7 +59,11 @@ Widget erpActionButton({
   bool filled = false,
 }) {
   final child = filled
-      ? FilledButton.icon(onPressed: onPressed, icon: Icon(icon, size: 18), label: Text(label))
+      ? FilledButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 18),
+          label: Text(label),
+        )
       : OutlinedButton.icon(
           onPressed: onPressed,
           icon: Icon(icon, size: 18),
@@ -62,7 +72,10 @@ Widget erpActionButton({
   return SizedBox(width: double.infinity, child: child);
 }
 
-Widget erpWorkflowSection({required String title, required List<Widget> children}) {
+Widget erpWorkflowSection({
+  required String title,
+  required List<Widget> children,
+}) {
   if (children.isEmpty) return const SizedBox.shrink();
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -76,7 +89,9 @@ Widget erpWorkflowSection({required String title, required List<Widget> children
         ),
       ),
       const SizedBox(height: 8),
-      ...children.map((w) => Padding(padding: const EdgeInsets.only(bottom: 8), child: w)),
+      ...children.map(
+        (w) => Padding(padding: const EdgeInsets.only(bottom: 8), child: w),
+      ),
     ],
   );
 }
@@ -92,7 +107,10 @@ List<Widget> erpRelatedDocChips({
       runSpacing: 8,
       children: docIds.map((id) {
         return ActionChip(
-          label: Text(id, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+          label: Text(
+            id,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+          ),
           onPressed: () => onTap(id),
         );
       }).toList(),

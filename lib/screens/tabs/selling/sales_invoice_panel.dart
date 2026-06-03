@@ -5,7 +5,6 @@ import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../utils/erp_doc_utils.dart';
 import '../../../utils/erp_format.dart';
-import '../../../utils/frappe_status.dart';
 import '../../../widgets/erp/erp_document_card.dart';
 import '../../../widgets/erp/erp_detail_sheet.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
@@ -29,7 +28,10 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
     const ErpStatusChip(label: 'All', value: null),
     const ErpStatusChip(label: 'Draft', value: InvoiceStatusKey.draft),
     const ErpStatusChip(label: 'Unpaid', value: InvoiceStatusKey.unpaid),
-    const ErpStatusChip(label: 'Partly Paid', value: InvoiceStatusKey.partlyPaid),
+    const ErpStatusChip(
+      label: 'Partly Paid',
+      value: InvoiceStatusKey.partlyPaid,
+    ),
     const ErpStatusChip(label: 'Paid', value: InvoiceStatusKey.paid),
     const ErpStatusChip(label: 'Overdue', value: InvoiceStatusKey.overdue),
     const ErpStatusChip(label: 'Return', value: InvoiceStatusKey.returnDoc),
@@ -60,7 +62,9 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
   }
 
   Future<void> _openDetail(SalesInvoice doc) async {
-    final detail = await context.read<AppState>().loadSalesInvoiceDetail(doc.id);
+    final detail = await context.read<AppState>().loadSalesInvoiceDetail(
+      doc.id,
+    );
     if (!mounted) return;
 
     final canSubmit = isDocDraft(detail.docStatus);
@@ -73,7 +77,10 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
       rows: [
         docStatusRow(detail.docStatus),
         ErpDetailRow(label: 'Posting Date', value: detail.date),
-        ErpDetailRow(label: 'Due Date', value: detail.dueDate.isEmpty ? '—' : detail.dueDate),
+        ErpDetailRow(
+          label: 'Due Date',
+          value: detail.dueDate.isEmpty ? '—' : detail.dueDate,
+        ),
         ErpDetailRow(
           label: 'Grand Total',
           value: 'Rp ${formatErpCurrency(detail.value)}',
@@ -102,9 +109,11 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
     )) {
       return;
     }
+    if (!mounted) return;
     final ok = await runErpWorkflowAction(
       context,
-      action: () => context.read<AppState>().submitDocument('Sales Invoice', id),
+      action: () =>
+          context.read<AppState>().submitDocument('Sales Invoice', id),
       successMessage: 'Sales Invoice submitted',
     );
     if (ok && mounted) Navigator.pop(context);
@@ -136,11 +145,15 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
             fillColor: AppColors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+              borderSide: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.1),
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: AppColors.primary.withOpacity(0.1)),
+              borderSide: BorderSide(
+                color: AppColors.primary.withValues(alpha: 0.1),
+              ),
             ),
           ),
         ),
