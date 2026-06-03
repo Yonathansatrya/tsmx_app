@@ -13,6 +13,8 @@ import '../models/quotation.dart';
 import '../models/payment_entry.dart';
 import '../models/stock_entry.dart';
 import '../models/material_request.dart';
+import '../models/approval_request.dart';
+import '../models/barcode_stock_lookup.dart';
 import '../models/stock_ledger_movement.dart';
 import '../models/inventory_item.dart';
 import '../utils/date_range_presets.dart';
@@ -20,7 +22,6 @@ import '../models/warehouse_info.dart';
 import '../models/stock_area_option.dart';
 import '../services/frappe_service.dart';
 import '../utils/erp_doc_utils.dart';
-import '../utils/frappe_status.dart';
 import '../utils/num_parse.dart';
 import '../widgets/notifications/notification_model.dart';
 
@@ -48,6 +49,7 @@ class AppState with ChangeNotifier {
   List<PaymentEntry> _paymentEntries = [];
   List<StockEntry> _stockEntries = [];
   List<MaterialRequest> _materialRequests = [];
+  List<ApprovalRequest> _approvalRequests = [];
   List<InventoryItem> _inventory = [];
 
   List<SalesOrder> get salesOrders => _salesOrders;
@@ -61,6 +63,7 @@ class AppState with ChangeNotifier {
   List<PaymentEntry> get paymentEntries => _paymentEntries;
   List<StockEntry> get stockEntries => _stockEntries;
   List<MaterialRequest> get materialRequests => _materialRequests;
+  List<ApprovalRequest> get approvalRequests => _approvalRequests;
   List<InventoryItem> get inventory => _inventory;
 
   List<WarehouseInfo> _warehouses = [];
@@ -133,6 +136,12 @@ class AppState with ChangeNotifier {
   bool get isMaterialRequestsLoading => _isMaterialRequestsLoading;
   String? _materialRequestsError;
   String? get materialRequestsError => _materialRequestsError;
+
+  bool _isApprovalRequestsLoading = false;
+  bool get isApprovalRequestsLoading => _isApprovalRequestsLoading;
+  String? _approvalRequestsError;
+  String? get approvalRequestsError => _approvalRequestsError;
+  int get pendingApprovalsCount => _approvalRequests.length;
 
   bool _isInventoryLoading = false;
   bool get isInventoryLoading => _isInventoryLoading;
@@ -220,6 +229,7 @@ class AppState with ChangeNotifier {
         fetchWarehousesFromFrappe(),
         fetchInventoryFromFrappe(),
       ]);
+      await refreshApprovalRequests(silent: true);
       await refreshNotifications(silent: true);
     } catch (_) {
       // Prefetch failures should not block login.
@@ -306,6 +316,113 @@ class AppState with ChangeNotifier {
     }
   }
 
+  Future<void> refreshApprovalRequests({bool silent = false}) async {
+    if (!_isAuthenticated || _currentUser == null) return;
+
+    if (!silent) {
+      _isApprovalRequestsLoading = true;
+      _approvalRequestsError = null;
+      notifyListeners();
+    }
+
+    try {
+      await _frappeService.ensureLoggedIn();
+      _approvalRequests = await _fetchApprovalRequestsFromFrappe();
+      _approvalRequestsError = null;
+    } catch (err) {
+      _approvalRequestsError = err.toString();
+    } finally {
+      if (!silent) {
+        _isApprovalRequestsLoading = false;
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> applyApprovalAction(
+    ApprovalRequest request,
+    String action,
+  ) async {
+    if (!request.hasDocument) {
+      throw Exception('Approval request tidak memiliki dokumen referensi.');
+    }
+    await _frappeService.ensureLoggedIn();
+    final doc = await _frappeService.fetchDocument(
+      request.documentType,
+      request.documentName,
+    );
+    await _frappeService.callMethod(
+      'frappe.model.workflow.apply_workflow',
+      args: {'doc': doc, 'action': action},
+    );
+    await refreshApprovalRequests();
+    await refreshNotifications(silent: true);
+    await _refreshAfterDocChange(request.documentType);
+  }
+
+  Future<List<ApprovalRequest>> _fetchApprovalRequestsFromFrappe() async {
+    final fields = const [
+      'name',
+      'reference_doctype',
+      'reference_name',
+      'document_type',
+      'document_name',
+      'workflow_state',
+      'state',
+      'status',
+      'action',
+      'user',
+      'creation',
+      'modified',
+    ];
+
+    Future<List<Map<String, dynamic>>> fetch({
+      List<List<dynamic>>? filters,
+    }) async {
+      return _fetchResourceWithFieldFallback(
+        doctype: 'Workflow Action',
+        fields: fields,
+        limit: 120,
+        orderBy: 'modified desc',
+        filters: filters,
+      );
+    }
+
+    List<Map<String, dynamic>> rows;
+    try {
+      rows = await fetch(
+        filters: [
+          ['status', '=', 'Open'],
+          ['user', '=', _currentUser],
+        ],
+      );
+    } catch (_) {
+      try {
+        rows = await fetch(
+          filters: [
+            ['status', '=', 'Open'],
+          ],
+        );
+      } catch (_) {
+        rows = await fetch();
+      }
+    }
+
+    final requests =
+        rows
+            .map(ApprovalRequest.fromWorkflowAction)
+            .where((request) => request.id.isNotEmpty && request.hasDocument)
+            .toList()
+          ..sort((a, b) {
+            final left = a.modifiedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final right =
+                b.modifiedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return right.compareTo(left);
+          });
+
+    return requests;
+  }
+
   Future<void> markAllNotificationsRead() async {
     final unread = _notifications.where((n) => !n.isRead).toList();
     if (unread.isEmpty) return;
@@ -365,7 +482,7 @@ class AppState with ChangeNotifier {
             'modified',
             'type',
           ],
-          limit: 80,
+          limit: 200,
           orderBy: 'modified desc',
           filters: [
             ['for_user', '=', user],
@@ -389,7 +506,7 @@ class AppState with ChangeNotifier {
             'modified',
             'type',
           ],
-          limit: 80,
+          limit: 200,
           orderBy: 'modified desc',
         );
         for (final row in rows) {
@@ -413,7 +530,7 @@ class AppState with ChangeNotifier {
             'creation',
             'modified',
           ],
-          limit: 40,
+          limit: 120,
           orderBy: 'creation desc',
         );
         for (final row in rows) {
@@ -528,16 +645,40 @@ class AppState with ChangeNotifier {
   Future<SalesOrder> updateSalesOrder({
     required String orderId,
     String? customer,
-    DateTime? deliveryDate,
+    String? itemCode,
+    double? qty,
+    String? warehouse,
+    double? rate,
+    String? costCenter,
+    String? company,
+    DateTime? transactionDate,
     String? status,
   }) async {
     await _frappeService.ensureLoggedIn();
 
     final updates = <String, dynamic>{
       if (customer != null && customer.trim().isNotEmpty) 'customer': customer,
-      if (deliveryDate != null)
-        'delivery_date': deliveryDate.toIso8601String().split('T').first,
+      if (company != null && company.trim().isNotEmpty)
+        'company': company.trim(),
+      if (transactionDate != null)
+        'transaction_date': transactionDate.toIso8601String().split('T').first,
       if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
+      if (costCenter != null && costCenter.trim().isNotEmpty)
+        'cost_center': costCenter.trim(),
+      if (warehouse != null && warehouse.trim().isNotEmpty)
+        'set_warehouse': warehouse.trim(),
+      if (itemCode != null && itemCode.trim().isNotEmpty && qty != null)
+        'items': [
+          {
+            'item_code': itemCode.trim(),
+            'qty': qty,
+            if (rate != null && rate > 0) 'rate': rate,
+            if (warehouse != null && warehouse.trim().isNotEmpty)
+              'warehouse': warehouse.trim(),
+            if (costCenter != null && costCenter.trim().isNotEmpty)
+              'cost_center': costCenter.trim(),
+          },
+        ],
     };
 
     if (updates.isEmpty) {
@@ -634,6 +775,60 @@ class AppState with ChangeNotifier {
     return order;
   }
 
+  Future<PurchaseOrder> updatePurchaseOrder({
+    required String orderId,
+    String? supplier,
+    String? itemCode,
+    double? qty,
+    String? warehouse,
+    double? rate,
+    DateTime? transactionDate,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+
+    final updates = <String, dynamic>{
+      if (supplier != null && supplier.trim().isNotEmpty)
+        'supplier': supplier.trim(),
+      if (transactionDate != null)
+        'transaction_date': transactionDate.toIso8601String().split('T').first,
+      if (itemCode != null && itemCode.trim().isNotEmpty && qty != null)
+        'items': [
+          {
+            'item_code': itemCode.trim(),
+            'qty': qty,
+            if (rate != null && rate > 0) 'rate': rate,
+            if (warehouse != null && warehouse.trim().isNotEmpty)
+              'warehouse': warehouse.trim(),
+          },
+        ],
+    };
+
+    if (updates.isEmpty) {
+      throw Exception('No fields to update.');
+    }
+
+    await _frappeService.updateDocument('Purchase Order', orderId, updates);
+    final updatedDoc = await _frappeService.fetchDocument(
+      'Purchase Order',
+      orderId,
+    );
+    final updatedOrder = PurchaseOrder.fromJson(updatedDoc);
+    _purchaseOrders = _purchaseOrders
+        .map((o) => o.id == orderId ? updatedOrder : o)
+        .toList();
+    notifyListeners();
+    await refreshPurchaseOrders();
+    return updatedOrder;
+  }
+
+  Future<void> deletePurchaseOrder(String orderId) async {
+    await _frappeService.ensureLoggedIn();
+    await _frappeService.deleteDocument('Purchase Order', orderId);
+    _purchaseOrders.removeWhere((o) => o.id == orderId);
+    notifyListeners();
+    await refreshPurchaseOrders();
+  }
+
   Future<StockEntry> createStockEntry({
     required String stockEntryType,
     required List<Map<String, dynamic>> items,
@@ -690,7 +885,9 @@ class AppState with ChangeNotifier {
         orderBy: 'transaction_date desc',
       );
 
-      _salesOrders = data.map((item) => SalesOrder.fromJson(item)).toList();
+      var orders = data.map((item) => SalesOrder.fromJson(item)).toList();
+      orders = await _attachSalesOrderItems(orders);
+      _salesOrders = orders;
     } catch (error) {
       _salesOrdersError = error.toString();
     } finally {
@@ -733,9 +930,9 @@ class AppState with ChangeNotifier {
         orderBy: 'modified desc',
       );
 
-      _purchaseOrders = data
-          .map((item) => PurchaseOrder.fromJson(item))
-          .toList();
+      var orders = data.map((item) => PurchaseOrder.fromJson(item)).toList();
+      orders = await _attachPurchaseOrderItems(orders);
+      _purchaseOrders = orders;
 
       _purchaseOrdersError = null;
     } catch (err) {
@@ -1506,6 +1703,175 @@ class AppState with ChangeNotifier {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<List<SalesOrder>> _attachSalesOrderItems(
+    List<SalesOrder> orders,
+  ) async {
+    if (orders.isEmpty) return orders;
+    try {
+      final rows = await _fetchAllResourcePages(
+        doctype: 'Sales Order Item',
+        fields: const [
+          'parent',
+          'item_code',
+          'item_name',
+          'qty',
+          'rate',
+          'warehouse',
+        ],
+        filters: [
+          ['parent', 'in', orders.map((order) => order.id).toList()],
+        ],
+      );
+      final grouped = <String, List<SalesOrderItem>>{};
+      for (final row in rows) {
+        final parent = row['parent']?.toString() ?? '';
+        if (parent.isEmpty) continue;
+        grouped.putIfAbsent(parent, () => []).add(SalesOrderItem.fromJson(row));
+      }
+      return orders
+          .map(
+            (order) => order.copyWith(items: grouped[order.id] ?? order.items),
+          )
+          .toList();
+    } catch (_) {
+      return orders;
+    }
+  }
+
+  Future<List<PurchaseOrder>> _attachPurchaseOrderItems(
+    List<PurchaseOrder> orders,
+  ) async {
+    if (orders.isEmpty) return orders;
+    try {
+      final rows = await _fetchAllResourcePages(
+        doctype: 'Purchase Order Item',
+        fields: const [
+          'parent',
+          'item_code',
+          'item_name',
+          'qty',
+          'rate',
+          'warehouse',
+        ],
+        filters: [
+          ['parent', 'in', orders.map((order) => order.id).toList()],
+        ],
+      );
+      final grouped = <String, List<PurchaseOrderItem>>{};
+      for (final row in rows) {
+        final parent = row['parent']?.toString() ?? '';
+        if (parent.isEmpty) continue;
+        grouped
+            .putIfAbsent(parent, () => [])
+            .add(PurchaseOrderItem.fromJson(row));
+      }
+      return orders
+          .map(
+            (order) => order.copyWith(items: grouped[order.id] ?? order.items),
+          )
+          .toList();
+    } catch (_) {
+      return orders;
+    }
+  }
+
+  Future<List<BarcodeStockLookup>> lookupStockByBarcode(
+    String scannedCode, {
+    String? warehouse,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+
+    final normalized = scannedCode.trim();
+    if (normalized.isEmpty) {
+      throw Exception('Barcode atau item code tidak boleh kosong.');
+    }
+
+    final item = await _resolveItemFromBarcode(normalized);
+    final itemCode = item['name']?.toString() ?? normalized;
+    final itemName = item['item_name']?.toString() ?? itemCode;
+    final valuationRate = NumParse.asDouble(item['valuation_rate']);
+
+    final filters = <List<dynamic>>[
+      ['item_code', '=', itemCode],
+      if (warehouse != null && warehouse.trim().isNotEmpty)
+        ['warehouse', '=', warehouse.trim()],
+    ];
+
+    final bins = await _fetchResourceWithFieldFallback(
+      doctype: 'Bin',
+      fields: const [
+        'item_code',
+        'warehouse',
+        'actual_qty',
+        'reserved_qty',
+        'projected_qty',
+      ],
+      limit: 200,
+      orderBy: 'warehouse asc',
+      filters: filters,
+    );
+
+    if (bins.isEmpty) {
+      return [
+        BarcodeStockLookup(
+          scannedCode: normalized,
+          itemCode: itemCode,
+          itemName: itemName,
+          warehouse: warehouse ?? '',
+          actualQty: 0,
+          reservedQty: 0,
+          projectedQty: 0,
+          valuationRate: valuationRate,
+        ),
+      ];
+    }
+
+    return bins
+        .map(
+          (bin) => BarcodeStockLookup.fromBin(
+            scannedCode: normalized,
+            itemCode: itemCode,
+            itemName: itemName,
+            bin: bin,
+            valuationRate: valuationRate,
+          ),
+        )
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> _resolveItemFromBarcode(String code) async {
+    try {
+      final rows = await _fetchResourceWithFieldFallback(
+        doctype: 'Item Barcode',
+        fields: const ['parent', 'barcode'],
+        limit: 1,
+        filters: [
+          ['barcode', '=', code],
+        ],
+      );
+      if (rows.isNotEmpty) {
+        final parent = rows.first['parent']?.toString() ?? '';
+        if (parent.isNotEmpty) {
+          return _frappeService.fetchDocument('Item', parent);
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final rows = await _fetchResourceWithFieldFallback(
+        doctype: 'Item',
+        fields: const ['name', 'item_name', 'valuation_rate', 'barcode'],
+        limit: 1,
+        filters: [
+          ['barcode', '=', code],
+        ],
+      );
+      if (rows.isNotEmpty) return rows.first;
+    } catch (_) {}
+
+    return _frappeService.fetchDocument('Item', code);
   }
 
   Future<List<Map<String, dynamic>>> _fetchAllResourcePages({

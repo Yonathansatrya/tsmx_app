@@ -5,30 +5,38 @@ export '../utils/frappe_status.dart'
     show PurchaseOrderStatusKey, parsePurchaseOrderStatus;
 
 class PurchaseOrderItem {
+  final String itemCode;
   final String itemName;
   final int qty;
   final double rate;
+  final String warehouse;
 
   PurchaseOrderItem({
+    required this.itemCode,
     required this.itemName,
     required this.qty,
     required this.rate,
+    this.warehouse = '',
   });
 
   factory PurchaseOrderItem.fromJson(Map<String, dynamic> json) {
+    final itemCode = json['item_code']?.toString() ?? '';
     return PurchaseOrderItem(
+      itemCode: itemCode,
       itemName:
           json['item_name']?.toString() ??
-          json['item_code']?.toString() ??
+          (itemCode.isNotEmpty ? itemCode : null) ??
           'Unknown Item',
       qty: NumParse.asInt(json['qty'] ?? json['stock_qty']),
       rate: NumParse.asDouble(json['rate'] ?? json['net_rate']),
+      warehouse: json['warehouse']?.toString() ?? '',
     );
   }
 }
 
 class PurchaseOrder {
   final String id;
+  final String supplierId;
   final String vendor;
   final PurchaseOrderStatusKey statusKey;
   final String statusText;
@@ -42,6 +50,7 @@ class PurchaseOrder {
 
   PurchaseOrder({
     required this.id,
+    required this.supplierId,
     required this.vendor,
     required this.statusKey,
     required this.statusText,
@@ -58,9 +67,13 @@ class PurchaseOrder {
 
   PurchaseOrder copyWith({
     String? id,
+    String? supplierId,
     String? vendor,
     PurchaseOrderStatusKey? statusKey,
     String? statusText,
+    int? docStatus,
+    double? perReceived,
+    double? perBilled,
     String? eta,
     int? itemsCount,
     double? totalValue,
@@ -68,9 +81,13 @@ class PurchaseOrder {
   }) {
     return PurchaseOrder(
       id: id ?? this.id,
+      supplierId: supplierId ?? this.supplierId,
       vendor: vendor ?? this.vendor,
       statusKey: statusKey ?? this.statusKey,
       statusText: statusText ?? this.statusText,
+      docStatus: docStatus ?? this.docStatus,
+      perReceived: perReceived ?? this.perReceived,
+      perBilled: perBilled ?? this.perBilled,
       eta: eta ?? this.eta,
       itemsCount: itemsCount ?? this.itemsCount,
       totalValue: totalValue ?? this.totalValue,
@@ -85,6 +102,7 @@ class PurchaseOrder {
         json['supplier_name']?.toString() ??
         json['supplier']?.toString() ??
         'Unknown Supplier';
+    final supplierId = json['supplier']?.toString() ?? vendor;
 
     final eta = _formatDate(
       json['schedule_date'] ??
@@ -134,6 +152,7 @@ class PurchaseOrder {
 
     return PurchaseOrder(
       id: id,
+      supplierId: supplierId,
       vendor: vendor,
       statusKey: statusKey,
       statusText: statusText,
@@ -157,7 +176,7 @@ class PurchaseOrder {
 
     final day = parsed.day.toString().padLeft(2, '0');
     final month = parsed.month.toString().padLeft(2, '0');
-    return '$day/${month}/${parsed.year}';
+    return '$day/$month/${parsed.year}';
   }
 
   static DateTime? _parseEta(String eta) {

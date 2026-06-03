@@ -52,6 +52,10 @@ class _DashboardTabState extends State<DashboardTab> {
       if (appState.paymentEntries.isEmpty) {
         appState.refreshPaymentEntries();
       }
+
+      if (appState.approvalRequests.isEmpty) {
+        appState.refreshApprovalRequests(silent: true);
+      }
     });
   }
 
@@ -97,6 +101,7 @@ class _DashboardTabState extends State<DashboardTab> {
           appState.refreshPurchaseInvoices(),
           appState.refreshPaymentEntries(),
           appState.refreshInventory(),
+          appState.refreshApprovalRequests(silent: true),
         ]);
       },
       child: SingleChildScrollView(
@@ -117,6 +122,26 @@ class _DashboardTabState extends State<DashboardTab> {
             ),
 
             const SizedBox(height: 18),
+
+            if (appState.approvalRequests.isNotEmpty) ...[
+              DashboardDataSection(
+                title: 'Approval Inbox',
+                child: Column(
+                  children: appState.approvalRequests.take(3).map((request) {
+                    return _DashboardOrderRow(
+                      label: request.documentName,
+                      value: request.action.isEmpty
+                          ? request.status
+                          : request.action,
+                      subtitle:
+                          '${request.documentType} - ${request.workflowState}',
+                      status: request.timeLabel,
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 14),
+            ],
 
             GridView.count(
               crossAxisCount: 2,

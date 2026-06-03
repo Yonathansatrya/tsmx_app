@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../models/sales_order.dart';
 import '../models/warehouse_info.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 
 class CreateSalesOrderScreen extends StatefulWidget {
-  const CreateSalesOrderScreen({super.key});
+  final String? editOrderId;
+
+  const CreateSalesOrderScreen({super.key, this.editOrderId});
+
+  bool get isEditMode => editOrderId != null;
 
   @override
   State<CreateSalesOrderScreen> createState() => _CreateSalesOrderScreenState();
@@ -19,6 +24,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   final _rateCtrl = TextEditingController();
 
   TextEditingController? _itemTextController;
+  String? _initialItemText;
   String? _selectedItemCode;
   String? _selectedSeries;
   String? _selectedWarehouse;
@@ -743,21 +749,39 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       final selectedWarehouseInfo = _selectedWarehouseInfo(
         _warehouseOptions(appState),
       );
-      await appState.createSalesOrder(
-        customer: _customerCtrl.text.trim(),
-        itemCode: itemCode,
-        qty: qty,
-        warehouse: _selectedWarehouse,
-        rate: rate,
-        series: _selectedSeries,
-        costCenter: _selectedCenter,
-        company: selectedWarehouseInfo?.company,
-        transactionDate: _selectedDate,
-      );
+      if (widget.isEditMode) {
+        await appState.updateSalesOrder(
+          orderId: widget.editOrderId!,
+          customer: _customerCtrl.text.trim(),
+          itemCode: itemCode,
+          qty: qty,
+          warehouse: _selectedWarehouse,
+          rate: rate,
+          costCenter: _selectedCenter,
+          company: selectedWarehouseInfo?.company,
+          transactionDate: _selectedDate,
+        );
+      } else {
+        await appState.createSalesOrder(
+          customer: _customerCtrl.text.trim(),
+          itemCode: itemCode,
+          qty: qty,
+          warehouse: _selectedWarehouse,
+          rate: rate,
+          series: _selectedSeries,
+          costCenter: _selectedCenter,
+          company: selectedWarehouseInfo?.company,
+          transactionDate: _selectedDate,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sales Order berhasil dibuat'),
+        SnackBar(
+          content: Text(
+            widget.isEditMode
+                ? 'Sales Order berhasil diperbarui'
+                : 'Sales Order berhasil dibuat',
+          ),
           backgroundColor: AppColors.primary,
         ),
       );
@@ -766,7 +790,11 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal membuat Sales Order: $e'),
+          content: Text(
+            widget.isEditMode
+                ? 'Gagal memperbarui Sales Order: $e'
+                : 'Gagal membuat Sales Order: $e',
+          ),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -915,6 +943,13 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         _itemOptions = itemOptions;
         _selectedWarehouse = selectedWarehouse;
       });
+      if (widget.isEditMode) {
+        final editingOrder = await appState.loadSalesOrderDetail(
+          widget.editOrderId!,
+        );
+        if (!mounted) return;
+        _applyEditingOrder(editingOrder);
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -938,6 +973,31 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }
   }
 
+  void _applyEditingOrder(SalesOrder order) {
+    final firstItem = order.items.isNotEmpty ? order.items.first : null;
+    setState(() {
+      _customerCtrl.text = order.customerId;
+      _selectedDate = DateTime.tryParse(order.date) ?? _selectedDate;
+      if (firstItem != null) {
+        _selectedItemCode = firstItem.itemCode.isNotEmpty
+            ? firstItem.itemCode
+            : firstItem.itemName;
+        _qtyCtrl.text = firstItem.qty.toString();
+        _rateCtrl.text = firstItem.rate > 0 ? firstItem.rate.toString() : '';
+        if (firstItem.warehouse.isNotEmpty) {
+          _selectedWarehouse = firstItem.warehouse;
+        }
+        _initialItemText = firstItem.itemCode.isNotEmpty
+            ? '${firstItem.itemName} (${firstItem.itemCode})'
+            : firstItem.itemName;
+        _itemTextController?.text = _initialItemText!;
+      }
+      _customerError = null;
+      _itemError = null;
+    });
+    _calculateTotal();
+  }
+
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -952,8 +1012,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         shadowColor: Colors.black.withValues(alpha: 0.08),
         centerTitle: false,
         titleSpacing: 16,
-        title: const Text(
-          'New Sales Order',
+        title: Text(
+          widget.isEditMode ? 'Edit Sales Order' : 'New Sales Order',
           style: TextStyle(
             color: AppColors.primary,
             fontSize: 18,
@@ -1221,6 +1281,10 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             onSubmit,
                           ) {
                             _itemTextController ??= textEditingController;
+                            if (_initialItemText != null &&
+                                textEditingController.text.isEmpty) {
+                              textEditingController.text = _initialItemText!;
+                            }
                             return TextFormField(
                               controller: textEditingController,
                               focusNode: focusNode,
@@ -1514,8 +1578,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 )
-              : const Text(
-                  'Save Sales Order',
+              : Text(
+                  widget.isEditMode ? 'Update Sales Order' : 'Save Sales Order',
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                 ),
         ),

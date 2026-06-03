@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../models/purchase_order.dart';
 import '../models/warehouse_info.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 
 class CreatePurchaseOrderScreen extends StatefulWidget {
-  const CreatePurchaseOrderScreen({super.key});
+  final String? editOrderId;
+
+  const CreatePurchaseOrderScreen({super.key, this.editOrderId});
+
+  bool get isEditMode => editOrderId != null;
 
   @override
   State<CreatePurchaseOrderScreen> createState() =>
@@ -20,6 +25,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   final _rateCtrl = TextEditingController();
 
   TextEditingController? _itemTextController;
+  String? _initialItemText;
   String? _selectedItemCode;
   String? _selectedWarehouse;
   DateTime _selectedDate = DateTime.now();
@@ -157,6 +163,13 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         _supplierOptions = suppliers;
         _itemOptions = items;
       });
+      if (widget.isEditMode) {
+        final editingOrder = await appState.loadPurchaseOrderDetail(
+          widget.editOrderId!,
+        );
+        if (!mounted) return;
+        _applyEditingOrder(editingOrder);
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -164,6 +177,47 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         });
       }
     }
+  }
+
+  void _applyEditingOrder(PurchaseOrder order) {
+    final firstItem = order.items.isNotEmpty ? order.items.first : null;
+    setState(() {
+      _supplierCtrl.text = order.supplierId;
+      _selectedDate = _parseDate(order.eta) ?? _selectedDate;
+      if (firstItem != null) {
+        _selectedItemCode = firstItem.itemCode.isNotEmpty
+            ? firstItem.itemCode
+            : firstItem.itemName;
+        _qtyCtrl.text = firstItem.qty.toString();
+        _rateCtrl.text = firstItem.rate > 0 ? firstItem.rate.toString() : '';
+        if (firstItem.warehouse.isNotEmpty) {
+          _selectedWarehouse = firstItem.warehouse;
+        }
+        _initialItemText = firstItem.itemCode.isNotEmpty
+            ? '${firstItem.itemName} (${firstItem.itemCode})'
+            : firstItem.itemName;
+        _itemTextController?.text = _initialItemText!;
+      }
+      _supplierError = null;
+      _itemError = null;
+    });
+  }
+
+  DateTime? _parseDate(String rawDate) {
+    final trimmed = rawDate.trim();
+    if (trimmed.isEmpty) return null;
+    final iso = DateTime.tryParse(trimmed);
+    if (iso != null) return iso;
+    final parts = trimmed.split('/');
+    if (parts.length == 3) {
+      final day = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final year = int.tryParse(parts[2]);
+      if (day != null && month != null && year != null) {
+        return DateTime(year, month, day);
+      }
+    }
+    return null;
   }
 
   Future<void> _validateItem(String value) async {
@@ -360,19 +414,35 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         throw Exception('Item code tidak boleh kosong');
       }
 
-      await appState.createPurchaseOrder(
-        supplier: _supplierCtrl.text.trim(),
-        itemCode: itemCode,
-        qty: qty,
-        warehouse: _selectedWarehouse,
-        rate: rate,
-        transactionDate: _selectedDate,
-      );
+      if (widget.isEditMode) {
+        await appState.updatePurchaseOrder(
+          orderId: widget.editOrderId!,
+          supplier: _supplierCtrl.text.trim(),
+          itemCode: itemCode,
+          qty: qty,
+          warehouse: _selectedWarehouse,
+          rate: rate,
+          transactionDate: _selectedDate,
+        );
+      } else {
+        await appState.createPurchaseOrder(
+          supplier: _supplierCtrl.text.trim(),
+          itemCode: itemCode,
+          qty: qty,
+          warehouse: _selectedWarehouse,
+          rate: rate,
+          transactionDate: _selectedDate,
+        );
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Purchase Order berhasil dibuat'),
+        SnackBar(
+          content: Text(
+            widget.isEditMode
+                ? 'Purchase Order berhasil diperbarui'
+                : 'Purchase Order berhasil dibuat',
+          ),
           backgroundColor: AppColors.primary,
         ),
       );
@@ -381,7 +451,11 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Gagal membuat Purchase Order: $e'),
+          content: Text(
+            widget.isEditMode
+                ? 'Gagal memperbarui Purchase Order: $e'
+                : 'Gagal membuat Purchase Order: $e',
+          ),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -404,8 +478,8 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         shadowColor: Colors.black.withValues(alpha: 0.08),
         centerTitle: false,
         titleSpacing: 16,
-        title: const Text(
-          'New Purchase Order',
+        title: Text(
+          widget.isEditMode ? 'Edit Purchase Order' : 'New Purchase Order',
           style: TextStyle(
             color: AppColors.primary,
             fontSize: 18,
@@ -588,6 +662,10 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                             onSubmit,
                           ) {
                             _itemTextController ??= textEditingController;
+                            if (_initialItemText != null &&
+                                textEditingController.text.isEmpty) {
+                              textEditingController.text = _initialItemText!;
+                            }
                             return TextFormField(
                               controller: textEditingController,
                               focusNode: focusNode,
@@ -860,8 +938,10 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 )
-              : const Text(
-                  'Save Purchase Order',
+              : Text(
+                  widget.isEditMode
+                      ? 'Update Purchase Order'
+                      : 'Save Purchase Order',
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                 ),
         ),

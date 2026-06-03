@@ -11,6 +11,8 @@ class ErpDocumentCard extends StatelessWidget {
   final double value;
   final String? trailing;
   final VoidCallback? onTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const ErpDocumentCard({
     super.key,
@@ -21,6 +23,8 @@ class ErpDocumentCard extends StatelessWidget {
     required this.value,
     this.trailing,
     this.onTap,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -60,6 +64,45 @@ class ErpDocumentCard extends StatelessWidget {
                     ),
                   ),
                   ErpStatusBadge(statusText: statusText),
+                  if (onEdit != null || onDelete != null) ...[
+                    const SizedBox(width: 4),
+                    PopupMenuButton<String>(
+                      tooltip: 'Actions',
+                      icon: const Icon(
+                        Icons.more_vert_rounded,
+                        color: AppColors.slate,
+                        size: 19,
+                      ),
+                      onSelected: (value) {
+                        if (value == 'edit') onEdit?.call();
+                        if (value == 'delete') onDelete?.call();
+                      },
+                      itemBuilder: (context) => [
+                        if (onEdit != null)
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('Edit'),
+                              ],
+                            ),
+                          ),
+                        if (onDelete != null)
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline_rounded, size: 18),
+                                SizedBox(width: 8),
+                                Text('Delete'),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 6),

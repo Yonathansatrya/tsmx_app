@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:http/http.dart' as http;
 
@@ -72,8 +73,10 @@ class FrappeService {
       'fields': jsonEncode(fields),
       'limit_page_length': limit.toString(),
       if (limitStart > 0) 'limit_start': limitStart.toString(),
-      if (orderBy != null) 'order_by': orderBy,
-      if (filters != null) 'filters': jsonEncode(filters),
+      'order_by': ?orderBy,
+      ...filters == null
+          ? const <String, String>{}
+          : {'filters': jsonEncode(filters)},
     };
 
     final uri = Uri.parse(
@@ -164,9 +167,7 @@ class FrappeService {
 
     final encodedDoctype = Uri.encodeComponent(doctype);
     final encodedName = Uri.encodeComponent(name);
-    final uri = Uri.parse(
-      '$baseUrl/api/resource/$encodedDoctype/$encodedName',
-    );
+    final uri = Uri.parse('$baseUrl/api/resource/$encodedDoctype/$encodedName');
 
     final response = await _put(
       uri,
@@ -213,10 +214,7 @@ class FrappeService {
     String name,
   ) async {
     final doc = await fetchDocument(doctype, name);
-    final result = await callMethod(
-      'frappe.client.submit',
-      args: {'doc': doc},
-    );
+    final result = await callMethod('frappe.client.submit', args: {'doc': doc});
     if (result is Map<String, dynamic>) return result;
     if (result is Map) return Map<String, dynamic>.from(result);
     return fetchDocument(doctype, name);
@@ -227,10 +225,7 @@ class FrappeService {
     String name,
   ) async {
     final doc = await fetchDocument(doctype, name);
-    final result = await callMethod(
-      'frappe.client.cancel',
-      args: {'doc': doc},
-    );
+    final result = await callMethod('frappe.client.cancel', args: {'doc': doc});
     if (result is Map<String, dynamic>) return result;
     if (result is Map) return Map<String, dynamic>.from(result);
     return fetchDocument(doctype, name);
@@ -342,11 +337,14 @@ class FrappeService {
         responseHeaders[name] = values.join(',');
       });
       if (response.statusCode >= 400) {
-        print('FrappeService POST error for ${uri.toString()}');
-        print('Sent request headers: $sentRequestHeaders');
-        print('Response status: ${response.statusCode}');
-        print('Response headers: $responseHeaders');
-        print('Response body: $responseBody');
+        _logHttpError(
+          method: 'POST',
+          uri: uri,
+          requestHeaders: sentRequestHeaders,
+          statusCode: response.statusCode,
+          responseHeaders: responseHeaders,
+          responseBody: responseBody,
+        );
       }
       return http.Response(
         responseBody,
@@ -390,11 +388,14 @@ class FrappeService {
         responseHeaders[name] = values.join(',');
       });
       if (response.statusCode >= 400) {
-        print('FrappeService GET error for ${uri.toString()}');
-        print('Sent request headers: $sentRequestHeaders');
-        print('Response status: ${response.statusCode}');
-        print('Response headers: $responseHeaders');
-        print('Response body: $responseBody');
+        _logHttpError(
+          method: 'GET',
+          uri: uri,
+          requestHeaders: sentRequestHeaders,
+          statusCode: response.statusCode,
+          responseHeaders: responseHeaders,
+          responseBody: responseBody,
+        );
       }
       return http.Response(
         responseBody,
@@ -407,10 +408,7 @@ class FrappeService {
     }
   }
 
-  Future<http.Response> _delete(
-    Uri uri, {
-    Map<String, String>? headers,
-  }) async {
+  Future<http.Response> _delete(Uri uri, {Map<String, String>? headers}) async {
     final httpClient = HttpClient();
     try {
       final request = await httpClient.deleteUrl(uri);
@@ -493,5 +491,23 @@ class FrappeService {
     }
 
     return 'Frappe API error: $statusCode';
+  }
+
+  void _logHttpError({
+    required String method,
+    required Uri uri,
+    required Map<String, String> requestHeaders,
+    required int statusCode,
+    required Map<String, String> responseHeaders,
+    required String responseBody,
+  }) {
+    developer.log(
+      'FrappeService $method error for $uri\n'
+      'Sent request headers: $requestHeaders\n'
+      'Response status: $statusCode\n'
+      'Response headers: $responseHeaders\n'
+      'Response body: $responseBody',
+      name: 'FrappeService',
+    );
   }
 }

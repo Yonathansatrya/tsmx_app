@@ -4,7 +4,9 @@ import '../../theme/app_colors.dart';
 import 'notification_card.dart';
 import 'notification_model.dart';
 
-class NotificationSheet extends StatelessWidget {
+enum _NotificationFilter { all, unread, action, warning, info }
+
+class NotificationSheet extends StatefulWidget {
   final List<AppNotification> notifications;
   final VoidCallback? onMarkAllRead;
   final ValueChanged<AppNotification>? onNotificationTap;
@@ -40,14 +42,50 @@ class NotificationSheet extends StatelessWidget {
   }
 
   @override
+  State<NotificationSheet> createState() => _NotificationSheetState();
+}
+
+class _NotificationSheetState extends State<NotificationSheet> {
+  _NotificationFilter _filter = _NotificationFilter.all;
+
+  String _filterLabel(_NotificationFilter filter) {
+    return switch (filter) {
+      _NotificationFilter.all => 'All',
+      _NotificationFilter.unread => 'Unread',
+      _NotificationFilter.action => 'Action',
+      _NotificationFilter.warning => 'Warning',
+      _NotificationFilter.info => 'Info',
+    };
+  }
+
+  List<AppNotification> _filteredNotifications() {
+    return widget.notifications.where((item) {
+      return switch (_filter) {
+        _NotificationFilter.all => true,
+        _NotificationFilter.unread => !item.isRead,
+        _NotificationFilter.action => item.type == NotificationType.action,
+        _NotificationFilter.warning => item.type == NotificationType.warning,
+        _NotificationFilter.info => item.type == NotificationType.info,
+      };
+    }).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final unread = notifications.where((n) => !n.isRead).length;
+    final unread = widget.notifications.where((n) => !n.isRead).length;
+    final actions = widget.notifications
+        .where((n) => n.type == NotificationType.action)
+        .length;
+    final warnings = widget.notifications
+        .where((n) => n.type == NotificationType.warning)
+        .length;
+    final filtered = _filteredNotifications();
 
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.78,
+      initialChildSize: 0.86,
       minChildSize: 0.45,
-      maxChildSize: 0.92,
+      maxChildSize: 0.96,
       builder: (context, scrollController) {
         return Column(
           children: [
@@ -61,39 +99,115 @@ class NotificationSheet extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 12, 12),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(18, 16, 12, 10),
+              child: Column(
                 children: [
-                  const Expanded(
-                    child: Text(
-                      'Notifications',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.navy,
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.notifications_outlined,
+                          color: AppColors.primary,
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'ERP Inbox',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.navy,
+                              ),
+                            ),
+                            Text(
+                              '${widget.notifications.length} notifications - $unread unread',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.slate,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
                   ),
-                  Text(
-                    unread > 0
-                        ? '$unread unread'
-                        : '${notifications.length} items',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.slate,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _InboxMetric(
+                          label: 'Unread',
+                          value: unread,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _InboxMetric(
+                          label: 'Actions',
+                          value: actions,
+                          color: AppColors.success,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _InboxMetric(
+                          label: 'Warnings',
+                          value: warnings,
+                          color: AppColors.warning,
+                        ),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 36,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: _NotificationFilter.values.map((filter) {
+                        final selected = filter == _filter;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(_filterLabel(filter)),
+                            selected: selected,
+                            showCheckmark: false,
+                            selectedColor: AppColors.primary,
+                            backgroundColor: AppColors.softGreen,
+                            labelStyle: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              color: selected
+                                  ? AppColors.white
+                                  : AppColors.primary,
+                            ),
+                            onSelected: (_) => setState(() => _filter = filter),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ),
                 ],
               ),
             ),
-            if (notifications.isNotEmpty && unread > 0)
+            if (widget.notifications.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
                 child: Row(
                   children: [
                     const Text(
@@ -105,32 +219,34 @@ class NotificationSheet extends StatelessWidget {
                       ),
                     ),
                     const Spacer(),
-                    TextButton(
-                      onPressed: onMarkAllRead,
-                      child: const Text(
-                        'Mark all read',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
+                    if (unread > 0)
+                      TextButton.icon(
+                        onPressed: widget.onMarkAllRead,
+                        icon: const Icon(Icons.done_all_rounded, size: 17),
+                        label: const Text(
+                          'Mark read',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
             Expanded(
-              child: notifications.isEmpty
+              child: filtered.isEmpty
                   ? const _EmptyNotifications()
                   : ListView.builder(
                       controller: scrollController,
                       padding: const EdgeInsets.fromLTRB(20, 6, 20, 20),
-                      itemCount: notifications.length,
+                      itemCount: filtered.length,
                       itemBuilder: (context, index) {
-                        final item = notifications[index];
+                        final item = filtered[index];
                         return NotificationCard(
                           item: item,
                           onTap: () {
-                            onNotificationTap?.call(item);
+                            widget.onNotificationTap?.call(item);
                             Navigator.pop(context);
                           },
                         );
@@ -140,6 +256,53 @@ class NotificationSheet extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _InboxMetric extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+
+  const _InboxMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.14)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$value',
+            style: TextStyle(
+              color: color,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
