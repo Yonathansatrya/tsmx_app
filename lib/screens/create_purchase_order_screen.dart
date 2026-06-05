@@ -377,7 +377,9 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         });
       }
     } finally {
-      searchCtrl.dispose();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        searchCtrl.dispose();
+      });
     }
   }
 

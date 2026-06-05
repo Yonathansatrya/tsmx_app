@@ -284,8 +284,18 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     });
   }
 
+  String _normalizeItemCode(String rawText) {
+    final trimmed = rawText.trim();
+    if (trimmed.isEmpty) return '';
+    final match = RegExp(r'\(([^)]+)\)\$').firstMatch(trimmed);
+    if (match != null) {
+      return match.group(1)!.trim();
+    }
+    return trimmed;
+  }
+
   Future<void> _validateItem(String value) async {
-    final candidate = _selectedItemCode ?? value.trim();
+    final candidate = _selectedItemCode ?? _normalizeItemCode(value);
     if (candidate.isEmpty) {
       setState(() => _itemError = null);
       return;
@@ -449,7 +459,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         selectedCustomerId = result;
       }
     } finally {
-      searchCtrl.dispose();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        searchCtrl.dispose();
+      });
     }
 
     if (selectedCustomerId != null && mounted) {
@@ -694,7 +706,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         );
       },
     );
-    nameCtrl.dispose();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      nameCtrl.dispose();
+    });
   }
 
   Widget _buildSheetDropdown({
@@ -741,8 +755,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       final appState = context.read<AppState>();
       final qty = double.parse(_qtyCtrl.text.trim());
       final rate = double.tryParse(_rateCtrl.text.trim());
-      final itemCode =
-          _selectedItemCode ?? _itemTextController?.text.trim() ?? '';
+      final itemCode = (_selectedItemCode ?? '').isNotEmpty
+          ? _selectedItemCode!
+          : _normalizeItemCode(_itemTextController?.text ?? '');
       if (itemCode.isEmpty) {
         throw Exception('Item code tidak boleh kosong');
       }
@@ -1289,8 +1304,15 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                               controller: textEditingController,
                               focusNode: focusNode,
                               onChanged: (value) {
-                                if (_selectedItemCode != null) {
+                                final code = _normalizeItemCode(value);
+                                if (_selectedItemCode != null &&
+                                    code != _selectedItemCode) {
                                   setState(() => _selectedItemCode = null);
+                                }
+                                if (value.contains('(') &&
+                                    value.endsWith(')') &&
+                                    code.isNotEmpty) {
+                                  setState(() => _selectedItemCode = code);
                                 }
                                 _validateItem(value);
                               },
@@ -1559,7 +1581,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
         child: ElevatedButton(
-          onPressed: _isSaving ? null : _save,
+          onPressed: (_isSaving || _isLoadingSelectors || _isValidatingItem)
+              ? null
+              : _save,
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
             foregroundColor: Colors.white,
