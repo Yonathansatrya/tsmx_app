@@ -6,6 +6,7 @@ class InventoryItem {
   final String sku;
   final String name;
   final String warehouseId;
+  final String? category;
 
   final int quantity;
   final int minStockThreshold;
@@ -18,6 +19,7 @@ class InventoryItem {
     required this.warehouseId,
     required this.quantity,
     required this.minStockThreshold,
+    this.category,
     this.unitValue = 0,
     required this.status,
   });
@@ -28,6 +30,7 @@ class InventoryItem {
     String? warehouseId,
     int? quantity,
     int? minStockThreshold,
+    String? category,
     double? unitValue,
     StockStatus? status,
   }) {
@@ -37,6 +40,7 @@ class InventoryItem {
       warehouseId: warehouseId ?? this.warehouseId,
       quantity: quantity ?? this.quantity,
       minStockThreshold: minStockThreshold ?? this.minStockThreshold,
+      category: category ?? this.category,
       unitValue: unitValue ?? this.unitValue,
       status: status ?? this.status,
     );
@@ -92,12 +96,18 @@ class InventoryItem {
       json['valuation_rate'] ?? json['stock_value'],
     );
 
+    final category =
+        json['item_group']?.toString() ??
+        json['category']?.toString() ??
+        json['group']?.toString();
+
     return InventoryItem(
       sku: sku,
       name: name,
       warehouseId: warehouseRaw,
       quantity: quantity,
       minStockThreshold: minThreshold,
+      category: category,
       unitValue: unitValue,
       status: status,
     );

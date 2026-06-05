@@ -20,10 +20,11 @@ class StockTab extends StatefulWidget {
 
 class _StockTabState extends State<StockTab> {
   String? _selectedCompany;
-  String? _selectedAreaId;
+  WarehouseType? _selectedWarehouseType;
   final TextEditingController _stockSearchController = TextEditingController();
   _StockStatusFilter _stockStatusFilter = _StockStatusFilter.all;
   _StockSortOption _stockSortOption = _StockSortOption.urgentFirst;
+  String? _selectedCategory;
   bool _selectionInitialized = false;
 
   @override
@@ -62,12 +63,12 @@ class _StockTabState extends State<StockTab> {
 
     final company = _selectedCompany ?? companies.first.key;
     final areas = appState.stockWarehousesForCompany(company);
-    final areaId =
-        _selectedAreaId ?? (areas.isNotEmpty ? areas.first.areaId : null);
+    final warehouseType =
+        _selectedWarehouseType ?? _defaultWarehouseType(areas);
 
     setState(() {
       _selectedCompany = company;
-      _selectedAreaId = areaId;
+      _selectedWarehouseType = warehouseType;
       _selectionInitialized = true;
     });
   }
@@ -90,7 +91,8 @@ class _StockTabState extends State<StockTab> {
 
     setState(() {
       _selectedCompany = company;
-      _selectedAreaId = areas.isNotEmpty ? areas.first.areaId : _selectedAreaId;
+      _selectedWarehouseType = _defaultWarehouseType(areas);
+      _selectedCategory = null;
     });
 
     appState.refreshInventoryForCompany(company);
@@ -114,20 +116,26 @@ class _StockTabState extends State<StockTab> {
 
     if (selectedCompany != null &&
         areas.isNotEmpty &&
-        (_selectedAreaId == null ||
-            !areas.any((a) => a.areaId == _selectedAreaId))) {
+        (_selectedWarehouseType == null ||
+            !areas.any((a) => a.warehouseType == _selectedWarehouseType))) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        setState(() => _selectedAreaId = areas.first.areaId);
+        setState(() => _selectedWarehouseType = _defaultWarehouseType(areas));
       });
     }
 
-    final selectedAreaId = _selectedAreaId;
+    final selectedWarehouseType = _selectedWarehouseType;
+    final selectedAreas = selectedWarehouseType == null
+        ? <StockAreaOption>[]
+        : areas
+              .where((area) => area.warehouseType == selectedWarehouseType)
+              .toList();
+    final selectedAreaIds = selectedAreas.map((area) => area.areaId).toSet();
 
-    final areaInventory = selectedAreaId == null
+    final areaInventory = selectedAreaIds.isEmpty
         ? <InventoryItem>[]
         : appState.inventory
-              .where((item) => item.warehouseId == selectedAreaId)
+              .where((item) => selectedAreaIds.contains(item.warehouseId))
               .toList();
 
     final filteredInventory = _filterAndSortInventory(areaInventory);
@@ -137,9 +145,10 @@ class _StockTabState extends State<StockTab> {
       (sum, item) => sum + item.quantity,
     );
 
-    const int boxesPerSmallRoom = 900;
-    const int smallRoomsUsed = 3;
-    final int estimatedMaxBoxCapacity = boxesPerSmallRoom * smallRoomsUsed;
+    final int estimatedMaxBoxCapacity = selectedAreas.fold<int>(
+      0,
+      (sum, area) => sum + area.maxCapacity,
+    );
 
     final capacityPercentage = estimatedMaxBoxCapacity > 0
         ? (totalBoxesInStock / estimatedMaxBoxCapacity).clamp(0.0, 1.0)
@@ -269,12 +278,12 @@ class _StockTabState extends State<StockTab> {
                     Center(
                       child: WarehouseGauge(
                         percentage: capacityPercentage,
-                        label: _selectedAreaTitle(areas),
+                        label: _selectedAreaTitle(),
                       ),
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Capacity set for 3 small rooms (approx. 2700 boxes)',
+                      _capacitySummary(selectedAreas, estimatedMaxBoxCapacity),
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.slate.withValues(alpha: 0.9),
@@ -296,6 +305,7 @@ class _StockTabState extends State<StockTab> {
               _buildInventoryControls(
                 resultCount: filteredInventory.length,
                 totalCount: areaInventory.length,
+                currentItems: areaInventory,
               ),
               const SizedBox(height: 10),
 
@@ -306,7 +316,7 @@ class _StockTabState extends State<StockTab> {
                   (item) => _buildInventoryCard(
                     item,
                     companyLabel: _companyTitle(companies, selectedCompany),
-                    areaLabel: _selectedAreaTitle(areas),
+                    areaLabel: _selectedAreaTitle(),
                   ),
                 ),
 
@@ -346,7 +356,79 @@ class _StockTabState extends State<StockTab> {
 
   bool get _hasActiveStockFilters {
     return _stockSearchController.text.trim().isNotEmpty ||
-        _stockStatusFilter != _StockStatusFilter.all;
+        _stockStatusFilter != _StockStatusFilter.all ||
+        _selectedCategory != null;
+  }
+
+  List<String> _getUniqueCategories(List<InventoryItem> items) {
+    final categories = <String>{};
+    for (final item in items) {
+      if (item.category != null && item.category!.isNotEmpty) {
+        categories.add(item.category!);
+      }
+    }
+    return categories.toList()..sort();
+  }
+
+  String _warehouseTypeLabel(WarehouseType type) {
+    return switch (type) {
+      WarehouseType.inbound => 'Inbound',
+      WarehouseType.ripening => 'Ripening',
+      WarehouseType.stores => 'Stores',
+    };
+  }
+
+  Color _warehouseTypeColor(WarehouseType type) {
+    return switch (type) {
+      WarehouseType.inbound => const Color(0xFF2196F3), // Blue
+      WarehouseType.ripening => const Color(0xFFFF9800), // Orange
+      WarehouseType.stores => const Color(0xFF4CAF50), // Green
+    };
+  }
+
+  Map<WarehouseType, List<StockAreaOption>> _groupAreasByType(
+    List<StockAreaOption> areas,
+  ) {
+    final grouped = <WarehouseType, List<StockAreaOption>>{};
+    for (final area in areas) {
+      grouped.putIfAbsent(area.warehouseType, () => []).add(area);
+    }
+    return grouped;
+  }
+
+  List<WarehouseType> _availableWarehouseTypes(List<StockAreaOption> areas) {
+    const orderedTypes = [
+      WarehouseType.inbound,
+      WarehouseType.ripening,
+      WarehouseType.stores,
+    ];
+    return orderedTypes
+        .where((type) => areas.any((area) => area.warehouseType == type))
+        .toList();
+  }
+
+  WarehouseType? _defaultWarehouseType(List<StockAreaOption> areas) {
+    final types = _availableWarehouseTypes(areas);
+    return types.isEmpty ? null : types.first;
+  }
+
+  String _warehouseTypeDescription(WarehouseType type) {
+    return switch (type) {
+      WarehouseType.inbound => 'Barang datang disortir dulu',
+      WarehouseType.ripening => 'Pematangan buah',
+      WarehouseType.stores => 'Barang siap jual',
+    };
+  }
+
+  String _capacitySummary(List<StockAreaOption> areas, int totalCapacity) {
+    if (areas.isEmpty || totalCapacity <= 0) return 'Capacity not set';
+
+    final roomCount = areas.length;
+    final capacityLabel = totalCapacity.toString();
+    if (_selectedWarehouseType == WarehouseType.inbound) {
+      return 'Capacity: $roomCount Inbound room${roomCount == 1 ? '' : 's'} x 2,000 = $capacityLabel boxes';
+    }
+    return 'Capacity: $roomCount small room${roomCount == 1 ? '' : 's'} = $capacityLabel boxes';
   }
 
   List<InventoryItem> _filterAndSortInventory(List<InventoryItem> items) {
@@ -365,7 +447,10 @@ class _StockTabState extends State<StockTab> {
         _StockStatusFilter.inStock => item.status == StockStatus.inStock,
       };
 
-      return matchesSearch && matchesStatus;
+      final matchesCategory =
+          _selectedCategory == null || item.category == _selectedCategory;
+
+      return matchesSearch && matchesStatus && matchesCategory;
     }).toList();
 
     filtered.sort((a, b) {
@@ -429,6 +514,7 @@ class _StockTabState extends State<StockTab> {
   Widget _buildInventoryControls({
     required int resultCount,
     required int totalCount,
+    required List<InventoryItem> currentItems,
   }) {
     return Container(
       width: double.infinity,
@@ -507,6 +593,8 @@ class _StockTabState extends State<StockTab> {
               _buildSortMenu(),
             ],
           ),
+          const SizedBox(height: 10),
+          _buildCategoryFilterSection(currentItems),
           if (_hasActiveStockFilters) ...[
             const SizedBox(height: 8),
             Row(
@@ -526,6 +614,7 @@ class _StockTabState extends State<StockTab> {
                     _stockSearchController.clear();
                     setState(() {
                       _stockStatusFilter = _StockStatusFilter.all;
+                      _selectedCategory = null;
                     });
                   },
                   style: TextButton.styleFrom(
@@ -571,6 +660,78 @@ class _StockTabState extends State<StockTab> {
         color: isSelected ? color : color.withValues(alpha: 0.16),
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    );
+  }
+
+  Widget _buildCategoryFilterSection(List<InventoryItem> currentItems) {
+    final categories = _getUniqueCategories(currentItems);
+
+    if (categories.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8, left: 4),
+          child: Text(
+            'Category',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppColors.slate.withValues(alpha: 0.8),
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 34,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: _buildCategoryChip(null, 'All'),
+              ),
+              ...categories.map((category) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _buildCategoryChip(category, category),
+                );
+              }),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryChip(String? category, String label) {
+    final isSelected = _selectedCategory == category;
+
+    return ChoiceChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) {
+        setState(() {
+          _selectedCategory = category;
+        });
+      },
+      showCheckmark: false,
+      visualDensity: VisualDensity.compact,
+      labelStyle: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: isSelected ? AppColors.white : AppColors.primary,
+      ),
+      selectedColor: AppColors.primary,
+      backgroundColor: AppColors.primary.withValues(alpha: 0.08),
+      side: BorderSide(
+        color: isSelected
+            ? AppColors.primary
+            : AppColors.primary.withValues(alpha: 0.2),
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     );
   }
 
@@ -852,98 +1013,130 @@ class _StockTabState extends State<StockTab> {
   }
 
   Widget _buildAreaSelector(List<StockAreaOption> areas) {
+    if (areas.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final groupedAreas = _groupAreasByType(areas);
+    final warehouseTypes = _availableWarehouseTypes(areas);
+
     return SizedBox(
-      height: 48,
+      height: 74,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        itemCount: areas.length,
+        itemCount: warehouseTypes.length,
         itemBuilder: (context, index) {
-          final area = areas[index];
-          final isSelected = _selectedAreaId == area.areaId;
+          final type = warehouseTypes[index];
+          final typeAreas = groupedAreas[type] ?? const <StockAreaOption>[];
+          final typeColor = _warehouseTypeColor(type);
+          final isSelected = _selectedWarehouseType == type;
+          final totalCapacity = typeAreas.fold<int>(
+            0,
+            (sum, area) => sum + area.maxCapacity,
+          );
 
           return Padding(
-            padding: EdgeInsets.only(right: index == areas.length - 1 ? 0 : 8),
+            padding: EdgeInsets.only(
+              right: index == warehouseTypes.length - 1 ? 0 : 10,
+            ),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
                 onTap: () {
                   setState(() {
-                    _selectedAreaId = area.areaId;
+                    _selectedWarehouseType = type;
+                    _selectedCategory = null;
                   });
                 },
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 240),
+                  duration: const Duration(milliseconds: 220),
                   curve: Curves.easeOut,
-                  width: 170,
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  width: 178,
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : AppColors.white,
-                    borderRadius: BorderRadius.circular(14),
+                    color: isSelected ? typeColor : AppColors.white,
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isSelected
-                          ? AppColors.primary
-                          : AppColors.primary.withValues(alpha: 0.08),
+                          ? typeColor
+                          : typeColor.withValues(alpha: 0.22),
                       width: isSelected ? 2 : 1,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: isSelected
-                            ? AppColors.primary.withValues(alpha: 0.18)
-                            : AppColors.primaryDark.withValues(alpha: 0.05),
-                        blurRadius: isSelected ? 14 : 8,
-                        offset: const Offset(0, 4),
+                        color: typeColor.withValues(
+                          alpha: isSelected ? 0.16 : 0.05,
+                        ),
+                        blurRadius: isSelected ? 12 : 6,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
                   child: Row(
                     children: [
                       Container(
-                        width: 28,
-                        height: 28,
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? AppColors.white.withValues(alpha: 0.18)
-                              : AppColors.primary.withValues(alpha: 0.1),
+                              ? AppColors.white.withValues(alpha: 0.2)
+                              : typeColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
-                          Icons.location_on_rounded,
-                          size: 16,
-                          color: isSelected
-                              ? AppColors.white
-                              : AppColors.primary,
+                          typeAreas.isEmpty
+                              ? Icons.warehouse_rounded
+                              : typeAreas.first.icon,
+                          size: 18,
+                          color: isSelected ? AppColors.white : typeColor,
                         ),
                       ),
-                      const SizedBox(width: 9),
+                      const SizedBox(width: 8),
                       Expanded(
-                        child: Tooltip(
-                          message: area.title,
-                          waitDuration: const Duration(milliseconds: 500),
-                          child: Text(
-                            area.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              height: 1.1,
-                              fontWeight: FontWeight.w900,
-                              color: isSelected
-                                  ? AppColors.white
-                                  : AppColors.navy,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _warehouseTypeLabel(type),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                                color: isSelected
+                                    ? AppColors.white
+                                    : AppColors.navy,
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${typeAreas.length} rooms - $totalCapacity box',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: isSelected
+                                    ? AppColors.white.withValues(alpha: 0.86)
+                                    : AppColors.slate,
+                              ),
+                            ),
+                            Text(
+                              _warehouseTypeDescription(type),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: isSelected
+                                    ? AppColors.white.withValues(alpha: 0.76)
+                                    : AppColors.slate.withValues(alpha: 0.86),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      if (isSelected) ...[
-                        const SizedBox(width: 6),
-                        const Icon(
-                          Icons.check_circle_rounded,
-                          size: 16,
-                          color: AppColors.white,
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -1090,11 +1283,9 @@ class _StockTabState extends State<StockTab> {
     );
   }
 
-  String _selectedAreaTitle(List<StockAreaOption> areas) {
-    for (final area in areas) {
-      if (area.areaId == _selectedAreaId) return area.title;
-    }
-    return 'Warehouse';
+  String _selectedAreaTitle() {
+    final type = _selectedWarehouseType;
+    return type == null ? 'Warehouse' : _warehouseTypeLabel(type);
   }
 
   Widget _buildStatusBadge({

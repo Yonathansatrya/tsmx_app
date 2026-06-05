@@ -1379,6 +1379,8 @@ class AppState with ChangeNotifier {
           title: w.name,
           subtitle: w.displayName == w.name ? '' : w.displayName,
           icon: _iconForWarehouseName(w.name),
+          warehouseType: _typeForWarehouseName(w.name),
+          maxCapacity: _capacityForWarehouseName(w.name),
         ),
       );
     }
@@ -2086,5 +2088,28 @@ class AppState with ChangeNotifier {
       return Icons.storefront_outlined;
     }
     return Icons.inventory_2_outlined;
+  }
+
+  WarehouseType _typeForWarehouseName(String name) {
+    final w = name.toLowerCase();
+    if (w.contains('inbound') ||
+        w.contains('masuk') ||
+        w.contains('datang') ||
+        w.contains('receiving')) {
+      return WarehouseType.inbound;
+    }
+    if (w.contains('ripen') ||
+        w.contains('rippen') ||
+        w.contains('matang') ||
+        w.contains('pematang')) {
+      return WarehouseType.ripening;
+    }
+    return WarehouseType.stores;
+  }
+
+  int _capacityForWarehouseName(String name) {
+    final type = _typeForWarehouseName(name);
+    if (type == WarehouseType.inbound) return 2000;
+    return 900;
   }
 }
