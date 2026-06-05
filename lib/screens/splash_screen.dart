@@ -53,11 +53,6 @@ class _SplashScreenState extends State<SplashScreen> {
                 width: 118,
                 height: 118,
                 padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: AppColors.cardShadow,
-                ),
                 child: Image.asset(
                   'assets/images/logo.png',
                   fit: BoxFit.contain,

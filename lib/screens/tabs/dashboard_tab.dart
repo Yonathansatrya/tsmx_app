@@ -6,9 +6,9 @@ import '../../models/purchase_order.dart';
 import '../../models/sales_order.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/erp_format.dart';
 import '../../widgets/dashboard/dashboard_data_section.dart';
 import '../../widgets/dashboard/dashboard_kpi_card.dart';
-import '../../widgets/dashboard/dashboard_stock_alert_row.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
@@ -25,34 +25,14 @@ class _DashboardTabState extends State<DashboardTab> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
 
-      if (appState.salesOrders.isEmpty) {
-        appState.refreshSalesOrders();
-      }
-
-      if (appState.purchaseOrders.isEmpty) {
-        appState.refreshPurchaseOrders();
-      }
-
-      if (appState.warehouses.isEmpty) {
-        appState.refreshWarehouses();
-      }
-
-      if (appState.inventory.isEmpty) {
-        appState.refreshInventory();
-      }
-
-      if (appState.salesInvoices.isEmpty) {
-        appState.refreshSalesInvoices();
-      }
-
+      if (appState.salesOrders.isEmpty) appState.refreshSalesOrders();
+      if (appState.purchaseOrders.isEmpty) appState.refreshPurchaseOrders();
+      if (appState.warehouses.isEmpty) appState.refreshWarehouses();
+      if (appState.inventory.isEmpty) appState.refreshInventory();
+      if (appState.salesInvoices.isEmpty) appState.refreshSalesInvoices();
       if (appState.purchaseInvoices.isEmpty) {
         appState.refreshPurchaseInvoices();
       }
-
-      if (appState.paymentEntries.isEmpty) {
-        appState.refreshPaymentEntries();
-      }
-
       if (appState.approvalRequests.isEmpty) {
         appState.refreshApprovalRequests(silent: true);
       }
@@ -69,27 +49,16 @@ class _DashboardTabState extends State<DashboardTab> {
     final openSalesCount = appState.salesOrders
         .where((so) => so.statusKey != SalesOrderStatusKey.completed)
         .length;
-
     final lowStockCount = appState.inventory
         .where((item) => item.status != StockStatus.inStock)
         .length;
-
     final unpaidSiCount = appState.unpaidSalesInvoicesCount;
     final overduePiCount = appState.overduePurchaseInvoicesCount;
 
-    final recentSales = appState.salesOrders.take(3).toList();
-
-    final recentPayments = appState.paymentEntries.take(3).toList();
-
-    final pendingPurchaseOrders = appState.purchaseOrders
-        .where((po) => po.statusKey != PurchaseOrderStatusKey.completed)
-        .take(3)
-        .toList();
-
-    final lowStockItems = appState.inventory
-        .where((item) => item.status != StockStatus.inStock)
-        .take(4)
-        .toList();
+    final salesStats = _SalesMoneyStats.fromOrders(appState.salesOrders);
+    final purchaseStats = _PurchaseMoneyStats.fromOrders(
+      appState.purchaseOrders,
+    );
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -99,7 +68,6 @@ class _DashboardTabState extends State<DashboardTab> {
           appState.refreshPurchaseOrders(),
           appState.refreshSalesInvoices(),
           appState.refreshPurchaseInvoices(),
-          appState.refreshPaymentEntries(),
           appState.refreshInventory(),
           appState.refreshApprovalRequests(silent: true),
         ]);
@@ -110,19 +78,13 @@ class _DashboardTabState extends State<DashboardTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _DashboardHeader(userName: appState.currentUser),
-
-            const SizedBox(height: 14),
-
             _OperationsSnapshot(
               openSales: openSalesCount,
               unpaidInvoices: unpaidSiCount,
               pendingPurchases: pendingPurchasesCount,
               stockAlerts: lowStockCount,
-            ),
-
+            ),  
             const SizedBox(height: 18),
-
             if (appState.approvalRequests.isNotEmpty) ...[
               DashboardDataSection(
                 title: 'Approval Inbox',
@@ -142,7 +104,6 @@ class _DashboardTabState extends State<DashboardTab> {
               ),
               const SizedBox(height: 14),
             ],
-
             GridView.count(
               crossAxisCount: 2,
               crossAxisSpacing: 8,
@@ -195,73 +156,8 @@ class _DashboardTabState extends State<DashboardTab> {
                 ),
               ],
             ),
-
             const SizedBox(height: 20),
-
-            DashboardDataSection(
-              title: 'Recent Payment Entries',
-              child: recentPayments.isNotEmpty
-                  ? Column(
-                      children: recentPayments.map((pe) {
-                        return _DashboardOrderRow(
-                          label: pe.id,
-                          value: 'Rp ${pe.amount.toStringAsFixed(0)}',
-                          subtitle: '${pe.paymentType} · ${pe.party}',
-                          status: pe.statusText,
-                        );
-                      }).toList(),
-                    )
-                  : const _EmptySectionText('No payment entries loaded yet.'),
-            ),
-
-            const SizedBox(height: 14),
-
-            DashboardDataSection(
-              title: 'Recent Sales Orders',
-              child: recentSales.isNotEmpty
-                  ? Column(
-                      children: recentSales.map((order) {
-                        return _DashboardOrderRow(
-                          label: order.id,
-                          value: 'Rp ${order.value.toStringAsFixed(0)}',
-                          subtitle: order.customer,
-                          status: order.statusText,
-                        );
-                      }).toList(),
-                    )
-                  : const _EmptySectionText('No sales orders available yet.'),
-            ),
-
-            const SizedBox(height: 14),
-
-            DashboardDataSection(
-              title: 'Pending Purchase Orders',
-              child: pendingPurchaseOrders.isNotEmpty
-                  ? Column(
-                      children: pendingPurchaseOrders.map((po) {
-                        return _DashboardOrderRow(
-                          label: po.id,
-                          value: 'Qty ${po.itemsCount}',
-                          subtitle: po.vendor,
-                          status: po.isDelayed ? 'Delayed' : po.statusText,
-                        );
-                      }).toList(),
-                    )
-                  : const _EmptySectionText('No pending POs at this time.'),
-            ),
-
-            const SizedBox(height: 14),
-
-            DashboardDataSection(
-              title: 'Low Stock Alerts',
-              child: lowStockItems.isNotEmpty
-                  ? Column(
-                      children: lowStockItems.map((item) {
-                        return DashboardStockAlertRow(item: item);
-                      }).toList(),
-                    )
-                  : const _EmptySectionText('Inventory levels are healthy.'),
-            ),
+            _FinancialSnapshot(sales: salesStats, purchases: purchaseStats),
           ],
         ),
       ),
@@ -269,56 +165,193 @@ class _DashboardTabState extends State<DashboardTab> {
   }
 }
 
-class _DashboardHeader extends StatelessWidget {
-  final String? userName;
+class _SalesMoneyStats {
+  final double total;
+  final double open;
+  final double completed;
+  final int draftCount;
+  final int openCount;
+  final int completedCount;
 
-  const _DashboardHeader({required this.userName});
+  const _SalesMoneyStats({
+    required this.total,
+    required this.open,
+    required this.completed,
+    required this.draftCount,
+    required this.openCount,
+    required this.completedCount,
+  });
+
+  factory _SalesMoneyStats.fromOrders(List<SalesOrder> orders) {
+    final openOrders = orders.where((order) {
+      return order.statusKey != SalesOrderStatusKey.completed &&
+          order.statusKey != SalesOrderStatusKey.cancelled &&
+          order.statusKey != SalesOrderStatusKey.closed;
+    }).toList();
+    final completedOrders = orders
+        .where((order) => order.statusKey == SalesOrderStatusKey.completed)
+        .toList();
+
+    return _SalesMoneyStats(
+      total: orders.fold(0, (sum, order) => sum + order.value),
+      open: openOrders.fold(0, (sum, order) => sum + order.value),
+      completed: completedOrders.fold(0, (sum, order) => sum + order.value),
+      draftCount: orders.where((order) => order.docStatus == 0).length,
+      openCount: openOrders.length,
+      completedCount: completedOrders.length,
+    );
+  }
+}
+
+class _PurchaseMoneyStats {
+  final double total;
+  final double pending;
+  final double delayed;
+  final int draftCount;
+  final int pendingCount;
+  final int completedCount;
+
+  const _PurchaseMoneyStats({
+    required this.total,
+    required this.pending,
+    required this.delayed,
+    required this.draftCount,
+    required this.pendingCount,
+    required this.completedCount,
+  });
+
+  factory _PurchaseMoneyStats.fromOrders(List<PurchaseOrder> orders) {
+    final pendingOrders = orders.where((order) {
+      return order.statusKey != PurchaseOrderStatusKey.completed &&
+          order.statusKey != PurchaseOrderStatusKey.cancelled &&
+          order.statusKey != PurchaseOrderStatusKey.closed;
+    }).toList();
+    final completedOrders = orders
+        .where((order) => order.statusKey == PurchaseOrderStatusKey.completed)
+        .toList();
+    final delayedOrders = orders.where((order) => order.isDelayed).toList();
+
+    return _PurchaseMoneyStats(
+      total: orders.fold(0, (sum, order) => sum + order.totalValue),
+      pending: pendingOrders.fold(0, (sum, order) => sum + order.totalValue),
+      delayed: delayedOrders.fold(0, (sum, order) => sum + order.totalValue),
+      draftCount: orders.where((order) => order.docStatus == 0).length,
+      pendingCount: pendingOrders.length,
+      completedCount: completedOrders.length,
+    );
+  }
+}
+
+class _FinancialSnapshot extends StatelessWidget {
+  final _SalesMoneyStats sales;
+  final _PurchaseMoneyStats purchases;
+
+  const _FinancialSnapshot({required this.sales, required this.purchases});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final netValue = sales.total - purchases.total;
+    final netColor = netValue >= 0 ? AppColors.success : AppColors.warning;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Halo, ${userName ?? 'Operator'}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              const Text(
-                'Ringkasan operasional ERP',
-                style: TextStyle(fontSize: 12, color: AppColors.primaryLight),
-              ),
-            ],
+        const Text(
+          'Financial Snapshot',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+            color: AppColors.navy,
           ),
         ),
-
-        const SizedBox(width: 10),
+        const SizedBox(height: 10),
+        _MoneyStatCard(
+          title: 'Sales Orders',
+          icon: Icons.point_of_sale_rounded,
+          color: AppColors.primary,
+          totalLabel: 'Total SO',
+          totalValue: sales.total,
+          rows: [
+            _MoneyStatRow('Open value', sales.open, '${sales.openCount} SO'),
+            _MoneyStatRow(
+              'Completed',
+              sales.completed,
+              '${sales.completedCount} SO',
+            ),
+            _MoneyStatRow('Draft count', 0, '${sales.draftCount} SO'),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _MoneyStatCard(
+          title: 'Purchase Orders',
+          icon: Icons.shopping_bag_rounded,
+          color: AppColors.warning,
+          totalLabel: 'Total PO',
+          totalValue: purchases.total,
+          rows: [
+            _MoneyStatRow(
+              'Pending value',
+              purchases.pending,
+              '${purchases.pendingCount} PO',
+            ),
+            _MoneyStatRow('Delayed', purchases.delayed, 'ETA risk'),
+            _MoneyStatRow('Draft count', 0, '${purchases.draftCount} PO'),
+          ],
+        ),
+        const SizedBox(height: 10),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(20),
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: netColor.withValues(alpha: 0.16)),
+            boxShadow: AppColors.cardShadow,
           ),
-          child: const Row(
+          child: Row(
             children: [
-              _LiveDot(),
-              SizedBox(width: 6),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: netColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.account_balance_wallet_rounded,
+                  color: netColor,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Sales vs Purchase',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      netValue >= 0 ? 'Positive commitment' : 'Purchase heavy',
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Text(
-                'Live Sync',
+                '${netValue < 0 ? '-' : ''}Rp ${formatErpCurrency(netValue.abs())}',
                 style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
+                  color: netColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ],
@@ -329,17 +362,132 @@ class _DashboardHeader extends StatelessWidget {
   }
 }
 
-class _LiveDot extends StatelessWidget {
-  const _LiveDot();
+class _MoneyStatRow {
+  final String label;
+  final double value;
+  final String detail;
+
+  const _MoneyStatRow(this.label, this.value, this.detail);
+}
+
+class _MoneyStatCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Color color;
+  final String totalLabel;
+  final double totalValue;
+  final List<_MoneyStatRow> rows;
+
+  const _MoneyStatCard({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.totalLabel,
+    required this.totalValue,
+    required this.rows,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 6,
-      height: 6,
-      decoration: const BoxDecoration(
-        color: AppColors.primary,
-        shape: BoxShape.circle,
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.14)),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.navy,
+                      ),
+                    ),
+                    Text(
+                      totalLabel,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.slate,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                'Rp ${formatErpCurrency(totalValue)}',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...rows.map((row) {
+            final hasMoney = row.value > 0;
+            return Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      row.label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.slate,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    hasMoney
+                        ? 'Rp ${formatErpCurrency(row.value)}'
+                        : row.detail,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                  if (hasMoney) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      row.detail,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.slate,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -486,23 +634,6 @@ class _SnapshotMetric extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _EmptySectionText extends StatelessWidget {
-  final String message;
-
-  const _EmptySectionText(this.message);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        message,
-        style: const TextStyle(color: AppColors.slate, fontSize: 12),
-      ),
     );
   }
 }

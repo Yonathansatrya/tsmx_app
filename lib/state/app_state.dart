@@ -15,6 +15,7 @@ import '../models/stock_entry.dart';
 import '../models/material_request.dart';
 import '../models/approval_request.dart';
 import '../models/barcode_stock_lookup.dart';
+import '../models/journal_entry.dart';
 import '../models/stock_ledger_movement.dart';
 import '../models/inventory_item.dart';
 import '../utils/date_range_presets.dart';
@@ -50,6 +51,7 @@ class AppState with ChangeNotifier {
   List<StockEntry> _stockEntries = [];
   List<MaterialRequest> _materialRequests = [];
   List<ApprovalRequest> _approvalRequests = [];
+  List<JournalEntry> _journalEntries = [];
   List<InventoryItem> _inventory = [];
 
   List<SalesOrder> get salesOrders => _salesOrders;
@@ -64,6 +66,7 @@ class AppState with ChangeNotifier {
   List<StockEntry> get stockEntries => _stockEntries;
   List<MaterialRequest> get materialRequests => _materialRequests;
   List<ApprovalRequest> get approvalRequests => _approvalRequests;
+  List<JournalEntry> get journalEntries => _journalEntries;
   List<InventoryItem> get inventory => _inventory;
 
   List<WarehouseInfo> _warehouses = [];
@@ -136,6 +139,11 @@ class AppState with ChangeNotifier {
   bool get isMaterialRequestsLoading => _isMaterialRequestsLoading;
   String? _materialRequestsError;
   String? get materialRequestsError => _materialRequestsError;
+
+  bool _isJournalEntriesLoading = false;
+  bool get isJournalEntriesLoading => _isJournalEntriesLoading;
+  String? _journalEntriesError;
+  String? get journalEntriesError => _journalEntriesError;
 
   bool _isApprovalRequestsLoading = false;
   bool get isApprovalRequestsLoading => _isApprovalRequestsLoading;
@@ -737,6 +745,12 @@ class AppState with ChangeNotifier {
     return PurchaseInvoice.fromJson(doc);
   }
 
+  Future<JournalEntry> loadJournalEntryDetail(String id) async {
+    await _frappeService.ensureLoggedIn();
+    final doc = await _frappeService.fetchDocument('Journal Entry', id);
+    return JournalEntry.fromJson(doc);
+  }
+
   Future<PurchaseOrder> createPurchaseOrder({
     required String supplier,
     required String itemCode,
@@ -827,6 +841,14 @@ class AppState with ChangeNotifier {
     _purchaseOrders.removeWhere((o) => o.id == orderId);
     notifyListeners();
     await refreshPurchaseOrders();
+  }
+
+  Future<void> deleteJournalEntry(String id) async {
+    await _frappeService.ensureLoggedIn();
+    await _frappeService.deleteDocument('Journal Entry', id);
+    _journalEntries.removeWhere((entry) => entry.id == id);
+    notifyListeners();
+    await refreshJournalEntries();
   }
 
   Future<StockEntry> createStockEntry({
@@ -1228,10 +1250,48 @@ class AppState with ChangeNotifier {
     }
   }
 
+  Future<void> fetchJournalEntriesFromFrappe() async {
+    _isJournalEntriesLoading = true;
+    _journalEntriesError = null;
+    notifyListeners();
+
+    try {
+      await _frappeService.ensureLoggedIn();
+      final data = await _fetchAllResourcePages(
+        doctype: 'Journal Entry',
+        fields: const [
+          'name',
+          'posting_date',
+          'voucher_type',
+          'company',
+          'title',
+          'remark',
+          'status',
+          'workflow_state',
+          'docstatus',
+          'total_debit',
+          'total_credit',
+          'difference',
+          'creation',
+          'modified',
+        ],
+        orderBy: 'posting_date desc, modified desc',
+      );
+      _journalEntries = data.map((e) => JournalEntry.fromJson(e)).toList();
+      _journalEntriesError = null;
+    } catch (err) {
+      _journalEntriesError = err.toString();
+    } finally {
+      _isJournalEntriesLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> refreshQuotations() => fetchQuotationsFromFrappe();
   Future<void> refreshPaymentEntries() => fetchPaymentEntriesFromFrappe();
   Future<void> refreshStockEntries() => fetchStockEntriesFromFrappe();
   Future<void> refreshMaterialRequests() => fetchMaterialRequestsFromFrappe();
+  Future<void> refreshJournalEntries() => fetchJournalEntriesFromFrappe();
 
   Future<void> fetchWarehousesFromFrappe({
     String baseUrl = _defaultFrappeBaseUrl,
@@ -1446,6 +1506,8 @@ class AppState with ChangeNotifier {
         await refreshPurchaseReceipts();
       case 'Purchase Invoice':
         await refreshPurchaseInvoices();
+      case 'Journal Entry':
+        await refreshJournalEntries();
     }
     notifyListeners();
   }
