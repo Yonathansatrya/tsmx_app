@@ -9,7 +9,14 @@ import 'buying/purchase_invoice_panel.dart';
 import 'buying/material_request_panel.dart';
 
 class BuyingTab extends StatefulWidget {
-  const BuyingTab({super.key});
+  final String selectedSegment;
+  final ValueChanged<String>? onSegmentChanged;
+
+  const BuyingTab({
+    super.key,
+    required this.selectedSegment,
+    this.onSegmentChanged,
+  });
 
   @override
   State<BuyingTab> createState() => BuyingTabState();
@@ -23,13 +30,9 @@ class BuyingTabState extends State<BuyingTab> {
     ErpSegmentOption(id: 'mr', label: 'MR'),
   ];
 
-  String _segment = 'po';
-
-  String get currentSegment => _segment;
-
   Future<void> refreshCurrent() async {
     final appState = context.read<AppState>();
-    switch (_segment) {
+    switch (widget.selectedSegment) {
       case 'pr':
         await appState.refreshPurchaseReceipts();
       case 'pi':
@@ -53,9 +56,9 @@ class BuyingTabState extends State<BuyingTab> {
         children: [
           ErpSegmentBar(
             options: segments,
-            selectedId: _segment,
+            selectedId: widget.selectedSegment,
             onSelected: (id) {
-              setState(() => _segment = id);
+              widget.onSegmentChanged?.call(id);
               final appState = context.read<AppState>();
               switch (id) {
                 case 'pr':
@@ -79,7 +82,7 @@ class BuyingTabState extends State<BuyingTab> {
             },
           ),
           const SizedBox(height: 14),
-          switch (_segment) {
+          switch (widget.selectedSegment) {
             'pr' => const PurchaseReceiptPanel(),
             'pi' => const PurchaseInvoicePanel(),
             'mr' => const MaterialRequestPanel(),

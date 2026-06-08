@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 import '../../../models/material_request.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
+import '../../../utils/erp_doc_utils.dart';
 import '../../../widgets/erp/erp_document_card.dart';
 import '../../../widgets/erp/erp_detail_sheet.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_summary_card.dart';
+import '../../../widgets/erp/erp_workflow_helper.dart';
 
 class MaterialRequestPanel extends StatefulWidget {
   const MaterialRequestPanel({super.key});
@@ -40,16 +42,44 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
   }
 
   void _openDetail(MaterialRequest doc) {
+    final canSubmit = isDocDraft(doc.docStatus);
     showErpDetailSheet(
       context: context,
       title: doc.id,
       subtitle: doc.materialRequestType,
       statusText: doc.statusText,
       rows: [
+        docStatusRow(doc.docStatus),
         ErpDetailRow(label: 'Date', value: doc.date),
         ErpDetailRow(label: 'Qty', value: '${doc.itemsCount}'),
       ],
+      footer: canSubmit
+          ? erpActionButton(
+              label: 'Submit Material Request',
+              icon: Icons.check_circle_outline_rounded,
+              filled: true,
+              onPressed: () => _submit(doc.id),
+            )
+          : null,
     );
+  }
+
+  Future<void> _submit(String id) async {
+    if (!await confirmErpAction(
+      context,
+      title: 'Submit Material Request?',
+      message: 'Submit $id to ERPNext?',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    final ok = await runErpWorkflowAction(
+      context,
+      action: () =>
+          context.read<AppState>().submitDocument('Material Request', id),
+      successMessage: 'Material Request submitted',
+    );
+    if (ok && mounted) Navigator.pop(context);
   }
 
   @override

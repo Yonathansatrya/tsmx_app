@@ -14,6 +14,8 @@ import 'tabs/buying_tab.dart';
 import 'tabs/selling_tab.dart';
 import 'tabs/stock_tab.dart';
 import 'create_purchase_order_screen.dart';
+import 'create_purchase_invoice_screen.dart';
+import 'create_buying_document_screen.dart';
 import 'create_sales_order_screen.dart';
 import 'create_stock_entry_screen.dart';
 
@@ -27,7 +29,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   String _salesSegment = 'so';
-  final _buyingTabKey = GlobalKey<BuyingTabState>();
+  String _buyingSegment = 'po';
 
   @override
   void initState() {
@@ -44,7 +46,10 @@ class _HomeScreenState extends State<HomeScreen> {
       selectedSegment: _salesSegment,
       onSegmentChanged: (segment) => setState(() => _salesSegment = segment),
     ),
-    BuyingTab(key: _buyingTabKey),
+    BuyingTab(
+      selectedSegment: _buyingSegment,
+      onSegmentChanged: (segment) => setState(() => _buyingSegment = segment),
+    ),
     const StockTab(),
   ];
 
@@ -266,7 +271,56 @@ class _HomeScreenState extends State<HomeScreen> {
         );
 
       case 2:
-        if (_buyingTabKey.currentState?.currentSegment != 'po') {
+        if (_buyingSegment == 'pr') {
+          return FloatingActionButton.extended(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const CreateBuyingDocumentScreen(
+                    type: BuyingDocumentType.purchaseReceipt,
+                  ),
+                ),
+              );
+            },
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.inventory_outlined),
+            label: const Text('Purchase Receipt'),
+          );
+        }
+        if (_buyingSegment == 'pi') {
+          return FloatingActionButton.extended(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const CreatePurchaseInvoiceScreen(),
+                ),
+              );
+            },
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.receipt_long_outlined),
+            label: const Text('Purchase Invoice'),
+          );
+        }
+        if (_buyingSegment == 'mr') {
+          return FloatingActionButton.extended(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const CreateBuyingDocumentScreen(
+                    type: BuyingDocumentType.materialRequest,
+                  ),
+                ),
+              );
+            },
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.assignment_outlined),
+            label: const Text('Material Request'),
+          );
+        }
+        if (_buyingSegment != 'po') {
           return null;
         }
         return FloatingActionButton.extended(

@@ -28,7 +28,9 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   String? _initialItemText;
   String? _selectedItemCode;
   String? _selectedWarehouse;
+  String? _selectedSeries;
   DateTime _selectedDate = DateTime.now();
+  DateTime _requiredByDate = DateTime.now();
 
   bool _isLoadingSelectors = true;
   bool _isSaving = false;
@@ -37,6 +39,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   String? _itemError;
 
   List<WarehouseInfo> _warehouseOptions = [];
+  List<String> _seriesOptions = [];
   List<_SupplierOption> _supplierOptions = [];
   List<_ItemOption> _itemOptions = [];
 
@@ -157,11 +160,14 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
 
       final suppliers = await _fetchSupplierOptions(appState);
       final items = await _fetchItemOptions(appState);
+      final series = await appState.fetchNamingSeries('Purchase Order');
 
       if (!mounted) return;
       setState(() {
         _supplierOptions = suppliers;
         _itemOptions = items;
+        _seriesOptions = series;
+        _selectedSeries = series.isNotEmpty ? series.first : null;
       });
       if (widget.isEditMode) {
         final editingOrder = await appState.loadPurchaseOrderDetail(
@@ -184,6 +190,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     setState(() {
       _supplierCtrl.text = order.supplierId;
       _selectedDate = _parseDate(order.eta) ?? _selectedDate;
+      _requiredByDate = _selectedDate;
       if (firstItem != null) {
         _selectedItemCode = firstItem.itemCode.isNotEmpty
             ? firstItem.itemCode
@@ -392,6 +399,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedSeries == null) return;
     if (_supplierError != null || _itemError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -425,15 +433,18 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
           warehouse: _selectedWarehouse,
           rate: rate,
           transactionDate: _selectedDate,
+          requiredBy: _requiredByDate,
         );
       } else {
         await appState.createPurchaseOrder(
           supplier: _supplierCtrl.text.trim(),
           itemCode: itemCode,
           qty: qty,
+          namingSeries: _selectedSeries!,
           warehouse: _selectedWarehouse,
           rate: rate,
           transactionDate: _selectedDate,
+          requiredBy: _requiredByDate,
         );
       }
 
@@ -525,6 +536,61 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _requiredByDate.isBefore(_selectedDate)
+                              ? _selectedDate
+                              : _requiredByDate,
+                          firstDate: _selectedDate,
+                          lastDate: DateTime(2035),
+                        );
+                        if (picked != null) {
+                          setState(() => _requiredByDate = picked);
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Required By',
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Text(
+                          DateFormat('dd-MM-yyyy').format(_requiredByDate),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: _selectedSeries,
+                      decoration: InputDecoration(
+                        labelText: 'Series',
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                      items: _seriesOptions
+                          .map(
+                            (series) => DropdownMenuItem(
+                              value: series,
+                              child: Text(series),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: widget.isEditMode
+                          ? null
+                          : (value) => setState(() => _selectedSeries = value),
+                      validator: (value) => widget.isEditMode || value != null
+                          ? null
+                          : 'Series wajib dipilih',
+                    ),
+                    const SizedBox(height: 12),
                     TextFormField(
                       controller: _supplierCtrl,
                       readOnly: true,
@@ -568,7 +634,12 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                           lastDate: DateTime(2030),
                         );
                         if (picked != null) {
-                          setState(() => _selectedDate = picked);
+                          setState(() {
+                            _selectedDate = picked;
+                            if (_requiredByDate.isBefore(picked)) {
+                              _requiredByDate = picked;
+                            }
+                          });
                         }
                       },
                       child: Container(

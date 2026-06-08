@@ -651,10 +651,57 @@ class AppState with ChangeNotifier {
     return PurchaseInvoice.fromJson(doc);
   }
 
+  Future<PurchaseInvoice> createPurchaseInvoice({
+    required String supplier,
+    required String itemCode,
+    required double qty,
+    required String namingSeries,
+    required DateTime postingDate,
+    required DateTime dueDate,
+    required bool updateStock,
+    String? warehouse,
+    double? rate,
+    String? company,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final warehouseName = warehouse?.trim() ?? '';
+    if (updateStock && warehouseName.isEmpty) {
+      throw Exception('Warehouse wajib dipilih saat Update Stock aktif.');
+    }
+
+    final payload = <String, dynamic>{
+      'supplier': supplier.trim(),
+      'naming_series': namingSeries.trim(),
+      'posting_date': postingDate.toIso8601String().split('T').first,
+      'due_date': dueDate.toIso8601String().split('T').first,
+      'update_stock': updateStock ? 1 : 0,
+      if (company != null && company.trim().isNotEmpty)
+        'company': company.trim(),
+      if (updateStock) 'set_warehouse': warehouseName,
+      'items': [
+        {
+          'item_code': itemCode.trim(),
+          'qty': qty,
+          if (rate != null && rate >= 0) 'rate': rate,
+          if (updateStock) 'warehouse': warehouseName,
+        },
+      ],
+    };
+
+    final created = await _frappeService.createDocument(
+      'Purchase Invoice',
+      payload,
+    );
+    await refreshPurchaseInvoices();
+    return PurchaseInvoice.fromJson(created);
+  }
+
   Future<PurchaseOrder> createPurchaseOrder({
     required String supplier,
     required String itemCode,
     required double qty,
+    required String namingSeries,
+    required DateTime requiredBy,
     String? warehouse,
     double? rate,
     DateTime? transactionDate,
@@ -663,14 +710,17 @@ class AppState with ChangeNotifier {
 
     final payload = <String, dynamic>{
       'supplier': supplier,
+      'naming_series': namingSeries.trim(),
       'transaction_date': (transactionDate ?? DateTime.now())
           .toIso8601String()
           .split('T')
           .first,
+      'schedule_date': requiredBy.toIso8601String().split('T').first,
       'items': [
         {
           'item_code': itemCode,
           'qty': qty,
+          'schedule_date': requiredBy.toIso8601String().split('T').first,
           if (rate != null && rate > 0) 'rate': rate,
           if (warehouse != null && warehouse.trim().isNotEmpty)
             'warehouse': warehouse.trim(),
@@ -697,6 +747,7 @@ class AppState with ChangeNotifier {
     String? warehouse,
     double? rate,
     DateTime? transactionDate,
+    DateTime? requiredBy,
   }) async {
     await _frappeService.ensureLoggedIn();
 
@@ -705,11 +756,15 @@ class AppState with ChangeNotifier {
         'supplier': supplier.trim(),
       if (transactionDate != null)
         'transaction_date': transactionDate.toIso8601String().split('T').first,
+      if (requiredBy != null)
+        'schedule_date': requiredBy.toIso8601String().split('T').first,
       if (itemCode != null && itemCode.trim().isNotEmpty && qty != null)
         'items': [
           {
             'item_code': itemCode.trim(),
             'qty': qty,
+            if (requiredBy != null)
+              'schedule_date': requiredBy.toIso8601String().split('T').first,
             if (rate != null && rate > 0) 'rate': rate,
             if (warehouse != null && warehouse.trim().isNotEmpty)
               'warehouse': warehouse.trim(),
@@ -733,6 +788,65 @@ class AppState with ChangeNotifier {
     notifyListeners();
     await refreshPurchaseOrders();
     return updatedOrder;
+  }
+
+  Future<void> createPurchaseReceipt({
+    required String supplier,
+    required String itemCode,
+    required double qty,
+    required String namingSeries,
+    required String warehouse,
+    required DateTime postingDate,
+    double? rate,
+    String? company,
+  }) async {
+    final payload = <String, dynamic>{
+      'supplier': supplier.trim(),
+      'naming_series': namingSeries.trim(),
+      'posting_date': postingDate.toIso8601String().split('T').first,
+      'set_warehouse': warehouse.trim(),
+      if (company != null && company.trim().isNotEmpty)
+        'company': company.trim(),
+      'items': [
+        {
+          'item_code': itemCode.trim(),
+          'qty': qty,
+          'warehouse': warehouse.trim(),
+          if (rate != null && rate >= 0) 'rate': rate,
+        },
+      ],
+    };
+    await _frappeService.createDocument('Purchase Receipt', payload);
+    await refreshPurchaseReceipts();
+  }
+
+  Future<void> createMaterialRequest({
+    required String itemCode,
+    required double qty,
+    required String namingSeries,
+    required String warehouse,
+    required DateTime requiredBy,
+    String? company,
+  }) async {
+    final date = requiredBy.toIso8601String().split('T').first;
+    final payload = <String, dynamic>{
+      'naming_series': namingSeries.trim(),
+      'material_request_type': 'Purchase',
+      'transaction_date': DateTime.now().toIso8601String().split('T').first,
+      'schedule_date': date,
+      if (company != null && company.trim().isNotEmpty)
+        'company': company.trim(),
+      'items': [
+        {
+          'item_code': itemCode.trim(),
+          'qty': qty,
+          'schedule_date': date,
+          'warehouse': warehouse.trim(),
+        },
+      ],
+    };
+    await _frappeService.createDocument('Material Request', payload);
+    await refreshMaterialRequests();
   }
 
   Future<void> deletePurchaseOrder(String orderId) async {
@@ -1343,6 +1457,8 @@ class AppState with ChangeNotifier {
         await refreshPurchaseReceipts();
       case 'Purchase Invoice':
         await refreshPurchaseInvoices();
+      case 'Material Request':
+        await refreshMaterialRequests();
     }
     notifyListeners();
   }
