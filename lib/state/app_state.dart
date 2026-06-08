@@ -462,7 +462,9 @@ class AppState with ChangeNotifier {
     String? series,
     String? costCenter,
     String? company,
+    required String salesPerson,
     DateTime? transactionDate,
+    DateTime? deliveryDate,
   }) async {
     await _frappeService.ensureLoggedIn();
 
@@ -474,14 +476,25 @@ class AppState with ChangeNotifier {
           .toIso8601String()
           .split('T')
           .first,
+      'delivery_date': (deliveryDate ?? transactionDate ?? DateTime.now())
+          .toIso8601String()
+          .split('T')
+          .first,
       if (series != null && series.trim().isNotEmpty)
         'naming_series': series.trim(),
       if (costCenter != null && costCenter.trim().isNotEmpty)
         'cost_center': costCenter.trim(),
+      'sales_team': [
+        {'sales_person': salesPerson.trim(), 'allocated_percentage': 100},
+      ],
       'items': [
         {
           'item_code': itemCode,
           'qty': qty,
+          'delivery_date': (deliveryDate ?? transactionDate ?? DateTime.now())
+              .toIso8601String()
+              .split('T')
+              .first,
           if (rate != null && rate > 0) 'rate': rate,
           if (warehouse != null && warehouse.trim().isNotEmpty)
             'warehouse': warehouse.trim(),
@@ -498,6 +511,7 @@ class AppState with ChangeNotifier {
     _salesOrders = [order, ..._salesOrders];
     notifyListeners();
     await refreshSalesOrders();
+    unawaited(refreshOrderSummaries(silent: true));
     return order;
   }
 
@@ -539,7 +553,9 @@ class AppState with ChangeNotifier {
     double? rate,
     String? costCenter,
     String? company,
+    String? salesPerson,
     DateTime? transactionDate,
+    DateTime? deliveryDate,
     String? status,
   }) async {
     await _frappeService.ensureLoggedIn();
@@ -550,9 +566,15 @@ class AppState with ChangeNotifier {
         'company': company.trim(),
       if (transactionDate != null)
         'transaction_date': transactionDate.toIso8601String().split('T').first,
+      if (deliveryDate != null)
+        'delivery_date': deliveryDate.toIso8601String().split('T').first,
       if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
       if (costCenter != null && costCenter.trim().isNotEmpty)
         'cost_center': costCenter.trim(),
+      if (salesPerson != null && salesPerson.trim().isNotEmpty)
+        'sales_team': [
+          {'sales_person': salesPerson.trim(), 'allocated_percentage': 100},
+        ],
       if (warehouse != null && warehouse.trim().isNotEmpty)
         'set_warehouse': warehouse.trim(),
       if (itemCode != null && itemCode.trim().isNotEmpty && qty != null)
@@ -560,6 +582,8 @@ class AppState with ChangeNotifier {
           {
             'item_code': itemCode.trim(),
             'qty': qty,
+            if (deliveryDate != null)
+              'delivery_date': deliveryDate.toIso8601String().split('T').first,
             if (rate != null && rate > 0) 'rate': rate,
             if (warehouse != null && warehouse.trim().isNotEmpty)
               'warehouse': warehouse.trim(),
@@ -584,6 +608,7 @@ class AppState with ChangeNotifier {
         .toList();
     notifyListeners();
     await refreshSalesOrders();
+    unawaited(refreshOrderSummaries(silent: true));
     return updatedOrder;
   }
 
@@ -593,6 +618,7 @@ class AppState with ChangeNotifier {
     _salesOrders.removeWhere((o) => o.id == orderId);
     notifyListeners();
     await refreshSalesOrders();
+    unawaited(refreshOrderSummaries(silent: true));
   }
 
   Future<PurchaseOrder> loadPurchaseOrderDetail(String orderId) async {
@@ -1111,10 +1137,12 @@ class AppState with ChangeNotifier {
             'company',
             'parent_warehouse',
             'is_group',
+            'disabled',
           ],
           orderBy: 'name asc',
           filters: [
             ['is_group', '=', 0],
+            ['disabled', '=', 0],
           ],
         );
       } catch (_) {
@@ -1126,6 +1154,7 @@ class AppState with ChangeNotifier {
             'company',
             'parent_warehouse',
             'is_group',
+            'disabled',
           ],
           orderBy: 'name asc',
         );
@@ -1133,7 +1162,7 @@ class AppState with ChangeNotifier {
 
       _warehouses = data
           .map((row) => WarehouseInfo.fromJson(row))
-          .where((w) => w.name.isNotEmpty && !w.isGroup)
+          .where((w) => w.name.isNotEmpty && !w.isGroup && w.isDisabled != true)
           .toList();
     } catch (_) {
       // Warehouse list is optional; stock can fall back to name filters.
@@ -1284,6 +1313,15 @@ class AppState with ChangeNotifier {
   Future<void> submitDocument(String doctype, String name) async {
     await _frappeService.submitDocument(doctype, name);
     await _refreshAfterDocChange(doctype);
+    if (doctype == 'Sales Order' ||
+        doctype == 'Delivery Note' ||
+        doctype == 'Sales Invoice') {
+      unawaited(refreshOrderSummaries(silent: true));
+    }
+  }
+
+  Future<List<String>> fetchNamingSeries(String doctype) {
+    return _frappeService.fetchNamingSeries(doctype);
   }
 
   Future<void> cancelDocument(String doctype, String name) async {
@@ -1309,7 +1347,10 @@ class AppState with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<DeliveryNote> createDeliveryNoteFromSalesOrder(String soId) async {
+  Future<DeliveryNote> createDeliveryNoteFromSalesOrder(
+    String soId, {
+    required String namingSeries,
+  }) async {
     final so = await _frappeService.fetchDocument('Sales Order', soId);
     final items = buildDeliveryNoteItemsFromSalesOrder(so);
     if (items.isEmpty) {
@@ -1317,6 +1358,7 @@ class AppState with ChangeNotifier {
     }
 
     final payload = <String, dynamic>{
+      'naming_series': namingSeries.trim(),
       'customer': so['customer'],
       'company': so['company'],
       'posting_date': DateTime.now().toIso8601String().split('T').first,
@@ -1329,10 +1371,14 @@ class AppState with ChangeNotifier {
     );
     await refreshDeliveryNotes();
     await refreshSalesOrders();
+    unawaited(refreshOrderSummaries(silent: true));
     return DeliveryNote.fromJson(created);
   }
 
-  Future<SalesInvoice> createSalesInvoiceFromSalesOrder(String soId) async {
+  Future<SalesInvoice> createSalesInvoiceFromSalesOrder(
+    String soId, {
+    required String namingSeries,
+  }) async {
     final so = await _frappeService.fetchDocument('Sales Order', soId);
     final items = buildSalesInvoiceItemsFromSalesOrder(so);
     if (items.isEmpty) {
@@ -1340,6 +1386,7 @@ class AppState with ChangeNotifier {
     }
 
     final payload = <String, dynamic>{
+      'naming_series': namingSeries.trim(),
       'customer': so['customer'],
       'company': so['company'],
       'posting_date': DateTime.now().toIso8601String().split('T').first,
@@ -1352,6 +1399,7 @@ class AppState with ChangeNotifier {
     );
     await refreshSalesInvoices();
     await refreshSalesOrders();
+    unawaited(refreshOrderSummaries(silent: true));
     return SalesInvoice.fromJson(created);
   }
 
@@ -1578,6 +1626,8 @@ class AppState with ChangeNotifier {
         'docstatus',
         'transaction_date',
         'total_qty',
+        'per_delivered',
+        'per_billed',
       ],
       limit: _documentPageSize,
       limitStart: limitStart,
@@ -1601,6 +1651,8 @@ class AppState with ChangeNotifier {
         'docstatus',
         'transaction_date',
         'total_qty',
+        'per_delivered',
+        'per_billed',
       ],
       orderBy: 'transaction_date desc',
       maxRows: null,

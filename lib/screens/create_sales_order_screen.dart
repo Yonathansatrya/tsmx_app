@@ -18,6 +18,8 @@ class CreateSalesOrderScreen extends StatefulWidget {
 }
 
 class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
+  static const _defaultWarehouseName = 'Stores - Jakarta';
+
   final _formKey = GlobalKey<FormState>();
   final _customerCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
@@ -29,11 +31,14 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   String? _selectedSeries;
   String? _selectedWarehouse;
   String? _selectedCenter;
+  String? _selectedSalesPerson;
   DateTime _selectedDate = DateTime.now();
+  DateTime _selectedDeliveryDate = DateTime.now();
 
   bool _isLoadingSelectors = true;
   bool _isSaving = false;
   bool _isValidatingItem = false;
+  String? _seriesError;
   String? _customerError;
   String? _itemError;
   double _totalAmount = 0.0;
@@ -44,6 +49,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   List<String> _customerGroupOptions = [];
   List<String> _territoryOptions = [];
   List<String> _paymentTermsOptions = [];
+  List<String> _salesPersonOptions = [];
   List<_CostCenterOption> _costCenterOptions = [];
   List<_CustomerOption> _customerOptions = [];
   List<_ItemOption> _itemOptions = [];
@@ -54,10 +60,41 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     final seen = <String>{};
     return warehouses.where((warehouse) {
       final name = warehouse.name.trim();
-      if (name.isEmpty || seen.contains(name)) return false;
+      if (name.isEmpty || warehouse.isDisabled == true || seen.contains(name)) {
+        return false;
+      }
       seen.add(name);
       return true;
     }).toList();
+  }
+
+  String? _defaultWarehouse(List<WarehouseInfo> warehouses) {
+    for (final warehouse in warehouses) {
+      if (warehouse.name.trim().toLowerCase() ==
+          _defaultWarehouseName.toLowerCase()) {
+        return warehouse.name;
+      }
+    }
+    return warehouses.isNotEmpty ? warehouses.first.name : null;
+  }
+
+  Future<void> _ensureWarehouseEnabled(AppState appState) async {
+    final warehouse = _selectedWarehouse?.trim() ?? '';
+    if (warehouse.isEmpty) return;
+
+    final document = await appState.frappeService.fetchDocument(
+      'Warehouse',
+      warehouse,
+    );
+    final disabled = document['disabled'] == 1 || document['disabled'] == true;
+    final isGroup = document['is_group'] == 1 || document['is_group'] == true;
+    if (disabled || isGroup) {
+      throw Exception(
+        disabled
+            ? 'Warehouse $warehouse sudah dinonaktifkan. Pilih warehouse lain.'
+            : 'Warehouse $warehouse merupakan group dan tidak dapat digunakan.',
+      );
+    }
   }
 
   List<String> _splitFrappeOptions(dynamic raw) {
@@ -104,39 +141,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   }
 
   Future<List<String>> _fetchSalesOrderSeriesOptions(AppState appState) async {
-    try {
-      final docType = await appState.frappeService.fetchDocument(
-        'DocType',
-        'Sales Order',
-      );
-      final fields = docType['fields'];
-      if (fields is List) {
-        for (final row in fields) {
-          if (row is! Map) continue;
-          if (row['fieldname']?.toString() != 'naming_series') continue;
-
-          final options = _splitFrappeOptions(row['options']);
-          final defaultValue = row['default']?.toString().trim() ?? '';
-          if (defaultValue.isNotEmpty && options.contains(defaultValue)) {
-            return [
-              defaultValue,
-              ...options.where((option) => option != defaultValue),
-            ];
-          }
-          return options;
-        }
-      }
-    } catch (_) {}
-
-    try {
-      final message = await appState.frappeService.callMethod(
-        'frappe.model.naming.get_options',
-        args: {'doctype': 'Sales Order'},
-      );
-      return _splitFrappeOptions(message);
-    } catch (_) {
-      return [];
-    }
+    return appState.fetchNamingSeries('Sales Order');
   }
 
   Future<List<String>> _fetchDocTypeSelectOptions(
@@ -179,6 +184,32 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           .toList();
     } catch (_) {
       return [];
+    }
+  }
+
+  Future<List<String>> _fetchSalesPersonOptions(AppState appState) async {
+    Future<List<String>> fetch(List<List<dynamic>> filters) async {
+      final data = await appState.frappeService.fetchResource(
+        'Sales Person',
+        fields: const ['name'],
+        filters: filters,
+        orderBy: 'name asc',
+      );
+      return data
+          .map((row) => row['name']?.toString() ?? '')
+          .where((name) => name.isNotEmpty)
+          .toList();
+    }
+
+    try {
+      return await fetch(const [
+        ['is_group', '=', 0],
+        ['enabled', '=', 1],
+      ]);
+    } catch (_) {
+      return fetch(const [
+        ['is_group', '=', 0],
+      ]);
     }
   }
 
@@ -328,149 +359,138 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   }
 
   Future<void> _showCustomerSelectSheet() async {
-    final searchCtrl = TextEditingController();
     String? selectedCustomerId;
     var shouldAddCustomer = false;
 
-    try {
-      final result = await showModalBottomSheet<Object>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: AppColors.white,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-        ),
-        builder: (sheetContext) {
-          var query = '';
-          return StatefulBuilder(
-            builder: (context, setSheetState) {
-              final customers = _filteredCustomers(query);
-              return Padding(
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 20,
-                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Pilih Customer',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.navy,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.pop(sheetContext),
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: searchCtrl,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        labelText: 'Search nama customer',
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
+    final result = await showModalBottomSheet<Object>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final customers = _filteredCustomers(query);
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Pilih Customer',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.navy,
                         ),
                       ),
-                      onChanged: (value) => setSheetState(() => query = value),
+                      IconButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'Search nama customer',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(
+                          color: AppColors.primary.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(sheetContext, true);
-                      },
-                      icon: const Icon(Icons.person_add_alt_1_rounded),
-                      label: const Text('Add Customer Baru'),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: MediaQuery.of(sheetContext).size.height * 0.42,
-                      child: customers.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Customer tidak ditemukan',
-                                style: TextStyle(color: AppColors.slate),
-                              ),
-                            )
-                          : ListView.separated(
-                              itemCount: customers.length,
-                              separatorBuilder: (context, index) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final customer = customers[index];
-                                final selected =
-                                    customer.id == _customerCtrl.text.trim();
-                                return ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(
-                                    customer.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  subtitle: customer.name == customer.id
-                                      ? null
-                                      : Text(customer.id),
-                                  trailing: selected
-                                      ? const Icon(
-                                          Icons.check_circle,
-                                          color: Colors.green,
-                                        )
-                                      : null,
-                                  onTap: () {
-                                    Navigator.pop(sheetContext, customer.id);
-                                  },
-                                );
-                              },
+                    onChanged: (value) => setSheetState(() => query = value),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetContext, true);
+                    },
+                    icon: const Icon(Icons.person_add_alt_1_rounded),
+                    label: const Text('Add Customer Baru'),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: MediaQuery.of(sheetContext).size.height * 0.42,
+                    child: customers.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'Customer tidak ditemukan',
+                              style: TextStyle(color: AppColors.slate),
                             ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
-      );
+                          )
+                        : ListView.separated(
+                            itemCount: customers.length,
+                            separatorBuilder: (context, index) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final customer = customers[index];
+                              final selected =
+                                  customer.id == _customerCtrl.text.trim();
+                              return ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(
+                                  customer.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                subtitle: customer.name == customer.id
+                                    ? null
+                                    : Text(customer.id),
+                                trailing: selected
+                                    ? const Icon(
+                                        Icons.check_circle,
+                                        color: Colors.green,
+                                      )
+                                    : null,
+                                onTap: () {
+                                  Navigator.pop(sheetContext, customer.id);
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
 
-      if (result is bool && result) {
-        shouldAddCustomer = true;
-      } else if (result is String && result.isNotEmpty) {
-        selectedCustomerId = result;
-      }
-    } finally {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        searchCtrl.dispose();
-      });
+    if (result is bool && result) {
+      shouldAddCustomer = true;
+    } else if (result is String && result.isNotEmpty) {
+      selectedCustomerId = result;
     }
 
     if (selectedCustomerId != null && mounted) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        setState(() {
-          _customerCtrl.text = selectedCustomerId!;
-          _customerError = null;
-        });
+      setState(() {
+        _customerCtrl.text = selectedCustomerId!;
+        _customerError = null;
       });
     }
 
@@ -706,9 +726,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         );
       },
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      nameCtrl.dispose();
-    });
   }
 
   Widget _buildSheetDropdown({
@@ -737,6 +754,33 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedDeliveryDate.isBefore(_selectedDate)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Delivery Date tidak boleh sebelum Transaction Date'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (_selectedSeries == null || _selectedSeries!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Naming series Sales Order wajib dipilih'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (_selectedSalesPerson == null || _selectedSalesPerson!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sales Person wajib dipilih'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     if (_customerError != null || _itemError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -753,6 +797,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       });
 
       final appState = context.read<AppState>();
+      await _ensureWarehouseEnabled(appState);
       final qty = double.parse(_qtyCtrl.text.trim());
       final rate = double.tryParse(_rateCtrl.text.trim());
       final itemCode = (_selectedItemCode ?? '').isNotEmpty
@@ -774,7 +819,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           rate: rate,
           costCenter: _selectedCenter,
           company: selectedWarehouseInfo?.company,
+          salesPerson: _selectedSalesPerson,
           transactionDate: _selectedDate,
+          deliveryDate: _selectedDeliveryDate,
         );
       } else {
         await appState.createSalesOrder(
@@ -786,7 +833,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           series: _selectedSeries,
           costCenter: _selectedCenter,
           company: selectedWarehouseInfo?.company,
+          salesPerson: _selectedSalesPerson!,
           transactionDate: _selectedDate,
+          deliveryDate: _selectedDeliveryDate,
         );
       }
       if (!mounted) return;
@@ -859,6 +908,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         appState,
         doctype: 'Payment Terms Template',
       );
+      final salesPersonOptions = await _fetchSalesPersonOptions(appState);
 
       List<Map<String, dynamic>> customerData;
       try {
@@ -919,7 +969,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       );
       final selectedWarehouse = selectedWarehouseValid
           ? _selectedWarehouse
-          : (warehouseOptions.isNotEmpty ? warehouseOptions.first.name : null);
+          : _defaultWarehouse(warehouseOptions);
       String selectedWarehouseCompany = '';
       for (final warehouse in warehouseOptions) {
         if (warehouse.name == selectedWarehouse) {
@@ -939,11 +989,13 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       if (!mounted) return;
       setState(() {
         _seriesOptions = _normalizeOptions(seriesOptions);
+        _seriesError = null;
         _customerSeriesOptions = _normalizeOptions(customerSeriesOptions);
         _customerTypeOptions = _normalizeOptions(customerTypeOptions);
         _customerGroupOptions = _normalizeOptions(customerGroupOptions);
         _territoryOptions = _normalizeOptions(territoryOptions);
         _paymentTermsOptions = _normalizeOptions(paymentTermsOptions);
+        _salesPersonOptions = _normalizeOptions(salesPersonOptions);
         _costCenterOptions = _normalizeCostCenterOptions(costCenters);
         _customerOptions = customerOptions;
         _selectedSeries = _seriesOptions.contains(_selectedSeries)
@@ -955,6 +1007,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
             : (costCenterChoices.isNotEmpty
                   ? costCenterChoices.first.name
                   : null);
+        _selectedSalesPerson =
+            _salesPersonOptions.contains(_selectedSalesPerson)
+            ? _selectedSalesPerson
+            : (_salesPersonOptions.isNotEmpty
+                  ? _salesPersonOptions.first
+                  : null);
         _itemOptions = itemOptions;
         _selectedWarehouse = selectedWarehouse;
       });
@@ -965,7 +1023,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         if (!mounted) return;
         _applyEditingOrder(editingOrder);
       }
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _seriesOptions = [];
@@ -974,10 +1032,13 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         _customerGroupOptions = [];
         _territoryOptions = [];
         _paymentTermsOptions = [];
+        _salesPersonOptions = [];
         _costCenterOptions = [];
         _customerOptions = [];
         _selectedSeries = null;
         _selectedCenter = null;
+        _selectedSalesPerson = null;
+        _seriesError = error.toString();
       });
     } finally {
       if (mounted) {
@@ -993,6 +1054,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     setState(() {
       _customerCtrl.text = order.customerId;
       _selectedDate = DateTime.tryParse(order.date) ?? _selectedDate;
+      _selectedDeliveryDate = _selectedDate;
       if (firstItem != null) {
         _selectedItemCode = firstItem.itemCode.isNotEmpty
             ? firstItem.itemCode
@@ -1103,10 +1165,37 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                       onChanged: _seriesOptions.isEmpty
                           ? null
                           : (v) => setState(() => _selectedSeries = v),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Series wajib dipilih'
+                          : null,
                       hint: _isLoadingSelectors
                           ? const Text('Loading series...')
                           : const Text('Pilih series'),
                     ),
+                    if (_seriesError != null) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _seriesError!,
+                              style: const TextStyle(
+                                color: Colors.redAccent,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _isLoadingSelectors
+                                ? null
+                                : _loadSelectors,
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ],
 
                     const SizedBox(height: 12),
 
@@ -1119,7 +1208,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                           lastDate: DateTime(2030),
                         );
                         if (picked != null) {
-                          setState(() => _selectedDate = picked);
+                          setState(() {
+                            _selectedDate = picked;
+                            if (_selectedDeliveryDate.isBefore(picked)) {
+                              _selectedDeliveryDate = picked;
+                            }
+                          });
                         }
                       },
                       child: Container(
@@ -1148,6 +1242,62 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             const SizedBox(height: 4),
                             Text(
                               DateFormat('dd-MM-yyyy').format(_selectedDate),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: AppColors.navy,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate:
+                              _selectedDeliveryDate.isBefore(_selectedDate)
+                              ? _selectedDate
+                              : _selectedDeliveryDate,
+                          firstDate: _selectedDate,
+                          lastDate: DateTime(2030),
+                        );
+                        if (picked != null) {
+                          setState(() => _selectedDeliveryDate = picked);
+                        }
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Delivery Date',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.slate,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              DateFormat(
+                                'dd-MM-yyyy',
+                              ).format(_selectedDeliveryDate),
                               style: const TextStyle(
                                 fontSize: 14,
                                 color: AppColors.navy,
@@ -1198,6 +1348,45 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                       hint: _isLoadingSelectors
                           ? const Text('Loading cost centers...')
                           : const Text('Pilih cost center'),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    DropdownButtonFormField<String>(
+                      initialValue:
+                          _salesPersonOptions.contains(_selectedSalesPerson)
+                          ? _selectedSalesPerson
+                          : null,
+                      decoration: InputDecoration(
+                        labelText: 'Sales Person',
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                      ),
+                      items: _salesPersonOptions
+                          .map(
+                            (salesPerson) => DropdownMenuItem(
+                              value: salesPerson,
+                              child: Text(salesPerson),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: _salesPersonOptions.isEmpty
+                          ? null
+                          : (value) =>
+                                setState(() => _selectedSalesPerson = value),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Sales Person wajib dipilih'
+                          : null,
+                      hint: _isLoadingSelectors
+                          ? const Text('Loading sales persons...')
+                          : const Text('Pilih sales person'),
                     ),
 
                     const SizedBox(height: 12),
@@ -1581,7 +1770,11 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
         child: ElevatedButton(
-          onPressed: (_isSaving || _isLoadingSelectors || _isValidatingItem)
+          onPressed:
+              (_isSaving ||
+                  _isLoadingSelectors ||
+                  _isValidatingItem ||
+                  _selectedSeries == null)
               ? null
               : _save,
           style: ElevatedButton.styleFrom(

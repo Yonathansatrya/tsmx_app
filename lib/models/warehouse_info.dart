@@ -4,6 +4,7 @@ class WarehouseInfo {
   final String company;
   final String? parentWarehouse;
   final bool isGroup;
+  final bool? isDisabled;
 
   WarehouseInfo({
     required this.name,
@@ -11,6 +12,7 @@ class WarehouseInfo {
     this.company = '',
     this.parentWarehouse,
     this.isGroup = false,
+    this.isDisabled = false,
   });
 
   factory WarehouseInfo.fromJson(Map<String, dynamic> json) {
@@ -24,6 +26,7 @@ class WarehouseInfo {
       company: json['company']?.toString() ?? '',
       parentWarehouse: json['parent_warehouse']?.toString(),
       isGroup: json['is_group'] == 1 || json['is_group'] == true,
+      isDisabled: json['disabled'] == 1 || json['disabled'] == true,
     );
   }
 }

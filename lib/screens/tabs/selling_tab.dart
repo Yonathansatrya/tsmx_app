@@ -8,7 +8,14 @@ import 'selling/delivery_note_panel.dart';
 import 'selling/sales_invoice_panel.dart';
 
 class SellingTab extends StatefulWidget {
-  const SellingTab({super.key});
+  final String selectedSegment;
+  final ValueChanged<String>? onSegmentChanged;
+
+  const SellingTab({
+    super.key,
+    required this.selectedSegment,
+    this.onSegmentChanged,
+  });
 
   @override
   State<SellingTab> createState() => SellingTabState();
@@ -21,13 +28,9 @@ class SellingTabState extends State<SellingTab> {
     ErpSegmentOption(id: 'si', label: 'Invoices'),
   ];
 
-  String _segment = 'so';
-
-  String get currentSegment => _segment;
-
   Future<void> refreshCurrent() async {
     final appState = context.read<AppState>();
-    switch (_segment) {
+    switch (widget.selectedSegment) {
       case 'dn':
         await appState.refreshDeliveryNotes();
         break;
@@ -51,9 +54,9 @@ class SellingTabState extends State<SellingTab> {
         children: [
           ErpSegmentBar(
             options: segments,
-            selectedId: _segment,
+            selectedId: widget.selectedSegment,
             onSelected: (id) {
-              setState(() => _segment = id);
+              widget.onSegmentChanged?.call(id);
               final appState = context.read<AppState>();
               switch (id) {
                 case 'dn':
@@ -75,7 +78,7 @@ class SellingTabState extends State<SellingTab> {
             },
           ),
           const SizedBox(height: 14),
-          switch (_segment) {
+          switch (widget.selectedSegment) {
             'dn' => const DeliveryNotePanel(),
             'si' => const SalesInvoicePanel(),
             _ => const SalesOrderPanel(),

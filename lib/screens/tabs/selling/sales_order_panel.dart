@@ -237,17 +237,8 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     final relatedSi = await appState.fetchSalesInvoicesForSalesOrder(order.id);
     if (!mounted) return;
 
-    final canDeliver =
-        isDocSubmitted(detail.docStatus) && detail.perDelivered < 100;
-    final canBill = isDocSubmitted(detail.docStatus) && detail.perBilled < 100;
     final canSubmit = isDocDraft(detail.docStatus);
     final canEdit = isDocDraft(detail.docStatus);
-    final canDelete = isDocDraft(detail.docStatus);
-    final canCancel =
-        isDocSubmitted(detail.docStatus) &&
-        detail.statusKey != SalesOrderStatusKey.completed &&
-        detail.statusKey != SalesOrderStatusKey.closed &&
-        detail.statusKey != SalesOrderStatusKey.cancelled;
 
     showErpDetailSheet(
       context: context,
@@ -317,36 +308,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
               filled: true,
               onPressed: () => _submitSo(detail.id),
             ),
-          if (canDeliver)
-            erpActionButton(
-              label: 'Create Delivery Note',
-              icon: Icons.local_shipping_outlined,
-              onPressed: () => _createDn(detail.id),
-            ),
-          if (canBill)
-            erpActionButton(
-              label: 'Create Sales Invoice',
-              icon: Icons.receipt_long_outlined,
-              onPressed: () => _createSi(detail.id),
-            ),
-          if (canCancel)
-            erpActionButton(
-              label: 'Cancel Sales Order',
-              icon: Icons.cancel_outlined,
-              onPressed: () => _cancelSo(detail.id),
-            ),
-          if (canDelete)
-            erpActionButton(
-              label: 'Delete Draft',
-              icon: Icons.delete_outline_rounded,
-              onPressed: () => _deleteSo(detail.id, closeSheet: true),
-            ),
-          if (!canSubmit &&
-              !canDeliver &&
-              !canBill &&
-              !canEdit &&
-              !canCancel &&
-              !canDelete)
+          if (!canSubmit && !canEdit)
             const Text(
               'No workflow actions available for this document.',
               style: TextStyle(fontSize: 12, color: AppColors.slate),
@@ -447,66 +409,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     if (ok && mounted) Navigator.pop(context);
   }
 
-  Future<void> _cancelSo(String id) async {
-    if (!await confirmErpAction(
-      context,
-      title: 'Cancel Sales Order?',
-      message: 'Cancel $id di ERPNext?',
-    )) {
-      return;
-    }
-    if (!mounted) return;
-    final ok = await runErpWorkflowAction(
-      context,
-      action: () => context.read<AppState>().cancelDocument('Sales Order', id),
-      successMessage: 'Sales Order cancelled',
-    );
-    if (ok && mounted) Navigator.pop(context);
-  }
-
-  Future<void> _deleteSo(String id, {bool closeSheet = false}) async {
-    if (!await confirmErpAction(
-      context,
-      title: 'Delete Draft Sales Order?',
-      message: 'Delete draft $id dari ERPNext?',
-    )) {
-      return;
-    }
-    if (!mounted) return;
-    final ok = await runErpWorkflowAction(
-      context,
-      action: () => context.read<AppState>().deleteSalesOrder(id),
-      successMessage: 'Sales Order deleted',
-    );
-    if (ok && mounted && closeSheet) Navigator.pop(context);
-  }
-
-  Future<void> _createDn(String soId) async {
-    final ok = await runErpWorkflowAction(
-      context,
-      action: () =>
-          context.read<AppState>().createDeliveryNoteFromSalesOrder(soId),
-      successMessage: 'Delivery Note created',
-    );
-    if (ok && mounted) {
-      Navigator.pop(context);
-      await context.read<AppState>().refreshDeliveryNotes();
-    }
-  }
-
-  Future<void> _createSi(String soId) async {
-    final ok = await runErpWorkflowAction(
-      context,
-      action: () =>
-          context.read<AppState>().createSalesInvoiceFromSalesOrder(soId),
-      successMessage: 'Sales Invoice created',
-    );
-    if (ok && mounted) {
-      Navigator.pop(context);
-      await context.read<AppState>().refreshSalesInvoices();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -595,7 +497,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
               value: o.value,
               onTap: () => _openDetail(o),
               onEdit: isDocDraft(o.docStatus) ? () => _editSo(o.id) : null,
-              onDelete: isDocDraft(o.docStatus) ? () => _deleteSo(o.id) : null,
             ),
           ),
         if (appState.hasMoreSalesOrders ||

@@ -210,6 +210,73 @@ class FrappeService {
     return decoded;
   }
 
+  Future<dynamic> callDocumentMethod({
+    required Map<String, dynamic> document,
+    required String method,
+  }) {
+    return callMethod(
+      'run_doc_method',
+      args: {'docs': jsonEncode(document), 'method': method},
+    );
+  }
+
+  Future<List<String>> fetchNamingSeries(String doctype) async {
+    Object? settingsError;
+    try {
+      final settings = await fetchDocument(
+        'Document Naming Settings',
+        'Document Naming Settings',
+      );
+      final document = Map<String, dynamic>.from(settings)
+        ..['transaction_type'] = doctype;
+      final result = await callDocumentMethod(
+        document: document,
+        method: 'get_options',
+      );
+      final options = _splitOptions(result);
+      if (options.isNotEmpty) return options;
+    } catch (error) {
+      settingsError = error;
+    }
+
+    try {
+      final meta = await fetchDocument('DocType', doctype);
+      final fields = meta['fields'];
+      if (fields is List) {
+        for (final field in fields) {
+          if (field is! Map ||
+              field['fieldname']?.toString() != 'naming_series') {
+            continue;
+          }
+          final options = _splitOptions(field['options']);
+          final defaultValue = field['default']?.toString().trim() ?? '';
+          if (defaultValue.isNotEmpty && options.contains(defaultValue)) {
+            return [
+              defaultValue,
+              ...options.where((option) => option != defaultValue),
+            ];
+          }
+          if (options.isNotEmpty) return options;
+        }
+      }
+    } catch (error) {
+      settingsError ??= error;
+    }
+
+    throw Exception(
+      'Naming series untuk $doctype tidak tersedia. ${settingsError ?? ''}',
+    );
+  }
+
+  List<String> _splitOptions(dynamic raw) {
+    final values = raw is List ? raw : raw?.toString().split('\n') ?? const [];
+    final seen = <String>{};
+    return values
+        .map((value) => value?.toString().trim() ?? '')
+        .where((value) => value.isNotEmpty && seen.add(value))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> submitDocument(
     String doctype,
     String name,
