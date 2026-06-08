@@ -7,7 +7,6 @@ import '../../models/sales_order.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/erp_format.dart';
-import '../../widgets/dashboard/dashboard_data_section.dart';
 import '../../widgets/dashboard/dashboard_kpi_card.dart';
 
 class DashboardTab extends StatefulWidget {
@@ -33,8 +32,8 @@ class _DashboardTabState extends State<DashboardTab> {
       if (appState.purchaseInvoices.isEmpty) {
         appState.refreshPurchaseInvoices();
       }
-      if (appState.approvalRequests.isEmpty) {
-        appState.refreshApprovalRequests(silent: true);
+      if (!appState.hasFullOrderSummary) {
+        appState.refreshOrderSummaries();
       }
     });
   }
@@ -43,10 +42,13 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
 
-    final pendingPurchasesCount = appState.purchaseOrders
+    final dashboardSalesOrders = appState.dashboardSalesOrders;
+    final dashboardPurchaseOrders = appState.dashboardPurchaseOrders;
+
+    final pendingPurchasesCount = dashboardPurchaseOrders
         .where((po) => po.statusKey != PurchaseOrderStatusKey.completed)
         .length;
-    final openSalesCount = appState.salesOrders
+    final openSalesCount = dashboardSalesOrders
         .where((so) => so.statusKey != SalesOrderStatusKey.completed)
         .length;
     final lowStockCount = appState.inventory
@@ -55,9 +57,9 @@ class _DashboardTabState extends State<DashboardTab> {
     final unpaidSiCount = appState.unpaidSalesInvoicesCount;
     final overduePiCount = appState.overduePurchaseInvoicesCount;
 
-    final salesStats = _SalesMoneyStats.fromOrders(appState.salesOrders);
+    final salesStats = _SalesMoneyStats.fromOrders(dashboardSalesOrders);
     final purchaseStats = _PurchaseMoneyStats.fromOrders(
-      appState.purchaseOrders,
+      dashboardPurchaseOrders,
     );
 
     return RefreshIndicator(
@@ -69,7 +71,7 @@ class _DashboardTabState extends State<DashboardTab> {
           appState.refreshSalesInvoices(),
           appState.refreshPurchaseInvoices(),
           appState.refreshInventory(),
-          appState.refreshApprovalRequests(silent: true),
+          appState.refreshOrderSummaries(),
         ]);
       },
       child: SingleChildScrollView(
@@ -83,27 +85,23 @@ class _DashboardTabState extends State<DashboardTab> {
               unpaidInvoices: unpaidSiCount,
               pendingPurchases: pendingPurchasesCount,
               stockAlerts: lowStockCount,
-            ),  
-            const SizedBox(height: 18),
-            if (appState.approvalRequests.isNotEmpty) ...[
-              DashboardDataSection(
-                title: 'Approval Inbox',
-                child: Column(
-                  children: appState.approvalRequests.take(3).map((request) {
-                    return _DashboardOrderRow(
-                      label: request.documentName,
-                      value: request.action.isEmpty
-                          ? request.status
-                          : request.action,
-                      subtitle:
-                          '${request.documentType} - ${request.workflowState}',
-                      status: request.timeLabel,
-                    );
-                  }).toList(),
+            ),
+            if (appState.isOrderSummaryLoading) ...[
+              const SizedBox(height: 10),
+              const LinearProgressIndicator(),
+            ],
+            if (appState.orderSummaryError != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Summary sync failed: ${appState.orderSummaryError}',
+                style: const TextStyle(
+                  color: Colors.redAccent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 14),
             ],
+            const SizedBox(height: 18),
             GridView.count(
               crossAxisCount: 2,
               crossAxisSpacing: 8,
@@ -634,88 +632,6 @@ class _SnapshotMetric extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _DashboardOrderRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final String subtitle;
-  final String status;
-
-  const _DashboardOrderRow({
-    required this.label,
-    required this.value,
-    required this.subtitle,
-    required this.status,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.navy,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: AppColors.slate),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  status.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }

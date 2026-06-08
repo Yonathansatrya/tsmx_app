@@ -19,12 +19,12 @@ class SellingTab extends StatefulWidget {
 
 class SellingTabState extends State<SellingTab> {
   static const segments = [
-    ErpSegmentOption(id: 'qt', label: 'Quotations'),
+    // ErpSegmentOption(id: 'qt', label: 'Quotations'),
     ErpSegmentOption(id: 'so', label: 'Sales Order'),
     ErpSegmentOption(id: 'dn', label: 'Delivery Notes'),
-    ErpSegmentOption(id: 'dt', label: 'Delivery Trips'),
+    // ErpSegmentOption(id: 'dt', label: 'Delivery Trips'),
     ErpSegmentOption(id: 'si', label: 'Invoices'),
-    ErpSegmentOption(id: 'p', label: 'Payments'),
+    // ErpSegmentOption(id: 'p', label: 'Payments'),
   ];
 
   String _segment = 'so';

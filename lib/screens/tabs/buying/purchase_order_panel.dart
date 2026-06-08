@@ -605,6 +605,30 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
               onDelete: isDocDraft(o.docStatus) ? () => _deletePo(o.id) : null,
             ),
           ),
+        if (appState.hasMorePurchaseOrders ||
+            appState.isMorePurchaseOrdersLoading) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: appState.isMorePurchaseOrdersLoading
+                  ? null
+                  : () => context.read<AppState>().loadMorePurchaseOrders(),
+              icon: appState.isMorePurchaseOrdersLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(
+                appState.isMorePurchaseOrdersLoading
+                    ? 'Loading orders...'
+                    : 'Load more orders',
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

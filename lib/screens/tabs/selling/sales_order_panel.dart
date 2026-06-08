@@ -598,6 +598,30 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
               onDelete: isDocDraft(o.docStatus) ? () => _deleteSo(o.id) : null,
             ),
           ),
+        if (appState.hasMoreSalesOrders ||
+            appState.isMoreSalesOrdersLoading) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: appState.isMoreSalesOrdersLoading
+                  ? null
+                  : () => context.read<AppState>().loadMoreSalesOrders(),
+              icon: appState.isMoreSalesOrdersLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(
+                appState.isMoreSalesOrdersLoading
+                    ? 'Loading orders...'
+                    : 'Load more orders',
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

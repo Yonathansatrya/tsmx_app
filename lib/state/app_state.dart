@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sales_order.dart';
@@ -13,9 +14,6 @@ import '../models/quotation.dart';
 import '../models/payment_entry.dart';
 import '../models/stock_entry.dart';
 import '../models/material_request.dart';
-import '../models/approval_request.dart';
-import '../models/barcode_stock_lookup.dart';
-import '../models/journal_entry.dart';
 import '../models/stock_ledger_movement.dart';
 import '../models/inventory_item.dart';
 import '../utils/date_range_presets.dart';
@@ -50,9 +48,9 @@ class AppState with ChangeNotifier {
   List<PaymentEntry> _paymentEntries = [];
   List<StockEntry> _stockEntries = [];
   List<MaterialRequest> _materialRequests = [];
-  List<ApprovalRequest> _approvalRequests = [];
-  List<JournalEntry> _journalEntries = [];
   List<InventoryItem> _inventory = [];
+  List<SalesOrder> _summarySalesOrders = [];
+  List<PurchaseOrder> _summaryPurchaseOrders = [];
 
   List<SalesOrder> get salesOrders => _salesOrders;
   List<PurchaseOrder> get purchaseOrders => _purchaseOrders;
@@ -65,9 +63,11 @@ class AppState with ChangeNotifier {
   List<PaymentEntry> get paymentEntries => _paymentEntries;
   List<StockEntry> get stockEntries => _stockEntries;
   List<MaterialRequest> get materialRequests => _materialRequests;
-  List<ApprovalRequest> get approvalRequests => _approvalRequests;
-  List<JournalEntry> get journalEntries => _journalEntries;
   List<InventoryItem> get inventory => _inventory;
+  List<SalesOrder> get dashboardSalesOrders =>
+      _summarySalesOrders.isEmpty ? _salesOrders : _summarySalesOrders;
+  List<PurchaseOrder> get dashboardPurchaseOrders =>
+      _summaryPurchaseOrders.isEmpty ? _purchaseOrders : _summaryPurchaseOrders;
 
   List<WarehouseInfo> _warehouses = [];
   List<WarehouseInfo> get warehouses => _warehouses;
@@ -86,14 +86,34 @@ class AppState with ChangeNotifier {
   bool _isSalesOrdersLoading = false;
   bool get isSalesOrdersLoading => _isSalesOrdersLoading;
 
+  bool _isMoreSalesOrdersLoading = false;
+  bool get isMoreSalesOrdersLoading => _isMoreSalesOrdersLoading;
+
+  bool _hasMoreSalesOrders = true;
+  bool get hasMoreSalesOrders => _hasMoreSalesOrders;
+
   String? _salesOrdersError;
   String? get salesOrdersError => _salesOrdersError;
 
   bool _isPurchaseOrdersLoading = false;
   bool get isPurchaseOrdersLoading => _isPurchaseOrdersLoading;
 
+  bool _isMorePurchaseOrdersLoading = false;
+  bool get isMorePurchaseOrdersLoading => _isMorePurchaseOrdersLoading;
+
+  bool _hasMorePurchaseOrders = true;
+  bool get hasMorePurchaseOrders => _hasMorePurchaseOrders;
+
   String? _purchaseOrdersError;
   String? get purchaseOrdersError => _purchaseOrdersError;
+
+  Future<void>? _orderSummaryJob;
+  bool _isOrderSummaryLoading = false;
+  bool get isOrderSummaryLoading => _isOrderSummaryLoading;
+  String? _orderSummaryError;
+  String? get orderSummaryError => _orderSummaryError;
+  bool get hasFullOrderSummary =>
+      _summarySalesOrders.isNotEmpty && _summaryPurchaseOrders.isNotEmpty;
 
   bool _isDeliveryNotesLoading = false;
   bool get isDeliveryNotesLoading => _isDeliveryNotesLoading;
@@ -140,17 +160,6 @@ class AppState with ChangeNotifier {
   String? _materialRequestsError;
   String? get materialRequestsError => _materialRequestsError;
 
-  bool _isJournalEntriesLoading = false;
-  bool get isJournalEntriesLoading => _isJournalEntriesLoading;
-  String? _journalEntriesError;
-  String? get journalEntriesError => _journalEntriesError;
-
-  bool _isApprovalRequestsLoading = false;
-  bool get isApprovalRequestsLoading => _isApprovalRequestsLoading;
-  String? _approvalRequestsError;
-  String? get approvalRequestsError => _approvalRequestsError;
-  int get pendingApprovalsCount => _approvalRequests.length;
-
   bool _isInventoryLoading = false;
   bool get isInventoryLoading => _isInventoryLoading;
 
@@ -158,7 +167,9 @@ class AppState with ChangeNotifier {
   String? get inventoryError => _inventoryError;
 
   static const String _defaultFrappeBaseUrl = 'http://apps.willshine.id:8014';
-  static const int _frappePageSize = FrappeService.maxPageLength;
+  static const int _frappePageSize = 500;
+  static const int _defaultFetchRowLimit = 500;
+  static const int _documentPageSize = 50;
   static const String _prefsFrappeConfigKey = 'frappe_config';
 
   final FrappeService _frappeService = FrappeService();
@@ -227,18 +238,18 @@ class AppState with ChangeNotifier {
 
   Future<void> prefetchInitialData() async {
     try {
+      await fetchWarehousesFromFrappe();
+      await fetchInventoryFromFrappe();
       await Future.wait([
         fetchSalesOrdersFromFrappe(),
         fetchPurchaseOrdersFromFrappe(),
-        fetchDeliveryNotesFromFrappe(),
         fetchSalesInvoicesFromFrappe(),
-        fetchPurchaseReceiptsFromFrappe(),
         fetchPurchaseInvoicesFromFrappe(),
-        fetchWarehousesFromFrappe(),
-        fetchInventoryFromFrappe(),
       ]);
-      await refreshApprovalRequests(silent: true);
+      await fetchDeliveryNotesFromFrappe();
+      await fetchPurchaseReceiptsFromFrappe();
       await refreshNotifications(silent: true);
+      unawaited(refreshOrderSummaries(silent: true));
     } catch (_) {
       // Prefetch failures should not block login.
     }
@@ -322,113 +333,6 @@ class AppState with ChangeNotifier {
       }
       notifyListeners();
     }
-  }
-
-  Future<void> refreshApprovalRequests({bool silent = false}) async {
-    if (!_isAuthenticated || _currentUser == null) return;
-
-    if (!silent) {
-      _isApprovalRequestsLoading = true;
-      _approvalRequestsError = null;
-      notifyListeners();
-    }
-
-    try {
-      await _frappeService.ensureLoggedIn();
-      _approvalRequests = await _fetchApprovalRequestsFromFrappe();
-      _approvalRequestsError = null;
-    } catch (err) {
-      _approvalRequestsError = err.toString();
-    } finally {
-      if (!silent) {
-        _isApprovalRequestsLoading = false;
-      }
-      notifyListeners();
-    }
-  }
-
-  Future<void> applyApprovalAction(
-    ApprovalRequest request,
-    String action,
-  ) async {
-    if (!request.hasDocument) {
-      throw Exception('Approval request tidak memiliki dokumen referensi.');
-    }
-    await _frappeService.ensureLoggedIn();
-    final doc = await _frappeService.fetchDocument(
-      request.documentType,
-      request.documentName,
-    );
-    await _frappeService.callMethod(
-      'frappe.model.workflow.apply_workflow',
-      args: {'doc': doc, 'action': action},
-    );
-    await refreshApprovalRequests();
-    await refreshNotifications(silent: true);
-    await _refreshAfterDocChange(request.documentType);
-  }
-
-  Future<List<ApprovalRequest>> _fetchApprovalRequestsFromFrappe() async {
-    final fields = const [
-      'name',
-      'reference_doctype',
-      'reference_name',
-      'document_type',
-      'document_name',
-      'workflow_state',
-      'state',
-      'status',
-      'action',
-      'user',
-      'creation',
-      'modified',
-    ];
-
-    Future<List<Map<String, dynamic>>> fetch({
-      List<List<dynamic>>? filters,
-    }) async {
-      return _fetchResourceWithFieldFallback(
-        doctype: 'Workflow Action',
-        fields: fields,
-        limit: 120,
-        orderBy: 'modified desc',
-        filters: filters,
-      );
-    }
-
-    List<Map<String, dynamic>> rows;
-    try {
-      rows = await fetch(
-        filters: [
-          ['status', '=', 'Open'],
-          ['user', '=', _currentUser],
-        ],
-      );
-    } catch (_) {
-      try {
-        rows = await fetch(
-          filters: [
-            ['status', '=', 'Open'],
-          ],
-        );
-      } catch (_) {
-        rows = await fetch();
-      }
-    }
-
-    final requests =
-        rows
-            .map(ApprovalRequest.fromWorkflowAction)
-            .where((request) => request.id.isNotEmpty && request.hasDocument)
-            .toList()
-          ..sort((a, b) {
-            final left = a.modifiedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-            final right =
-                b.modifiedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-            return right.compareTo(left);
-          });
-
-    return requests;
   }
 
   Future<void> markAllNotificationsRead() async {
@@ -745,12 +649,6 @@ class AppState with ChangeNotifier {
     return PurchaseInvoice.fromJson(doc);
   }
 
-  Future<JournalEntry> loadJournalEntryDetail(String id) async {
-    await _frappeService.ensureLoggedIn();
-    final doc = await _frappeService.fetchDocument('Journal Entry', id);
-    return JournalEntry.fromJson(doc);
-  }
-
   Future<PurchaseOrder> createPurchaseOrder({
     required String supplier,
     required String itemCode,
@@ -843,14 +741,6 @@ class AppState with ChangeNotifier {
     await refreshPurchaseOrders();
   }
 
-  Future<void> deleteJournalEntry(String id) async {
-    await _frappeService.ensureLoggedIn();
-    await _frappeService.deleteDocument('Journal Entry', id);
-    _journalEntries.removeWhere((entry) => entry.id == id);
-    notifyListeners();
-    await refreshJournalEntries();
-  }
-
   Future<StockEntry> createStockEntry({
     required String stockEntryType,
     required List<Map<String, dynamic>> items,
@@ -882,6 +772,7 @@ class AppState with ChangeNotifier {
   }) async {
     _isSalesOrdersLoading = true;
     _salesOrdersError = null;
+    _hasMoreSalesOrders = true;
     notifyListeners();
 
     try {
@@ -892,24 +783,9 @@ class AppState with ChangeNotifier {
         await _frappeService.ensureLoggedIn();
       }
 
-      final data = await _fetchAllResourcePages(
-        doctype: 'Sales Order',
-        fields: const [
-          'name',
-          'customer',
-          'customer_name',
-          'grand_total',
-          'status',
-          'docstatus',
-          'transaction_date',
-          'total_qty',
-        ],
-        orderBy: 'transaction_date desc',
-      );
-
-      var orders = data.map((item) => SalesOrder.fromJson(item)).toList();
-      orders = await _attachSalesOrderItems(orders);
+      final orders = await _fetchSalesOrderPage(limitStart: 0);
       _salesOrders = orders;
+      _hasMoreSalesOrders = orders.length == _documentPageSize;
     } catch (error) {
       _salesOrdersError = error.toString();
     } finally {
@@ -926,6 +802,7 @@ class AppState with ChangeNotifier {
     _frappeService.baseUrl = baseUrl;
     _isPurchaseOrdersLoading = true;
     _purchaseOrdersError = null;
+    _hasMorePurchaseOrders = true;
     notifyListeners();
 
     try {
@@ -935,32 +812,110 @@ class AppState with ChangeNotifier {
         await _frappeService.ensureLoggedIn();
       }
 
-      final data = await _fetchAllResourcePages(
-        doctype: 'Purchase Order',
-        fields: const [
-          'name',
-          'supplier',
-          'supplier_name',
-          'status',
-          'docstatus',
-          'transaction_date',
-          'schedule_date',
-          'total_qty',
-          'grand_total',
-          'creation',
-        ],
-        orderBy: 'modified desc',
-      );
-
-      var orders = data.map((item) => PurchaseOrder.fromJson(item)).toList();
-      orders = await _attachPurchaseOrderItems(orders);
+      final orders = await _fetchPurchaseOrderPage(limitStart: 0);
       _purchaseOrders = orders;
+      _hasMorePurchaseOrders = orders.length == _documentPageSize;
 
       _purchaseOrdersError = null;
     } catch (err) {
       _purchaseOrdersError = err.toString();
     } finally {
       _isPurchaseOrdersLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMoreSalesOrders() async {
+    if (_isSalesOrdersLoading ||
+        _isMoreSalesOrdersLoading ||
+        !_hasMoreSalesOrders) {
+      return;
+    }
+
+    _isMoreSalesOrdersLoading = true;
+    notifyListeners();
+
+    try {
+      await _frappeService.ensureLoggedIn();
+      final nextPage = await _fetchSalesOrderPage(
+        limitStart: _salesOrders.length,
+      );
+      final existingIds = _salesOrders.map((order) => order.id).toSet();
+      _salesOrders = [
+        ..._salesOrders,
+        ...nextPage.where((order) => existingIds.add(order.id)),
+      ];
+      _hasMoreSalesOrders = nextPage.length == _documentPageSize;
+      _salesOrdersError = null;
+    } catch (err) {
+      _salesOrdersError = err.toString();
+    } finally {
+      _isMoreSalesOrdersLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMorePurchaseOrders() async {
+    if (_isPurchaseOrdersLoading ||
+        _isMorePurchaseOrdersLoading ||
+        !_hasMorePurchaseOrders) {
+      return;
+    }
+
+    _isMorePurchaseOrdersLoading = true;
+    notifyListeners();
+
+    try {
+      await _frappeService.ensureLoggedIn();
+      final nextPage = await _fetchPurchaseOrderPage(
+        limitStart: _purchaseOrders.length,
+      );
+      final existingIds = _purchaseOrders.map((order) => order.id).toSet();
+      _purchaseOrders = [
+        ..._purchaseOrders,
+        ...nextPage.where((order) => existingIds.add(order.id)),
+      ];
+      _hasMorePurchaseOrders = nextPage.length == _documentPageSize;
+      _purchaseOrdersError = null;
+    } catch (err) {
+      _purchaseOrdersError = err.toString();
+    } finally {
+      _isMorePurchaseOrdersLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> refreshOrderSummaries({bool silent = false}) {
+    if (!_isAuthenticated) return Future.value();
+
+    final activeJob = _orderSummaryJob;
+    if (activeJob != null) return activeJob;
+
+    final job = _refreshOrderSummaries(silent: silent);
+    _orderSummaryJob = job.whenComplete(() {
+      _orderSummaryJob = null;
+    });
+    return _orderSummaryJob!;
+  }
+
+  Future<void> _refreshOrderSummaries({required bool silent}) async {
+    if (!silent) {
+      _isOrderSummaryLoading = true;
+      _orderSummaryError = null;
+      notifyListeners();
+    }
+
+    try {
+      await _frappeService.ensureLoggedIn();
+      final sales = await _fetchAllSalesOrderSummary();
+      final purchases = await _fetchAllPurchaseOrderSummary();
+      _summarySalesOrders = sales;
+      _summaryPurchaseOrders = purchases;
+      _orderSummaryError = null;
+    } catch (err) {
+      _orderSummaryError = err.toString();
+    } finally {
+      _isOrderSummaryLoading = false;
       notifyListeners();
     }
   }
@@ -1250,48 +1205,10 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Future<void> fetchJournalEntriesFromFrappe() async {
-    _isJournalEntriesLoading = true;
-    _journalEntriesError = null;
-    notifyListeners();
-
-    try {
-      await _frappeService.ensureLoggedIn();
-      final data = await _fetchAllResourcePages(
-        doctype: 'Journal Entry',
-        fields: const [
-          'name',
-          'posting_date',
-          'voucher_type',
-          'company',
-          'title',
-          'remark',
-          'status',
-          'workflow_state',
-          'docstatus',
-          'total_debit',
-          'total_credit',
-          'difference',
-          'creation',
-          'modified',
-        ],
-        orderBy: 'posting_date desc, modified desc',
-      );
-      _journalEntries = data.map((e) => JournalEntry.fromJson(e)).toList();
-      _journalEntriesError = null;
-    } catch (err) {
-      _journalEntriesError = err.toString();
-    } finally {
-      _isJournalEntriesLoading = false;
-      notifyListeners();
-    }
-  }
-
   Future<void> refreshQuotations() => fetchQuotationsFromFrappe();
   Future<void> refreshPaymentEntries() => fetchPaymentEntriesFromFrappe();
   Future<void> refreshStockEntries() => fetchStockEntriesFromFrappe();
   Future<void> refreshMaterialRequests() => fetchMaterialRequestsFromFrappe();
-  Future<void> refreshJournalEntries() => fetchJournalEntriesFromFrappe();
 
   Future<void> fetchWarehousesFromFrappe({
     String baseUrl = _defaultFrappeBaseUrl,
@@ -1422,6 +1339,7 @@ class AppState with ChangeNotifier {
         );
       }
 
+      final maxRows = filters == null ? _defaultFetchRowLimit : null;
       List<Map<String, dynamic>> data;
       try {
         data = await _fetchAllResourcePages(
@@ -1434,12 +1352,14 @@ class AppState with ChangeNotifier {
             'projected_qty',
           ],
           filters: filters,
+          maxRows: maxRows,
         );
       } catch (_) {
         data = await _fetchAllResourcePages(
           doctype: 'Bin',
           fields: const ['item_code', 'warehouse', 'actual_qty'],
           filters: filters,
+          maxRows: maxRows,
         );
       }
 
@@ -1508,8 +1428,6 @@ class AppState with ChangeNotifier {
         await refreshPurchaseReceipts();
       case 'Purchase Invoice':
         await refreshPurchaseInvoices();
-      case 'Journal Entry':
-        await refreshJournalEntries();
     }
     notifyListeners();
   }
@@ -1769,6 +1687,100 @@ class AppState with ChangeNotifier {
     }
   }
 
+  Future<List<SalesOrder>> _fetchSalesOrderPage({
+    required int limitStart,
+  }) async {
+    final data = await _fetchResourceWithFieldFallback(
+      doctype: 'Sales Order',
+      fields: const [
+        'name',
+        'customer',
+        'customer_name',
+        'grand_total',
+        'status',
+        'docstatus',
+        'transaction_date',
+        'total_qty',
+      ],
+      limit: _documentPageSize,
+      limitStart: limitStart,
+      orderBy: 'transaction_date desc',
+    );
+
+    var orders = data.map((item) => SalesOrder.fromJson(item)).toList();
+    orders = await _attachSalesOrderItems(orders);
+    return orders;
+  }
+
+  Future<List<SalesOrder>> _fetchAllSalesOrderSummary() async {
+    final data = await _fetchAllResourcePages(
+      doctype: 'Sales Order',
+      fields: const [
+        'name',
+        'customer',
+        'customer_name',
+        'grand_total',
+        'status',
+        'docstatus',
+        'transaction_date',
+        'total_qty',
+      ],
+      orderBy: 'transaction_date desc',
+      maxRows: null,
+    );
+
+    return data.map((item) => SalesOrder.fromJson(item)).toList();
+  }
+
+  Future<List<PurchaseOrder>> _fetchPurchaseOrderPage({
+    required int limitStart,
+  }) async {
+    final data = await _fetchResourceWithFieldFallback(
+      doctype: 'Purchase Order',
+      fields: const [
+        'name',
+        'supplier',
+        'supplier_name',
+        'status',
+        'docstatus',
+        'transaction_date',
+        'schedule_date',
+        'total_qty',
+        'grand_total',
+        'creation',
+      ],
+      limit: _documentPageSize,
+      limitStart: limitStart,
+      orderBy: 'modified desc',
+    );
+
+    var orders = data.map((item) => PurchaseOrder.fromJson(item)).toList();
+    orders = await _attachPurchaseOrderItems(orders);
+    return orders;
+  }
+
+  Future<List<PurchaseOrder>> _fetchAllPurchaseOrderSummary() async {
+    final data = await _fetchAllResourcePages(
+      doctype: 'Purchase Order',
+      fields: const [
+        'name',
+        'supplier',
+        'supplier_name',
+        'status',
+        'docstatus',
+        'transaction_date',
+        'schedule_date',
+        'total_qty',
+        'grand_total',
+        'creation',
+      ],
+      orderBy: 'modified desc',
+      maxRows: null,
+    );
+
+    return data.map((item) => PurchaseOrder.fromJson(item)).toList();
+  }
+
   Future<List<SalesOrder>> _attachSalesOrderItems(
     List<SalesOrder> orders,
   ) async {
@@ -1787,6 +1799,7 @@ class AppState with ChangeNotifier {
         filters: [
           ['parent', 'in', orders.map((order) => order.id).toList()],
         ],
+        maxRows: 2000,
       );
       final grouped = <String, List<SalesOrderItem>>{};
       for (final row in rows) {
@@ -1822,6 +1835,7 @@ class AppState with ChangeNotifier {
         filters: [
           ['parent', 'in', orders.map((order) => order.id).toList()],
         ],
+        maxRows: 2000,
       );
       final grouped = <String, List<PurchaseOrderItem>>{};
       for (final row in rows) {
@@ -1841,124 +1855,33 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Future<List<BarcodeStockLookup>> lookupStockByBarcode(
-    String scannedCode, {
-    String? warehouse,
-  }) async {
-    await _frappeService.ensureLoggedIn();
-
-    final normalized = scannedCode.trim();
-    if (normalized.isEmpty) {
-      throw Exception('Barcode atau item code tidak boleh kosong.');
-    }
-
-    final item = await _resolveItemFromBarcode(normalized);
-    final itemCode = item['name']?.toString() ?? normalized;
-    final itemName = item['item_name']?.toString() ?? itemCode;
-    final valuationRate = NumParse.asDouble(item['valuation_rate']);
-
-    final filters = <List<dynamic>>[
-      ['item_code', '=', itemCode],
-      if (warehouse != null && warehouse.trim().isNotEmpty)
-        ['warehouse', '=', warehouse.trim()],
-    ];
-
-    final bins = await _fetchResourceWithFieldFallback(
-      doctype: 'Bin',
-      fields: const [
-        'item_code',
-        'warehouse',
-        'actual_qty',
-        'reserved_qty',
-        'projected_qty',
-      ],
-      limit: 200,
-      orderBy: 'warehouse asc',
-      filters: filters,
-    );
-
-    if (bins.isEmpty) {
-      return [
-        BarcodeStockLookup(
-          scannedCode: normalized,
-          itemCode: itemCode,
-          itemName: itemName,
-          warehouse: warehouse ?? '',
-          actualQty: 0,
-          reservedQty: 0,
-          projectedQty: 0,
-          valuationRate: valuationRate,
-        ),
-      ];
-    }
-
-    return bins
-        .map(
-          (bin) => BarcodeStockLookup.fromBin(
-            scannedCode: normalized,
-            itemCode: itemCode,
-            itemName: itemName,
-            bin: bin,
-            valuationRate: valuationRate,
-          ),
-        )
-        .toList();
-  }
-
-  Future<Map<String, dynamic>> _resolveItemFromBarcode(String code) async {
-    try {
-      final rows = await _fetchResourceWithFieldFallback(
-        doctype: 'Item Barcode',
-        fields: const ['parent', 'barcode'],
-        limit: 1,
-        filters: [
-          ['barcode', '=', code],
-        ],
-      );
-      if (rows.isNotEmpty) {
-        final parent = rows.first['parent']?.toString() ?? '';
-        if (parent.isNotEmpty) {
-          return _frappeService.fetchDocument('Item', parent);
-        }
-      }
-    } catch (_) {}
-
-    try {
-      final rows = await _fetchResourceWithFieldFallback(
-        doctype: 'Item',
-        fields: const ['name', 'item_name', 'valuation_rate', 'barcode'],
-        limit: 1,
-        filters: [
-          ['barcode', '=', code],
-        ],
-      );
-      if (rows.isNotEmpty) return rows.first;
-    } catch (_) {}
-
-    return _frappeService.fetchDocument('Item', code);
-  }
-
   Future<List<Map<String, dynamic>>> _fetchAllResourcePages({
     required String doctype,
     required List<String> fields,
     String? orderBy,
     List<List<dynamic>>? filters,
+    int? maxRows = _defaultFetchRowLimit,
   }) async {
     final all = <Map<String, dynamic>>[];
     var start = 0;
 
     while (true) {
+      final remaining = maxRows == null ? null : maxRows - all.length;
+      if (remaining != null && remaining <= 0) break;
+      final pageLimit = remaining == null
+          ? _frappePageSize
+          : math.min(_frappePageSize, remaining);
       final page = await _fetchResourceWithFieldFallback(
         doctype: doctype,
         fields: fields,
-        limit: _frappePageSize,
+        limit: pageLimit,
         limitStart: start,
         orderBy: orderBy,
         filters: filters,
       );
       all.addAll(page);
-      if (page.length < _frappePageSize) break;
-      start += _frappePageSize;
+      if (page.length < pageLimit) break;
+      start += pageLimit;
     }
 
     return all;

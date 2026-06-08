@@ -5,9 +5,6 @@ import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
-import 'approval_center_screen.dart';
-import 'barcode_warehouse_screen.dart';
-import 'journal_entry_screen.dart';
 
 import 'tabs/dashboard_tab.dart';
 import 'tabs/buying_tab.dart';
@@ -35,7 +32,6 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<AppState>().refreshNotifications(silent: true);
-      context.read<AppState>().refreshApprovalRequests(silent: true);
     });
   }
 
@@ -112,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   Text(
-                    '${appState.currentUser ?? 'Operator'}',
+                    appState.currentUser ?? 'Operator',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -127,76 +123,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         actions: [
-          // IconButton(
-          //   tooltip: 'Barcode Warehouse',
-          //   icon: const Icon(
-          //     Icons.qr_code_scanner_rounded,
-          //     color: AppColors.primary,
-          //   ),
-          //   onPressed: () {
-          //     Navigator.push(
-          //       context,
-          //       MaterialPageRoute(
-          //         builder: (_) => const BarcodeWarehouseScreen(),
-          //       ),
-          //     );
-          //   },
-          // ),
-          // IconButton(
-          //   tooltip: 'Approvals',
-          //   icon: Stack(
-          //     clipBehavior: Clip.none,
-          //     children: [
-          //       const Icon(Icons.approval_outlined, color: AppColors.primary),
-          //       if (appState.pendingApprovalsCount > 0)
-          //         Positioned(
-          //           right: -6,
-          //           top: -6,
-          //           child: Container(
-          //             constraints: const BoxConstraints(
-          //               minWidth: 16,
-          //               minHeight: 16,
-          //             ),
-          //             padding: const EdgeInsets.symmetric(horizontal: 4),
-          //             decoration: const BoxDecoration(
-          //               color: AppColors.warning,
-          //               shape: BoxShape.circle,
-          //             ),
-          //             alignment: Alignment.center,
-          //             child: Text(
-          //               appState.pendingApprovalsCount > 9
-          //                   ? '9+'
-          //                   : '${appState.pendingApprovalsCount}',
-          //               style: const TextStyle(
-          //                 color: AppColors.white,
-          //                 fontSize: 9,
-          //                 fontWeight: FontWeight.w900,
-          //               ),
-          //             ),
-          //           ),
-          //         ),
-          //     ],
-          //   ),
-          //   onPressed: () {
-          //     Navigator.push(
-          //       context,
-          //       MaterialPageRoute(builder: (_) => const ApprovalCenterScreen()),
-          //     );
-          //   },
-          // ),
-          IconButton(
-            tooltip: 'Journals',
-            icon: const Icon(
-              Icons.account_balance_rounded,
-              color: AppColors.primary,
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const JournalEntryScreen()),
-              );
-            },
-          ),
           IconButton(
             tooltip: 'Notifications',
             icon: Stack(

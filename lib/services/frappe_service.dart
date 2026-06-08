@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class FrappeService {
@@ -32,7 +33,7 @@ class FrappeService {
       throw Exception('Frappe login failed: ${response.statusCode}');
     }
 
-    final decoded = jsonDecode(response.body);
+    final decoded = await _decodeJson(response.body);
     if (decoded is Map && decoded['exc'] != null) {
       throw Exception('Frappe login failed: ${decoded['exc']}');
     }
@@ -84,7 +85,7 @@ class FrappeService {
     ).replace(queryParameters: queryParameters);
 
     final response = await _get(uri);
-    final decoded = jsonDecode(response.body);
+    final decoded = await _decodeJson(response.body);
 
     if (response.statusCode != 200) {
       throw Exception(_extractFrappeError(decoded, response.statusCode));
@@ -112,7 +113,7 @@ class FrappeService {
     final uri = Uri.parse('$baseUrl/api/resource/$encodedDoctype/$encodedName');
 
     final response = await _get(uri);
-    final decoded = jsonDecode(response.body);
+    final decoded = await _decodeJson(response.body);
 
     if (response.statusCode != 200) {
       throw Exception(_extractFrappeError(decoded, response.statusCode));
@@ -142,7 +143,7 @@ class FrappeService {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(data),
     );
-    final decoded = jsonDecode(response.body);
+    final decoded = await _decodeJson(response.body);
 
     if (response.statusCode != 200) {
       throw Exception(_extractFrappeError(decoded, response.statusCode));
@@ -174,7 +175,7 @@ class FrappeService {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(data),
     );
-    final decoded = jsonDecode(response.body);
+    final decoded = await _decodeJson(response.body);
 
     if (response.statusCode != 200) {
       throw Exception(_extractFrappeError(decoded, response.statusCode));
@@ -193,7 +194,7 @@ class FrappeService {
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(args ?? {}),
     );
-    final decoded = jsonDecode(response.body);
+    final decoded = await _decodeJson(response.body);
 
     if (response.statusCode != 200) {
       throw Exception(_extractFrappeError(decoded, response.statusCode));
@@ -239,7 +240,9 @@ class FrappeService {
     final uri = Uri.parse('$baseUrl/api/resource/$encodedDoctype/$encodedName');
 
     final response = await _delete(uri);
-    final decoded = response.body.isNotEmpty ? jsonDecode(response.body) : null;
+    final decoded = response.body.isNotEmpty
+        ? await _decodeJson(response.body)
+        : null;
 
     if (response.statusCode != 200 && response.statusCode != 202) {
       throw Exception(_extractFrappeError(decoded, response.statusCode));
@@ -465,6 +468,13 @@ class FrappeService {
 
   String _cookieHeader() {
     return _cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
+  }
+
+  Future<dynamic> _decodeJson(String source) async {
+    if (source.length < 50 * 1024) {
+      return jsonDecode(source);
+    }
+    return compute(jsonDecode, source);
   }
 
   static String _extractFrappeError(dynamic decoded, int statusCode) {
