@@ -6,12 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sales_order.dart';
 import '../models/purchase_order.dart';
 import '../models/delivery_note.dart';
-import '../models/delivery_trip.dart';
 import '../models/sales_invoice.dart';
 import '../models/purchase_receipt.dart';
 import '../models/purchase_invoice.dart';
-import '../models/quotation.dart';
-import '../models/payment_entry.dart';
 import '../models/stock_entry.dart';
 import '../models/material_request.dart';
 import '../models/stock_ledger_movement.dart';
@@ -40,12 +37,9 @@ class AppState with ChangeNotifier {
   List<SalesOrder> _salesOrders = [];
   List<PurchaseOrder> _purchaseOrders = [];
   List<DeliveryNote> _deliveryNotes = [];
-  List<DeliveryTrip> _deliveryTrips = [];
   List<SalesInvoice> _salesInvoices = [];
   List<PurchaseReceipt> _purchaseReceipts = [];
   List<PurchaseInvoice> _purchaseInvoices = [];
-  List<Quotation> _quotations = [];
-  List<PaymentEntry> _paymentEntries = [];
   List<StockEntry> _stockEntries = [];
   List<MaterialRequest> _materialRequests = [];
   List<InventoryItem> _inventory = [];
@@ -58,9 +52,6 @@ class AppState with ChangeNotifier {
   List<SalesInvoice> get salesInvoices => _salesInvoices;
   List<PurchaseReceipt> get purchaseReceipts => _purchaseReceipts;
   List<PurchaseInvoice> get purchaseInvoices => _purchaseInvoices;
-  List<DeliveryTrip> get deliveryTrips => _deliveryTrips;
-  List<Quotation> get quotations => _quotations;
-  List<PaymentEntry> get paymentEntries => _paymentEntries;
   List<StockEntry> get stockEntries => _stockEntries;
   List<MaterialRequest> get materialRequests => _materialRequests;
   List<InventoryItem> get inventory => _inventory;
@@ -120,11 +111,6 @@ class AppState with ChangeNotifier {
   String? _deliveryNotesError;
   String? get deliveryNotesError => _deliveryNotesError;
 
-  bool _isDeliveryTripsLoading = false;
-  bool get isDeliveryTripsLoading => _isDeliveryTripsLoading;
-  String? _deliveryTripsError;
-  String? get deliveryTripsError => _deliveryTripsError;
-
   bool _isSalesInvoicesLoading = false;
   bool get isSalesInvoicesLoading => _isSalesInvoicesLoading;
   String? _salesInvoicesError;
@@ -139,16 +125,6 @@ class AppState with ChangeNotifier {
   bool get isPurchaseInvoicesLoading => _isPurchaseInvoicesLoading;
   String? _purchaseInvoicesError;
   String? get purchaseInvoicesError => _purchaseInvoicesError;
-
-  bool _isQuotationsLoading = false;
-  bool get isQuotationsLoading => _isQuotationsLoading;
-  String? _quotationsError;
-  String? get quotationsError => _quotationsError;
-
-  bool _isPaymentEntriesLoading = false;
-  bool get isPaymentEntriesLoading => _isPaymentEntriesLoading;
-  String? _paymentEntriesError;
-  String? get paymentEntriesError => _paymentEntriesError;
 
   bool _isStockEntriesLoading = false;
   bool get isStockEntriesLoading => _isStockEntriesLoading;
@@ -951,40 +927,6 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Future<void> fetchDeliveryTripsFromFrappe() async {
-    _isDeliveryTripsLoading = true;
-    _deliveryTripsError = null;
-    notifyListeners();
-
-    try {
-      await _frappeService.ensureLoggedIn();
-      final data = await _fetchAllResourcePages(
-        doctype: 'Delivery Trip',
-        fields: const [
-          'name',
-          'status',
-          'docstatus',
-          'vehicle',
-          'trip_number',
-          'route',
-          'total_distance',
-          'distance',
-          'posting_date',
-          'modified',
-          'creation',
-        ],
-        orderBy: 'modified desc',
-      );
-      _deliveryTrips = data.map((e) => DeliveryTrip.fromJson(e)).toList();
-      _deliveryTripsError = null;
-    } catch (err) {
-      _deliveryTripsError = err.toString();
-    } finally {
-      _isDeliveryTripsLoading = false;
-      notifyListeners();
-    }
-  }
-
   Future<void> fetchSalesInvoicesFromFrappe() async {
     _isSalesInvoicesLoading = true;
     _salesInvoicesError = null;
@@ -1080,70 +1022,7 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Future<void> fetchQuotationsFromFrappe() async {
-    _isQuotationsLoading = true;
-    _quotationsError = null;
-    notifyListeners();
-
-    try {
-      await _frappeService.ensureLoggedIn();
-      final data = await _fetchAllResourcePages(
-        doctype: 'Quotation',
-        fields: const [
-          'name',
-          'customer',
-          'customer_name',
-          'status',
-          'docstatus',
-          'transaction_date',
-          'grand_total',
-        ],
-        orderBy: 'transaction_date desc',
-      );
-      _quotations = data.map((e) => Quotation.fromJson(e)).toList();
-      _quotationsError = null;
-    } catch (err) {
-      _quotationsError = err.toString();
-    } finally {
-      _isQuotationsLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> fetchPaymentEntriesFromFrappe() async {
-    _isPaymentEntriesLoading = true;
-    _paymentEntriesError = null;
-    notifyListeners();
-
-    try {
-      await _frappeService.ensureLoggedIn();
-      final data = await _fetchAllResourcePages(
-        doctype: 'Payment Entry',
-        fields: const [
-          'name',
-          'party',
-          'party_name',
-          'payment_type',
-          'status',
-          'docstatus',
-          'posting_date',
-          'paid_amount',
-          'received_amount',
-        ],
-        orderBy: 'posting_date desc',
-      );
-      _paymentEntries = data.map((e) => PaymentEntry.fromJson(e)).toList();
-      _paymentEntriesError = null;
-    } catch (err) {
-      _paymentEntriesError = err.toString();
-    } finally {
-      _isPaymentEntriesLoading = false;
-      notifyListeners();
-    }
-  }
-
   Future<void> refreshDeliveryNotes() => fetchDeliveryNotesFromFrappe();
-  Future<void> refreshDeliveryTrips() => fetchDeliveryTripsFromFrappe();
   Future<void> refreshSalesInvoices() => fetchSalesInvoicesFromFrappe();
   Future<void> refreshPurchaseReceipts() => fetchPurchaseReceiptsFromFrappe();
   Future<void> refreshPurchaseInvoices() => fetchPurchaseInvoicesFromFrappe();
@@ -1205,8 +1084,6 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Future<void> refreshQuotations() => fetchQuotationsFromFrappe();
-  Future<void> refreshPaymentEntries() => fetchPaymentEntriesFromFrappe();
   Future<void> refreshStockEntries() => fetchStockEntriesFromFrappe();
   Future<void> refreshMaterialRequests() => fetchMaterialRequestsFromFrappe();
 
