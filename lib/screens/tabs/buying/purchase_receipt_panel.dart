@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/purchase_receipt.dart';
@@ -23,6 +24,7 @@ class PurchaseReceiptPanel extends StatefulWidget {
 class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
   String _search = '';
   DeliveryNoteStatusKey? _statusFilter;
+  Timer? _searchDebounce;
 
   static final _chips = <ErpStatusChip<DeliveryNoteStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
@@ -37,6 +39,15 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
       value: DeliveryNoteStatusKey.completed,
     ),
     const ErpStatusChip(
+      label: 'Return',
+      value: DeliveryNoteStatusKey.returnDoc,
+    ),
+    const ErpStatusChip(
+      label: 'Return Issued',
+      value: DeliveryNoteStatusKey.returnIssued,
+    ),
+    const ErpStatusChip(label: 'Closed', value: DeliveryNoteStatusKey.closed),
+    const ErpStatusChip(
       label: 'Cancelled',
       value: DeliveryNoteStatusKey.cancelled,
     ),
@@ -49,6 +60,37 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
       final appState = context.read<AppState>();
       if (appState.purchaseReceipts.isEmpty) {
         appState.refreshPurchaseReceipts();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  String? get _statusText => switch (_statusFilter) {
+    DeliveryNoteStatusKey.draft => 'Draft',
+    DeliveryNoteStatusKey.toBill => 'To Bill',
+    DeliveryNoteStatusKey.partiallyBilled => 'Partially Billed',
+    DeliveryNoteStatusKey.completed => 'Completed',
+    DeliveryNoteStatusKey.returnDoc => 'Return',
+    DeliveryNoteStatusKey.returnIssued => 'Return Issued',
+    DeliveryNoteStatusKey.closed => 'Closed',
+    DeliveryNoteStatusKey.cancelled => 'Cancelled',
+    _ => null,
+  };
+
+  void _searchChanged(String value) {
+    setState(() => _search = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        context.read<AppState>().setPurchaseReceiptQuery(
+          search: value,
+          status: _statusText,
+        );
       }
     });
   }
@@ -120,7 +162,6 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final filtered = _filter(appState.purchaseReceipts);
-    final total = filtered.fold<double>(0, (s, d) => s + d.value);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,13 +169,17 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
         ErpSummaryCard(
           title: 'Purchase Receipts',
           valueLabel: 'documents',
-          totalValue: total,
-          documentCount: filtered.length,
-          isLoading: appState.isPurchaseReceiptsLoading,
+          totalValue: appState.purchaseReceiptSummary.totalValue,
+          documentCount: appState.purchaseReceiptSummary.documentCount,
+          subtitle:
+              '${appState.summarySyncSubtitle} | ${filtered.length} loaded',
+          isLoading:
+              appState.isOrderSummaryLoading &&
+              appState.purchaseReceiptSummary.documentCount == 0,
         ),
         const SizedBox(height: 12),
         TextField(
-          onChanged: (v) => setState(() => _search = v),
+          onChanged: _searchChanged,
           decoration: InputDecoration(
             hintText: 'Search PR or supplier…',
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
@@ -162,7 +207,13 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
         ErpStatusChipBar<DeliveryNoteStatusKey?>(
           chips: _chips,
           selected: _statusFilter,
-          onSelected: (v) => setState(() => _statusFilter = v),
+          onSelected: (v) {
+            setState(() => _statusFilter = v);
+            context.read<AppState>().setPurchaseReceiptQuery(
+              search: _search,
+              status: _statusText,
+            );
+          },
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty && !appState.isPurchaseReceiptsLoading)
@@ -178,6 +229,30 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
               onTap: () => _openDetail(d),
             ),
           ),
+        if (appState.hasMorePurchaseReceipts ||
+            appState.isMorePurchaseReceiptsLoading) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: appState.isMorePurchaseReceiptsLoading
+                  ? null
+                  : () => context.read<AppState>().loadMorePurchaseReceipts(),
+              icon: appState.isMorePurchaseReceiptsLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(
+                appState.isMorePurchaseReceiptsLoading
+                    ? 'Loading receipts...'
+                    : 'Load more receipts',
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

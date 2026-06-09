@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/purchase_invoice.dart';
@@ -24,6 +25,7 @@ class PurchaseInvoicePanel extends StatefulWidget {
 class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
   String _search = '';
   InvoiceStatusKey? _statusFilter;
+  Timer? _searchDebounce;
 
   static final _chips = <ErpStatusChip<InvoiceStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
@@ -35,6 +37,11 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
     ),
     const ErpStatusChip(label: 'Paid', value: InvoiceStatusKey.paid),
     const ErpStatusChip(label: 'Overdue', value: InvoiceStatusKey.overdue),
+    const ErpStatusChip(label: 'Return', value: InvoiceStatusKey.returnDoc),
+    const ErpStatusChip(
+      label: 'Credit Note',
+      value: InvoiceStatusKey.creditNote,
+    ),
     const ErpStatusChip(label: 'Cancelled', value: InvoiceStatusKey.cancelled),
   ];
 
@@ -45,6 +52,37 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
       final appState = context.read<AppState>();
       if (appState.purchaseInvoices.isEmpty) {
         appState.refreshPurchaseInvoices();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  String? get _statusText => switch (_statusFilter) {
+    InvoiceStatusKey.draft => 'Draft',
+    InvoiceStatusKey.unpaid => 'Unpaid',
+    InvoiceStatusKey.partlyPaid => 'Partly Paid',
+    InvoiceStatusKey.paid => 'Paid',
+    InvoiceStatusKey.overdue => 'Overdue',
+    InvoiceStatusKey.returnDoc => 'Return',
+    InvoiceStatusKey.creditNote => 'Credit Note',
+    InvoiceStatusKey.cancelled => 'Cancelled',
+    _ => null,
+  };
+
+  void _searchChanged(String value) {
+    setState(() => _search = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        context.read<AppState>().setPurchaseInvoiceQuery(
+          search: value,
+          status: _statusText,
+        );
       }
     });
   }
@@ -123,7 +161,6 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final filtered = _filter(appState.purchaseInvoices);
-    final total = filtered.fold<double>(0, (s, d) => s + d.value);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -131,13 +168,17 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
         ErpSummaryCard(
           title: 'Purchase Invoices',
           valueLabel: 'invoices',
-          totalValue: total,
-          documentCount: filtered.length,
-          isLoading: appState.isPurchaseInvoicesLoading,
+          totalValue: appState.purchaseInvoiceSummary.totalValue,
+          documentCount: appState.purchaseInvoiceSummary.documentCount,
+          subtitle:
+              '${appState.summarySyncSubtitle} | ${filtered.length} loaded',
+          isLoading:
+              appState.isOrderSummaryLoading &&
+              appState.purchaseInvoiceSummary.documentCount == 0,
         ),
         const SizedBox(height: 12),
         TextField(
-          onChanged: (v) => setState(() => _search = v),
+          onChanged: _searchChanged,
           decoration: InputDecoration(
             hintText: 'Search PI or supplier…',
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
@@ -165,7 +206,13 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
         ErpStatusChipBar<InvoiceStatusKey?>(
           chips: _chips,
           selected: _statusFilter,
-          onSelected: (v) => setState(() => _statusFilter = v),
+          onSelected: (v) {
+            setState(() => _statusFilter = v);
+            context.read<AppState>().setPurchaseInvoiceQuery(
+              search: _search,
+              status: _statusText,
+            );
+          },
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty && !appState.isPurchaseInvoicesLoading)
@@ -181,6 +228,30 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
               onTap: () => _openDetail(d),
             ),
           ),
+        if (appState.hasMorePurchaseInvoices ||
+            appState.isMorePurchaseInvoicesLoading) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: appState.isMorePurchaseInvoicesLoading
+                  ? null
+                  : () => context.read<AppState>().loadMorePurchaseInvoices(),
+              icon: appState.isMorePurchaseInvoicesLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(
+                appState.isMorePurchaseInvoicesLoading
+                    ? 'Loading invoices...'
+                    : 'Load more invoices',
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

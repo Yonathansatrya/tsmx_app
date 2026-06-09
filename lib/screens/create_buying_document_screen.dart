@@ -5,12 +5,8 @@ import '../models/warehouse_info.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 
-enum BuyingDocumentType { purchaseReceipt, materialRequest }
-
 class CreateBuyingDocumentScreen extends StatefulWidget {
-  final BuyingDocumentType type;
-
-  const CreateBuyingDocumentScreen({super.key, required this.type});
+  const CreateBuyingDocumentScreen({super.key});
 
   @override
   State<CreateBuyingDocumentScreen> createState() =>
@@ -37,8 +33,7 @@ class _CreateBuyingDocumentScreenState
   bool _saving = false;
   String? _error;
 
-  bool get _isReceipt => widget.type == BuyingDocumentType.purchaseReceipt;
-  String get _doctype => _isReceipt ? 'Purchase Receipt' : 'Material Request';
+  static const String _doctype = 'Purchase Receipt';
 
   @override
   void initState() {
@@ -93,9 +88,7 @@ class _CreateBuyingDocumentScreenState
       if (appState.warehouses.isEmpty) await appState.refreshWarehouses();
       final series = await appState.fetchNamingSeries(_doctype);
       final items = await _options(appState, 'Item', 'item_name');
-      final suppliers = _isReceipt
-          ? await _options(appState, 'Supplier', 'supplier_name')
-          : <_Option>[];
+      final suppliers = await _options(appState, 'Supplier', 'supplier_name');
       final warehouses =
           appState.warehouses
               .where(
@@ -151,27 +144,16 @@ class _CreateBuyingDocumentScreenState
     try {
       final appState = context.read<AppState>();
       final qty = double.parse(_qtyCtrl.text.trim());
-      if (_isReceipt) {
-        await appState.createPurchaseReceipt(
-          supplier: _selectedSupplier!,
-          itemCode: _selectedItem!,
-          qty: qty,
-          rate: double.tryParse(_rateCtrl.text.trim()),
-          namingSeries: _selectedSeries!,
-          warehouse: _selectedWarehouse!,
-          postingDate: _date,
-          company: _warehouse?.company,
-        );
-      } else {
-        await appState.createMaterialRequest(
-          itemCode: _selectedItem!,
-          qty: qty,
-          namingSeries: _selectedSeries!,
-          warehouse: _selectedWarehouse!,
-          requiredBy: _date,
-          company: _warehouse?.company,
-        );
-      }
+      await appState.createPurchaseReceipt(
+        supplier: _selectedSupplier!,
+        itemCode: _selectedItem!,
+        qty: qty,
+        rate: double.tryParse(_rateCtrl.text.trim()),
+        namingSeries: _selectedSeries!,
+        warehouse: _selectedWarehouse!,
+        postingDate: _date,
+        company: _warehouse?.company,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -265,15 +247,13 @@ class _CreateBuyingDocumentScreenState
                       validator: (value) =>
                           value == null ? 'Series wajib dipilih' : null,
                     ),
-                    if (_isReceipt) ...[
-                      const SizedBox(height: 12),
-                      _dropdown(
-                        'Supplier',
-                        _selectedSupplier,
-                        _suppliers,
-                        (value) => setState(() => _selectedSupplier = value),
-                      ),
-                    ],
+                    const SizedBox(height: 12),
+                    _dropdown(
+                      'Supplier',
+                      _selectedSupplier,
+                      _suppliers,
+                      (value) => setState(() => _selectedSupplier = value),
+                    ),
                     const SizedBox(height: 12),
                     _dropdown(
                       'Item',
@@ -285,9 +265,7 @@ class _CreateBuyingDocumentScreenState
                     DropdownButtonFormField<String>(
                       initialValue: _selectedWarehouse,
                       isExpanded: true,
-                      decoration: _decoration(
-                        _isReceipt ? 'Warehouse' : 'Target Warehouse',
-                      ),
+                      decoration: _decoration('Warehouse'),
                       items: _warehouses
                           .map(
                             (warehouse) => DropdownMenuItem(
@@ -308,9 +286,7 @@ class _CreateBuyingDocumentScreenState
                     InkWell(
                       onTap: _pickDate,
                       child: InputDecorator(
-                        decoration: _decoration(
-                          _isReceipt ? 'Posting Date' : 'Required By',
-                        ),
+                        decoration: _decoration('Posting Date'),
                         child: Text(DateFormat('dd-MM-yyyy').format(_date)),
                       ),
                     ),
@@ -326,23 +302,21 @@ class _CreateBuyingDocumentScreenState
                         return qty == null || qty <= 0 ? 'Qty > 0' : null;
                       },
                     ),
-                    if (_isReceipt) ...[
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _rateCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: _decoration('Rate'),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return null;
-                          }
-                          final rate = double.tryParse(value.trim());
-                          return rate == null || rate < 0 ? 'Rate >= 0' : null;
-                        },
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _rateCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
                       ),
-                    ],
+                      decoration: _decoration('Rate'),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return null;
+                        }
+                        final rate = double.tryParse(value.trim());
+                        return rate == null || rate < 0 ? 'Rate >= 0' : null;
+                      },
+                    ),
                   ],
                 ),
               ),

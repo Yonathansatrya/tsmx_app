@@ -276,9 +276,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => const CreateBuyingDocumentScreen(
-                    type: BuyingDocumentType.purchaseReceipt,
-                  ),
+                  builder: (_) => const CreateBuyingDocumentScreen(),
                 ),
               );
             },
@@ -301,23 +299,6 @@ class _HomeScreenState extends State<HomeScreen> {
             foregroundColor: Colors.white,
             icon: const Icon(Icons.receipt_long_outlined),
             label: const Text('Purchase Invoice'),
-          );
-        }
-        if (_buyingSegment == 'mr') {
-          return FloatingActionButton.extended(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const CreateBuyingDocumentScreen(
-                    type: BuyingDocumentType.materialRequest,
-                  ),
-                ),
-              );
-            },
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.assignment_outlined),
-            label: const Text('Material Request'),
           );
         }
         if (_buyingSegment != 'po') {

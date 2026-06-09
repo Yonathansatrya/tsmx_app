@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/purchase_order.dart';
@@ -42,6 +43,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   DateTime? _advancedFrom;
   DateTime? _advancedTo;
   _PoDocStatusFilter _advancedDocStatus = _PoDocStatusFilter.all;
+  Timer? _searchDebounce;
 
   static final _chips = <ErpStatusChip<PurchaseOrderStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
@@ -89,8 +91,39 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  String? get _statusText {
+    if (_delayedOnly) return 'Delayed';
+    return switch (_statusFilter) {
+      PurchaseOrderStatusKey.draft => 'Draft',
+      PurchaseOrderStatusKey.onHold => 'On Hold',
+      PurchaseOrderStatusKey.toReceiveAndBill => 'To Receive and Bill',
+      PurchaseOrderStatusKey.toReceive => 'To Receive',
+      PurchaseOrderStatusKey.toBill => 'To Bill',
+      PurchaseOrderStatusKey.toPay => 'To Pay',
+      PurchaseOrderStatusKey.completed => 'Completed',
+      PurchaseOrderStatusKey.delivered => 'Delivered',
+      PurchaseOrderStatusKey.closed => 'Closed',
+      PurchaseOrderStatusKey.cancelled => 'Cancelled',
+      _ => null,
+    };
+  }
+
+  void _searchChanged(String value) {
+    setState(() => _search = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        context.read<AppState>().setPurchaseOrderQuery(
+          search: value,
+          status: _statusText,
+        );
+      }
+    });
   }
 
   List<PurchaseOrder> _filter(List<PurchaseOrder> orders) {
@@ -503,7 +536,6 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final filtered = _filter(appState.purchaseOrders);
-    final total = filtered.fold<double>(0, (s, o) => s + o.totalValue);
     final delayedCount = appState.purchaseOrders
         .where((o) => o.isDelayed)
         .length;
@@ -514,15 +546,19 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
         ErpSummaryCard(
           title: 'Purchase Orders',
           valueLabel: 'orders',
-          totalValue: total,
-          documentCount: filtered.length,
-          subtitle: delayedCount > 0 ? '$delayedCount delayed by ETA' : null,
-          isLoading: appState.isPurchaseOrdersLoading,
+          totalValue: appState.purchaseOrderSummary.totalValue,
+          documentCount: appState.purchaseOrderSummary.documentCount,
+          subtitle:
+              '${appState.summarySyncSubtitle} | ${filtered.length} loaded'
+              '${delayedCount > 0 ? ' | $delayedCount delayed' : ''}',
+          isLoading:
+              appState.isOrderSummaryLoading &&
+              appState.purchaseOrderSummary.documentCount == 0,
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _searchController,
-          onChanged: (v) => setState(() => _search = v),
+          onChanged: _searchChanged,
           decoration: InputDecoration(
             hintText: 'Search PO or supplier…',
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
@@ -554,22 +590,28 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
           sortLabel: _sortLabel,
           onDateChanged: (v) => setState(() => _dateFilter = v),
           onSortChanged: (v) => setState(() => _sortOption = v),
-          onReset: () => setState(() {
-            _searchController.clear();
-            _search = '';
-            _statusFilter = null;
-            _delayedOnly = false;
-            _dateFilter = _PurchaseDateFilter.all;
-            _sortOption = _PurchaseSortOption.newestEta;
-            _advancedSupplier = '';
-            _advancedItem = '';
-            _advancedWarehouse = '';
-            _advancedMinValue = null;
-            _advancedMaxValue = null;
-            _advancedFrom = null;
-            _advancedTo = null;
-            _advancedDocStatus = _PoDocStatusFilter.all;
-          }),
+          onReset: () {
+            setState(() {
+              _searchController.clear();
+              _search = '';
+              _statusFilter = null;
+              _delayedOnly = false;
+              _dateFilter = _PurchaseDateFilter.all;
+              _sortOption = _PurchaseSortOption.newestEta;
+              _advancedSupplier = '';
+              _advancedItem = '';
+              _advancedWarehouse = '';
+              _advancedMinValue = null;
+              _advancedMaxValue = null;
+              _advancedFrom = null;
+              _advancedTo = null;
+              _advancedDocStatus = _PoDocStatusFilter.all;
+            });
+            context.read<AppState>().setPurchaseOrderQuery(
+              search: '',
+              status: null,
+            );
+          },
           advancedCount: _advancedFilterCount,
           onAdvancedFilters: _openAdvancedFilters,
         ),
@@ -579,15 +621,21 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
           selected: _delayedOnly
               ? PurchaseOrderStatusKey.delayed
               : _statusFilter,
-          onSelected: (v) => setState(() {
-            if (v == PurchaseOrderStatusKey.delayed) {
-              _delayedOnly = true;
-              _statusFilter = null;
-            } else {
-              _delayedOnly = false;
-              _statusFilter = v;
-            }
-          }),
+          onSelected: (v) {
+            setState(() {
+              if (v == PurchaseOrderStatusKey.delayed) {
+                _delayedOnly = true;
+                _statusFilter = null;
+              } else {
+                _delayedOnly = false;
+                _statusFilter = v;
+              }
+            });
+            context.read<AppState>().setPurchaseOrderQuery(
+              search: _search,
+              status: _statusText,
+            );
+          },
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty && !appState.isPurchaseOrdersLoading)

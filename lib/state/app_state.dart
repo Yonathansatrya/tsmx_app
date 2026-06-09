@@ -11,7 +11,6 @@ import '../models/sales_invoice.dart';
 import '../models/purchase_receipt.dart';
 import '../models/purchase_invoice.dart';
 import '../models/stock_entry.dart';
-import '../models/material_request.dart';
 import '../models/stock_ledger_movement.dart';
 import '../models/inventory_item.dart';
 import '../utils/date_range_presets.dart';
@@ -46,16 +45,21 @@ class AppState with ChangeNotifier {
   List<PurchaseReceipt> _purchaseReceipts = [];
   List<PurchaseInvoice> _purchaseInvoices = [];
   List<StockEntry> _stockEntries = [];
-  List<MaterialRequest> _materialRequests = [];
   List<InventoryItem> _inventory = [];
   DocumentSummary _salesOrderSummary = const DocumentSummary();
   DocumentSummary _deliveryNoteSummary = const DocumentSummary();
   DocumentSummary _salesInvoiceSummary = const DocumentSummary();
+  DocumentSummary _purchaseOrderSummary = const DocumentSummary();
+  DocumentSummary _purchaseReceiptSummary = const DocumentSummary();
+  DocumentSummary _purchaseInvoiceSummary = const DocumentSummary();
   DashboardSummary _dashboardSummary = const DashboardSummary();
 
   DocumentSummary get salesOrderSummary => _salesOrderSummary;
   DocumentSummary get deliveryNoteSummary => _deliveryNoteSummary;
   DocumentSummary get salesInvoiceSummary => _salesInvoiceSummary;
+  DocumentSummary get purchaseOrderSummary => _purchaseOrderSummary;
+  DocumentSummary get purchaseReceiptSummary => _purchaseReceiptSummary;
+  DocumentSummary get purchaseInvoiceSummary => _purchaseInvoiceSummary;
   DashboardSummary get dashboardSummary => _dashboardSummary;
 
   List<SalesOrder> get salesOrders => _salesOrders;
@@ -65,7 +69,6 @@ class AppState with ChangeNotifier {
   List<PurchaseReceipt> get purchaseReceipts => _purchaseReceipts;
   List<PurchaseInvoice> get purchaseInvoices => _purchaseInvoices;
   List<StockEntry> get stockEntries => _stockEntries;
-  List<MaterialRequest> get materialRequests => _materialRequests;
   List<InventoryItem> get inventory => _inventory;
   List<SalesOrder> get dashboardSalesOrders => _salesOrders;
   List<PurchaseOrder> get dashboardPurchaseOrders => _purchaseOrders;
@@ -110,6 +113,9 @@ class AppState with ChangeNotifier {
 
   String? _purchaseOrdersError;
   String? get purchaseOrdersError => _purchaseOrdersError;
+  String _purchaseOrderSearch = '';
+  String? _purchaseOrderStatus;
+  int _purchaseOrderQueryVersion = 0;
 
   Future<void>? _orderSummaryJob;
   bool _isOrderSummaryLoading = false;
@@ -157,23 +163,32 @@ class AppState with ChangeNotifier {
 
   bool _isPurchaseReceiptsLoading = false;
   bool get isPurchaseReceiptsLoading => _isPurchaseReceiptsLoading;
+  bool _isMorePurchaseReceiptsLoading = false;
+  bool get isMorePurchaseReceiptsLoading => _isMorePurchaseReceiptsLoading;
+  bool _hasMorePurchaseReceipts = true;
+  bool get hasMorePurchaseReceipts => _hasMorePurchaseReceipts;
   String? _purchaseReceiptsError;
   String? get purchaseReceiptsError => _purchaseReceiptsError;
+  String _purchaseReceiptSearch = '';
+  String? _purchaseReceiptStatus;
+  int _purchaseReceiptQueryVersion = 0;
 
   bool _isPurchaseInvoicesLoading = false;
   bool get isPurchaseInvoicesLoading => _isPurchaseInvoicesLoading;
+  bool _isMorePurchaseInvoicesLoading = false;
+  bool get isMorePurchaseInvoicesLoading => _isMorePurchaseInvoicesLoading;
+  bool _hasMorePurchaseInvoices = true;
+  bool get hasMorePurchaseInvoices => _hasMorePurchaseInvoices;
   String? _purchaseInvoicesError;
   String? get purchaseInvoicesError => _purchaseInvoicesError;
+  String _purchaseInvoiceSearch = '';
+  String? _purchaseInvoiceStatus;
+  int _purchaseInvoiceQueryVersion = 0;
 
   bool _isStockEntriesLoading = false;
   bool get isStockEntriesLoading => _isStockEntriesLoading;
   String? _stockEntriesError;
   String? get stockEntriesError => _stockEntriesError;
-
-  bool _isMaterialRequestsLoading = false;
-  bool get isMaterialRequestsLoading => _isMaterialRequestsLoading;
-  String? _materialRequestsError;
-  String? get materialRequestsError => _materialRequestsError;
 
   bool _isInventoryLoading = false;
   bool get isInventoryLoading => _isInventoryLoading;
@@ -279,6 +294,13 @@ class AppState with ChangeNotifier {
       final raw = sp.getString(_prefsSummaryCacheKey);
       if (raw == null) return;
       final json = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      DocumentSummary documentSummary(String key) {
+        final value = json[key];
+        return value is Map
+            ? DocumentSummary.fromJson(Map<String, dynamic>.from(value))
+            : const DocumentSummary();
+      }
+
       _salesOrderSummary = DocumentSummary.fromJson(
         Map<String, dynamic>.from(json['salesOrder'] as Map),
       );
@@ -288,6 +310,9 @@ class AppState with ChangeNotifier {
       _salesInvoiceSummary = DocumentSummary.fromJson(
         Map<String, dynamic>.from(json['salesInvoice'] as Map),
       );
+      _purchaseOrderSummary = documentSummary('purchaseOrder');
+      _purchaseReceiptSummary = documentSummary('purchaseReceipt');
+      _purchaseInvoiceSummary = documentSummary('purchaseInvoice');
       _dashboardSummary = DashboardSummary.fromJson(
         Map<String, dynamic>.from(json['dashboard'] as Map),
       );
@@ -302,6 +327,9 @@ class AppState with ChangeNotifier {
         'salesOrder': _salesOrderSummary.toJson(),
         'deliveryNote': _deliveryNoteSummary.toJson(),
         'salesInvoice': _salesInvoiceSummary.toJson(),
+        'purchaseOrder': _purchaseOrderSummary.toJson(),
+        'purchaseReceipt': _purchaseReceiptSummary.toJson(),
+        'purchaseInvoice': _purchaseInvoiceSummary.toJson(),
         'dashboard': _dashboardSummary.toJson(),
       }),
     );
@@ -773,6 +801,7 @@ class AppState with ChangeNotifier {
       payload,
     );
     await refreshPurchaseInvoices();
+    unawaited(refreshAllSummaries(silent: true));
     return PurchaseInvoice.fromJson(created);
   }
 
@@ -816,6 +845,7 @@ class AppState with ChangeNotifier {
     _purchaseOrders = [order, ..._purchaseOrders];
     notifyListeners();
     await refreshPurchaseOrders();
+    unawaited(refreshAllSummaries(silent: true));
     return order;
   }
 
@@ -867,6 +897,7 @@ class AppState with ChangeNotifier {
         .toList();
     notifyListeners();
     await refreshPurchaseOrders();
+    unawaited(refreshAllSummaries(silent: true));
     return updatedOrder;
   }
 
@@ -898,35 +929,7 @@ class AppState with ChangeNotifier {
     };
     await _frappeService.createDocument('Purchase Receipt', payload);
     await refreshPurchaseReceipts();
-  }
-
-  Future<void> createMaterialRequest({
-    required String itemCode,
-    required double qty,
-    required String namingSeries,
-    required String warehouse,
-    required DateTime requiredBy,
-    String? company,
-  }) async {
-    final date = requiredBy.toIso8601String().split('T').first;
-    final payload = <String, dynamic>{
-      'naming_series': namingSeries.trim(),
-      'material_request_type': 'Purchase',
-      'transaction_date': DateTime.now().toIso8601String().split('T').first,
-      'schedule_date': date,
-      if (company != null && company.trim().isNotEmpty)
-        'company': company.trim(),
-      'items': [
-        {
-          'item_code': itemCode.trim(),
-          'qty': qty,
-          'schedule_date': date,
-          'warehouse': warehouse.trim(),
-        },
-      ],
-    };
-    await _frappeService.createDocument('Material Request', payload);
-    await refreshMaterialRequests();
+    unawaited(refreshAllSummaries(silent: true));
   }
 
   Future<void> deletePurchaseOrder(String orderId) async {
@@ -935,6 +938,7 @@ class AppState with ChangeNotifier {
     _purchaseOrders.removeWhere((o) => o.id == orderId);
     notifyListeners();
     await refreshPurchaseOrders();
+    unawaited(refreshAllSummaries(silent: true));
   }
 
   Future<StockEntry> createStockEntry({
@@ -1005,6 +1009,8 @@ class AppState with ChangeNotifier {
     _isPurchaseOrdersLoading = true;
     _purchaseOrdersError = null;
     _hasMorePurchaseOrders = true;
+    _isMorePurchaseOrdersLoading = false;
+    final version = ++_purchaseOrderQueryVersion;
     notifyListeners();
 
     try {
@@ -1015,15 +1021,19 @@ class AppState with ChangeNotifier {
       }
 
       final orders = await _fetchPurchaseOrderPage(limitStart: 0);
+      if (version != _purchaseOrderQueryVersion) return;
       _purchaseOrders = orders;
-      _hasMorePurchaseOrders = orders.length == _documentPageSize;
+      _hasMorePurchaseOrders = orders.isNotEmpty;
 
       _purchaseOrdersError = null;
     } catch (err) {
+      if (version != _purchaseOrderQueryVersion) return;
       _purchaseOrdersError = err.toString();
     } finally {
-      _isPurchaseOrdersLoading = false;
-      notifyListeners();
+      if (version == _purchaseOrderQueryVersion) {
+        _isPurchaseOrdersLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -1070,6 +1080,7 @@ class AppState with ChangeNotifier {
     }
 
     _isMorePurchaseOrdersLoading = true;
+    final version = _purchaseOrderQueryVersion;
     notifyListeners();
 
     try {
@@ -1077,18 +1088,22 @@ class AppState with ChangeNotifier {
       final nextPage = await _fetchPurchaseOrderPage(
         limitStart: _purchaseOrders.length,
       );
+      if (version != _purchaseOrderQueryVersion) return;
       final existingIds = _purchaseOrders.map((order) => order.id).toSet();
       _purchaseOrders = [
         ..._purchaseOrders,
         ...nextPage.where((order) => existingIds.add(order.id)),
       ];
-      _hasMorePurchaseOrders = nextPage.length == _documentPageSize;
+      _hasMorePurchaseOrders = nextPage.isNotEmpty;
       _purchaseOrdersError = null;
     } catch (err) {
+      if (version != _purchaseOrderQueryVersion) return;
       _purchaseOrdersError = err.toString();
     } finally {
-      _isMorePurchaseOrdersLoading = false;
-      notifyListeners();
+      if (version == _purchaseOrderQueryVersion) {
+        _isMorePurchaseOrdersLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -1185,6 +1200,7 @@ class AppState with ChangeNotifier {
       var purchaseDraftCount = 0;
       var purchasePendingCount = 0;
       var purchaseCompletedCount = 0;
+      var purchaseDocumentCount = 0;
       await _forEachResourcePage(
         doctype: 'Purchase Order',
         fields: const [
@@ -1196,6 +1212,7 @@ class AppState with ChangeNotifier {
         ],
         onRow: (row) {
           final order = PurchaseOrder.fromJson(row);
+          purchaseDocumentCount++;
           purchaseTotal += order.totalValue;
           if (order.docStatus == 0) purchaseDraftCount++;
           if (order.statusKey == PurchaseOrderStatusKey.completed) {
@@ -1209,13 +1226,28 @@ class AppState with ChangeNotifier {
         },
       );
 
+      var purchaseReceiptTotal = 0.0;
+      var purchaseReceiptCount = 0;
+      await _forEachResourcePage(
+        doctype: 'Purchase Receipt',
+        fields: const ['name', 'grand_total'],
+        onRow: (row) {
+          purchaseReceiptTotal += NumParse.asDouble(row['grand_total']);
+          purchaseReceiptCount++;
+        },
+      );
+
+      var purchaseInvoiceTotal = 0.0;
+      var purchaseInvoiceCount = 0;
       var overduePurchaseInvoices = 0;
       await _forEachResourcePage(
         doctype: 'Purchase Invoice',
-        fields: const ['name', 'status', 'docstatus'],
+        fields: const ['name', 'grand_total', 'status', 'docstatus'],
         onRow: (row) {
-          if (PurchaseInvoice.fromJson(row).statusKey ==
-              InvoiceStatusKey.overdue) {
+          final invoice = PurchaseInvoice.fromJson(row);
+          purchaseInvoiceTotal += invoice.value;
+          purchaseInvoiceCount++;
+          if (invoice.statusKey == InvoiceStatusKey.overdue) {
             overduePurchaseInvoices++;
           }
         },
@@ -1255,6 +1287,18 @@ class AppState with ChangeNotifier {
       _salesInvoiceSummary = DocumentSummary(
         totalValue: invoiceTotal,
         documentCount: invoiceCount,
+      );
+      _purchaseOrderSummary = DocumentSummary(
+        totalValue: purchaseTotal,
+        documentCount: purchaseDocumentCount,
+      );
+      _purchaseReceiptSummary = DocumentSummary(
+        totalValue: purchaseReceiptTotal,
+        documentCount: purchaseReceiptCount,
+      );
+      _purchaseInvoiceSummary = DocumentSummary(
+        totalValue: purchaseInvoiceTotal,
+        documentCount: purchaseInvoiceCount,
       );
       _dashboardSummary = DashboardSummary(
         salesTotal: salesTotal,
@@ -1340,65 +1384,52 @@ class AppState with ChangeNotifier {
   Future<void> fetchPurchaseReceiptsFromFrappe() async {
     _isPurchaseReceiptsLoading = true;
     _purchaseReceiptsError = null;
+    _hasMorePurchaseReceipts = true;
+    _isMorePurchaseReceiptsLoading = false;
+    final version = ++_purchaseReceiptQueryVersion;
     notifyListeners();
 
     try {
       await _frappeService.ensureLoggedIn();
-      final data = await _fetchAllResourcePages(
-        doctype: 'Purchase Receipt',
-        fields: const [
-          'name',
-          'supplier',
-          'supplier_name',
-          'status',
-          'docstatus',
-          'posting_date',
-          'grand_total',
-          'total_qty',
-        ],
-        orderBy: 'posting_date desc',
-        maxRows: _defaultFetchRowLimit,
-      );
-      _purchaseReceipts = data.map((e) => PurchaseReceipt.fromJson(e)).toList();
+      final docs = await _fetchPurchaseReceiptPage(limitStart: 0);
+      if (version != _purchaseReceiptQueryVersion) return;
+      _purchaseReceipts = docs;
+      _hasMorePurchaseReceipts = docs.isNotEmpty;
       _purchaseReceiptsError = null;
     } catch (err) {
+      if (version != _purchaseReceiptQueryVersion) return;
       _purchaseReceiptsError = err.toString();
     } finally {
-      _isPurchaseReceiptsLoading = false;
-      notifyListeners();
+      if (version == _purchaseReceiptQueryVersion) {
+        _isPurchaseReceiptsLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> fetchPurchaseInvoicesFromFrappe() async {
     _isPurchaseInvoicesLoading = true;
     _purchaseInvoicesError = null;
+    _hasMorePurchaseInvoices = true;
+    _isMorePurchaseInvoicesLoading = false;
+    final version = ++_purchaseInvoiceQueryVersion;
     notifyListeners();
 
     try {
       await _frappeService.ensureLoggedIn();
-      final data = await _fetchAllResourcePages(
-        doctype: 'Purchase Invoice',
-        fields: const [
-          'name',
-          'supplier',
-          'supplier_name',
-          'status',
-          'docstatus',
-          'posting_date',
-          'grand_total',
-          'outstanding_amount',
-          'due_date',
-        ],
-        orderBy: 'posting_date desc',
-        maxRows: _defaultFetchRowLimit,
-      );
-      _purchaseInvoices = data.map((e) => PurchaseInvoice.fromJson(e)).toList();
+      final docs = await _fetchPurchaseInvoicePage(limitStart: 0);
+      if (version != _purchaseInvoiceQueryVersion) return;
+      _purchaseInvoices = docs;
+      _hasMorePurchaseInvoices = docs.isNotEmpty;
       _purchaseInvoicesError = null;
     } catch (err) {
+      if (version != _purchaseInvoiceQueryVersion) return;
       _purchaseInvoicesError = err.toString();
     } finally {
-      _isPurchaseInvoicesLoading = false;
-      notifyListeners();
+      if (version == _purchaseInvoiceQueryVersion) {
+        _isPurchaseInvoicesLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -1481,6 +1512,87 @@ class AppState with ChangeNotifier {
 
   Future<void> refreshPurchaseReceipts() => fetchPurchaseReceiptsFromFrappe();
   Future<void> refreshPurchaseInvoices() => fetchPurchaseInvoicesFromFrappe();
+
+  Future<void> setPurchaseOrderQuery({String? search, String? status}) async {
+    _purchaseOrderSearch = search?.trim() ?? _purchaseOrderSearch;
+    _purchaseOrderStatus = status;
+    await fetchPurchaseOrdersFromFrappe();
+  }
+
+  Future<void> setPurchaseReceiptQuery({String? search, String? status}) async {
+    _purchaseReceiptSearch = search?.trim() ?? _purchaseReceiptSearch;
+    _purchaseReceiptStatus = status;
+    await fetchPurchaseReceiptsFromFrappe();
+  }
+
+  Future<void> setPurchaseInvoiceQuery({String? search, String? status}) async {
+    _purchaseInvoiceSearch = search?.trim() ?? _purchaseInvoiceSearch;
+    _purchaseInvoiceStatus = status;
+    await fetchPurchaseInvoicesFromFrappe();
+  }
+
+  Future<void> loadMorePurchaseReceipts() async {
+    if (_isPurchaseReceiptsLoading ||
+        _isMorePurchaseReceiptsLoading ||
+        !_hasMorePurchaseReceipts) {
+      return;
+    }
+    _isMorePurchaseReceiptsLoading = true;
+    final version = _purchaseReceiptQueryVersion;
+    notifyListeners();
+    try {
+      final page = await _fetchPurchaseReceiptPage(
+        limitStart: _purchaseReceipts.length,
+      );
+      if (version != _purchaseReceiptQueryVersion) return;
+      final ids = _purchaseReceipts.map((e) => e.id).toSet();
+      _purchaseReceipts = [
+        ..._purchaseReceipts,
+        ...page.where((e) => ids.add(e.id)),
+      ];
+      _hasMorePurchaseReceipts = page.isNotEmpty;
+    } catch (err) {
+      if (version != _purchaseReceiptQueryVersion) return;
+      _purchaseReceiptsError = err.toString();
+    } finally {
+      if (version == _purchaseReceiptQueryVersion) {
+        _isMorePurchaseReceiptsLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadMorePurchaseInvoices() async {
+    if (_isPurchaseInvoicesLoading ||
+        _isMorePurchaseInvoicesLoading ||
+        !_hasMorePurchaseInvoices) {
+      return;
+    }
+    _isMorePurchaseInvoicesLoading = true;
+    final version = _purchaseInvoiceQueryVersion;
+    notifyListeners();
+    try {
+      final page = await _fetchPurchaseInvoicePage(
+        limitStart: _purchaseInvoices.length,
+      );
+      if (version != _purchaseInvoiceQueryVersion) return;
+      final ids = _purchaseInvoices.map((e) => e.id).toSet();
+      _purchaseInvoices = [
+        ..._purchaseInvoices,
+        ...page.where((e) => ids.add(e.id)),
+      ];
+      _hasMorePurchaseInvoices = page.isNotEmpty;
+    } catch (err) {
+      if (version != _purchaseInvoiceQueryVersion) return;
+      _purchaseInvoicesError = err.toString();
+    } finally {
+      if (version == _purchaseInvoiceQueryVersion) {
+        _isMorePurchaseInvoicesLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> fetchStockEntriesFromFrappe() async {
     _isStockEntriesLoading = true;
     _stockEntriesError = null;
@@ -1511,38 +1623,7 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Future<void> fetchMaterialRequestsFromFrappe() async {
-    _isMaterialRequestsLoading = true;
-    _materialRequestsError = null;
-    notifyListeners();
-
-    try {
-      await _frappeService.ensureLoggedIn();
-      final data = await _fetchAllResourcePages(
-        doctype: 'Material Request',
-        fields: const [
-          'name',
-          'material_request_type',
-          'status',
-          'docstatus',
-          'transaction_date',
-          'total_qty',
-        ],
-        orderBy: 'transaction_date desc',
-        maxRows: _defaultFetchRowLimit,
-      );
-      _materialRequests = data.map((e) => MaterialRequest.fromJson(e)).toList();
-      _materialRequestsError = null;
-    } catch (err) {
-      _materialRequestsError = err.toString();
-    } finally {
-      _isMaterialRequestsLoading = false;
-      notifyListeners();
-    }
-  }
-
   Future<void> refreshStockEntries() => fetchStockEntriesFromFrappe();
-  Future<void> refreshMaterialRequests() => fetchMaterialRequestsFromFrappe();
 
   Future<void> fetchWarehousesFromFrappe({
     String baseUrl = _defaultFrappeBaseUrl,
@@ -1771,8 +1852,6 @@ class AppState with ChangeNotifier {
         await refreshPurchaseReceipts();
       case 'Purchase Invoice':
         await refreshPurchaseInvoices();
-      case 'Material Request':
-        await refreshMaterialRequests();
     }
     unawaited(refreshAllSummaries(silent: true));
     notifyListeners();
@@ -1856,6 +1935,7 @@ class AppState with ChangeNotifier {
     );
     await refreshPurchaseReceipts();
     await refreshPurchaseOrders();
+    unawaited(refreshAllSummaries(silent: true));
     return PurchaseReceipt.fromJson(created);
   }
 
@@ -1881,6 +1961,7 @@ class AppState with ChangeNotifier {
     );
     await refreshPurchaseInvoices();
     await refreshPurchaseOrders();
+    unawaited(refreshAllSummaries(silent: true));
     return PurchaseInvoice.fromJson(created);
   }
 
@@ -2188,12 +2269,92 @@ class AppState with ChangeNotifier {
       ],
       limit: _documentPageSize,
       limitStart: limitStart,
-      orderBy: 'modified desc',
+      orderBy: 'modified desc, name desc',
+      filters: _purchaseOrderFilters(_purchaseOrderStatus),
+      orFilters: _searchFilters(_purchaseOrderSearch, const [
+        'name',
+        'supplier',
+        'supplier_name',
+      ]),
     );
 
     var orders = data.map((item) => PurchaseOrder.fromJson(item)).toList();
     orders = await _attachPurchaseOrderItems(orders);
     return orders;
+  }
+
+  Future<List<PurchaseReceipt>> _fetchPurchaseReceiptPage({
+    required int limitStart,
+  }) async {
+    final data = await _fetchResourceWithFieldFallback(
+      doctype: 'Purchase Receipt',
+      fields: const [
+        'name',
+        'supplier',
+        'supplier_name',
+        'status',
+        'docstatus',
+        'posting_date',
+        'grand_total',
+        'total_qty',
+      ],
+      limit: _documentPageSize,
+      limitStart: limitStart,
+      orderBy: 'posting_date desc, name desc',
+      filters: _statusFilters(_purchaseReceiptStatus),
+      orFilters: _searchFilters(_purchaseReceiptSearch, const [
+        'name',
+        'supplier',
+        'supplier_name',
+      ]),
+    );
+    return data.map(PurchaseReceipt.fromJson).toList();
+  }
+
+  Future<List<PurchaseInvoice>> _fetchPurchaseInvoicePage({
+    required int limitStart,
+  }) async {
+    final data = await _fetchResourceWithFieldFallback(
+      doctype: 'Purchase Invoice',
+      fields: const [
+        'name',
+        'supplier',
+        'supplier_name',
+        'status',
+        'docstatus',
+        'posting_date',
+        'grand_total',
+        'outstanding_amount',
+        'due_date',
+      ],
+      limit: _documentPageSize,
+      limitStart: limitStart,
+      orderBy: 'posting_date desc, name desc',
+      filters: _statusFilters(_purchaseInvoiceStatus),
+      orFilters: _searchFilters(_purchaseInvoiceSearch, const [
+        'name',
+        'supplier',
+        'supplier_name',
+      ]),
+    );
+    return data.map(PurchaseInvoice.fromJson).toList();
+  }
+
+  List<List<dynamic>>? _purchaseOrderFilters(String? status) {
+    if (status != 'Delayed') return _statusFilters(status);
+    final now = DateTime.now();
+    final today =
+        '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    return [
+      ['schedule_date', '<', today],
+      [
+        'status',
+        'not in',
+        ['Draft', 'Completed', 'Closed', 'Cancelled'],
+      ],
+    ];
   }
 
   Future<List<SalesOrder>> _attachSalesOrderItems(
