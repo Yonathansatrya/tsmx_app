@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/sales_order.dart';
+import '../models/sales_order_insight.dart';
 import '../models/warehouse_info.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
@@ -24,6 +28,21 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   final _customerCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
   final _rateCtrl = TextEditingController();
+  final List<_AdditionalItemRow> _additionalItems = [];
+  final ImagePicker _imagePicker = ImagePicker();
+  final List<XFile> _photos = [];
+  bool _attachPhotosToCustomer = false;
+  CustomerSalesInsight? _customerInsight;
+  final Map<String, ItemSalesInsight> _itemInsights = {};
+  final Set<String> _loadingItemPrices = {};
+  bool _isLoadingCustomerInsight = false;
+  String? _customerInsightError;
+  Timer? _pricingDebounce;
+  int _pricingRequestVersion = 0;
+  String? _selectedCurrency;
+  String? _selectedPriceList;
+  String? _priceListCurrency;
+  bool _ignorePricingRule = false;
 
   TextEditingController? _itemTextController;
   String? _initialItemText;
@@ -50,6 +69,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   List<String> _territoryOptions = [];
   List<String> _paymentTermsOptions = [];
   List<String> _salesPersonOptions = [];
+  List<String> _currencyOptions = [];
+  List<String> _priceListOptions = [];
   List<_CostCenterOption> _costCenterOptions = [];
   List<_CustomerOption> _customerOptions = [];
   List<_ItemOption> _itemOptions = [];
@@ -291,7 +312,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   @override
   void initState() {
     super.initState();
-    _qtyCtrl.addListener(_calculateTotal);
+    _qtyCtrl.addListener(_onPricingInputChanged);
     _rateCtrl.addListener(_calculateTotal);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSelectors();
@@ -300,9 +321,13 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
   @override
   void dispose() {
+    _pricingDebounce?.cancel();
     _customerCtrl.dispose();
     _qtyCtrl.dispose();
     _rateCtrl.dispose();
+    for (final row in _additionalItems) {
+      row.dispose();
+    }
     _itemTextController = null;
     super.dispose();
   }
@@ -311,8 +336,358 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     setState(() {
       final qty = double.tryParse(_qtyCtrl.text.trim()) ?? 0;
       final rate = double.tryParse(_rateCtrl.text.trim()) ?? 0;
-      _totalAmount = qty * rate;
+      _totalAmount =
+          (qty * rate) +
+          _additionalItems.fold<double>(0, (total, row) {
+            final rowQty = double.tryParse(row.qtyController.text.trim()) ?? 0;
+            final rowRate =
+                double.tryParse(row.rateController.text.trim()) ?? 0;
+            return total + (rowQty * rowRate);
+          });
     });
+  }
+
+  void _onPricingInputChanged() {
+    _calculateTotal();
+    _scheduleRepriceAllItems();
+  }
+
+  void _addItemRow() {
+    final row = _AdditionalItemRow();
+    row.qtyController.addListener(_onPricingInputChanged);
+    row.rateController.addListener(_calculateTotal);
+    setState(() => _additionalItems.add(row));
+  }
+
+  void _scheduleRepriceAllItems() {
+    _pricingRequestVersion++;
+    _pricingDebounce?.cancel();
+    _pricingDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) _repriceAllItems();
+    });
+  }
+
+  Future<void> _repriceAllItems() async {
+    final firstCode = _selectedItemCode;
+    if (firstCode != null && firstCode.isNotEmpty) {
+      await _loadItemInsight(firstCode, applyPrice: true);
+    }
+    for (final row in _additionalItems) {
+      final code = row.itemCode;
+      if (code != null && code.isNotEmpty) {
+        await _loadItemInsight(code, applyPrice: true, row: row);
+      }
+    }
+  }
+
+  void _removeItemRow(int index) {
+    final row = _additionalItems.removeAt(index);
+    row.dispose();
+    _calculateTotal();
+  }
+
+  List<Map<String, dynamic>> _buildItemsPayload(String firstItemCode) {
+    final deliveryDate = _selectedDeliveryDate
+        .toIso8601String()
+        .split('T')
+        .first;
+    Map<String, dynamic> itemPayload({
+      required String itemCode,
+      required double qty,
+      double? rate,
+      String? warehouse,
+    }) {
+      final pricing = _itemInsights[itemCode];
+      return {
+        'item_code': itemCode,
+        'qty': qty,
+        'delivery_date': deliveryDate,
+        if (rate != null && rate > 0) 'rate': rate,
+        if (pricing != null && pricing.priceListRate > 0)
+          'price_list_rate': pricing.priceListRate,
+        if (pricing != null && pricing.discountPercentage > 0)
+          'discount_percentage': pricing.discountPercentage,
+        if (pricing != null && pricing.pricingRule.isNotEmpty)
+          'pricing_rule': pricing.pricingRule,
+        if (warehouse != null && warehouse.trim().isNotEmpty)
+          'warehouse': warehouse.trim(),
+        if (_selectedCenter != null && _selectedCenter!.trim().isNotEmpty)
+          'cost_center': _selectedCenter!.trim(),
+      };
+    }
+
+    return [
+      itemPayload(
+        itemCode: firstItemCode,
+        qty: double.parse(_qtyCtrl.text.trim()),
+        rate: double.tryParse(_rateCtrl.text.trim()),
+        warehouse: _selectedWarehouse,
+      ),
+      ..._additionalItems.map(
+        (row) => itemPayload(
+          itemCode: row.itemCode!,
+          qty: double.parse(row.qtyController.text.trim()),
+          rate: double.tryParse(row.rateController.text.trim()),
+          warehouse: row.warehouse ?? _selectedWarehouse,
+        ),
+      ),
+    ];
+  }
+
+  Future<void> _loadCustomerInsight() async {
+    final customer = _customerCtrl.text.trim();
+    if (customer.isEmpty) return;
+    setState(() {
+      _isLoadingCustomerInsight = true;
+      _customerInsightError = null;
+    });
+    try {
+      final insight = await context.read<AppState>().fetchCustomerSalesInsight(
+        customer,
+        company: _selectedCompany(_warehouseOptions(context.read<AppState>())),
+      );
+      if (!mounted) return;
+      setState(() {
+        _customerInsight = insight;
+        _selectedPriceList = insight.priceList.isNotEmpty
+            ? insight.priceList
+            : _selectedPriceList;
+        _selectedCurrency = insight.currency.isNotEmpty
+            ? insight.currency
+            : _selectedCurrency;
+        _priceListCurrency = insight.priceListCurrency.isNotEmpty
+            ? insight.priceListCurrency
+            : (_selectedCurrency ?? _priceListCurrency);
+      });
+      await _repriceAllItems();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _customerInsightError = error.toString());
+    } finally {
+      if (mounted) setState(() => _isLoadingCustomerInsight = false);
+    }
+  }
+
+  Future<void> _selectPriceList(String? value) async {
+    setState(() {
+      _selectedPriceList = value;
+      _priceListCurrency = _selectedCurrency;
+    });
+    if (value != null && value.isNotEmpty) {
+      try {
+        final doc = await context.read<AppState>().frappeService.fetchDocument(
+          'Price List',
+          value,
+        );
+        if (mounted) {
+          setState(() {
+            _priceListCurrency =
+                doc['currency']?.toString() ?? _selectedCurrency;
+          });
+        }
+      } catch (_) {}
+    }
+    _scheduleRepriceAllItems();
+  }
+
+  Future<ItemSalesInsight?> _loadItemInsight(
+    String itemCode, {
+    bool applyPrice = false,
+    _AdditionalItemRow? row,
+  }) async {
+    if (itemCode.isEmpty) return null;
+    final requestVersion = _pricingRequestVersion;
+    final loadingKey = row == null ? 'first:$itemCode' : 'row:${row.hashCode}';
+    setState(() => _loadingItemPrices.add(loadingKey));
+    try {
+      final appState = context.read<AppState>();
+      final qty =
+          double.tryParse((row?.qtyController ?? _qtyCtrl).text.trim()) ?? 1;
+      final insight = await context.read<AppState>().fetchItemSalesInsight(
+        itemCode,
+        customer: _customerCtrl.text.trim(),
+        company: _selectedCompany(_warehouseOptions(appState)),
+        priceList: _selectedPriceList,
+        currency: _selectedCurrency,
+        warehouse: row?.warehouse ?? _selectedWarehouse,
+        transactionDate: _selectedDate,
+        qty: qty,
+        ignorePricingRule: _ignorePricingRule,
+      );
+      if (!mounted || requestVersion != _pricingRequestVersion) return insight;
+      if (row == null && _selectedItemCode != itemCode) return insight;
+      if (row != null && row.itemCode != itemCode) return insight;
+      setState(() {
+        _itemInsights[itemCode] = insight;
+        if (applyPrice && insight.price > 0) {
+          if (row == null) {
+            _rateCtrl.text = insight.price.toString();
+          } else {
+            row.rateController.text = insight.price.toString();
+          }
+        }
+      });
+      return insight;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal mengambil stok/harga: $error')),
+        );
+      }
+      return null;
+    } finally {
+      if (mounted) setState(() => _loadingItemPrices.remove(loadingKey));
+    }
+  }
+
+  Future<void> _showItemInsight(String itemCode) async {
+    final insight = _itemInsights[itemCode] ?? await _loadItemInsight(itemCode);
+    if (!mounted || insight == null) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                insight.itemCode,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                insight.price > 0
+                    ? '${insight.priceList}: ${insight.currency} ${insight.price.toStringAsFixed(0)}'
+                    : 'Harga price list tidak ditemukan',
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Stock per Gudang',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 6),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: insight.stocks
+                      .map(
+                        (stock) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(stock.warehouse),
+                          subtitle: Text(
+                            'Reserved ${stock.reservedQty.toStringAsFixed(0)} | '
+                            'Projected ${stock.projectedQty.toStringAsFixed(0)}',
+                          ),
+                          trailing: Text(
+                            stock.actualQty.toStringAsFixed(0),
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickPhoto(ImageSource source) async {
+    final photo = await _imagePicker.pickImage(
+      source: source,
+      imageQuality: 75,
+      maxWidth: 1600,
+    );
+    if (photo != null && mounted) setState(() => _photos.add(photo));
+  }
+
+  void _showCustomerHistory() {
+    final customer = _customerCtrl.text.trim();
+    if (customer.isEmpty) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _CustomerHistorySheet(
+        customer: customer,
+        company: _selectedCompany(
+          _warehouseOptions(this.context.read<AppState>()),
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _confirmOrderRisks(List<Map<String, dynamic>> items) async {
+    final warnings = <String>[];
+    final customer = _customerInsight;
+    if (customer != null &&
+        customer.creditLimit > 0 &&
+        customer.outstanding + _totalAmount > customer.creditLimit) {
+      warnings.add(
+        'Total order melewati limit kredit customer sebesar '
+        'Rp ${(customer.outstanding + _totalAmount - customer.creditLimit).toStringAsFixed(0)}.',
+      );
+    }
+
+    for (final item in items) {
+      final itemCode = item['item_code']?.toString() ?? '';
+      final warehouse = item['warehouse']?.toString() ?? '';
+      final qty = (item['qty'] as num?)?.toDouble() ?? 0;
+      if (itemCode.isEmpty || warehouse.isEmpty) continue;
+      final insight =
+          _itemInsights[itemCode] ?? await _loadItemInsight(itemCode);
+      if (insight == null) continue;
+      final matching = insight.stocks.where(
+        (row) => row.warehouse == warehouse,
+      );
+      final actual = matching.isEmpty ? 0 : matching.first.actualQty;
+      if (actual < qty) {
+        warnings.add(
+          '$itemCode di $warehouse hanya tersedia ${actual.toStringAsFixed(0)}, '
+          'order ${qty.toStringAsFixed(0)}.',
+        );
+      }
+    }
+
+    if (warnings.isEmpty || !mounted) return true;
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Konfirmasi Risiko Order'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: warnings
+                    .map(
+                      (warning) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text('• $warning'),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Periksa Lagi'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Tetap Simpan Draft'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   String _normalizeItemCode(String rawText) {
@@ -491,7 +866,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       setState(() {
         _customerCtrl.text = selectedCustomerId!;
         _customerError = null;
+        _customerInsight = null;
+        _customerInsightError = null;
+        _pricingRequestVersion++;
+        _itemInsights.clear();
       });
+      await _loadCustomerInsight();
     }
 
     if (shouldAddCustomer && mounted) {
@@ -790,6 +1170,26 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       );
       return;
     }
+    final invalidAdditionalItem = _additionalItems.any((row) {
+      final qty = double.tryParse(row.qtyController.text.trim());
+      final rateText = row.rateController.text.trim();
+      final rate = rateText.isEmpty ? 0 : double.tryParse(rateText);
+      return row.itemCode == null ||
+          row.itemCode!.isEmpty ||
+          qty == null ||
+          qty <= 0 ||
+          rate == null ||
+          rate < 0;
+    });
+    if (invalidAdditionalItem) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lengkapi item tambahan, qty, dan harga dengan benar'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     try {
       setState(() {
@@ -798,53 +1198,69 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
       final appState = context.read<AppState>();
       await _ensureWarehouseEnabled(appState);
-      final qty = double.parse(_qtyCtrl.text.trim());
-      final rate = double.tryParse(_rateCtrl.text.trim());
       final itemCode = (_selectedItemCode ?? '').isNotEmpty
           ? _selectedItemCode!
           : _normalizeItemCode(_itemTextController?.text ?? '');
       if (itemCode.isEmpty) {
         throw Exception('Item code tidak boleh kosong');
       }
+      final items = _buildItemsPayload(itemCode);
+      if (!await _confirmOrderRisks(items)) return;
       final selectedWarehouseInfo = _selectedWarehouseInfo(
         _warehouseOptions(appState),
       );
+      final SalesOrder savedOrder;
       if (widget.isEditMode) {
-        await appState.updateSalesOrder(
+        savedOrder = await appState.updateSalesOrder(
           orderId: widget.editOrderId!,
           customer: _customerCtrl.text.trim(),
-          itemCode: itemCode,
-          qty: qty,
-          warehouse: _selectedWarehouse,
-          rate: rate,
+          items: items,
           costCenter: _selectedCenter,
           company: selectedWarehouseInfo?.company,
+          currency: _selectedCurrency,
+          sellingPriceList: _selectedPriceList,
+          priceListCurrency: _priceListCurrency,
+          ignorePricingRule: _ignorePricingRule,
           salesPerson: _selectedSalesPerson,
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
         );
       } else {
-        await appState.createSalesOrder(
+        savedOrder = await appState.createSalesOrder(
           customer: _customerCtrl.text.trim(),
-          itemCode: itemCode,
-          qty: qty,
-          warehouse: _selectedWarehouse,
-          rate: rate,
+          items: items,
           series: _selectedSeries,
           costCenter: _selectedCenter,
           company: selectedWarehouseInfo?.company,
+          currency: _selectedCurrency,
+          sellingPriceList: _selectedPriceList,
+          priceListCurrency: _priceListCurrency,
+          ignorePricingRule: _ignorePricingRule,
           salesPerson: _selectedSalesPerson!,
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
         );
       }
+      var failedUploads = 0;
+      for (final photo in _photos) {
+        try {
+          await appState.uploadAttachment(
+            doctype: _attachPhotosToCustomer ? 'Customer' : 'Sales Order',
+            documentName: _attachPhotosToCustomer
+                ? _customerCtrl.text.trim()
+                : savedOrder.id,
+            filePath: photo.path,
+          );
+        } catch (_) {
+          failedUploads++;
+        }
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            widget.isEditMode
-                ? 'Sales Order berhasil diperbarui'
-                : 'Sales Order berhasil dibuat',
+            '${widget.isEditMode ? 'Sales Order berhasil diperbarui' : 'Sales Order berhasil dibuat'}'
+            '${failedUploads > 0 ? ', tetapi $failedUploads foto gagal di-upload' : ''}',
           ),
           backgroundColor: AppColors.primary,
         ),
@@ -909,6 +1325,38 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         doctype: 'Payment Terms Template',
       );
       final salesPersonOptions = await _fetchSalesPersonOptions(appState);
+      final currencyOptions = await _fetchLinkOptions(
+        appState,
+        doctype: 'Currency',
+      );
+      var priceListOptions = await _fetchLinkOptions(
+        appState,
+        doctype: 'Price List',
+        filters: const [
+          ['selling', '=', 1],
+          ['enabled', '=', 1],
+        ],
+      );
+      if (priceListOptions.isEmpty) {
+        priceListOptions = await _fetchLinkOptions(
+          appState,
+          doctype: 'Price List',
+          filters: const [
+            ['selling', '=', 1],
+          ],
+        );
+      }
+      String defaultSellingPriceList = '';
+      try {
+        final sellingSettings = await appState.frappeService.fetchDocument(
+          'Selling Settings',
+          'Selling Settings',
+        );
+        defaultSellingPriceList =
+            sellingSettings['selling_price_list']?.toString() ??
+            sellingSettings['default_price_list']?.toString() ??
+            '';
+      } catch (_) {}
 
       List<Map<String, dynamic>> customerData;
       try {
@@ -977,6 +1425,19 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           break;
         }
       }
+      String companyCurrency = '';
+      if (selectedWarehouseCompany.isNotEmpty) {
+        try {
+          final companyDoc = await appState.frappeService.fetchDocument(
+            'Company',
+            selectedWarehouseCompany,
+          );
+          companyCurrency =
+              companyDoc['default_currency']?.toString() ??
+              companyDoc['currency']?.toString() ??
+              '';
+        } catch (_) {}
+      }
       final availableCostCenters = selectedWarehouseCompany.isEmpty
           ? costCenters
           : costCenters
@@ -996,6 +1457,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         _territoryOptions = _normalizeOptions(territoryOptions);
         _paymentTermsOptions = _normalizeOptions(paymentTermsOptions);
         _salesPersonOptions = _normalizeOptions(salesPersonOptions);
+        _currencyOptions = _normalizeOptions(currencyOptions);
+        _priceListOptions = _normalizeOptions(priceListOptions);
         _costCenterOptions = _normalizeCostCenterOptions(costCenters);
         _customerOptions = customerOptions;
         _selectedSeries = _seriesOptions.contains(_selectedSeries)
@@ -1015,6 +1478,21 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                   : null);
         _itemOptions = itemOptions;
         _selectedWarehouse = selectedWarehouse;
+        _selectedCurrency = _currencyOptions.contains(_selectedCurrency)
+            ? _selectedCurrency
+            : (_currencyOptions.contains(companyCurrency)
+                  ? companyCurrency
+                  : (_currencyOptions.isNotEmpty
+                        ? _currencyOptions.first
+                        : null));
+        _selectedPriceList = _priceListOptions.contains(_selectedPriceList)
+            ? _selectedPriceList
+            : (_priceListOptions.contains(defaultSellingPriceList)
+                  ? defaultSellingPriceList
+                  : (_priceListOptions.isNotEmpty
+                        ? _priceListOptions.first
+                        : null));
+        _priceListCurrency ??= _selectedCurrency;
       });
       if (widget.isEditMode) {
         final editingOrder = await appState.loadSalesOrderDetail(
@@ -1051,8 +1529,33 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
   void _applyEditingOrder(SalesOrder order) {
     final firstItem = order.items.isNotEmpty ? order.items.first : null;
+    for (final row in _additionalItems) {
+      row.dispose();
+    }
+    _additionalItems.clear();
+    for (final item in order.items.skip(1)) {
+      final row = _AdditionalItemRow(
+        itemCode: item.itemCode,
+        qty: item.qty.toString(),
+        rate: item.rate > 0 ? item.rate.toString() : '',
+        warehouse: item.warehouse.isNotEmpty ? item.warehouse : null,
+      );
+      row.qtyController.addListener(_onPricingInputChanged);
+      row.rateController.addListener(_calculateTotal);
+      _additionalItems.add(row);
+    }
     setState(() {
       _customerCtrl.text = order.customerId;
+      _selectedCurrency = order.currency.isNotEmpty
+          ? order.currency
+          : _selectedCurrency;
+      _selectedPriceList = order.sellingPriceList.isNotEmpty
+          ? order.sellingPriceList
+          : _selectedPriceList;
+      _priceListCurrency = order.priceListCurrency.isNotEmpty
+          ? order.priceListCurrency
+          : _priceListCurrency;
+      _ignorePricingRule = order.ignorePricingRule;
       _selectedDate = DateTime.tryParse(order.date) ?? _selectedDate;
       _selectedDeliveryDate = _selectedDate;
       if (firstItem != null) {
@@ -1072,6 +1575,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       _customerError = null;
       _itemError = null;
     });
+    _loadCustomerInsight();
     _calculateTotal();
   }
 
@@ -1080,6 +1584,14 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     final appState = context.watch<AppState>();
     final warehouseOptions = _warehouseOptions(appState);
     final costCenterOptions = _costCentersForWarehouse(warehouseOptions);
+    final currencyOptions = _normalizeOptions([
+      ..._currencyOptions,
+      if (_selectedCurrency != null) _selectedCurrency!,
+    ]);
+    final priceListOptions = _normalizeOptions([
+      ..._priceListOptions,
+      if (_selectedPriceList != null) _selectedPriceList!,
+    ]);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -1199,114 +1711,148 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
                     const SizedBox(height: 12),
 
-                    GestureDetector(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _selectedDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _selectedDate = picked;
-                            if (_selectedDeliveryDate.isBefore(picked)) {
-                              _selectedDeliveryDate = picked;
-                            }
-                          });
-                        }
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.2),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: _selectedDate,
+                                firstDate: DateTime(2020),
+                                lastDate: DateTime(2030),
+                              );
+
+                              if (picked != null) {
+                                setState(() {
+                                  _selectedDate = picked;
+
+                                  if (_selectedDeliveryDate.isBefore(picked)) {
+                                    _selectedDeliveryDate = picked;
+                                  }
+                                });
+                                _scheduleRepriceAllItems();
+                              }
+                            },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.background,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                ),
+                              ),
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.calendar_today,
+                                        size: 14,
+                                        color: AppColors.slate,
+                                      ),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        'Date',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.slate,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    DateFormat(
+                                      'dd-MM-yyyy',
+                                    ).format(_selectedDate),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.navy,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Date',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.slate,
-                                fontWeight: FontWeight.w500,
+
+                        const SizedBox(width: 12),
+
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate:
+                                    _selectedDeliveryDate.isBefore(
+                                      _selectedDate,
+                                    )
+                                    ? _selectedDate
+                                    : _selectedDeliveryDate,
+                                firstDate: _selectedDate,
+                                lastDate: DateTime(2030),
+                              );
+
+                              if (picked != null) {
+                                setState(() => _selectedDeliveryDate = picked);
+                              }
+                            },
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: AppColors.background,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                ),
+                              ),
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.local_shipping_outlined,
+                                        size: 14,
+                                        color: AppColors.slate,
+                                      ),
+                                      SizedBox(width: 6),
+                                      Text(
+                                        'Delivery',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.slate,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    DateFormat(
+                                      'dd-MM-yyyy',
+                                    ).format(_selectedDeliveryDate),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.navy,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              DateFormat('dd-MM-yyyy').format(_selectedDate),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: AppColors.navy,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    GestureDetector(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate:
-                              _selectedDeliveryDate.isBefore(_selectedDate)
-                              ? _selectedDate
-                              : _selectedDeliveryDate,
-                          firstDate: _selectedDate,
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setState(() => _selectedDeliveryDate = picked);
-                        }
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Delivery Date',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.slate,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              DateFormat(
-                                'dd-MM-yyyy',
-                              ).format(_selectedDeliveryDate),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: AppColors.navy,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      ],
                     ),
 
                     const SizedBox(height: 12),
@@ -1426,6 +1972,245 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                           ? 'Customer wajib diisi'
                           : null,
                     ),
+                    if (_isLoadingCustomerInsight) ...[
+                      const SizedBox(height: 10),
+                      const LinearProgressIndicator(),
+                    ] else if (_customerInsight != null) ...[
+                      const SizedBox(height: 10),
+                      _CustomerInsightCard(
+                        insight: _customerInsight!,
+                        orderTotal: _totalAmount,
+                        onHistory: _showCustomerHistory,
+                      ),
+                    ] else if (_customerInsightError != null) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.orange.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'Informasi kredit customer gagal dimuat.',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                            TextButton.icon(
+                              onPressed: _loadCustomerInsight,
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Retry informasi customer'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: AppColors.cardShadow,
+                ),
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Currency & Price List',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.slate,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            key: ValueKey('currency:$_selectedCurrency'),
+                            initialValue:
+                                currencyOptions.contains(_selectedCurrency)
+                                ? _selectedCurrency
+                                : null,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Currency',
+                            ),
+                            items: currencyOptions
+                                .map(
+                                  (value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(value),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedCurrency = value;
+                                _priceListCurrency ??= value;
+                              });
+                              _scheduleRepriceAllItems();
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            key: ValueKey('price-list:$_selectedPriceList'),
+                            initialValue:
+                                priceListOptions.contains(_selectedPriceList)
+                                ? _selectedPriceList
+                                : null,
+                            isExpanded: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Selling Price List',
+                            ),
+                            items: priceListOptions
+                                .map(
+                                  (value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(
+                                      value,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _selectPriceList,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: _ignorePricingRule,
+                      onChanged: (value) {
+                        setState(() => _ignorePricingRule = value);
+                        _scheduleRepriceAllItems();
+                      },
+                      title: const Text('Ignore Pricing Rule'),
+                      subtitle: Text(
+                        _priceListCurrency == null
+                            ? 'Harga akan dihitung oleh ERPNext'
+                            : 'Price List Currency: $_priceListCurrency',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Warehouse',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.slate,
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    if (warehouseOptions.isNotEmpty)
+                      DropdownButtonFormField<String>(
+                        initialValue:
+                            warehouseOptions.any(
+                              (w) => w.name == _selectedWarehouse,
+                            )
+                            ? _selectedWarehouse
+                            : '',
+                        decoration: InputDecoration(
+                          labelText: 'Pilih Warehouse',
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        items: [
+                          const DropdownMenuItem<String>(
+                            value: '',
+                            child: Text('— None —'),
+                          ),
+                          ...warehouseOptions.map(
+                            (w) => DropdownMenuItem<String>(
+                              value: w.name,
+                              child: Text(
+                                w.name,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                        onChanged: (v) {
+                          setState(() {
+                            _selectedWarehouse = v == '' ? null : v;
+                            final nextCostCenters = _costCentersForWarehouse(
+                              warehouseOptions,
+                            );
+                            _selectedCenter =
+                                nextCostCenters.any(
+                                  (center) => center.name == _selectedCenter,
+                                )
+                                ? _selectedCenter
+                                : (nextCostCenters.isNotEmpty
+                                      ? nextCostCenters.first.name
+                                      : null);
+                          });
+                          _loadCustomerInsight();
+                          _scheduleRepriceAllItems();
+                        },
+                      )
+                    else
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.orange.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        padding: const EdgeInsets.all(12),
+                        child: const Text(
+                          'Warehouse tidak tersedia — refresh Stock tab terlebih dahulu',
+                          style: TextStyle(fontSize: 12, color: Colors.orange),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1476,6 +2261,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                           _itemTextController?.text = option.label;
                           _itemError = null;
                         });
+                        _loadItemInsight(option.code, applyPrice: true);
                       },
                       fieldViewBuilder:
                           (
@@ -1554,7 +2340,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             );
                           },
                     ),
+
                     const SizedBox(height: 12),
+
                     Row(
                       children: [
                         Expanded(
@@ -1621,6 +2409,217 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                         ),
                       ],
                     ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: _selectedItemCode == null
+                            ? null
+                            : () => _showItemInsight(_selectedItemCode!),
+                        icon: const Icon(Icons.inventory_2_outlined),
+                        label: const Text('Cek stok & harga'),
+                      ),
+                    ),
+                    if (_selectedItemCode != null)
+                      _ItemPricingLine(
+                        insight: _itemInsights[_selectedItemCode],
+                        isLoading: _loadingItemPrices.contains(
+                          'first:$_selectedItemCode',
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    ..._additionalItems.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final row = entry.value;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.18),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Item ${index + 2}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.navy,
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: 'Hapus item',
+                                  onPressed: () => _removeItemRow(index),
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: Colors.redAccent,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Autocomplete<_ItemOption>(
+                              optionsBuilder: (textEditingValue) {
+                                final query = textEditingValue.text
+                                    .toLowerCase();
+                                if (query.isEmpty) {
+                                  return _itemOptions.take(20);
+                                }
+                                return _itemOptions.where((option) {
+                                  final label = option.label.toLowerCase();
+                                  return label.contains(query) ||
+                                      option.code.toLowerCase().contains(query);
+                                });
+                              },
+                              displayStringForOption: (option) => option.label,
+                              onSelected: (option) {
+                                setState(() {
+                                  row.itemCode = option.code;
+                                  row.itemTextController?.text = option.label;
+                                });
+                                _loadItemInsight(
+                                  option.code,
+                                  applyPrice: true,
+                                  row: row,
+                                );
+                              },
+                              fieldViewBuilder:
+                                  (
+                                    context,
+                                    textEditingController,
+                                    focusNode,
+                                    onSubmit,
+                                  ) {
+                                    row.itemTextController =
+                                        textEditingController;
+                                    if (row.itemCode != null &&
+                                        textEditingController.text.isEmpty) {
+                                      final currentOption = _itemOptions
+                                          .firstWhere(
+                                            (option) =>
+                                                option.code == row.itemCode,
+                                            orElse: () => _ItemOption(
+                                              code: row.itemCode ?? '',
+                                              name: row.itemCode ?? '',
+                                            ),
+                                          );
+                                      textEditingController.text =
+                                          currentOption.label;
+                                    }
+                                    return TextFormField(
+                                      controller: textEditingController,
+                                      focusNode: focusNode,
+                                      onChanged: (value) {
+                                        final code = _normalizeItemCode(value);
+                                        if (row.itemCode != null &&
+                                            code != row.itemCode) {
+                                          setState(() => row.itemCode = null);
+                                        }
+                                      },
+                                      decoration: InputDecoration(
+                                        labelText: 'Nama Item / Kode',
+                                        hintText: 'Cari dengan nama atau kode',
+                                        filled: true,
+                                        fillColor: AppColors.white,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                        ),
+                                      ),
+                                      validator: (value) {
+                                        if (row.itemCode == null ||
+                                            row.itemCode!.trim().isEmpty) {
+                                          return 'Item wajib dipilih';
+                                        }
+                                        return null;
+                                      },
+                                    );
+                                  },
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: row.qtyController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Quantity',
+                                    ),
+                                    validator: (value) {
+                                      final qty = double.tryParse(
+                                        value?.trim() ?? '',
+                                      );
+                                      return qty == null || qty <= 0
+                                          ? 'Qty > 0'
+                                          : null;
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: row.rateController,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Harga/Unit',
+                                    ),
+                                    validator: (value) {
+                                      if (value == null ||
+                                          value.trim().isEmpty) {
+                                        return null;
+                                      }
+                                      final rate = double.tryParse(
+                                        value.trim(),
+                                      );
+                                      return rate == null || rate < 0
+                                          ? 'Harga >= 0'
+                                          : null;
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            const SizedBox(height: 10),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: row.itemCode == null
+                                    ? null
+                                    : () => _showItemInsight(row.itemCode!),
+                                icon: const Icon(Icons.inventory_2_outlined),
+                                label: const Text('Cek stok & harga'),
+                              ),
+                            ),
+                            if (row.itemCode != null)
+                              _ItemPricingLine(
+                                insight: _itemInsights[row.itemCode],
+                                isLoading: _loadingItemPrices.contains(
+                                  'row:${row.hashCode}',
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    }),
+                    OutlinedButton.icon(
+                      onPressed: _addItemRow,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Tambah Item'),
+                    ),
                     const SizedBox(height: 12),
                     Container(
                       decoration: BoxDecoration(
@@ -1662,103 +2661,14 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
               const SizedBox(height: 16),
 
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Warehouse',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.slate,
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    if (warehouseOptions.isNotEmpty)
-                      DropdownButtonFormField<String>(
-                        initialValue:
-                            warehouseOptions.any(
-                              (w) => w.name == _selectedWarehouse,
-                            )
-                            ? _selectedWarehouse
-                            : '',
-                        decoration: InputDecoration(
-                          labelText: 'Pilih Warehouse',
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                        ),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: '',
-                            child: Text('— None —'),
-                          ),
-                          ...warehouseOptions.map(
-                            (w) => DropdownMenuItem<String>(
-                              value: w.name,
-                              child: Text(
-                                w.name,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        ],
-                        onChanged: (v) => setState(() {
-                          _selectedWarehouse = v == '' ? null : v;
-                          final nextCostCenters = _costCentersForWarehouse(
-                            warehouseOptions,
-                          );
-                          _selectedCenter =
-                              nextCostCenters.any(
-                                (center) => center.name == _selectedCenter,
-                              )
-                              ? _selectedCenter
-                              : (nextCostCenters.isNotEmpty
-                                    ? nextCostCenters.first.name
-                                    : null);
-                        }),
-                      )
-                    else
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.orange.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        child: const Text(
-                          'Warehouse tidak tersedia — refresh Stock tab terlebih dahulu',
-                          style: TextStyle(fontSize: 12, color: Colors.orange),
-                        ),
-                      ),
-                  ],
-                ),
+              _AttachmentCard(
+                photos: _photos,
+                attachToCustomer: _attachPhotosToCustomer,
+                onTargetChanged: (value) =>
+                    setState(() => _attachPhotosToCustomer = value),
+                onCamera: () => _pickPhoto(ImageSource.camera),
+                onGallery: () => _pickPhoto(ImageSource.gallery),
+                onRemove: (index) => setState(() => _photos.removeAt(index)),
               ),
 
               const SizedBox(height: 24),
@@ -1826,4 +2736,494 @@ class _CostCenterOption {
   final String company;
 
   const _CostCenterOption({required this.name, required this.company});
+}
+
+class _AdditionalItemRow {
+  String? itemCode;
+  String? warehouse;
+  final TextEditingController qtyController;
+  final TextEditingController rateController;
+  TextEditingController? itemTextController;
+
+  _AdditionalItemRow({
+    this.itemCode,
+    String qty = '1',
+    String rate = '',
+    this.warehouse,
+  }) : qtyController = TextEditingController(text: qty),
+       rateController = TextEditingController(text: rate);
+
+  void dispose() {
+    qtyController.dispose();
+    rateController.dispose();
+  }
+}
+
+class _CustomerInsightCard extends StatelessWidget {
+  final CustomerSalesInsight insight;
+  final double orderTotal;
+  final VoidCallback onHistory;
+
+  const _CustomerInsightCard({
+    required this.insight,
+    required this.orderTotal,
+    required this.onHistory,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final overLimit =
+        insight.creditLimit > 0 &&
+        insight.projectedOutstanding(orderTotal) > insight.creditLimit;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: overLimit
+            ? Colors.red.withValues(alpha: 0.06)
+            : AppColors.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: overLimit
+              ? Colors.red.withValues(alpha: 0.25)
+              : AppColors.primary.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Informasi Kredit Customer',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
+            children: [
+              _InsightMetric(
+                label: 'Credit Limit',
+                value: insight.creditLimit > 0
+                    ? 'Rp ${insight.creditLimit.toStringAsFixed(0)}'
+                    : 'Tidak dibatasi',
+              ),
+              _InsightMetric(
+                label: 'Outstanding',
+                value: 'Rp ${insight.outstanding.toStringAsFixed(0)}',
+                warning: overLimit,
+              ),
+              _InsightMetric(
+                label: 'Sisa Kredit',
+                value: insight.creditLimit > 0
+                    ? 'Rp ${insight.availableCredit.toStringAsFixed(0)}'
+                    : '-',
+                warning: insight.availableCredit < 0,
+              ),
+              _InsightMetric(
+                label: 'Total Order',
+                value: 'Rp ${orderTotal.toStringAsFixed(0)}',
+              ),
+              _InsightMetric(
+                label: 'Projected Piutang',
+                value:
+                    'Rp ${insight.projectedOutstanding(orderTotal).toStringAsFixed(0)}',
+                warning: overLimit,
+              ),
+              _InsightMetric(
+                label: 'Sisa Setelah Order',
+                value: insight.creditLimit > 0
+                    ? 'Rp ${insight.projectedAvailableCredit(orderTotal).toStringAsFixed(0)}'
+                    : '-',
+                warning: insight.projectedAvailableCredit(orderTotal) < 0,
+              ),
+              _InsightMetric(
+                label: 'Price List',
+                value: insight.priceList.isEmpty
+                    ? 'Default'
+                    : insight.priceList,
+              ),
+            ],
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: onHistory,
+              icon: const Icon(Icons.history_rounded),
+              label: const Text('Lihat history pembelian'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemPricingLine extends StatelessWidget {
+  final ItemSalesInsight? insight;
+  final bool isLoading;
+
+  const _ItemPricingLine({required this.insight, required this.isLoading});
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const LinearProgressIndicator(minHeight: 2);
+    }
+    final value = insight;
+    if (value == null) return const SizedBox.shrink();
+    final detail = <String>[
+      if (value.priceList.isNotEmpty) value.priceList,
+      if (value.priceListRate > 0)
+        'List ${value.currency} ${value.priceListRate.toStringAsFixed(0)}',
+      if (value.discountPercentage > 0)
+        'Diskon ${value.discountPercentage.toStringAsFixed(1)}%',
+      if (value.pricingRule.isNotEmpty) 'Rule ${value.pricingRule}',
+    ];
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        detail.isEmpty
+            ? 'Harga manual / price list tidak ditemukan'
+            : detail.join(' | '),
+        style: const TextStyle(fontSize: 11, color: AppColors.slate),
+      ),
+    );
+  }
+}
+
+class _CustomerHistorySheet extends StatefulWidget {
+  final String customer;
+  final String company;
+
+  const _CustomerHistorySheet({required this.customer, required this.company});
+
+  @override
+  State<_CustomerHistorySheet> createState() => _CustomerHistorySheetState();
+}
+
+class _CustomerHistorySheetState extends State<_CustomerHistorySheet>
+    with SingleTickerProviderStateMixin {
+  static const _pageSize = 20;
+  late final TabController _tabController;
+  final Map<String, List<CustomerPurchaseHistory>> _rows = {
+    'Sales Order': [],
+    'Sales Invoice': [],
+  };
+  final Map<String, bool> _loading = {
+    'Sales Order': false,
+    'Sales Invoice': false,
+  };
+  final Map<String, bool> _hasMore = {
+    'Sales Order': true,
+    'Sales Invoice': true,
+  };
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _loadMore('Sales Order');
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadMore(String doctype) async {
+    if (_loading[doctype] == true || _hasMore[doctype] != true) return;
+    setState(() {
+      _loading[doctype] = true;
+      _error = null;
+    });
+    try {
+      final page = await context.read<AppState>().fetchCustomerPurchaseHistory(
+        customer: widget.customer,
+        doctype: doctype,
+        company: widget.company,
+        offset: _rows[doctype]!.length,
+        limit: _pageSize,
+      );
+      if (!mounted) return;
+      final known = _rows[doctype]!.map((row) => row.id).toSet();
+      setState(() {
+        _rows[doctype]!.addAll(page.where((row) => known.add(row.id)));
+        _hasMore[doctype] = page.isNotEmpty;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loading[doctype] = false);
+    }
+  }
+
+  Future<void> _showDetail(CustomerPurchaseHistory row) async {
+    showDialog<void>(
+      context: context,
+      builder: (context) => FutureBuilder<Map<String, dynamic>>(
+        future: context.read<AppState>().loadSalesHistoryDetail(
+          row.doctype,
+          row.id,
+        ),
+        builder: (context, snapshot) {
+          final doc = snapshot.data;
+          final items = doc?['items'];
+          return AlertDialog(
+            title: Text(row.id),
+            content: snapshot.connectionState != ConnectionState.done
+                ? const SizedBox(
+                    height: 80,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : snapshot.hasError
+                ? Text('Gagal memuat detail: ${snapshot.error}')
+                : SizedBox(
+                    width: double.maxFinite,
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        Text('${row.date} | ${row.status}'),
+                        const SizedBox(height: 8),
+                        if (items is List)
+                          ...items.map(
+                            (item) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                item is Map
+                                    ? item['item_name']?.toString() ??
+                                          item['item_code']?.toString() ??
+                                          'Item'
+                                    : 'Item',
+                              ),
+                              trailing: Text(
+                                item is Map
+                                    ? 'x${item['qty']?.toString() ?? '0'}'
+                                    : '',
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Tutup'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTab(String doctype) {
+    final rows = _rows[doctype]!;
+    if (rows.isEmpty && _loading[doctype] == true) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        if (_error != null)
+          Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+        if (rows.isEmpty && _loading[doctype] != true)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Text('Belum ada transaksi customer ini.'),
+          ),
+        ...rows.map(
+          (row) => ListTile(
+            contentPadding: EdgeInsets.zero,
+            onTap: () => _showDetail(row),
+            title: Text(row.id),
+            subtitle: Text(
+              '${row.date} | ${row.status}'
+              '${row.itemsCount > 0 ? ' | Qty ${row.itemsCount}' : ''}'
+              '${row.outstanding > 0 ? ' | Outstanding Rp ${row.outstanding.toStringAsFixed(0)}' : ''}',
+            ),
+            trailing: Text(
+              'Rp ${row.total.toStringAsFixed(0)}',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+        if (_hasMore[doctype] == true)
+          TextButton.icon(
+            onPressed: _loading[doctype] == true
+                ? null
+                : () => _loadMore(doctype),
+            icon: _loading[doctype] == true
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.expand_more_rounded),
+            label: const Text('Load more'),
+          ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.78,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
+              child: Text(
+                'History Pembelian Customer',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+              ),
+            ),
+            TabBar(
+              controller: _tabController,
+              onTap: (index) =>
+                  _loadMore(index == 0 ? 'Sales Order' : 'Sales Invoice'),
+              tabs: const [
+                Tab(text: 'Sales Order'),
+                Tab(text: 'Sales Invoice'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildTab('Sales Order'),
+                  _buildTab('Sales Invoice'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InsightMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool warning;
+
+  const _InsightMetric({
+    required this.label,
+    required this.value,
+    this.warning = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 135,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10, color: AppColors.slate),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: warning ? Colors.red : AppColors.navy,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttachmentCard extends StatelessWidget {
+  final List<XFile> photos;
+  final bool attachToCustomer;
+  final ValueChanged<bool> onTargetChanged;
+  final VoidCallback onCamera;
+  final VoidCallback onGallery;
+  final ValueChanged<int> onRemove;
+
+  const _AttachmentCard({
+    required this.photos,
+    required this.attachToCustomer,
+    required this.onTargetChanged,
+    required this.onCamera,
+    required this.onGallery,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Foto Order / Customer',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: attachToCustomer,
+            onChanged: onTargetChanged,
+            title: Text(
+              attachToCustomer
+                  ? 'Lampirkan ke Customer'
+                  : 'Lampirkan ke Sales Order',
+            ),
+            subtitle: const Text('Pilih target penyimpanan foto di ERPNext'),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onCamera,
+                  icon: const Icon(Icons.camera_alt_outlined),
+                  label: const Text('Kamera'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onGallery,
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('Galeri'),
+                ),
+              ),
+            ],
+          ),
+          ...photos.asMap().entries.map(
+            (entry) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.image_outlined),
+              title: Text(
+                entry.value.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: IconButton(
+                onPressed: () => onRemove(entry.key),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

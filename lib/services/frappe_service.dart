@@ -163,6 +163,39 @@ class FrappeService {
         : Map<String, dynamic>.from(payload as Map);
   }
 
+  Future<Map<String, dynamic>> uploadFile({
+    required String filePath,
+    required String doctype,
+    required String documentName,
+  }) async {
+    await ensureLoggedIn();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseUrl/api/method/upload_file'),
+    );
+    request.headers[HttpHeaders.acceptHeader] = 'application/json';
+    if (_cookies.isNotEmpty) {
+      request.headers[HttpHeaders.cookieHeader] = _cookieHeader();
+    }
+    request.fields.addAll({
+      'doctype': doctype,
+      'docname': documentName,
+      'is_private': '0',
+    });
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+    final decoded = await _decodeJson(response.body);
+    if (response.statusCode != 200) {
+      throw Exception(_extractFrappeError(decoded, response.statusCode));
+    }
+    final message = decoded is Map ? decoded['message'] : null;
+    if (message is Map<String, dynamic>) return message;
+    if (message is Map) return Map<String, dynamic>.from(message);
+    throw Exception('Invalid upload response.');
+  }
+
   Future<void> updateDocument(
     String doctype,
     String name,
@@ -212,6 +245,59 @@ class FrappeService {
       return decoded['message'];
     }
     return decoded;
+  }
+
+  Future<Map<String, dynamic>> fetchSalesItemPricing({
+    required String itemCode,
+    required String customer,
+    required String company,
+    required String transactionDate,
+    required double qty,
+    String? warehouse,
+    String? priceList,
+    String? currency,
+    bool ignorePricingRule = false,
+  }) async {
+    final pricingArgs = <String, dynamic>{
+      'doctype': 'Sales Order',
+      'item_code': itemCode,
+      'customer': customer,
+      'company': company,
+      'transaction_date': transactionDate,
+      'conversion_rate': 1,
+      'price_list_currency': currency,
+      'plc_conversion_rate': 1,
+      'qty': qty,
+      'stock_qty': qty,
+      'is_pos': 0,
+      'ignore_pricing_rule': ignorePricingRule ? 1 : 0,
+      if (warehouse != null && warehouse.trim().isNotEmpty)
+        'warehouse': warehouse.trim(),
+      if (priceList != null && priceList.trim().isNotEmpty)
+        'price_list': priceList.trim(),
+      if (priceList != null && priceList.trim().isNotEmpty)
+        'selling_price_list': priceList.trim(),
+      if (currency != null && currency.trim().isNotEmpty)
+        'currency': currency.trim(),
+    };
+
+    final result = await callMethod(
+      'erpnext.stock.get_item_details.get_item_details',
+      args: {
+        'args': jsonEncode(pricingArgs),
+        'doc': jsonEncode({
+          'doctype': 'Sales Order',
+          'customer': customer,
+          'company': company,
+          'transaction_date': transactionDate,
+          'currency': currency,
+          'selling_price_list': priceList,
+          'ignore_pricing_rule': ignorePricingRule ? 1 : 0,
+        }),
+      },
+    );
+    if (result is Map) return Map<String, dynamic>.from(result);
+    throw Exception('ERPNext tidak mengembalikan detail harga item.');
   }
 
   Future<dynamic> callDocumentMethod({

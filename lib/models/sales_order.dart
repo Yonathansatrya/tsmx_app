@@ -45,6 +45,10 @@ class SalesOrder {
   final double perDelivered;
   final double perBilled;
   final String date;
+  final String currency;
+  final String sellingPriceList;
+  final String priceListCurrency;
+  final bool ignorePricingRule;
   final int itemsCount;
   final List<SalesOrderItem> items;
 
@@ -59,6 +63,10 @@ class SalesOrder {
     this.perDelivered = 0,
     this.perBilled = 0,
     required this.date,
+    this.currency = '',
+    this.sellingPriceList = '',
+    this.priceListCurrency = '',
+    this.ignorePricingRule = false,
     required this.itemsCount,
     this.items = const [],
   });
@@ -125,6 +133,12 @@ class SalesOrder {
       perDelivered: NumParse.asDouble(json['per_delivered']),
       perBilled: NumParse.asDouble(json['per_billed']),
       date: date,
+      currency: json['currency']?.toString() ?? '',
+      sellingPriceList: json['selling_price_list']?.toString() ?? '',
+      priceListCurrency: json['price_list_currency']?.toString() ?? '',
+      ignorePricingRule:
+          json['ignore_pricing_rule'] == 1 ||
+          json['ignore_pricing_rule'] == true,
       itemsCount: itemsCount,
       items: items,
     );
@@ -141,6 +155,10 @@ class SalesOrder {
     double? perDelivered,
     double? perBilled,
     String? date,
+    String? currency,
+    String? sellingPriceList,
+    String? priceListCurrency,
+    bool? ignorePricingRule,
     int? itemsCount,
     List<SalesOrderItem>? items,
   }) {
@@ -155,6 +173,10 @@ class SalesOrder {
       perDelivered: perDelivered ?? this.perDelivered,
       perBilled: perBilled ?? this.perBilled,
       date: date ?? this.date,
+      currency: currency ?? this.currency,
+      sellingPriceList: sellingPriceList ?? this.sellingPriceList,
+      priceListCurrency: priceListCurrency ?? this.priceListCurrency,
+      ignorePricingRule: ignorePricingRule ?? this.ignorePricingRule,
       itemsCount: itemsCount ?? this.itemsCount,
       items: items ?? this.items,
     );

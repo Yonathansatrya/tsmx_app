@@ -17,6 +17,7 @@ import '../utils/date_range_presets.dart';
 import '../models/warehouse_info.dart';
 import '../models/stock_area_option.dart';
 import '../models/erp_summary.dart';
+import '../models/sales_order_insight.dart';
 import '../services/frappe_service.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/num_parse.dart';
@@ -561,25 +562,330 @@ class AppState with ChangeNotifier {
     return SalesOrder.fromJson(doc);
   }
 
+  Future<CustomerSalesInsight> fetchCustomerSalesInsight(
+    String customer, {
+    String? company,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final customerDoc = await _frappeService.fetchDocument(
+      'Customer',
+      customer,
+    );
+    final priceList = customerDoc['default_price_list']?.toString() ?? '';
+    var companyCurrency = '';
+    var priceListCurrency = '';
+    if (company != null && company.isNotEmpty) {
+      try {
+        final companyDoc = await _frappeService.fetchDocument(
+          'Company',
+          company,
+        );
+        companyCurrency =
+            companyDoc['default_currency']?.toString() ??
+            companyDoc['currency']?.toString() ??
+            '';
+      } catch (_) {}
+    }
+    if (priceList.isNotEmpty) {
+      try {
+        final priceListDoc = await _frappeService.fetchDocument(
+          'Price List',
+          priceList,
+        );
+        priceListCurrency = priceListDoc['currency']?.toString() ?? '';
+      } catch (_) {}
+    }
+    var creditLimit = 0.0;
+    final creditLimits = customerDoc['credit_limits'];
+    if (creditLimits is List) {
+      for (final raw in creditLimits) {
+        if (raw is! Map) continue;
+        final rowCompany = raw['company']?.toString() ?? '';
+        if (company == null || company.isEmpty || rowCompany == company) {
+          creditLimit += NumParse.asDouble(raw['credit_limit']);
+        }
+      }
+    }
+
+    final invoices = await _fetchAllResourcePages(
+      doctype: 'Sales Invoice',
+      fields: const ['name', 'outstanding_amount'],
+      filters: [
+        ['customer', '=', customer],
+        if (company != null && company.isNotEmpty) ['company', '=', company],
+        ['docstatus', '=', 1],
+        ['outstanding_amount', '>', 0],
+      ],
+      maxRows: null,
+    );
+    final outstanding = invoices.fold<double>(
+      0,
+      (sum, row) => sum + NumParse.asDouble(row['outstanding_amount']),
+    );
+
+    return CustomerSalesInsight(
+      creditLimit: creditLimit,
+      outstanding: outstanding,
+      company: company ?? '',
+      currency: companyCurrency,
+      priceList: priceList,
+      priceListCurrency: priceListCurrency,
+    );
+  }
+
+  Future<ItemSalesInsight> fetchItemSalesInsight(
+    String itemCode, {
+    String? customer,
+    String? company,
+    String? priceList,
+    String? currency,
+    String? warehouse,
+    DateTime? transactionDate,
+    double qty = 1,
+    bool ignorePricingRule = false,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    Map<String, dynamic> pricing = const {};
+    if (customer != null &&
+        customer.isNotEmpty &&
+        company != null &&
+        company.isNotEmpty) {
+      try {
+        pricing = await _frappeService.fetchSalesItemPricing(
+          itemCode: itemCode,
+          customer: customer,
+          company: company,
+          transactionDate: (transactionDate ?? DateTime.now())
+              .toIso8601String()
+              .split('T')
+              .first,
+          qty: qty,
+          warehouse: warehouse,
+          priceList: priceList,
+          currency: currency,
+          ignorePricingRule: ignorePricingRule,
+        );
+      } catch (_) {}
+    }
+    final priceFilters = <List<dynamic>>[
+      ['item_code', '=', itemCode],
+      ['selling', '=', 1],
+      if (priceList != null && priceList.isNotEmpty)
+        ['price_list', '=', priceList],
+    ];
+    List<Map<String, dynamic>> prices;
+    try {
+      prices = await _fetchResourceWithFieldFallback(
+        doctype: 'Item Price',
+        fields: const ['name', 'price_list', 'price_list_rate', 'currency'],
+        limit: 1,
+        orderBy: 'valid_from desc, modified desc',
+        filters: priceFilters,
+      );
+    } catch (_) {
+      prices = await _fetchResourceWithFieldFallback(
+        doctype: 'Item Price',
+        fields: const ['name', 'price_list', 'price_list_rate', 'currency'],
+        limit: 1,
+        orderBy: 'modified desc',
+        filters: [
+          ['item_code', '=', itemCode],
+          if (priceList != null && priceList.isNotEmpty)
+            ['price_list', '=', priceList],
+        ],
+      );
+    }
+    final price = prices.isEmpty ? const <String, dynamic>{} : prices.first;
+    final resolvedPriceListRate = NumParse.asDouble(
+      pricing['price_list_rate'] ?? price['price_list_rate'],
+    );
+    final resolvedRate = NumParse.asDouble(
+      pricing['rate'] ?? pricing['net_rate'] ?? resolvedPriceListRate,
+    );
+
+    final bins = await _fetchAllResourcePages(
+      doctype: 'Bin',
+      fields: const [
+        'name',
+        'warehouse',
+        'actual_qty',
+        'reserved_qty',
+        'projected_qty',
+      ],
+      filters: [
+        ['item_code', '=', itemCode],
+      ],
+      maxRows: null,
+    );
+    final stocks =
+        bins
+            .map(
+              (row) => WarehouseStockInsight(
+                warehouse: row['warehouse']?.toString() ?? '',
+                actualQty: NumParse.asDouble(row['actual_qty']),
+                reservedQty: NumParse.asDouble(row['reserved_qty']),
+                projectedQty: NumParse.asDouble(row['projected_qty']),
+              ),
+            )
+            .where((row) => row.warehouse.isNotEmpty)
+            .toList()
+          ..sort((a, b) => a.warehouse.compareTo(b.warehouse));
+
+    return ItemSalesInsight(
+      itemCode: itemCode,
+      priceList:
+          pricing['price_list']?.toString() ??
+          price['price_list']?.toString() ??
+          priceList ??
+          '',
+      priceListRate: resolvedPriceListRate,
+      price: resolvedRate,
+      currency:
+          pricing['price_list_currency']?.toString() ??
+          pricing['currency']?.toString() ??
+          price['currency']?.toString() ??
+          currency ??
+          '',
+      discountPercentage: NumParse.asDouble(pricing['discount_percentage']),
+      pricingRule: pricing['pricing_rule']?.toString() ?? '',
+      stocks: stocks,
+    );
+  }
+
+  Future<List<CustomerPurchaseHistory>> fetchCustomerPurchaseHistory({
+    required String customer,
+    required String doctype,
+    String? company,
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final isInvoice = doctype == 'Sales Invoice';
+    final rows = await _frappeService.fetchResource(
+      doctype,
+      fields: [
+        'name',
+        isInvoice ? 'posting_date' : 'transaction_date',
+        'status',
+        'grand_total',
+        'total_qty',
+        if (isInvoice) 'outstanding_amount',
+      ],
+      filters: [
+        ['customer', '=', customer],
+        if (company != null && company.isNotEmpty) ['company', '=', company],
+      ],
+      orderBy:
+          '${isInvoice ? 'posting_date' : 'transaction_date'} desc, name desc',
+      limitStart: offset,
+      limit: limit,
+    );
+    return rows
+        .map(
+          (row) => CustomerPurchaseHistory(
+            id: row['name']?.toString() ?? '',
+            doctype: doctype,
+            date:
+                row[isInvoice ? 'posting_date' : 'transaction_date']
+                    ?.toString() ??
+                '',
+            status: row['status']?.toString() ?? '',
+            total: NumParse.asDouble(row['grand_total']),
+            outstanding: NumParse.asDouble(row['outstanding_amount']),
+            itemsCount: NumParse.asInt(row['total_qty']),
+          ),
+        )
+        .where((row) => row.id.isNotEmpty)
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> loadSalesHistoryDetail(
+    String doctype,
+    String name,
+  ) {
+    return _frappeService.fetchDocument(doctype, name);
+  }
+
+  Future<void> uploadSalesOrderAttachment(String orderId, String filePath) {
+    return uploadAttachment(
+      doctype: 'Sales Order',
+      documentName: orderId,
+      filePath: filePath,
+    );
+  }
+
+  Future<void> uploadAttachment({
+    required String doctype,
+    required String documentName,
+    required String filePath,
+  }) {
+    return _frappeService
+        .uploadFile(
+          filePath: filePath,
+          doctype: doctype,
+          documentName: documentName,
+        )
+        .then((_) {});
+  }
+
   Future<SalesOrder> createSalesOrder({
     required String customer,
-    required String itemCode,
-    required double qty,
+    String? itemCode,
+    double? qty,
+    List<Map<String, dynamic>>? items,
     String? warehouse,
     double? rate,
     String? series,
     String? costCenter,
     String? company,
+    String? currency,
+    String? sellingPriceList,
+    String? priceListCurrency,
+    bool ignorePricingRule = false,
     required String salesPerson,
     DateTime? transactionDate,
     DateTime? deliveryDate,
   }) async {
     await _frappeService.ensureLoggedIn();
+    final orderItems =
+        items ??
+        [
+          {
+            'item_code': itemCode,
+            'qty': qty,
+            'delivery_date': (deliveryDate ?? transactionDate ?? DateTime.now())
+                .toIso8601String()
+                .split('T')
+                .first,
+            if (rate != null && rate > 0) 'rate': rate,
+            if (warehouse != null && warehouse.trim().isNotEmpty)
+              'warehouse': warehouse.trim(),
+            if (costCenter != null && costCenter.trim().isNotEmpty)
+              'cost_center': costCenter.trim(),
+          },
+        ];
+    if (orderItems.isEmpty ||
+        orderItems.any(
+          (item) =>
+              item['item_code']?.toString().trim().isEmpty != false ||
+              NumParse.asDouble(item['qty']) <= 0,
+        )) {
+      throw Exception(
+        'Sales Order wajib memiliki minimal satu item yang valid.',
+      );
+    }
 
     final payload = <String, dynamic>{
       'customer': customer,
       if (company != null && company.trim().isNotEmpty)
         'company': company.trim(),
+      if (currency != null && currency.trim().isNotEmpty)
+        'currency': currency.trim(),
+      if (sellingPriceList != null && sellingPriceList.trim().isNotEmpty)
+        'selling_price_list': sellingPriceList.trim(),
+      if (priceListCurrency != null && priceListCurrency.trim().isNotEmpty)
+        'price_list_currency': priceListCurrency.trim(),
+      'ignore_pricing_rule': ignorePricingRule ? 1 : 0,
       'transaction_date': (transactionDate ?? DateTime.now())
           .toIso8601String()
           .split('T')
@@ -595,21 +901,7 @@ class AppState with ChangeNotifier {
       'sales_team': [
         {'sales_person': salesPerson.trim(), 'allocated_percentage': 100},
       ],
-      'items': [
-        {
-          'item_code': itemCode,
-          'qty': qty,
-          'delivery_date': (deliveryDate ?? transactionDate ?? DateTime.now())
-              .toIso8601String()
-              .split('T')
-              .first,
-          if (rate != null && rate > 0) 'rate': rate,
-          if (warehouse != null && warehouse.trim().isNotEmpty)
-            'warehouse': warehouse.trim(),
-          if (costCenter != null && costCenter.trim().isNotEmpty)
-            'cost_center': costCenter.trim(),
-        },
-      ],
+      'items': orderItems,
       if (warehouse != null && warehouse.trim().isNotEmpty)
         'set_warehouse': warehouse.trim(),
     };
@@ -657,21 +949,45 @@ class AppState with ChangeNotifier {
     String? customer,
     String? itemCode,
     double? qty,
+    List<Map<String, dynamic>>? items,
     String? warehouse,
     double? rate,
     String? costCenter,
     String? company,
+    String? currency,
+    String? sellingPriceList,
+    String? priceListCurrency,
+    bool? ignorePricingRule,
     String? salesPerson,
     DateTime? transactionDate,
     DateTime? deliveryDate,
     String? status,
   }) async {
     await _frappeService.ensureLoggedIn();
+    if (items != null &&
+        (items.isEmpty ||
+            items.any(
+              (item) =>
+                  item['item_code']?.toString().trim().isEmpty != false ||
+                  NumParse.asDouble(item['qty']) <= 0,
+            ))) {
+      throw Exception(
+        'Sales Order wajib memiliki minimal satu item yang valid.',
+      );
+    }
 
     final updates = <String, dynamic>{
       if (customer != null && customer.trim().isNotEmpty) 'customer': customer,
       if (company != null && company.trim().isNotEmpty)
         'company': company.trim(),
+      if (currency != null && currency.trim().isNotEmpty)
+        'currency': currency.trim(),
+      if (sellingPriceList != null && sellingPriceList.trim().isNotEmpty)
+        'selling_price_list': sellingPriceList.trim(),
+      if (priceListCurrency != null && priceListCurrency.trim().isNotEmpty)
+        'price_list_currency': priceListCurrency.trim(),
+      if (ignorePricingRule != null)
+        'ignore_pricing_rule': ignorePricingRule ? 1 : 0,
       if (transactionDate != null)
         'transaction_date': transactionDate.toIso8601String().split('T').first,
       if (deliveryDate != null)
@@ -685,7 +1001,9 @@ class AppState with ChangeNotifier {
         ],
       if (warehouse != null && warehouse.trim().isNotEmpty)
         'set_warehouse': warehouse.trim(),
-      if (itemCode != null && itemCode.trim().isNotEmpty && qty != null)
+      if (items != null)
+        'items': items
+      else if (itemCode != null && itemCode.trim().isNotEmpty && qty != null)
         'items': [
           {
             'item_code': itemCode.trim(),
