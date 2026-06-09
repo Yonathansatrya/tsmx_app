@@ -180,6 +180,7 @@ FrappeStatusStyle styleForStatusText(String statusText) {
 enum SalesOrderStatusKey {
   draft,
   onHold,
+  overdue,
   toDeliverAndBill,
   toBill,
   toDeliver,
@@ -190,7 +191,11 @@ enum SalesOrderStatusKey {
   unknown,
 }
 
-SalesOrderStatusKey parseSalesOrderStatus(String statusText, {int? docstatus}) {
+SalesOrderStatusKey parseSalesOrderStatus(
+  String statusText, {
+  int? docstatus,
+  bool isOverdue = false,
+}) {
   final text = normalizeStatusText(statusText, docstatus: docstatus);
   final s = text.toLowerCase();
 
@@ -201,6 +206,7 @@ SalesOrderStatusKey parseSalesOrderStatus(String statusText, {int? docstatus}) {
   }
   if (_contains(s, 'closed')) return SalesOrderStatusKey.closed;
   if (_contains(s, 'completed')) return SalesOrderStatusKey.completed;
+  if (isOverdue) return SalesOrderStatusKey.overdue;
   if (_contains(s, 'to pay')) return SalesOrderStatusKey.toPay;
   if (_contains(s, 'to deliver and bill')) {
     return SalesOrderStatusKey.toDeliverAndBill;
@@ -329,6 +335,8 @@ FrappeStatusStyle styleForSalesOrderKey(SalesOrderStatusKey key) {
       return styleForStatusText('Draft');
     case SalesOrderStatusKey.onHold:
       return styleForStatusText('On Hold');
+    case SalesOrderStatusKey.overdue:
+      return styleForStatusText('Overdue');
     case SalesOrderStatusKey.toDeliverAndBill:
       return styleForStatusText('To Deliver and Bill');
     case SalesOrderStatusKey.toBill:

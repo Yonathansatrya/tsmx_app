@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/sales_order.dart';
@@ -41,11 +42,13 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
   DateTime? _advancedFrom;
   DateTime? _advancedTo;
   _DocStatusFilter _advancedDocStatus = _DocStatusFilter.all;
+  Timer? _searchDebounce;
 
   static final _chips = <ErpStatusChip<SalesOrderStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
     const ErpStatusChip(label: 'Draft', value: SalesOrderStatusKey.draft),
     const ErpStatusChip(label: 'On Hold', value: SalesOrderStatusKey.onHold),
+    const ErpStatusChip(label: 'Overdue', value: SalesOrderStatusKey.overdue),
     const ErpStatusChip(
       label: 'Deliver & Bill',
       value: SalesOrderStatusKey.toDeliverAndBill,
@@ -80,9 +83,37 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
+
+  void _searchChanged(String value) {
+    setState(() => _search = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        context.read<AppState>().setSalesOrderQuery(
+          search: value,
+          status: _statusText,
+        );
+      }
+    });
+  }
+
+  String? get _statusText => switch (_statusFilter) {
+    SalesOrderStatusKey.draft => 'Draft',
+    SalesOrderStatusKey.onHold => 'On Hold',
+    SalesOrderStatusKey.overdue => 'Overdue',
+    SalesOrderStatusKey.toDeliverAndBill => 'To Deliver and Bill',
+    SalesOrderStatusKey.toBill => 'To Bill',
+    SalesOrderStatusKey.toDeliver => 'To Deliver',
+    SalesOrderStatusKey.toPay => 'To Pay',
+    SalesOrderStatusKey.completed => 'Completed',
+    SalesOrderStatusKey.closed => 'Closed',
+    SalesOrderStatusKey.cancelled => 'Cancelled',
+    _ => null,
+  };
 
   List<SalesOrder> _filter(List<SalesOrder> orders) {
     final q = _search.toLowerCase();
@@ -413,22 +444,25 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final filtered = _filter(appState.salesOrders);
-    final total = filtered.fold<double>(0, (s, o) => s + o.value);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ErpSummaryCard(
           title: 'Sales Orders',
           valueLabel: 'orders',
-          totalValue: total,
-          documentCount: filtered.length,
-          isLoading: appState.isSalesOrdersLoading,
+          totalValue: appState.salesOrderSummary.totalValue,
+          documentCount: appState.salesOrderSummary.documentCount,
+          subtitle:
+              '${appState.summarySyncSubtitle} | '
+              '${filtered.length} loaded for current filters',
+          isLoading:
+              appState.isOrderSummaryLoading &&
+              appState.salesOrderSummary.documentCount == 0,
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _searchController,
-          onChanged: (v) => setState(() => _search = v),
+          onChanged: _searchChanged,
           decoration: InputDecoration(
             hintText: 'Search SO or customer…',
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
@@ -460,21 +494,27 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
           sortLabel: _sortLabel,
           onDateChanged: (v) => setState(() => _dateFilter = v),
           onSortChanged: (v) => setState(() => _sortOption = v),
-          onReset: () => setState(() {
-            _searchController.clear();
-            _search = '';
-            _statusFilter = null;
-            _dateFilter = _OrderDateFilter.all;
-            _sortOption = _OrderSortOption.newest;
-            _advancedCustomer = '';
-            _advancedItem = '';
-            _advancedWarehouse = '';
-            _advancedMinValue = null;
-            _advancedMaxValue = null;
-            _advancedFrom = null;
-            _advancedTo = null;
-            _advancedDocStatus = _DocStatusFilter.all;
-          }),
+          onReset: () {
+            setState(() {
+              _searchController.clear();
+              _search = '';
+              _statusFilter = null;
+              _dateFilter = _OrderDateFilter.all;
+              _sortOption = _OrderSortOption.newest;
+              _advancedCustomer = '';
+              _advancedItem = '';
+              _advancedWarehouse = '';
+              _advancedMinValue = null;
+              _advancedMaxValue = null;
+              _advancedFrom = null;
+              _advancedTo = null;
+              _advancedDocStatus = _DocStatusFilter.all;
+            });
+            context.read<AppState>().setSalesOrderQuery(
+              search: '',
+              status: null,
+            );
+          },
           advancedCount: _advancedFilterCount,
           onAdvancedFilters: _openAdvancedFilters,
         ),
@@ -482,7 +522,13 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
         ErpStatusChipBar<SalesOrderStatusKey?>(
           chips: _chips,
           selected: _statusFilter,
-          onSelected: (v) => setState(() => _statusFilter = v),
+          onSelected: (v) {
+            setState(() => _statusFilter = v);
+            context.read<AppState>().setSalesOrderQuery(
+              search: _search,
+              status: _statusText,
+            );
+          },
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty && !appState.isSalesOrdersLoading)

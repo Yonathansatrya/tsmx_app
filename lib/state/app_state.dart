@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as developer;
-import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,9 +17,11 @@ import '../models/inventory_item.dart';
 import '../utils/date_range_presets.dart';
 import '../models/warehouse_info.dart';
 import '../models/stock_area_option.dart';
+import '../models/erp_summary.dart';
 import '../services/frappe_service.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/num_parse.dart';
+import '../utils/frappe_page_walker.dart';
 import '../widgets/notifications/notification_model.dart';
 
 class AppState with ChangeNotifier {
@@ -47,8 +48,15 @@ class AppState with ChangeNotifier {
   List<StockEntry> _stockEntries = [];
   List<MaterialRequest> _materialRequests = [];
   List<InventoryItem> _inventory = [];
-  List<SalesOrder> _summarySalesOrders = [];
-  List<PurchaseOrder> _summaryPurchaseOrders = [];
+  DocumentSummary _salesOrderSummary = const DocumentSummary();
+  DocumentSummary _deliveryNoteSummary = const DocumentSummary();
+  DocumentSummary _salesInvoiceSummary = const DocumentSummary();
+  DashboardSummary _dashboardSummary = const DashboardSummary();
+
+  DocumentSummary get salesOrderSummary => _salesOrderSummary;
+  DocumentSummary get deliveryNoteSummary => _deliveryNoteSummary;
+  DocumentSummary get salesInvoiceSummary => _salesInvoiceSummary;
+  DashboardSummary get dashboardSummary => _dashboardSummary;
 
   List<SalesOrder> get salesOrders => _salesOrders;
   List<PurchaseOrder> get purchaseOrders => _purchaseOrders;
@@ -59,10 +67,8 @@ class AppState with ChangeNotifier {
   List<StockEntry> get stockEntries => _stockEntries;
   List<MaterialRequest> get materialRequests => _materialRequests;
   List<InventoryItem> get inventory => _inventory;
-  List<SalesOrder> get dashboardSalesOrders =>
-      _summarySalesOrders.isEmpty ? _salesOrders : _summarySalesOrders;
-  List<PurchaseOrder> get dashboardPurchaseOrders =>
-      _summaryPurchaseOrders.isEmpty ? _purchaseOrders : _summaryPurchaseOrders;
+  List<SalesOrder> get dashboardSalesOrders => _salesOrders;
+  List<PurchaseOrder> get dashboardPurchaseOrders => _purchaseOrders;
 
   List<WarehouseInfo> _warehouses = [];
   List<WarehouseInfo> get warehouses => _warehouses;
@@ -89,6 +95,9 @@ class AppState with ChangeNotifier {
 
   String? _salesOrdersError;
   String? get salesOrdersError => _salesOrdersError;
+  String _salesOrderSearch = '';
+  String? _salesOrderStatus;
+  int _salesOrderQueryVersion = 0;
 
   bool _isPurchaseOrdersLoading = false;
   bool get isPurchaseOrdersLoading => _isPurchaseOrdersLoading;
@@ -107,18 +116,44 @@ class AppState with ChangeNotifier {
   bool get isOrderSummaryLoading => _isOrderSummaryLoading;
   String? _orderSummaryError;
   String? get orderSummaryError => _orderSummaryError;
+  SummarySyncStatus _summarySyncStatus = SummarySyncStatus.idle;
+  SummarySyncStatus get summarySyncStatus => _summarySyncStatus;
+  int _summaryProcessedRows = 0;
+  int get summaryProcessedRows => _summaryProcessedRows;
+  String get summarySyncSubtitle => switch (_summarySyncStatus) {
+    SummarySyncStatus.syncing =>
+      'Syncing all ERP data: $_summaryProcessedRows processed',
+    SummarySyncStatus.completed => 'Synced from all ERP data',
+    SummarySyncStatus.error => 'Showing last complete sync',
+    SummarySyncStatus.idle => 'Waiting for full ERP sync',
+  };
   bool get hasFullOrderSummary =>
-      _summarySalesOrders.isNotEmpty && _summaryPurchaseOrders.isNotEmpty;
+      _salesOrderSummary.documentCount > 0 ||
+      _dashboardSummary.purchasePendingCount > 0;
 
   bool _isDeliveryNotesLoading = false;
   bool get isDeliveryNotesLoading => _isDeliveryNotesLoading;
+  bool _isMoreDeliveryNotesLoading = false;
+  bool get isMoreDeliveryNotesLoading => _isMoreDeliveryNotesLoading;
+  bool _hasMoreDeliveryNotes = true;
+  bool get hasMoreDeliveryNotes => _hasMoreDeliveryNotes;
   String? _deliveryNotesError;
   String? get deliveryNotesError => _deliveryNotesError;
+  String _deliveryNoteSearch = '';
+  String? _deliveryNoteStatus;
+  int _deliveryNoteQueryVersion = 0;
 
   bool _isSalesInvoicesLoading = false;
   bool get isSalesInvoicesLoading => _isSalesInvoicesLoading;
+  bool _isMoreSalesInvoicesLoading = false;
+  bool get isMoreSalesInvoicesLoading => _isMoreSalesInvoicesLoading;
+  bool _hasMoreSalesInvoices = true;
+  bool get hasMoreSalesInvoices => _hasMoreSalesInvoices;
   String? _salesInvoicesError;
   String? get salesInvoicesError => _salesInvoicesError;
+  String _salesInvoiceSearch = '';
+  String? _salesInvoiceStatus;
+  int _salesInvoiceQueryVersion = 0;
 
   bool _isPurchaseReceiptsLoading = false;
   bool get isPurchaseReceiptsLoading => _isPurchaseReceiptsLoading;
@@ -151,6 +186,7 @@ class AppState with ChangeNotifier {
   static const int _defaultFetchRowLimit = 500;
   static const int _documentPageSize = 50;
   static const String _prefsFrappeConfigKey = 'frappe_config';
+  static const String _prefsSummaryCacheKey = 'erp_summary_cache';
 
   final FrappeService _frappeService = FrappeService();
 
@@ -172,6 +208,7 @@ class AppState with ChangeNotifier {
   AppState() {
     () async {
       await _restoreFrappeConfig();
+      await _restoreSummaryCache();
       _isInitializing = false;
       notifyListeners();
     }();
@@ -229,11 +266,45 @@ class AppState with ChangeNotifier {
       await fetchDeliveryNotesFromFrappe();
       await fetchPurchaseReceiptsFromFrappe();
       await refreshNotifications(silent: true);
-      unawaited(refreshOrderSummaries(silent: true));
+      unawaited(refreshAllSummaries(silent: true));
     } catch (_) {
       // Prefetch failures should not block login.
     }
     notifyListeners();
+  }
+
+  Future<void> _restoreSummaryCache() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final raw = sp.getString(_prefsSummaryCacheKey);
+      if (raw == null) return;
+      final json = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      _salesOrderSummary = DocumentSummary.fromJson(
+        Map<String, dynamic>.from(json['salesOrder'] as Map),
+      );
+      _deliveryNoteSummary = DocumentSummary.fromJson(
+        Map<String, dynamic>.from(json['deliveryNote'] as Map),
+      );
+      _salesInvoiceSummary = DocumentSummary.fromJson(
+        Map<String, dynamic>.from(json['salesInvoice'] as Map),
+      );
+      _dashboardSummary = DashboardSummary.fromJson(
+        Map<String, dynamic>.from(json['dashboard'] as Map),
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _saveSummaryCache() async {
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(
+      _prefsSummaryCacheKey,
+      jsonEncode({
+        'salesOrder': _salesOrderSummary.toJson(),
+        'deliveryNote': _deliveryNoteSummary.toJson(),
+        'salesInvoice': _salesInvoiceSummary.toJson(),
+        'dashboard': _dashboardSummary.toJson(),
+      }),
+    );
   }
 
   Future<void> clearSessionConfig() async {
@@ -898,6 +969,8 @@ class AppState with ChangeNotifier {
     _isSalesOrdersLoading = true;
     _salesOrdersError = null;
     _hasMoreSalesOrders = true;
+    _isMoreSalesOrdersLoading = false;
+    final version = ++_salesOrderQueryVersion;
     notifyListeners();
 
     try {
@@ -909,13 +982,17 @@ class AppState with ChangeNotifier {
       }
 
       final orders = await _fetchSalesOrderPage(limitStart: 0);
+      if (version != _salesOrderQueryVersion) return;
       _salesOrders = orders;
-      _hasMoreSalesOrders = orders.length == _documentPageSize;
+      _hasMoreSalesOrders = orders.isNotEmpty;
     } catch (error) {
+      if (version != _salesOrderQueryVersion) return;
       _salesOrdersError = error.toString();
     } finally {
-      _isSalesOrdersLoading = false;
-      notifyListeners();
+      if (version == _salesOrderQueryVersion) {
+        _isSalesOrdersLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -958,6 +1035,7 @@ class AppState with ChangeNotifier {
     }
 
     _isMoreSalesOrdersLoading = true;
+    final version = _salesOrderQueryVersion;
     notifyListeners();
 
     try {
@@ -965,18 +1043,22 @@ class AppState with ChangeNotifier {
       final nextPage = await _fetchSalesOrderPage(
         limitStart: _salesOrders.length,
       );
+      if (version != _salesOrderQueryVersion) return;
       final existingIds = _salesOrders.map((order) => order.id).toSet();
       _salesOrders = [
         ..._salesOrders,
         ...nextPage.where((order) => existingIds.add(order.id)),
       ];
-      _hasMoreSalesOrders = nextPage.length == _documentPageSize;
+      _hasMoreSalesOrders = nextPage.isNotEmpty;
       _salesOrdersError = null;
     } catch (err) {
+      if (version != _salesOrderQueryVersion) return;
       _salesOrdersError = err.toString();
     } finally {
-      _isMoreSalesOrdersLoading = false;
-      notifyListeners();
+      if (version == _salesOrderQueryVersion) {
+        _isMoreSalesOrdersLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -1011,34 +1093,192 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> refreshOrderSummaries({bool silent = false}) {
+    return refreshAllSummaries(silent: silent);
+  }
+
+  Future<void> refreshAllSummaries({bool silent = false}) {
     if (!_isAuthenticated) return Future.value();
 
     final activeJob = _orderSummaryJob;
     if (activeJob != null) return activeJob;
 
-    final job = _refreshOrderSummaries(silent: silent);
+    final job = _refreshAllSummaries(silent: silent);
     _orderSummaryJob = job.whenComplete(() {
       _orderSummaryJob = null;
     });
     return _orderSummaryJob!;
   }
 
-  Future<void> _refreshOrderSummaries({required bool silent}) async {
-    if (!silent) {
-      _isOrderSummaryLoading = true;
-      _orderSummaryError = null;
-      notifyListeners();
-    }
+  Future<void> _refreshAllSummaries({required bool silent}) async {
+    _isOrderSummaryLoading = true;
+    _summarySyncStatus = SummarySyncStatus.syncing;
+    _summaryProcessedRows = 0;
+    _orderSummaryError = null;
+    notifyListeners();
 
     try {
       await _frappeService.ensureLoggedIn();
-      final sales = await _fetchAllSalesOrderSummary();
-      final purchases = await _fetchAllPurchaseOrderSummary();
-      _summarySalesOrders = sales;
-      _summaryPurchaseOrders = purchases;
+      var salesTotal = 0.0;
+      var salesOpen = 0.0;
+      var salesCompleted = 0.0;
+      var salesDraftCount = 0;
+      var salesOpenCount = 0;
+      var salesCompletedCount = 0;
+      var salesDocumentCount = 0;
+      await _forEachResourcePage(
+        doctype: 'Sales Order',
+        fields: const [
+          'name',
+          'grand_total',
+          'status',
+          'docstatus',
+          'delivery_date',
+        ],
+        onRow: (row) {
+          final order = SalesOrder.fromJson(row);
+          salesDocumentCount++;
+          salesTotal += order.value;
+          if (order.docStatus == 0) salesDraftCount++;
+          if (order.statusKey == SalesOrderStatusKey.completed) {
+            salesCompleted += order.value;
+            salesCompletedCount++;
+          } else if (order.statusKey != SalesOrderStatusKey.cancelled &&
+              order.statusKey != SalesOrderStatusKey.closed) {
+            salesOpen += order.value;
+            salesOpenCount++;
+          }
+        },
+      );
+
+      var deliveryTotal = 0.0;
+      var deliveryCount = 0;
+      await _forEachResourcePage(
+        doctype: 'Delivery Note',
+        fields: const ['name', 'grand_total'],
+        onRow: (row) {
+          deliveryTotal += NumParse.asDouble(row['grand_total']);
+          deliveryCount++;
+        },
+      );
+
+      var invoiceTotal = 0.0;
+      var invoiceCount = 0;
+      var unpaidSalesInvoices = 0;
+      await _forEachResourcePage(
+        doctype: 'Sales Invoice',
+        fields: const ['name', 'grand_total', 'status', 'docstatus'],
+        onRow: (row) {
+          final invoice = SalesInvoice.fromJson(row);
+          invoiceTotal += invoice.value;
+          invoiceCount++;
+          if (invoice.statusKey == InvoiceStatusKey.unpaid ||
+              invoice.statusKey == InvoiceStatusKey.overdue ||
+              invoice.statusKey == InvoiceStatusKey.partlyPaid) {
+            unpaidSalesInvoices++;
+          }
+        },
+      );
+
+      var purchaseTotal = 0.0;
+      var purchasePending = 0.0;
+      var purchaseDelayed = 0.0;
+      var purchaseDraftCount = 0;
+      var purchasePendingCount = 0;
+      var purchaseCompletedCount = 0;
+      await _forEachResourcePage(
+        doctype: 'Purchase Order',
+        fields: const [
+          'name',
+          'grand_total',
+          'status',
+          'docstatus',
+          'schedule_date',
+        ],
+        onRow: (row) {
+          final order = PurchaseOrder.fromJson(row);
+          purchaseTotal += order.totalValue;
+          if (order.docStatus == 0) purchaseDraftCount++;
+          if (order.statusKey == PurchaseOrderStatusKey.completed) {
+            purchaseCompletedCount++;
+          } else if (order.statusKey != PurchaseOrderStatusKey.cancelled &&
+              order.statusKey != PurchaseOrderStatusKey.closed) {
+            purchasePending += order.totalValue;
+            purchasePendingCount++;
+          }
+          if (order.isDelayed) purchaseDelayed += order.totalValue;
+        },
+      );
+
+      var overduePurchaseInvoices = 0;
+      await _forEachResourcePage(
+        doctype: 'Purchase Invoice',
+        fields: const ['name', 'status', 'docstatus'],
+        onRow: (row) {
+          if (PurchaseInvoice.fromJson(row).statusKey ==
+              InvoiceStatusKey.overdue) {
+            overduePurchaseInvoices++;
+          }
+        },
+      );
+
+      final stockRows = <({String itemCode, int quantity})>[];
+      await _forEachResourcePage(
+        doctype: 'Bin',
+        fields: const ['name', 'item_code', 'actual_qty'],
+        onRow: (row) {
+          final itemCode = row['item_code']?.toString() ?? '';
+          if (itemCode.isEmpty) return;
+          stockRows.add((
+            itemCode: itemCode,
+            quantity: NumParse.asInt(row['actual_qty']),
+          ));
+        },
+      );
+      final stockMeta = await _fetchItemMeta(
+        stockRows.map((row) => row.itemCode).toSet(),
+      );
+      final stockAlerts = stockRows.where((row) {
+        final reorderLevel = stockMeta[row.itemCode]?.reorderLevel ?? 0;
+        return reorderLevel > 0
+            ? row.quantity <= reorderLevel
+            : row.quantity <= 0;
+      }).length;
+
+      _salesOrderSummary = DocumentSummary(
+        totalValue: salesTotal,
+        documentCount: salesDocumentCount,
+      );
+      _deliveryNoteSummary = DocumentSummary(
+        totalValue: deliveryTotal,
+        documentCount: deliveryCount,
+      );
+      _salesInvoiceSummary = DocumentSummary(
+        totalValue: invoiceTotal,
+        documentCount: invoiceCount,
+      );
+      _dashboardSummary = DashboardSummary(
+        salesTotal: salesTotal,
+        salesOpen: salesOpen,
+        salesCompleted: salesCompleted,
+        salesDraftCount: salesDraftCount,
+        salesOpenCount: salesOpenCount,
+        salesCompletedCount: salesCompletedCount,
+        purchaseTotal: purchaseTotal,
+        purchasePending: purchasePending,
+        purchaseDelayed: purchaseDelayed,
+        purchaseDraftCount: purchaseDraftCount,
+        purchasePendingCount: purchasePendingCount,
+        purchaseCompletedCount: purchaseCompletedCount,
+        unpaidSalesInvoices: unpaidSalesInvoices,
+        overduePurchaseInvoices: overduePurchaseInvoices,
+        stockAlerts: stockAlerts,
+      );
+      await _saveSummaryCache();
       _orderSummaryError = null;
+      _summarySyncStatus = SummarySyncStatus.completed;
     } catch (err) {
       _orderSummaryError = err.toString();
+      _summarySyncStatus = SummarySyncStatus.error;
     } finally {
       _isOrderSummaryLoading = false;
       notifyListeners();
@@ -1048,63 +1288,52 @@ class AppState with ChangeNotifier {
   Future<void> fetchDeliveryNotesFromFrappe() async {
     _isDeliveryNotesLoading = true;
     _deliveryNotesError = null;
+    _hasMoreDeliveryNotes = true;
+    _isMoreDeliveryNotesLoading = false;
+    final version = ++_deliveryNoteQueryVersion;
     notifyListeners();
 
     try {
       await _frappeService.ensureLoggedIn();
-      final data = await _fetchAllResourcePages(
-        doctype: 'Delivery Note',
-        fields: const [
-          'name',
-          'customer',
-          'customer_name',
-          'status',
-          'docstatus',
-          'posting_date',
-          'grand_total',
-          'total_qty',
-        ],
-        orderBy: 'posting_date desc',
-      );
-      _deliveryNotes = data.map((e) => DeliveryNote.fromJson(e)).toList();
+      final docs = await _fetchDeliveryNotePage(limitStart: 0);
+      if (version != _deliveryNoteQueryVersion) return;
+      _deliveryNotes = docs;
+      _hasMoreDeliveryNotes = docs.isNotEmpty;
       _deliveryNotesError = null;
     } catch (err) {
+      if (version != _deliveryNoteQueryVersion) return;
       _deliveryNotesError = err.toString();
     } finally {
-      _isDeliveryNotesLoading = false;
-      notifyListeners();
+      if (version == _deliveryNoteQueryVersion) {
+        _isDeliveryNotesLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   Future<void> fetchSalesInvoicesFromFrappe() async {
     _isSalesInvoicesLoading = true;
     _salesInvoicesError = null;
+    _hasMoreSalesInvoices = true;
+    _isMoreSalesInvoicesLoading = false;
+    final version = ++_salesInvoiceQueryVersion;
     notifyListeners();
 
     try {
       await _frappeService.ensureLoggedIn();
-      final data = await _fetchAllResourcePages(
-        doctype: 'Sales Invoice',
-        fields: const [
-          'name',
-          'customer',
-          'customer_name',
-          'status',
-          'docstatus',
-          'posting_date',
-          'grand_total',
-          'outstanding_amount',
-          'due_date',
-        ],
-        orderBy: 'posting_date desc',
-      );
-      _salesInvoices = data.map((e) => SalesInvoice.fromJson(e)).toList();
+      final docs = await _fetchSalesInvoicePage(limitStart: 0);
+      if (version != _salesInvoiceQueryVersion) return;
+      _salesInvoices = docs;
+      _hasMoreSalesInvoices = docs.isNotEmpty;
       _salesInvoicesError = null;
     } catch (err) {
+      if (version != _salesInvoiceQueryVersion) return;
       _salesInvoicesError = err.toString();
     } finally {
-      _isSalesInvoicesLoading = false;
-      notifyListeners();
+      if (version == _salesInvoiceQueryVersion) {
+        _isSalesInvoicesLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -1128,6 +1357,7 @@ class AppState with ChangeNotifier {
           'total_qty',
         ],
         orderBy: 'posting_date desc',
+        maxRows: _defaultFetchRowLimit,
       );
       _purchaseReceipts = data.map((e) => PurchaseReceipt.fromJson(e)).toList();
       _purchaseReceiptsError = null;
@@ -1160,6 +1390,7 @@ class AppState with ChangeNotifier {
           'due_date',
         ],
         orderBy: 'posting_date desc',
+        maxRows: _defaultFetchRowLimit,
       );
       _purchaseInvoices = data.map((e) => PurchaseInvoice.fromJson(e)).toList();
       _purchaseInvoicesError = null;
@@ -1173,6 +1404,81 @@ class AppState with ChangeNotifier {
 
   Future<void> refreshDeliveryNotes() => fetchDeliveryNotesFromFrappe();
   Future<void> refreshSalesInvoices() => fetchSalesInvoicesFromFrappe();
+
+  Future<void> setSalesOrderQuery({String? search, String? status}) async {
+    _salesOrderSearch = search?.trim() ?? _salesOrderSearch;
+    _salesOrderStatus = status;
+    await fetchSalesOrdersFromFrappe();
+  }
+
+  Future<void> setDeliveryNoteQuery({String? search, String? status}) async {
+    _deliveryNoteSearch = search?.trim() ?? _deliveryNoteSearch;
+    _deliveryNoteStatus = status;
+    await fetchDeliveryNotesFromFrappe();
+  }
+
+  Future<void> setSalesInvoiceQuery({String? search, String? status}) async {
+    _salesInvoiceSearch = search?.trim() ?? _salesInvoiceSearch;
+    _salesInvoiceStatus = status;
+    await fetchSalesInvoicesFromFrappe();
+  }
+
+  Future<void> loadMoreDeliveryNotes() async {
+    if (_isDeliveryNotesLoading ||
+        _isMoreDeliveryNotesLoading ||
+        !_hasMoreDeliveryNotes) {
+      return;
+    }
+    _isMoreDeliveryNotesLoading = true;
+    final version = _deliveryNoteQueryVersion;
+    notifyListeners();
+    try {
+      final page = await _fetchDeliveryNotePage(
+        limitStart: _deliveryNotes.length,
+      );
+      if (version != _deliveryNoteQueryVersion) return;
+      final ids = _deliveryNotes.map((e) => e.id).toSet();
+      _deliveryNotes = [..._deliveryNotes, ...page.where((e) => ids.add(e.id))];
+      _hasMoreDeliveryNotes = page.isNotEmpty;
+    } catch (err) {
+      if (version != _deliveryNoteQueryVersion) return;
+      _deliveryNotesError = err.toString();
+    } finally {
+      if (version == _deliveryNoteQueryVersion) {
+        _isMoreDeliveryNotesLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadMoreSalesInvoices() async {
+    if (_isSalesInvoicesLoading ||
+        _isMoreSalesInvoicesLoading ||
+        !_hasMoreSalesInvoices) {
+      return;
+    }
+    _isMoreSalesInvoicesLoading = true;
+    final version = _salesInvoiceQueryVersion;
+    notifyListeners();
+    try {
+      final page = await _fetchSalesInvoicePage(
+        limitStart: _salesInvoices.length,
+      );
+      if (version != _salesInvoiceQueryVersion) return;
+      final ids = _salesInvoices.map((e) => e.id).toSet();
+      _salesInvoices = [..._salesInvoices, ...page.where((e) => ids.add(e.id))];
+      _hasMoreSalesInvoices = page.isNotEmpty;
+    } catch (err) {
+      if (version != _salesInvoiceQueryVersion) return;
+      _salesInvoicesError = err.toString();
+    } finally {
+      if (version == _salesInvoiceQueryVersion) {
+        _isMoreSalesInvoicesLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> refreshPurchaseReceipts() => fetchPurchaseReceiptsFromFrappe();
   Future<void> refreshPurchaseInvoices() => fetchPurchaseInvoicesFromFrappe();
   Future<void> fetchStockEntriesFromFrappe() async {
@@ -1193,6 +1499,7 @@ class AppState with ChangeNotifier {
           'total_qty',
         ],
         orderBy: 'posting_date desc',
+        maxRows: _defaultFetchRowLimit,
       );
       _stockEntries = data.map((e) => StockEntry.fromJson(e)).toList();
       _stockEntriesError = null;
@@ -1222,6 +1529,7 @@ class AppState with ChangeNotifier {
           'total_qty',
         ],
         orderBy: 'transaction_date desc',
+        maxRows: _defaultFetchRowLimit,
       );
       _materialRequests = data.map((e) => MaterialRequest.fromJson(e)).toList();
       _materialRequestsError = null;
@@ -1267,6 +1575,7 @@ class AppState with ChangeNotifier {
             ['is_group', '=', 0],
             ['disabled', '=', 0],
           ],
+          maxRows: null,
         );
       } catch (_) {
         data = await _fetchAllResourcePages(
@@ -1280,6 +1589,7 @@ class AppState with ChangeNotifier {
             'disabled',
           ],
           orderBy: 'name asc',
+          maxRows: null,
         );
       }
 
@@ -1436,11 +1746,6 @@ class AppState with ChangeNotifier {
   Future<void> submitDocument(String doctype, String name) async {
     await _frappeService.submitDocument(doctype, name);
     await _refreshAfterDocChange(doctype);
-    if (doctype == 'Sales Order' ||
-        doctype == 'Delivery Note' ||
-        doctype == 'Sales Invoice') {
-      unawaited(refreshOrderSummaries(silent: true));
-    }
   }
 
   Future<List<String>> fetchNamingSeries(String doctype) {
@@ -1469,6 +1774,7 @@ class AppState with ChangeNotifier {
       case 'Material Request':
         await refreshMaterialRequests();
     }
+    unawaited(refreshAllSummaries(silent: true));
     notifyListeners();
   }
 
@@ -1597,6 +1903,7 @@ class AppState with ChangeNotifier {
       filters: [
         ['Delivery Note Item', 'against_sales_order', '=', soId],
       ],
+      maxRows: null,
     );
     return data.map((e) => DeliveryNote.fromJson(e)).toList();
   }
@@ -1622,6 +1929,7 @@ class AppState with ChangeNotifier {
         filters: [
           ['Sales Invoice Item', 'sales_order', '=', soId],
         ],
+        maxRows: null,
       );
       return data.map((e) => SalesInvoice.fromJson(e)).toList();
     } catch (_) {
@@ -1671,6 +1979,7 @@ class AppState with ChangeNotifier {
         ['posting_date', '>=', fromDate],
         ['posting_date', '<=', toDate],
       ],
+      maxRows: null,
     );
 
     final movements = data.map((e) => StockLedgerMovement.fromJson(e)).toList();
@@ -1750,13 +2059,20 @@ class AppState with ChangeNotifier {
         'status',
         'docstatus',
         'transaction_date',
+        'delivery_date',
         'total_qty',
         'per_delivered',
         'per_billed',
       ],
       limit: _documentPageSize,
       limitStart: limitStart,
-      orderBy: 'transaction_date desc',
+      orderBy: 'transaction_date desc, name desc',
+      filters: _salesOrderFilters(_salesOrderStatus),
+      orFilters: _searchFilters(_salesOrderSearch, const [
+        'name',
+        'customer',
+        'customer_name',
+      ]),
     );
 
     var orders = data.map((item) => SalesOrder.fromJson(item)).toList();
@@ -1764,26 +2080,93 @@ class AppState with ChangeNotifier {
     return orders;
   }
 
-  Future<List<SalesOrder>> _fetchAllSalesOrderSummary() async {
-    final data = await _fetchAllResourcePages(
-      doctype: 'Sales Order',
+  Future<List<DeliveryNote>> _fetchDeliveryNotePage({
+    required int limitStart,
+  }) async {
+    final data = await _fetchResourceWithFieldFallback(
+      doctype: 'Delivery Note',
       fields: const [
         'name',
         'customer',
         'customer_name',
-        'grand_total',
         'status',
         'docstatus',
-        'transaction_date',
+        'posting_date',
+        'grand_total',
         'total_qty',
-        'per_delivered',
-        'per_billed',
       ],
-      orderBy: 'transaction_date desc',
-      maxRows: null,
+      limit: _documentPageSize,
+      limitStart: limitStart,
+      orderBy: 'posting_date desc, name desc',
+      filters: _statusFilters(_deliveryNoteStatus),
+      orFilters: _searchFilters(_deliveryNoteSearch, const [
+        'name',
+        'customer',
+        'customer_name',
+      ]),
     );
+    return data.map(DeliveryNote.fromJson).toList();
+  }
 
-    return data.map((item) => SalesOrder.fromJson(item)).toList();
+  Future<List<SalesInvoice>> _fetchSalesInvoicePage({
+    required int limitStart,
+  }) async {
+    final data = await _fetchResourceWithFieldFallback(
+      doctype: 'Sales Invoice',
+      fields: const [
+        'name',
+        'customer',
+        'customer_name',
+        'status',
+        'docstatus',
+        'posting_date',
+        'grand_total',
+        'outstanding_amount',
+        'due_date',
+      ],
+      limit: _documentPageSize,
+      limitStart: limitStart,
+      orderBy: 'posting_date desc, name desc',
+      filters: _statusFilters(_salesInvoiceStatus),
+      orFilters: _searchFilters(_salesInvoiceSearch, const [
+        'name',
+        'customer',
+        'customer_name',
+      ]),
+    );
+    return data.map(SalesInvoice.fromJson).toList();
+  }
+
+  List<List<dynamic>>? _statusFilters(String? status) {
+    if (status == null || status.isEmpty) return null;
+    return [
+      ['status', '=', status],
+    ];
+  }
+
+  List<List<dynamic>>? _salesOrderFilters(String? status) {
+    if (status != 'Overdue') return _statusFilters(status);
+    final now = DateTime.now();
+    final today =
+        '${now.year.toString().padLeft(4, '0')}-'
+        '${now.month.toString().padLeft(2, '0')}-'
+        '${now.day.toString().padLeft(2, '0')}';
+    return [
+      ['delivery_date', '<', today],
+      [
+        'status',
+        'not in',
+        ['Draft', 'Completed', 'Closed', 'Cancelled'],
+      ],
+    ];
+  }
+
+  List<List<dynamic>>? _searchFilters(String search, List<String> fields) {
+    final query = search.trim();
+    if (query.isEmpty) return null;
+    return fields
+        .map<List<dynamic>>((field) => [field, 'like', '%$query%'])
+        .toList();
   }
 
   Future<List<PurchaseOrder>> _fetchPurchaseOrderPage({
@@ -1811,28 +2194,6 @@ class AppState with ChangeNotifier {
     var orders = data.map((item) => PurchaseOrder.fromJson(item)).toList();
     orders = await _attachPurchaseOrderItems(orders);
     return orders;
-  }
-
-  Future<List<PurchaseOrder>> _fetchAllPurchaseOrderSummary() async {
-    final data = await _fetchAllResourcePages(
-      doctype: 'Purchase Order',
-      fields: const [
-        'name',
-        'supplier',
-        'supplier_name',
-        'status',
-        'docstatus',
-        'transaction_date',
-        'schedule_date',
-        'total_qty',
-        'grand_total',
-        'creation',
-      ],
-      orderBy: 'modified desc',
-      maxRows: null,
-    );
-
-    return data.map((item) => PurchaseOrder.fromJson(item)).toList();
   }
 
   Future<List<SalesOrder>> _attachSalesOrderItems(
@@ -1914,31 +2275,46 @@ class AppState with ChangeNotifier {
     required List<String> fields,
     String? orderBy,
     List<List<dynamic>>? filters,
-    int? maxRows = _defaultFetchRowLimit,
+    required int? maxRows,
   }) async {
-    final all = <Map<String, dynamic>>[];
-    var start = 0;
-
-    while (true) {
-      final remaining = maxRows == null ? null : maxRows - all.length;
-      if (remaining != null && remaining <= 0) break;
-      final pageLimit = remaining == null
-          ? _frappePageSize
-          : math.min(_frappePageSize, remaining);
-      final page = await _fetchResourceWithFieldFallback(
+    return walkFrappePages(
+      pageSize: _frappePageSize,
+      maxRows: maxRows,
+      fetchPage: (start, limit) => _fetchResourceWithFieldFallback(
         doctype: doctype,
         fields: fields,
-        limit: pageLimit,
+        limit: limit,
         limitStart: start,
         orderBy: orderBy,
         filters: filters,
-      );
-      all.addAll(page);
-      if (page.length < pageLimit) break;
-      start += pageLimit;
-    }
+      ),
+    );
+  }
 
-    return all;
+  Future<void> _forEachResourcePage({
+    required String doctype,
+    required List<String> fields,
+    required void Function(Map<String, dynamic> row) onRow,
+    String? orderBy,
+    List<List<dynamic>>? filters,
+  }) async {
+    final progressBase = _summaryProcessedRows;
+    await walkFrappePages(
+      pageSize: _frappePageSize,
+      onRow: onRow,
+      onProgress: (processed) {
+        _summaryProcessedRows = progressBase + processed;
+        notifyListeners();
+      },
+      fetchPage: (start, limit) => _fetchResourceWithFieldFallback(
+        doctype: doctype,
+        fields: fields,
+        limit: limit,
+        limitStart: start,
+        orderBy: orderBy ?? 'name asc',
+        filters: filters,
+      ),
+    );
   }
 
   Future<List<Map<String, dynamic>>> _fetchResourceWithFieldFallback({
@@ -1948,6 +2324,7 @@ class AppState with ChangeNotifier {
     int limitStart = 0,
     String? orderBy,
     List<List<dynamic>>? filters,
+    List<List<dynamic>>? orFilters,
   }) async {
     var remainingFields = List<String>.from(fields);
     var currentOrderBy = orderBy;
@@ -1961,6 +2338,7 @@ class AppState with ChangeNotifier {
           limitStart: limitStart,
           orderBy: currentOrderBy,
           filters: filters,
+          orFilters: orFilters,
         );
       } catch (err) {
         final errStr = err.toString();

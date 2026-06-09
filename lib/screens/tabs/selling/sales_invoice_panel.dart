@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/sales_invoice.dart';
@@ -23,6 +24,7 @@ class SalesInvoicePanel extends StatefulWidget {
 class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
   String _search = '';
   InvoiceStatusKey? _statusFilter;
+  Timer? _searchDebounce;
 
   static final _chips = <ErpStatusChip<InvoiceStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
@@ -45,6 +47,36 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
       final appState = context.read<AppState>();
       if (appState.salesInvoices.isEmpty) {
         appState.refreshSalesInvoices();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  String? get _statusText => switch (_statusFilter) {
+    InvoiceStatusKey.draft => 'Draft',
+    InvoiceStatusKey.unpaid => 'Unpaid',
+    InvoiceStatusKey.partlyPaid => 'Partly Paid',
+    InvoiceStatusKey.paid => 'Paid',
+    InvoiceStatusKey.overdue => 'Overdue',
+    InvoiceStatusKey.returnDoc => 'Return',
+    InvoiceStatusKey.cancelled => 'Cancelled',
+    _ => null,
+  };
+
+  void _searchChanged(String value) {
+    setState(() => _search = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        context.read<AppState>().setSalesInvoiceQuery(
+          search: value,
+          status: _statusText,
+        );
       }
     });
   }
@@ -123,21 +155,24 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final filtered = _filter(appState.salesInvoices);
-    final total = filtered.fold<double>(0, (s, d) => s + d.value);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ErpSummaryCard(
           title: 'Sales Invoices',
           valueLabel: 'invoices',
-          totalValue: total,
-          documentCount: filtered.length,
-          isLoading: appState.isSalesInvoicesLoading,
+          totalValue: appState.salesInvoiceSummary.totalValue,
+          documentCount: appState.salesInvoiceSummary.documentCount,
+          subtitle:
+              '${appState.summarySyncSubtitle} | '
+              '${filtered.length} loaded for current filters',
+          isLoading:
+              appState.isOrderSummaryLoading &&
+              appState.salesInvoiceSummary.documentCount == 0,
         ),
         const SizedBox(height: 12),
         TextField(
-          onChanged: (v) => setState(() => _search = v),
+          onChanged: _searchChanged,
           decoration: InputDecoration(
             hintText: 'Search SI or customer…',
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
@@ -165,7 +200,13 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
         ErpStatusChipBar<InvoiceStatusKey?>(
           chips: _chips,
           selected: _statusFilter,
-          onSelected: (v) => setState(() => _statusFilter = v),
+          onSelected: (v) {
+            setState(() => _statusFilter = v);
+            context.read<AppState>().setSalesInvoiceQuery(
+              search: _search,
+              status: _statusText,
+            );
+          },
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty && !appState.isSalesInvoicesLoading)
@@ -181,6 +222,30 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
               onTap: () => _openDetail(d),
             ),
           ),
+        if (appState.hasMoreSalesInvoices ||
+            appState.isMoreSalesInvoicesLoading) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: appState.isMoreSalesInvoicesLoading
+                  ? null
+                  : () => context.read<AppState>().loadMoreSalesInvoices(),
+              icon: appState.isMoreSalesInvoicesLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(
+                appState.isMoreSalesInvoicesLoading
+                    ? 'Loading invoices...'
+                    : 'Load more invoices',
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

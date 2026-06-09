@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/inventory_item.dart';
-import '../../models/purchase_order.dart';
-import '../../models/sales_order.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/erp_format.dart';
@@ -42,24 +39,28 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
 
-    final dashboardSalesOrders = appState.dashboardSalesOrders;
-    final dashboardPurchaseOrders = appState.dashboardPurchaseOrders;
+    final summary = appState.dashboardSummary;
+    final pendingPurchasesCount = summary.purchasePendingCount;
+    final openSalesCount = summary.salesOpenCount;
+    final lowStockCount = summary.stockAlerts;
+    final unpaidSiCount = summary.unpaidSalesInvoices;
+    final overduePiCount = summary.overduePurchaseInvoices;
 
-    final pendingPurchasesCount = dashboardPurchaseOrders
-        .where((po) => po.statusKey != PurchaseOrderStatusKey.completed)
-        .length;
-    final openSalesCount = dashboardSalesOrders
-        .where((so) => so.statusKey != SalesOrderStatusKey.completed)
-        .length;
-    final lowStockCount = appState.inventory
-        .where((item) => item.status != StockStatus.inStock)
-        .length;
-    final unpaidSiCount = appState.unpaidSalesInvoicesCount;
-    final overduePiCount = appState.overduePurchaseInvoicesCount;
-
-    final salesStats = _SalesMoneyStats.fromOrders(dashboardSalesOrders);
-    final purchaseStats = _PurchaseMoneyStats.fromOrders(
-      dashboardPurchaseOrders,
+    final salesStats = _SalesMoneyStats(
+      total: summary.salesTotal,
+      open: summary.salesOpen,
+      completed: summary.salesCompleted,
+      draftCount: summary.salesDraftCount,
+      openCount: summary.salesOpenCount,
+      completedCount: summary.salesCompletedCount,
+    );
+    final purchaseStats = _PurchaseMoneyStats(
+      total: summary.purchaseTotal,
+      pending: summary.purchasePending,
+      delayed: summary.purchaseDelayed,
+      draftCount: summary.purchaseDraftCount,
+      pendingCount: summary.purchasePendingCount,
+      completedCount: summary.purchaseCompletedCount,
     );
 
     return RefreshIndicator(
@@ -71,7 +72,7 @@ class _DashboardTabState extends State<DashboardTab> {
           appState.refreshSalesInvoices(),
           appState.refreshPurchaseInvoices(),
           appState.refreshInventory(),
-          appState.refreshOrderSummaries(),
+          appState.refreshAllSummaries(),
         ]);
       },
       child: SingleChildScrollView(
@@ -179,26 +180,6 @@ class _SalesMoneyStats {
     required this.openCount,
     required this.completedCount,
   });
-
-  factory _SalesMoneyStats.fromOrders(List<SalesOrder> orders) {
-    final openOrders = orders.where((order) {
-      return order.statusKey != SalesOrderStatusKey.completed &&
-          order.statusKey != SalesOrderStatusKey.cancelled &&
-          order.statusKey != SalesOrderStatusKey.closed;
-    }).toList();
-    final completedOrders = orders
-        .where((order) => order.statusKey == SalesOrderStatusKey.completed)
-        .toList();
-
-    return _SalesMoneyStats(
-      total: orders.fold(0, (sum, order) => sum + order.value),
-      open: openOrders.fold(0, (sum, order) => sum + order.value),
-      completed: completedOrders.fold(0, (sum, order) => sum + order.value),
-      draftCount: orders.where((order) => order.docStatus == 0).length,
-      openCount: openOrders.length,
-      completedCount: completedOrders.length,
-    );
-  }
 }
 
 class _PurchaseMoneyStats {
@@ -217,27 +198,6 @@ class _PurchaseMoneyStats {
     required this.pendingCount,
     required this.completedCount,
   });
-
-  factory _PurchaseMoneyStats.fromOrders(List<PurchaseOrder> orders) {
-    final pendingOrders = orders.where((order) {
-      return order.statusKey != PurchaseOrderStatusKey.completed &&
-          order.statusKey != PurchaseOrderStatusKey.cancelled &&
-          order.statusKey != PurchaseOrderStatusKey.closed;
-    }).toList();
-    final completedOrders = orders
-        .where((order) => order.statusKey == PurchaseOrderStatusKey.completed)
-        .toList();
-    final delayedOrders = orders.where((order) => order.isDelayed).toList();
-
-    return _PurchaseMoneyStats(
-      total: orders.fold(0, (sum, order) => sum + order.totalValue),
-      pending: pendingOrders.fold(0, (sum, order) => sum + order.totalValue),
-      delayed: delayedOrders.fold(0, (sum, order) => sum + order.totalValue),
-      draftCount: orders.where((order) => order.docStatus == 0).length,
-      pendingCount: pendingOrders.length,
-      completedCount: completedOrders.length,
-    );
-  }
 }
 
 class _FinancialSnapshot extends StatelessWidget {

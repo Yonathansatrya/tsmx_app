@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/delivery_note.dart';
@@ -23,6 +24,7 @@ class DeliveryNotePanel extends StatefulWidget {
 class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
   String _search = '';
   DeliveryNoteStatusKey? _statusFilter;
+  Timer? _searchDebounce;
 
   static final _chips = <ErpStatusChip<DeliveryNoteStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
@@ -54,6 +56,36 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
       final appState = context.read<AppState>();
       if (appState.deliveryNotes.isEmpty) {
         appState.refreshDeliveryNotes();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  String? get _statusText => switch (_statusFilter) {
+    DeliveryNoteStatusKey.draft => 'Draft',
+    DeliveryNoteStatusKey.toBill => 'To Bill',
+    DeliveryNoteStatusKey.partiallyBilled => 'Partially Billed',
+    DeliveryNoteStatusKey.completed => 'Completed',
+    DeliveryNoteStatusKey.returnDoc => 'Return',
+    DeliveryNoteStatusKey.cancelled => 'Cancelled',
+    DeliveryNoteStatusKey.closed => 'Closed',
+    _ => null,
+  };
+
+  void _searchChanged(String value) {
+    setState(() => _search = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        context.read<AppState>().setDeliveryNoteQuery(
+          search: value,
+          status: _statusText,
+        );
       }
     });
   }
@@ -125,21 +157,24 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final filtered = _filter(appState.deliveryNotes);
-    final total = filtered.fold<double>(0, (s, d) => s + d.value);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ErpSummaryCard(
           title: 'Delivery Notes',
           valueLabel: 'documents',
-          totalValue: total,
-          documentCount: filtered.length,
-          isLoading: appState.isDeliveryNotesLoading,
+          totalValue: appState.deliveryNoteSummary.totalValue,
+          documentCount: appState.deliveryNoteSummary.documentCount,
+          subtitle:
+              '${appState.summarySyncSubtitle} | '
+              '${filtered.length} loaded for current filters',
+          isLoading:
+              appState.isOrderSummaryLoading &&
+              appState.deliveryNoteSummary.documentCount == 0,
         ),
         const SizedBox(height: 12),
         TextField(
-          onChanged: (v) => setState(() => _search = v),
+          onChanged: _searchChanged,
           decoration: InputDecoration(
             hintText: 'Search DN or customer…',
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
@@ -167,7 +202,13 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
         ErpStatusChipBar<DeliveryNoteStatusKey?>(
           chips: _chips,
           selected: _statusFilter,
-          onSelected: (v) => setState(() => _statusFilter = v),
+          onSelected: (v) {
+            setState(() => _statusFilter = v);
+            context.read<AppState>().setDeliveryNoteQuery(
+              search: _search,
+              status: _statusText,
+            );
+          },
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty && !appState.isDeliveryNotesLoading)
@@ -183,6 +224,30 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
               onTap: () => _openDetail(d),
             ),
           ),
+        if (appState.hasMoreDeliveryNotes ||
+            appState.isMoreDeliveryNotesLoading) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: appState.isMoreDeliveryNotesLoading
+                  ? null
+                  : () => context.read<AppState>().loadMoreDeliveryNotes(),
+              icon: appState.isMoreDeliveryNotesLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.expand_more_rounded),
+              label: Text(
+                appState.isMoreDeliveryNotesLoading
+                    ? 'Loading delivery notes...'
+                    : 'Load more delivery notes',
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

@@ -66,6 +66,7 @@ class FrappeService {
     int limitStart = 0,
     String? orderBy,
     List<List<dynamic>>? filters,
+    List<List<dynamic>>? orFilters,
   }) async {
     await ensureLoggedIn();
 
@@ -78,6 +79,9 @@ class FrappeService {
       ...filters == null
           ? const <String, String>{}
           : {'filters': jsonEncode(filters)},
+      ...orFilters == null
+          ? const <String, String>{}
+          : {'or_filters': jsonEncode(orFilters)},
     };
 
     final uri = Uri.parse(
