@@ -53,9 +53,14 @@ class _LoginScreenState extends State<LoginScreen> {
       ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
     } else {
       if (!mounted) return;
+      final err = appState.lastAuthError;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid login. Please check your credentials.'),
+        SnackBar(
+          content: Text(
+            err == null
+                ? 'Invalid login. Please check your credentials.'
+                : 'Login failed: $err',
+          ),
           backgroundColor: Colors.redAccent,
         ),
       );

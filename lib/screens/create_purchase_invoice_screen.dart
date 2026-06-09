@@ -296,7 +296,7 @@ class _CreatePurchaseInvoiceScreenState
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
-                          value: _selectedSeries,
+                          initialValue: _selectedSeries,
                           decoration: _decoration('Series'),
                           isExpanded: true,
                           items: _series
@@ -318,7 +318,7 @@ class _CreatePurchaseInvoiceScreenState
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
-                          value: _selectedSupplier,
+                          initialValue: _selectedSupplier,
                           decoration: _decoration('Supplier'),
                           isExpanded: true,
                           items: _suppliers
@@ -388,7 +388,7 @@ class _CreatePurchaseInvoiceScreenState
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
-                          value: _selectedItem,
+                          initialValue: _selectedItem,
                           decoration: _decoration('Item'),
                           isExpanded: true,
                           items: _items
@@ -464,7 +464,7 @@ class _CreatePurchaseInvoiceScreenState
                         if (_updateStock) ...[
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
-                            value: _selectedWarehouse,
+                            initialValue: _selectedWarehouse,
                             decoration: _decoration('Warehouse'),
                             isExpanded: true,
                             items: _warehouses

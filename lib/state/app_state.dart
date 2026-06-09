@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sales_order.dart';
@@ -33,6 +35,8 @@ class AppState with ChangeNotifier {
 
   bool _isInitializing = true;
   bool get isInitializing => _isInitializing;
+  String? _lastAuthError;
+  String? get lastAuthError => _lastAuthError;
 
   List<SalesOrder> _salesOrders = [];
   List<PurchaseOrder> _purchaseOrders = [];
@@ -252,6 +256,7 @@ class AppState with ChangeNotifier {
     String baseUrl = FrappeService.defaultBaseUrl,
   }) async {
     try {
+      _lastAuthError = null;
       _frappeService.baseUrl = baseUrl;
       await _frappeService.login(username, password);
       _isAuthenticated = true;
@@ -260,7 +265,11 @@ class AppState with ChangeNotifier {
       _startNotificationPolling();
       notifyListeners();
       return true;
-    } catch (_) {
+    } catch (e, st) {
+      _lastAuthError = e.toString();
+      if (!kReleaseMode) {
+        developer.log('Login failed', error: e, stackTrace: st);
+      }
       _isAuthenticated = false;
       _currentUser = null;
       notifyListeners();
