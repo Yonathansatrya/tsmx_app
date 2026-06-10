@@ -1187,6 +1187,15 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       );
       return;
     }
+    if (_selectedWarehouse == null || _selectedWarehouse!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Warehouse wajib dipilih'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     final appState = context.read<AppState>();
     final customerSalesTeam = _selectedCustomerOption()?.salesTeam ?? const [];
     if (appState.userRole == 'Sales' && customerSalesTeam.isEmpty) {
@@ -1265,6 +1274,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           orderId: widget.editOrderId!,
           customer: _customerCtrl.text.trim(),
           items: items,
+          warehouse: _selectedWarehouse,
           costCenter: _selectedCenter,
           company: selectedWarehouseInfo?.company,
           currency: _selectedCurrency,
@@ -1282,6 +1292,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         savedOrder = await appState.createSalesOrder(
           customer: _customerCtrl.text.trim(),
           items: items,
+          warehouse: _selectedWarehouse,
           series: _selectedSeries,
           costCenter: _selectedCenter,
           company: selectedWarehouseInfo?.company,
