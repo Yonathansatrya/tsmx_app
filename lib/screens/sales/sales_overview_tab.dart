@@ -24,18 +24,6 @@ class SalesOverviewTab extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
         children: [
-          if (state.salesIdentityError != null)
-            Card(
-              color: const Color(0xFFFFF7ED),
-              child: ListTile(
-                leading: const Icon(Icons.warning_amber, color: Colors.orange),
-                title: const Text('Mapping Sales belum lengkap'),
-                subtitle: Text(state.salesIdentityError!),
-              ),
-            ),
-
-          if (state.salesIdentityError != null) const SizedBox(height: 20),
-
           Row(
             children: [
               Expanded(
