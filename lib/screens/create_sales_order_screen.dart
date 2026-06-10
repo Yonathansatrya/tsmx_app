@@ -314,6 +314,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     _qtyCtrl.addListener(_onPricingInputChanged);
     _rateCtrl.addListener(_calculateTotal);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final appState = context.read<AppState>();
+      final defaultWarehouse = _defaultWarehouse(_warehouseOptions(appState));
+      if (defaultWarehouse != null && _selectedWarehouse == null) {
+        setState(() => _selectedWarehouse = defaultWarehouse);
+      }
       _loadSelectors();
     });
   }
@@ -2187,6 +2193,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
                     if (warehouseOptions.isNotEmpty)
                       DropdownButtonFormField<String>(
+                        key: ValueKey('warehouse:${_selectedWarehouse ?? ''}'),
                         initialValue:
                             warehouseOptions.any(
                               (w) => w.name == _selectedWarehouse,
