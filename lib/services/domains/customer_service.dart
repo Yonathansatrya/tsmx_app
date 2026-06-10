@@ -13,20 +13,31 @@ class CustomerService {
   }) async {
     List<Map<String, dynamic>> assignedTeam = const [];
     if (salesPerson?.isNotEmpty == true) {
-      assignedTeam = await _frappe.fetchResource(
-        'Sales Team',
-        fields: const [
-          'parent',
-          'parenttype',
-          'sales_person',
-          'allocated_percentage',
-          'commission_rate',
-        ],
-        filters: [
-          ['parenttype', '=', 'Customer'],
-          ['sales_person', '=', salesPerson],
-        ],
-      );
+      try {
+        assignedTeam = await _frappe.fetchResource(
+          'Sales Team',
+          fields: const [
+            'parent',
+            'parenttype',
+            'sales_person',
+            'allocated_percentage',
+            'commission_rate',
+          ],
+          filters: [
+            ['parenttype', '=', 'Customer'],
+            ['sales_person', '=', salesPerson],
+          ],
+        );
+      } catch (_) {
+        final customers = await _fetchPermittedCustomers();
+        return customers
+            .map(
+              (customer) => customer.copyWithSalesTeam([
+                {'sales_person': salesPerson, 'allocated_percentage': 100},
+              ]),
+            )
+            .toList();
+      }
     }
     final customerIds = assignedTeam
         .map((row) => row['parent']?.toString() ?? '')
@@ -51,20 +62,7 @@ class CustomerService {
         ],
       );
     }
-    final rows = await _frappe.fetchResource(
-      'Customer',
-      fields: const ['name', 'customer_name', 'primary_address'],
-      filters: customerIds.isEmpty
-          ? null
-          : [
-              ['name', 'in', customerIds.toList()],
-            ],
-      orderBy: 'customer_name asc',
-    );
-    final customers = rows
-        .map(SalesCustomerOption.fromJson)
-        .where((customer) => customer.id.isNotEmpty)
-        .toList();
+    final customers = await _fetchPermittedCustomers(customerIds: customerIds);
     if (salesPerson?.isNotEmpty != true) return customers;
 
     final grouped = <String, List<Map<String, dynamic>>>{};
@@ -85,6 +83,25 @@ class CustomerService {
         .map(
           (customer) => customer.copyWithSalesTeam(grouped[customer.id] ?? []),
         )
+        .toList();
+  }
+
+  Future<List<SalesCustomerOption>> _fetchPermittedCustomers({
+    Set<String> customerIds = const {},
+  }) async {
+    final rows = await _frappe.fetchResource(
+      'Customer',
+      fields: const ['name', 'customer_name', 'primary_address'],
+      filters: customerIds.isEmpty
+          ? null
+          : [
+              ['name', 'in', customerIds.toList()],
+            ],
+      orderBy: 'customer_name asc',
+    );
+    return rows
+        .map(SalesCustomerOption.fromJson)
+        .where((customer) => customer.id.isNotEmpty)
         .toList();
   }
 

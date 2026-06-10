@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/sales_order.dart';
 import '../models/sales_order_insight.dart';
+import '../models/sales_workspace.dart';
 import '../models/warehouse_info.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
@@ -57,6 +58,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   bool _isSaving = false;
   bool _isValidatingItem = false;
   String? _seriesError;
+  String? _selectorLoadError;
   String? _customerError;
   String? _itemError;
   double _totalAmount = 0.0;
@@ -191,19 +193,37 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     required String doctype,
     List<List<dynamic>>? filters,
   }) async {
+    final data = await appState.frappeService.fetchResource(
+      doctype,
+      fields: const ['name'],
+      filters: filters,
+      orderBy: 'name asc',
+    );
+    return data
+        .map((row) => row['name']?.toString() ?? '')
+        .where((name) => name.isNotEmpty)
+        .toList();
+  }
+
+  String _selectorErrorMessage(Object error) {
+    return error
+        .toString()
+        .replaceFirst('Exception: ', '')
+        .replaceAll(RegExp(r'<[^>]*>'), '')
+        .trim();
+  }
+
+  Future<T> _loadSelector<T>({
+    required String label,
+    required Future<T> Function() load,
+    required T fallback,
+    required List<String> errors,
+  }) async {
     try {
-      final data = await appState.frappeService.fetchResource(
-        doctype,
-        fields: const ['name'],
-        filters: filters,
-        orderBy: 'name asc',
-      );
-      return data
-          .map((row) => row['name']?.toString() ?? '')
-          .where((name) => name.isNotEmpty)
-          .toList();
-    } catch (_) {
-      return [];
+      return await load();
+    } catch (error) {
+      errors.add('$label: ${_selectorErrorMessage(error)}');
+      return fallback;
     }
   }
 
@@ -1335,11 +1355,23 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     final appState = context.read<AppState>();
     setState(() {
       _isLoadingSelectors = true;
+      _selectorLoadError = null;
     });
 
     try {
-      final seriesOptions = await _fetchSalesOrderSeriesOptions(appState);
-      final costCenters = await _fetchCostCenterOptions(appState);
+      final selectorErrors = <String>[];
+      final seriesOptions = await _loadSelector<List<String>>(
+        label: 'Series Sales Order',
+        load: () => _fetchSalesOrderSeriesOptions(appState),
+        fallback: const [],
+        errors: selectorErrors,
+      );
+      final costCenters = await _loadSelector<List<_CostCenterOption>>(
+        label: 'Cost Center',
+        load: () => _fetchCostCenterOptions(appState),
+        fallback: const [],
+        errors: selectorErrors,
+      );
       final customerSeriesOptions = await _fetchDocTypeSelectOptions(
         appState,
         doctype: 'Customer',
@@ -1350,44 +1382,74 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         doctype: 'Customer',
         fieldname: 'customer_type',
       );
-      final customerGroupOptions = await _fetchLinkOptions(
-        appState,
-        doctype: 'Customer Group',
-        filters: const [
-          ['is_group', '=', 0],
-        ],
+      final customerGroupOptions = await _loadSelector<List<String>>(
+        label: 'Customer Group',
+        load: () => _fetchLinkOptions(
+          appState,
+          doctype: 'Customer Group',
+          filters: const [
+            ['is_group', '=', 0],
+          ],
+        ),
+        fallback: const [],
+        errors: selectorErrors,
       );
-      final territoryOptions = await _fetchLinkOptions(
-        appState,
-        doctype: 'Territory',
-        filters: const [
-          ['is_group', '=', 0],
-        ],
+      final territoryOptions = await _loadSelector<List<String>>(
+        label: 'Territory',
+        load: () => _fetchLinkOptions(
+          appState,
+          doctype: 'Territory',
+          filters: const [
+            ['is_group', '=', 0],
+          ],
+        ),
+        fallback: const [],
+        errors: selectorErrors,
       );
-      final paymentTermsOptions = await _fetchLinkOptions(
-        appState,
-        doctype: 'Payment Terms Template',
+      final paymentTermsOptions = await _loadSelector<List<String>>(
+        label: 'Payment Terms Template',
+        load: () =>
+            _fetchLinkOptions(appState, doctype: 'Payment Terms Template'),
+        fallback: const [],
+        errors: selectorErrors,
       );
-      final salesPersonOptions = await _fetchSalesPersonOptions(appState);
-      final currencyOptions = await _fetchLinkOptions(
-        appState,
-        doctype: 'Currency',
+      final salesPersonOptions = await _loadSelector<List<String>>(
+        label: 'Sales Person',
+        load: () => _fetchSalesPersonOptions(appState),
+        fallback: const [],
+        errors: selectorErrors,
       );
-      var priceListOptions = await _fetchLinkOptions(
-        appState,
-        doctype: 'Price List',
-        filters: const [
-          ['selling', '=', 1],
-          ['enabled', '=', 1],
-        ],
+      final currencyOptions = await _loadSelector<List<String>>(
+        label: 'Currency',
+        load: () => _fetchLinkOptions(appState, doctype: 'Currency'),
+        fallback: const [],
+        errors: selectorErrors,
       );
-      if (priceListOptions.isEmpty) {
-        priceListOptions = await _fetchLinkOptions(
+      var priceListOptions = await _loadSelector<List<String>>(
+        label: 'Price List',
+        load: () => _fetchLinkOptions(
           appState,
           doctype: 'Price List',
           filters: const [
             ['selling', '=', 1],
+            ['enabled', '=', 1],
           ],
+        ),
+        fallback: const [],
+        errors: selectorErrors,
+      );
+      if (priceListOptions.isEmpty) {
+        priceListOptions = await _loadSelector<List<String>>(
+          label: 'Price List',
+          load: () => _fetchLinkOptions(
+            appState,
+            doctype: 'Price List',
+            filters: const [
+              ['selling', '=', 1],
+            ],
+          ),
+          fallback: const [],
+          errors: selectorErrors,
         );
       }
       String defaultSellingPriceList = '';
@@ -1402,7 +1464,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
             '';
       } catch (_) {}
 
-      final salesCustomers = await appState.fetchSalesCustomers();
+      final salesCustomers = await _loadSelector<List<SalesCustomerOption>>(
+        label: 'Customer / Sales Team',
+        load: appState.fetchSalesCustomers,
+        fallback: const [],
+        errors: selectorErrors,
+      );
       final customerOptions = salesCustomers
           .map(
             (customer) => _CustomerOption(
@@ -1413,20 +1480,26 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           )
           .toList();
 
-      List<Map<String, dynamic>> itemData;
-      try {
-        itemData = await appState.frappeService.fetchResource(
-          'Item',
-          fields: const ['name', 'item_name'],
-          orderBy: 'item_name asc',
-        );
-      } catch (_) {
-        itemData = await appState.frappeService.fetchResource(
-          'Item',
-          fields: const ['name'],
-          orderBy: 'name asc',
-        );
-      }
+      final itemData = await _loadSelector<List<Map<String, dynamic>>>(
+        label: 'Item',
+        load: () async {
+          try {
+            return await appState.frappeService.fetchResource(
+              'Item',
+              fields: const ['name', 'item_name'],
+              orderBy: 'item_name asc',
+            );
+          } catch (_) {
+            return appState.frappeService.fetchResource(
+              'Item',
+              fields: const ['name'],
+              orderBy: 'name asc',
+            );
+          }
+        },
+        fallback: const [],
+        errors: selectorErrors,
+      );
 
       final itemOptions = itemData
           .map((row) {
@@ -1439,7 +1512,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           .toList();
 
       if (appState.warehouses.isEmpty) {
-        await appState.refreshWarehouses();
+        await _loadSelector<void>(
+          label: 'Warehouse',
+          load: appState.refreshWarehouses,
+          fallback: null,
+          errors: selectorErrors,
+        );
       }
       final warehouseOptions = _warehouseOptions(appState);
       final selectedWarehouseValid = warehouseOptions.any(
@@ -1480,7 +1558,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       if (!mounted) return;
       setState(() {
         _seriesOptions = _normalizeOptions(seriesOptions);
-        _seriesError = null;
+        _seriesError = seriesOptions.isEmpty
+            ? 'Series Sales Order tidak dapat dibaca.'
+            : null;
+        _selectorLoadError = selectorErrors.isEmpty
+            ? null
+            : selectorErrors.toSet().join('\n');
         _customerSeriesOptions = _normalizeOptions(customerSeriesOptions);
         _customerTypeOptions = _normalizeOptions(customerTypeOptions);
         _customerGroupOptions = _normalizeOptions(customerGroupOptions);
@@ -1535,19 +1618,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _seriesOptions = [];
-        _customerSeriesOptions = [];
-        _customerTypeOptions = [];
-        _customerGroupOptions = [];
-        _territoryOptions = [];
-        _paymentTermsOptions = [];
-        _salesPersonOptions = [];
-        _costCenterOptions = [];
-        _customerOptions = [];
-        _selectedSeries = null;
-        _selectedCenter = null;
-        _selectedSalesPerson = null;
-        _seriesError = error.toString();
+        _selectorLoadError = _selectorErrorMessage(error);
       });
     } finally {
       if (mounted) {
@@ -1652,6 +1723,48 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (_selectorLoadError != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFFED7AA)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.orange,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Sebagian data tidak dapat dibaca',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _selectorLoadError!,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Coba lagi',
+                        onPressed: _isLoadingSelectors ? null : _loadSelectors,
+                        icon: const Icon(Icons.refresh_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               // Document Info Section
               Container(
                 decoration: BoxDecoration(
