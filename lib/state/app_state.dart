@@ -33,6 +33,8 @@ class AppState with ChangeNotifier {
   String? get currentUser => _currentUser;
   String? _currentEmployee;
   String? get currentEmployee => _currentEmployee;
+  Map<String, dynamic> _currentEmployeeProfile = const {};
+  Map<String, dynamic> get currentEmployeeProfile => _currentEmployeeProfile;
   String? _currentSalesPerson;
   String? get currentSalesPerson => _currentSalesPerson;
   String? _salesIdentityError;
@@ -51,16 +53,6 @@ class AppState with ChangeNotifier {
   bool get _shouldScopeSalesData => _userRole == 'Sales';
 
   static const String _prefsUserRoleKey = 'user_role';
-
-  Future<void> setUserRole(String role) async {
-    _userRole = role;
-    notifyListeners();
-    try {
-      final sp = await SharedPreferences.getInstance();
-      await sp.setString(_prefsUserRoleKey, role);
-    } catch (_) {}
-    if (_isAuthenticated) await refreshDataForCurrentRole();
-  }
 
   Future<void> refreshDataForCurrentRole() async {
     if (!_isAuthenticated) return;
@@ -105,6 +97,7 @@ class AppState with ChangeNotifier {
 
   Future<String?> resolveCurrentSalesIdentity() async {
     _currentEmployee = null;
+    _currentEmployeeProfile = const {};
     _currentSalesPerson = null;
     _salesIdentityError = null;
     if (_currentUser == null || _currentUser!.isEmpty) {
@@ -115,14 +108,35 @@ class AppState with ChangeNotifier {
     try {
       List<Map<String, dynamic>> employees;
       try {
-        employees = await _frappeService.fetchResource(
-          'Employee',
-          fields: const ['name'],
-          filters: [
-            ['user_id', '=', _currentUser],
-          ],
-          limit: 1,
-        );
+        try {
+          employees = await _frappeService.fetchResource(
+            'Employee',
+            fields: const [
+              'name',
+              'employee_name',
+              'user_id',
+              'status',
+              'company',
+              'designation',
+              'department',
+              'branch',
+              'date_of_joining',
+            ],
+            filters: [
+              ['user_id', '=', _currentUser],
+            ],
+            limit: 1,
+          );
+        } catch (_) {
+          employees = await _frappeService.fetchResource(
+            'Employee',
+            fields: const ['name'],
+            filters: [
+              ['user_id', '=', _currentUser],
+            ],
+            limit: 1,
+          );
+        }
       } catch (error) {
         throw Exception(
           'Role Sales tidak memiliki izin membaca mapping Employee.user_id. '
@@ -135,6 +149,7 @@ class AppState with ChangeNotifier {
         );
       }
       _currentEmployee = employees.first['name']?.toString();
+      _currentEmployeeProfile = Map<String, dynamic>.from(employees.first);
       List<Map<String, dynamic>> salesPersons;
       try {
         salesPersons = await _frappeService.fetchResource(
