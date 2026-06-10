@@ -19,6 +19,13 @@ import '../models/stock_area_option.dart';
 import '../models/erp_summary.dart';
 import '../models/sales_order_insight.dart';
 import '../models/sales_workspace.dart';
+import '../services/domains/auth_service.dart';
+import '../services/domains/customer_service.dart';
+import '../services/domains/purchase_invoice_service.dart';
+import '../services/domains/purchase_order_service.dart';
+import '../services/domains/sales_invoice_service.dart';
+import '../services/domains/sales_order_service.dart';
+import '../services/erp_services.dart';
 import '../services/frappe_service.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/num_parse.dart';
@@ -77,86 +84,8 @@ class AppState with ChangeNotifier {
     if (currentUser.isEmpty) {
       throw Exception('User login Frappe tidak tersedia.');
     }
-    String roleProfile = '';
-    List<String> sessionRoles = const [];
-    Object? directLookupError;
-
-    try {
-      final user = await _frappeService.fetchDocument('User', currentUser);
-      roleProfile = user['role_profile_name']?.toString().trim() ?? '';
-    } catch (error) {
-      directLookupError = error;
-    }
-
-    if (roleProfile.isEmpty) {
-      try {
-        final value = await _frappeService.callMethod(
-          'frappe.client.get_value',
-          args: {
-            'doctype': 'User',
-            'filters': {'name': currentUser},
-            'fieldname': 'role_profile_name',
-          },
-        );
-        if (value is Map) {
-          roleProfile = value['role_profile_name']?.toString().trim() ?? '';
-        }
-      } catch (error) {
-        directLookupError ??= error;
-      }
-    }
-
-    if (roleProfile.isEmpty) {
-      try {
-        final access = await _frappeService.callMethod(
-          'tmsx_current_user_access',
-        );
-        if (access is Map) {
-          final returnedUser = access['user']?.toString().trim() ?? '';
-          if (returnedUser.isNotEmpty && returnedUser != currentUser) {
-            throw Exception('Identitas session Frappe tidak sesuai.');
-          }
-          roleProfile = access['role_profile_name']?.toString().trim() ?? '';
-          final roles = access['roles'];
-          if (roles is List) {
-            sessionRoles = roles
-                .map((role) => role.toString().trim())
-                .where((role) => role.isNotEmpty)
-                .toList();
-          }
-        }
-      } catch (error, stackTrace) {
-        if (!kReleaseMode) {
-          developer.log(
-            'Current user access endpoint is unavailable',
-            error: error,
-            stackTrace: stackTrace,
-          );
-        }
-      }
-    }
-
-    final hasSalesRole = sessionRoles.any(
-      (role) => role.toLowerCase() == 'sales',
-    );
-    if (roleProfile.isEmpty && hasSalesRole) {
-      roleProfile = 'Sales';
-    }
-
-    if (roleProfile.isEmpty) {
-      if (!kReleaseMode && directLookupError != null) {
-        developer.log(
-          'Direct Role Profile lookup failed',
-          error: directLookupError,
-        );
-      }
-      throw Exception(
-        'Role Profile akun tidak dapat dibaca. Admin Frappe perlu membuat '
-        'Server Script API "tmsx_current_user_access".',
-      );
-    }
-
-    await _applyCurrentRole(roleProfile);
+    final access = await _authService.fetchCurrentUserAccess(currentUser);
+    await _applyCurrentRole(access.roleProfile);
   }
 
   Future<void> _applyCurrentRole(String roleProfile) async {
@@ -183,73 +112,10 @@ class AppState with ChangeNotifier {
       return null;
     }
     try {
-      List<Map<String, dynamic>> employees;
-      try {
-        try {
-          employees = await _frappeService.fetchResource(
-            'Employee',
-            fields: const [
-              'name',
-              'employee_name',
-              'user_id',
-              'status',
-              'company',
-              'designation',
-              'department',
-              'branch',
-              'date_of_joining',
-            ],
-            filters: [
-              ['user_id', '=', _currentUser],
-            ],
-            limit: 1,
-          );
-        } catch (_) {
-          employees = await _frappeService.fetchResource(
-            'Employee',
-            fields: const ['name'],
-            filters: [
-              ['user_id', '=', _currentUser],
-            ],
-            limit: 1,
-          );
-        }
-      } catch (error) {
-        throw Exception(
-          'Role Sales tidak memiliki izin membaca mapping Employee.user_id. '
-          'Detail: $error',
-        );
-      }
-      if (employees.isEmpty) {
-        throw Exception(
-          'User ${_currentUser!} belum terhubung ke Employee melalui field User ID.',
-        );
-      }
-      _currentEmployee = employees.first['name']?.toString();
-      _currentEmployeeProfile = Map<String, dynamic>.from(employees.first);
-      List<Map<String, dynamic>> salesPersons;
-      try {
-        salesPersons = await _frappeService.fetchResource(
-          'Sales Person',
-          fields: const ['name'],
-          filters: [
-            ['employee', '=', _currentEmployee],
-            ['is_group', '=', 0],
-          ],
-          limit: 1,
-        );
-      } catch (error) {
-        throw Exception(
-          'Role Sales tidak memiliki izin membaca mapping Sales Person.employee. '
-          'Detail: $error',
-        );
-      }
-      if (salesPersons.isEmpty) {
-        throw Exception(
-          'Employee $_currentEmployee belum terhubung ke Sales Person non-group.',
-        );
-      }
-      _currentSalesPerson = salesPersons.first['name']?.toString();
+      final identity = await _authService.resolveSalesIdentity(_currentUser!);
+      _currentEmployee = identity.employee;
+      _currentEmployeeProfile = identity.employeeProfile;
+      _currentSalesPerson = identity.salesPerson;
     } catch (error) {
       _salesIdentityError = error.toString();
     }
@@ -422,7 +288,16 @@ class AppState with ChangeNotifier {
   static const String _prefsFrappeConfigKey = 'frappe_config';
   static const String _prefsSummaryCacheKey = 'erp_summary_cache';
 
-  final FrappeService _frappeService = FrappeService();
+  final ErpServices services;
+
+  FrappeService get _frappeService => services.frappe;
+  AuthService get _authService => services.auth;
+  CustomerService get _customerService => services.customer;
+  SalesOrderService get _salesOrderService => services.salesOrder;
+  PurchaseOrderService get _purchaseOrderService => services.purchaseOrder;
+  SalesInvoiceService get _salesInvoiceService => services.salesInvoice;
+  PurchaseInvoiceService get _purchaseInvoiceService =>
+      services.purchaseInvoice;
 
   FrappeService get frappeService => _frappeService;
 
@@ -439,7 +314,7 @@ class AppState with ChangeNotifier {
     }
   }
 
-  AppState() {
+  AppState({ErpServices? services}) : services = services ?? ErpServices() {
     () async {
       await _restoreFrappeConfig();
       await _restoreSummaryCache();
@@ -797,9 +672,7 @@ class AppState with ChangeNotifier {
   }
 
   Future<SalesOrder> loadSalesOrderDetail(String orderId) async {
-    await _frappeService.ensureLoggedIn();
-    final doc = await _frappeService.fetchDocument('Sales Order', orderId);
-    return SalesOrder.fromJson(doc);
+    return _salesOrderService.load(orderId);
   }
 
   List<List<dynamic>> get _salesOwnerFilter => _shouldScopeSalesData
@@ -813,87 +686,15 @@ class AppState with ChangeNotifier {
         (_currentSalesPerson == null || _currentSalesPerson!.isEmpty)) {
       await resolveCurrentSalesIdentity();
     }
-    List<Map<String, dynamic>> assignedSalesTeamRows = const [];
-    if (_shouldScopeSalesData) {
-      if (_currentSalesPerson == null || _currentSalesPerson!.isEmpty) {
-        throw Exception(
-          _salesIdentityError ?? 'Sales Person user login belum tersedia.',
-        );
-      }
-      assignedSalesTeamRows = await _fetchAllResourcePages(
-        doctype: 'Sales Team',
-        fields: const [
-          'parent',
-          'parenttype',
-          'sales_person',
-          'allocated_percentage',
-          'commission_rate',
-        ],
-        filters: [
-          ['parenttype', '=', 'Customer'],
-          ['sales_person', '=', _currentSalesPerson],
-        ],
-        maxRows: null,
+    if (_shouldScopeSalesData &&
+        (_currentSalesPerson == null || _currentSalesPerson!.isEmpty)) {
+      throw Exception(
+        _salesIdentityError ?? 'Sales Person user login belum tersedia.',
       );
     }
-    final assignedCustomerIds = assignedSalesTeamRows
-        .map((row) => row['parent']?.toString() ?? '')
-        .where((id) => id.isNotEmpty)
-        .toSet();
-    if (_shouldScopeSalesData && assignedCustomerIds.isEmpty) return const [];
-    var salesTeamRows = assignedSalesTeamRows;
-    if (_shouldScopeSalesData) {
-      salesTeamRows = await _fetchAllResourcePages(
-        doctype: 'Sales Team',
-        fields: const [
-          'parent',
-          'parenttype',
-          'sales_person',
-          'allocated_percentage',
-          'commission_rate',
-        ],
-        filters: [
-          ['parenttype', '=', 'Customer'],
-          ['parent', 'in', assignedCustomerIds.toList()],
-        ],
-        maxRows: null,
-      );
-    }
-    final rows = await _fetchAllResourcePages(
-      doctype: 'Customer',
-      fields: const ['name', 'customer_name', 'primary_address'],
-      filters: _shouldScopeSalesData
-          ? [
-              ['name', 'in', assignedCustomerIds.toList()],
-            ]
-          : null,
-      orderBy: 'customer_name asc',
-      maxRows: null,
+    return _customerService.fetchSalesCustomers(
+      salesPerson: _shouldScopeSalesData ? _currentSalesPerson : null,
     );
-    final customers = rows
-        .map(SalesCustomerOption.fromJson)
-        .where((customer) => customer.id.isNotEmpty)
-        .toList();
-    if (!_shouldScopeSalesData) return customers;
-    final grouped = <String, List<Map<String, dynamic>>>{};
-    for (final row in salesTeamRows) {
-      final parent = row['parent']?.toString() ?? '';
-      if (parent.isEmpty) continue;
-      grouped.putIfAbsent(parent, () => []).add({
-        'sales_person': row['sales_person'],
-        'allocated_percentage':
-            NumParse.asDouble(row['allocated_percentage']) > 0
-            ? NumParse.asDouble(row['allocated_percentage'])
-            : 100,
-        if (row['commission_rate'] != null)
-          'commission_rate': row['commission_rate'],
-      });
-    }
-    return customers
-        .map(
-          (customer) => customer.copyWithSalesTeam(grouped[customer.id] ?? []),
-        )
-        .toList();
   }
 
   Future<List<PromiseToPay>> fetchPromisesToPay() async {
@@ -1049,73 +850,7 @@ class AppState with ChangeNotifier {
   Future<CustomerSalesInsight> fetchCustomerSalesInsight(
     String customer, {
     String? company,
-  }) async {
-    await _frappeService.ensureLoggedIn();
-    final customerDoc = await _frappeService.fetchDocument(
-      'Customer',
-      customer,
-    );
-    final priceList = customerDoc['default_price_list']?.toString() ?? '';
-    var companyCurrency = '';
-    var priceListCurrency = '';
-    if (company != null && company.isNotEmpty) {
-      try {
-        final companyDoc = await _frappeService.fetchDocument(
-          'Company',
-          company,
-        );
-        companyCurrency =
-            companyDoc['default_currency']?.toString() ??
-            companyDoc['currency']?.toString() ??
-            '';
-      } catch (_) {}
-    }
-    if (priceList.isNotEmpty) {
-      try {
-        final priceListDoc = await _frappeService.fetchDocument(
-          'Price List',
-          priceList,
-        );
-        priceListCurrency = priceListDoc['currency']?.toString() ?? '';
-      } catch (_) {}
-    }
-    var creditLimit = 0.0;
-    final creditLimits = customerDoc['credit_limits'];
-    if (creditLimits is List) {
-      for (final raw in creditLimits) {
-        if (raw is! Map) continue;
-        final rowCompany = raw['company']?.toString() ?? '';
-        if (company == null || company.isEmpty || rowCompany == company) {
-          creditLimit += NumParse.asDouble(raw['credit_limit']);
-        }
-      }
-    }
-
-    final invoices = await _fetchAllResourcePages(
-      doctype: 'Sales Invoice',
-      fields: const ['name', 'outstanding_amount'],
-      filters: [
-        ['customer', '=', customer],
-        if (company != null && company.isNotEmpty) ['company', '=', company],
-        ['docstatus', '=', 1],
-        ['outstanding_amount', '>', 0],
-      ],
-      maxRows: null,
-    );
-    final outstanding = invoices.fold<double>(
-      0,
-      (sum, row) => sum + NumParse.asDouble(row['outstanding_amount']),
-    );
-
-    return CustomerSalesInsight(
-      creditLimit: creditLimit,
-      outstanding: outstanding,
-      company: company ?? '',
-      currency: companyCurrency,
-      priceList: priceList,
-      priceListCurrency: priceListCurrency,
-    );
-  }
+  }) => _customerService.fetchSalesInsight(customer, company: company);
 
   Future<ItemSalesInsight> fetchItemSalesInsight(
     String itemCode, {
@@ -1244,46 +979,13 @@ class AppState with ChangeNotifier {
     String? company,
     int offset = 0,
     int limit = 20,
-  }) async {
-    await _frappeService.ensureLoggedIn();
-    final isInvoice = doctype == 'Sales Invoice';
-    final rows = await _frappeService.fetchResource(
-      doctype,
-      fields: [
-        'name',
-        isInvoice ? 'posting_date' : 'transaction_date',
-        'status',
-        'grand_total',
-        'total_qty',
-        if (isInvoice) 'outstanding_amount',
-      ],
-      filters: [
-        ['customer', '=', customer],
-        if (company != null && company.isNotEmpty) ['company', '=', company],
-      ],
-      orderBy:
-          '${isInvoice ? 'posting_date' : 'transaction_date'} desc, name desc',
-      limitStart: offset,
-      limit: limit,
-    );
-    return rows
-        .map(
-          (row) => CustomerPurchaseHistory(
-            id: row['name']?.toString() ?? '',
-            doctype: doctype,
-            date:
-                row[isInvoice ? 'posting_date' : 'transaction_date']
-                    ?.toString() ??
-                '',
-            status: row['status']?.toString() ?? '',
-            total: NumParse.asDouble(row['grand_total']),
-            outstanding: NumParse.asDouble(row['outstanding_amount']),
-            itemsCount: NumParse.asInt(row['total_qty']),
-          ),
-        )
-        .where((row) => row.id.isNotEmpty)
-        .toList();
-  }
+  }) => _customerService.fetchPurchaseHistory(
+    customer: customer,
+    doctype: doctype,
+    company: company,
+    offset: offset,
+    limit: limit,
+  );
 
   Future<Map<String, dynamic>> loadSalesHistoryDetail(
     String doctype,
@@ -1293,11 +995,7 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> uploadSalesOrderAttachment(String orderId, String filePath) {
-    return uploadAttachment(
-      doctype: 'Sales Order',
-      documentName: orderId,
-      filePath: filePath,
-    );
+    return _salesOrderService.uploadAttachment(orderId, filePath);
   }
 
   Future<void> uploadAttachment({
@@ -1396,8 +1094,7 @@ class AppState with ChangeNotifier {
         'set_warehouse': warehouse.trim(),
     };
 
-    final created = await _frappeService.createDocument('Sales Order', payload);
-    final order = SalesOrder.fromJson(created);
+    final order = await _salesOrderService.create(payload);
     _salesOrders = [order, ..._salesOrders];
     notifyListeners();
     await refreshSalesOrders();
@@ -1516,12 +1213,7 @@ class AppState with ChangeNotifier {
       throw Exception('No fields to update.');
     }
 
-    await _frappeService.updateDocument('Sales Order', orderId, updates);
-    final updatedDoc = await _frappeService.fetchDocument(
-      'Sales Order',
-      orderId,
-    );
-    final updatedOrder = SalesOrder.fromJson(updatedDoc);
+    final updatedOrder = await _salesOrderService.update(orderId, updates);
     _salesOrders = _salesOrders
         .map((o) => o.id == orderId ? updatedOrder : o)
         .toList();
@@ -1533,7 +1225,7 @@ class AppState with ChangeNotifier {
 
   Future<void> deleteSalesOrder(String orderId) async {
     await _frappeService.ensureLoggedIn();
-    await _frappeService.deleteDocument('Sales Order', orderId);
+    await _salesOrderService.delete(orderId);
     _salesOrders.removeWhere((o) => o.id == orderId);
     notifyListeners();
     await refreshSalesOrders();
@@ -1541,9 +1233,7 @@ class AppState with ChangeNotifier {
   }
 
   Future<PurchaseOrder> loadPurchaseOrderDetail(String orderId) async {
-    await _frappeService.ensureLoggedIn();
-    final doc = await _frappeService.fetchDocument('Purchase Order', orderId);
-    return PurchaseOrder.fromJson(doc);
+    return _purchaseOrderService.load(orderId);
   }
 
   Future<DeliveryNote> loadDeliveryNoteDetail(String id) async {
@@ -1553,9 +1243,7 @@ class AppState with ChangeNotifier {
   }
 
   Future<SalesInvoice> loadSalesInvoiceDetail(String id) async {
-    await _frappeService.ensureLoggedIn();
-    final doc = await _frappeService.fetchDocument('Sales Invoice', id);
-    return SalesInvoice.fromJson(doc);
+    return _salesInvoiceService.load(id);
   }
 
   Future<PurchaseReceipt> loadPurchaseReceiptDetail(String id) async {
@@ -1565,9 +1253,7 @@ class AppState with ChangeNotifier {
   }
 
   Future<PurchaseInvoice> loadPurchaseInvoiceDetail(String id) async {
-    await _frappeService.ensureLoggedIn();
-    final doc = await _frappeService.fetchDocument('Purchase Invoice', id);
-    return PurchaseInvoice.fromJson(doc);
+    return _purchaseInvoiceService.load(id);
   }
 
   Future<PurchaseInvoice> createPurchaseInvoice({
@@ -1607,13 +1293,10 @@ class AppState with ChangeNotifier {
       ],
     };
 
-    final created = await _frappeService.createDocument(
-      'Purchase Invoice',
-      payload,
-    );
+    final invoice = await _purchaseInvoiceService.create(payload);
     await refreshPurchaseInvoices();
     unawaited(refreshAllSummaries(silent: true));
-    return PurchaseInvoice.fromJson(created);
+    return invoice;
   }
 
   Future<PurchaseOrder> createPurchaseOrder({
@@ -1648,11 +1331,7 @@ class AppState with ChangeNotifier {
       ],
     };
 
-    final created = await _frappeService.createDocument(
-      'Purchase Order',
-      payload,
-    );
-    final order = PurchaseOrder.fromJson(created);
+    final order = await _purchaseOrderService.create(payload);
     _purchaseOrders = [order, ..._purchaseOrders];
     notifyListeners();
     await refreshPurchaseOrders();
@@ -1697,12 +1376,7 @@ class AppState with ChangeNotifier {
       throw Exception('No fields to update.');
     }
 
-    await _frappeService.updateDocument('Purchase Order', orderId, updates);
-    final updatedDoc = await _frappeService.fetchDocument(
-      'Purchase Order',
-      orderId,
-    );
-    final updatedOrder = PurchaseOrder.fromJson(updatedDoc);
+    final updatedOrder = await _purchaseOrderService.update(orderId, updates);
     _purchaseOrders = _purchaseOrders
         .map((o) => o.id == orderId ? updatedOrder : o)
         .toList();
@@ -1745,7 +1419,7 @@ class AppState with ChangeNotifier {
 
   Future<void> deletePurchaseOrder(String orderId) async {
     await _frappeService.ensureLoggedIn();
-    await _frappeService.deleteDocument('Purchase Order', orderId);
+    await _purchaseOrderService.delete(orderId);
     _purchaseOrders.removeWhere((o) => o.id == orderId);
     notifyListeners();
     await refreshPurchaseOrders();

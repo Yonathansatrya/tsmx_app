@@ -3,13 +3,18 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'state/app_state.dart';
+import 'services/erp_services.dart';
 import 'screens/splash_screen.dart';
 import 'theme/app_colors.dart';
 
 void main() {
+  final services = ErpServices();
   runApp(
     MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => AppState())],
+      providers: [
+        Provider.value(value: services),
+        ChangeNotifierProvider(create: (_) => AppState(services: services)),
+      ],
       child: const TMSXLogisticsApp(),
     ),
   );
