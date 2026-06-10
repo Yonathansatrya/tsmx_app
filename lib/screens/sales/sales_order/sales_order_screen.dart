@@ -19,7 +19,7 @@ class SalesOrderScreen extends StatelessWidget {
           tabs: [
             Tab(text: 'Sales Order'),
             Tab(text: 'Cek Stok'),
-            Tab(text: 'Customer Check'),
+            Tab(text: 'Cek Customer'),
           ],
         ),
         floatingActionButton: FloatingActionButton.extended(
@@ -28,7 +28,7 @@ class SalesOrderScreen extends StatelessWidget {
             MaterialPageRoute(builder: (_) => const CreateSalesOrderScreen()),
           ),
           icon: const Icon(Icons.add_rounded),
-          label: const Text('New Sales Order'),
+          label: const Text('Buat Sales Order'),
         ),
         body: const TabBarView(
           children: [

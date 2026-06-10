@@ -2211,7 +2211,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                         items: [
                           const DropdownMenuItem<String>(
                             value: '',
-                            child: Text('— None —'),
+                            child: Text('- None -'),
                           ),
                           ...warehouseOptions.map(
                             (w) => DropdownMenuItem<String>(
@@ -2253,7 +2253,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                         ),
                         padding: const EdgeInsets.all(12),
                         child: const Text(
-                          'Warehouse tidak tersedia — refresh Stock tab terlebih dahulu',
+                          'Warehouse tidak tersedia. Refresh Stock tab terlebih dahulu.',
                           style: TextStyle(fontSize: 12, color: Colors.orange),
                         ),
                       ),
@@ -2638,7 +2638,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 10),
                             const SizedBox(height: 10),
                             Align(
                               alignment: Alignment.centerLeft,

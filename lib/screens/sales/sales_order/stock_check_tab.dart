@@ -32,19 +32,45 @@ class _StockCheckTabState extends State<StockCheckTab> {
         ],
       ),
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Stok realtime Stores - Jakarta',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              Chip(label: Text('${items.length} item')),
+            ],
+          ),
+          const SizedBox(height: 8),
           TextField(
             onChanged: (value) => setState(() => query = value),
             decoration: const InputDecoration(
               prefixIcon: Icon(Icons.search),
               labelText: 'Cari stok Stores - Jakarta',
+              border: OutlineInputBorder(),
             ),
           ),
           if (state.isInventoryLoading) const LinearProgressIndicator(),
-          if (state.inventoryError != null)
+          if (state.inventoryError != null) ...[
             ErpErrorBox(message: state.inventoryError!),
-          if (items.isEmpty)
+            OutlinedButton.icon(
+              onPressed: () => state.fetchInventoryFromFrappe(
+                filters: const [
+                  ['warehouse', '=', warehouse],
+                ],
+              ),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Coba lagi'),
+            ),
+          ],
+          if (items.isEmpty &&
+              !state.isInventoryLoading &&
+              state.inventoryError == null)
             const ErpEmptyState(title: 'Stok tidak ditemukan')
           else
             ...items.map(
