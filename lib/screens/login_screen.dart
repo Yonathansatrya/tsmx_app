@@ -261,31 +261,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ],
                               ),
                             ),
-
-                            TextButton(
-                              style: TextButton.styleFrom(
-                                foregroundColor: AppColors.primary,
-                                overlayColor: AppColors.primary.withValues(
-                                  alpha: 0.08,
-                                ),
-                              ),
-                              onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Please contact IT support for credentials reset.',
-                                    ),
-                                  ),
-                                );
-                              },
-                              child: const Text(
-                                'Forgot Access?',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
 
