@@ -58,15 +58,25 @@ class _CustomerInsightTabState extends State<CustomerInsightTab> {
       final state = context.read<AppState>();
       final employeeCompany =
           state.currentEmployeeProfile['company']?.toString().trim() ?? '';
-      final customerInsight = await state.fetchCustomerSalesInsight(
-        customer.id,
-        company: employeeCompany.isEmpty ? null : employeeCompany,
-      );
-      final customerHistory = await state.fetchCustomerPurchaseHistory(
-        customer: customer.id,
-        doctype: 'Sales Order',
-        company: employeeCompany.isEmpty ? null : employeeCompany,
-      );
+      final company = employeeCompany.isEmpty ? null : employeeCompany;
+      final result = await Future.wait([
+        state.fetchCustomerSalesInsight(customer.id, company: company),
+        state.fetchCustomerPurchaseHistory(
+          customer: customer.id,
+          doctype: 'Sales Order',
+          company: company,
+        ),
+        state.fetchCustomerPurchaseHistory(
+          customer: customer.id,
+          doctype: 'Sales Invoice',
+          company: company,
+        ),
+      ]);
+      final customerInsight = result[0] as CustomerSalesInsight;
+      final customerHistory = <CustomerPurchaseHistory>[
+        ...(result[1] as List<CustomerPurchaseHistory>),
+        ...(result[2] as List<CustomerPurchaseHistory>),
+      ]..sort((a, b) => b.date.compareTo(a.date));
       if (!mounted) return;
       setState(() {
         insight = customerInsight;
@@ -167,7 +177,11 @@ class _CustomerInsightTabState extends State<CustomerInsightTab> {
               (row) => Card(
                 child: ListTile(
                   title: Text(row.id),
-                  subtitle: Text('${row.date} - ${row.status}'),
+                  subtitle: Text(
+                    '${row.doctype} | ${row.date} | ${row.status}'
+                    '${row.outstanding > 0 ? '\nOutstanding: Rp ${formatErpCurrency(row.outstanding)}' : ''}',
+                  ),
+                  isThreeLine: row.outstanding > 0,
                   trailing: Text('Rp ${formatErpCurrency(row.total)}'),
                 ),
               ),

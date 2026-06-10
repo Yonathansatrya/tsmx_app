@@ -1099,7 +1099,6 @@ class AppState with ChangeNotifier {
         if (company != null && company.isNotEmpty) ['company', '=', company],
         ['docstatus', '=', 1],
         ['outstanding_amount', '>', 0],
-        ..._salesOwnerFilter,
       ],
       maxRows: null,
     );
@@ -1261,7 +1260,6 @@ class AppState with ChangeNotifier {
       filters: [
         ['customer', '=', customer],
         if (company != null && company.isNotEmpty) ['company', '=', company],
-        ..._salesOwnerFilter,
       ],
       orderBy:
           '${isInvoice ? 'posting_date' : 'transaction_date'} desc, name desc',
