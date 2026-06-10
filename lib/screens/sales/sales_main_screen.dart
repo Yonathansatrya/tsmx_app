@@ -3,28 +3,28 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../profile_screen.dart';
+import 'sales_collection_tab.dart';
+import 'sales_history_tab.dart';
+import 'sales_order_tab.dart';
 import 'sales_overview_tab.dart';
-import 'sales_order/sales_order_screen.dart';
-import 'collection/collection_dashboard_screen.dart';
-import 'sales_visit/sales_visit_screen.dart';
-import 'sales_order_history_tab.dart';
+import 'sales_visit_tab.dart';
 
-class SalesDashboardScreen extends StatefulWidget {
-  const SalesDashboardScreen({super.key});
+class SalesMainScreen extends StatefulWidget {
+  const SalesMainScreen({super.key});
 
   @override
-  State<SalesDashboardScreen> createState() => _SalesDashboardScreenState();
+  State<SalesMainScreen> createState() => _SalesMainScreenState();
 }
 
-class _SalesDashboardScreenState extends State<SalesDashboardScreen> {
+class _SalesMainScreenState extends State<SalesMainScreen> {
   int _currentIndex = 0;
 
   late final List<Widget> _screens = [
     SalesOverviewTab(onMenuSelected: _changeTab),
-    const SalesOrderScreen(),
-    const CollectionDashboardScreen(),
-    const SalesVisitScreen(),
-    const SalesOrderHistoryTab(),
+    const SalesOrderTab(),
+    const SalesCollectionTab(),
+    const SalesVisitTab(),
+    const SalesHistoryTab(),
   ];
 
   void _changeTab(int index) {
@@ -80,7 +80,7 @@ class _SalesDashboardScreenState extends State<SalesDashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'TMSX SALES',
+                  'TMSX SALES TEAM',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

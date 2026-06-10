@@ -6,8 +6,8 @@ import '../../utils/erp_format.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_error_box.dart';
 
-class SalesOrderHistoryTab extends StatelessWidget {
-  const SalesOrderHistoryTab({super.key});
+class SalesHistoryTab extends StatelessWidget {
+  const SalesHistoryTab({super.key});
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();

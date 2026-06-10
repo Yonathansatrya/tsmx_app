@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../../models/sales_workspace.dart';
-import '../../../state/app_state.dart';
-import '../../../widgets/erp/erp_empty_state.dart';
-import '../../../widgets/erp/erp_error_box.dart';
+import '../../models/sales_workspace.dart';
+import '../../state/app_state.dart';
+import '../../widgets/erp/erp_empty_state.dart';
+import '../../widgets/erp/erp_error_box.dart';
 
-class SalesVisitScreen extends StatefulWidget {
-  const SalesVisitScreen({super.key});
+class SalesVisitTab extends StatefulWidget {
+  const SalesVisitTab({super.key});
   @override
-  State<SalesVisitScreen> createState() => _SalesVisitScreenState();
+  State<SalesVisitTab> createState() => _SalesVisitTabState();
 }
 
-class _SalesVisitScreenState extends State<SalesVisitScreen> {
+class _SalesVisitTabState extends State<SalesVisitTab> {
   final picker = ImagePicker();
   final notes = TextEditingController();
   final competitor = TextEditingController();
@@ -98,14 +98,18 @@ class _SalesVisitScreenState extends State<SalesVisitScreen> {
   @override
   Widget build(BuildContext context) => DefaultTabController(
     length: 2,
-    child: Scaffold(
-      appBar: const TabBar(
-        tabs: [
-          Tab(text: 'Input Kunjungan'),
-          Tab(text: 'Timeline Aktivitas'),
-        ],
-      ),
-      body: TabBarView(children: [_form(), _timeline()]),
+    child: Column(
+      children: [
+        const Material(
+          child: TabBar(
+            tabs: [
+              Tab(text: 'Input Kunjungan'),
+              Tab(text: 'Timeline Aktivitas'),
+            ],
+          ),
+        ),
+        Expanded(child: TabBarView(children: [_form(), _timeline()])),
+      ],
     ),
   );
 
