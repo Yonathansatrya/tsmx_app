@@ -39,6 +39,50 @@ class AppState with ChangeNotifier {
   String? _lastAuthError;
   String? get lastAuthError => _lastAuthError;
 
+  String _userRole = 'Executive Administrator';
+  String get userRole => _userRole;
+  bool get _shouldScopeSalesData =>
+      _userRole == 'Sales' && _currentUser?.isNotEmpty == true;
+
+  static const String _prefsUserRoleKey = 'user_role';
+
+  Future<void> setUserRole(String role) async {
+    _userRole = role;
+    notifyListeners();
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.setString(_prefsUserRoleKey, role);
+    } catch (_) {}
+    if (_isAuthenticated) await refreshDataForCurrentRole();
+  }
+
+  Future<void> refreshDataForCurrentRole() async {
+    if (!_isAuthenticated) return;
+    if (_userRole == 'Sales') {
+      await Future.wait([
+        fetchSalesOrdersFromFrappe(),
+        fetchSalesInvoicesFromFrappe(),
+        fetchInventoryFromFrappe(
+          filters: const [
+            ['warehouse', '=', 'Stores - Jakarta'],
+          ],
+        ),
+      ]);
+      return;
+    }
+    await prefetchInitialData();
+  }
+
+  Future<void> _restoreUserRole() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final saved = sp.getString(_prefsUserRoleKey);
+      if (saved != null) {
+        _userRole = saved;
+      }
+    } catch (_) {}
+  }
+
   List<SalesOrder> _salesOrders = [];
   List<PurchaseOrder> _purchaseOrders = [];
   List<DeliveryNote> _deliveryNotes = [];
@@ -225,6 +269,7 @@ class AppState with ChangeNotifier {
     () async {
       await _restoreFrappeConfig();
       await _restoreSummaryCache();
+      await _restoreUserRole();
       _isInitializing = false;
       notifyListeners();
     }();
@@ -272,7 +317,21 @@ class AppState with ChangeNotifier {
   Future<void> prefetchInitialData() async {
     try {
       await fetchWarehousesFromFrappe();
-      await fetchInventoryFromFrappe();
+      await fetchInventoryFromFrappe(
+        filters: _shouldScopeSalesData
+            ? const [
+                ['warehouse', '=', 'Stores - Jakarta'],
+              ]
+            : null,
+      );
+      if (_shouldScopeSalesData) {
+        await Future.wait([
+          fetchSalesOrdersFromFrappe(),
+          fetchSalesInvoicesFromFrappe(),
+        ]);
+        await refreshNotifications(silent: true);
+        return;
+      }
       await Future.wait([
         fetchSalesOrdersFromFrappe(),
         fetchPurchaseOrdersFromFrappe(),
@@ -615,6 +674,7 @@ class AppState with ChangeNotifier {
         if (company != null && company.isNotEmpty) ['company', '=', company],
         ['docstatus', '=', 1],
         ['outstanding_amount', '>', 0],
+        if (_shouldScopeSalesData) ['owner', '=', _currentUser],
       ],
       maxRows: null,
     );
@@ -714,6 +774,8 @@ class AppState with ChangeNotifier {
       ],
       filters: [
         ['item_code', '=', itemCode],
+        if (warehouse != null && warehouse.isNotEmpty)
+          ['warehouse', '=', warehouse],
       ],
       maxRows: null,
     );
@@ -774,6 +836,7 @@ class AppState with ChangeNotifier {
       filters: [
         ['customer', '=', customer],
         if (company != null && company.isNotEmpty) ['company', '=', company],
+        if (_shouldScopeSalesData) ['owner', '=', _currentUser],
       ],
       orderBy:
           '${isInvoice ? 'posting_date' : 'transaction_date'} desc, name desc',
@@ -2448,10 +2511,15 @@ class AppState with ChangeNotifier {
   Future<List<SalesOrder>> _fetchSalesOrderPage({
     required int limitStart,
   }) async {
+    final filters = <List<dynamic>>[
+      ...?_salesOrderFilters(_salesOrderStatus),
+      if (_shouldScopeSalesData) ['owner', '=', _currentUser],
+    ];
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Sales Order',
       fields: const [
         'name',
+        'owner',
         'customer',
         'customer_name',
         'grand_total',
@@ -2466,7 +2534,7 @@ class AppState with ChangeNotifier {
       limit: _documentPageSize,
       limitStart: limitStart,
       orderBy: 'transaction_date desc, name desc',
-      filters: _salesOrderFilters(_salesOrderStatus),
+      filters: filters.isEmpty ? null : filters,
       orFilters: _searchFilters(_salesOrderSearch, const [
         'name',
         'customer',
@@ -2510,10 +2578,15 @@ class AppState with ChangeNotifier {
   Future<List<SalesInvoice>> _fetchSalesInvoicePage({
     required int limitStart,
   }) async {
+    final filters = <List<dynamic>>[
+      ...?_statusFilters(_salesInvoiceStatus),
+      if (_shouldScopeSalesData) ['owner', '=', _currentUser],
+    ];
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Sales Invoice',
       fields: const [
         'name',
+        'owner',
         'customer',
         'customer_name',
         'status',
@@ -2526,7 +2599,7 @@ class AppState with ChangeNotifier {
       limit: _documentPageSize,
       limitStart: limitStart,
       orderBy: 'posting_date desc, name desc',
-      filters: _statusFilters(_salesInvoiceStatus),
+      filters: filters.isEmpty ? null : filters,
       orFilters: _searchFilters(_salesInvoiceSearch, const [
         'name',
         'customer',

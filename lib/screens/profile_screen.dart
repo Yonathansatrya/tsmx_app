@@ -105,7 +105,8 @@ class ProfileScreen extends StatelessWidget {
             _profileMenu(
               icon: Icons.badge_rounded,
               title: 'Role',
-              value: 'Executive Administrator',
+              value: appState.userRole,
+              onTap: () => _showRoleSelector(context, appState),
             ),
 
             _profileMenu(
@@ -152,58 +153,227 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _profileMenu({
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
+  void _showRoleSelector(BuildContext context, AppState appState) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.softGreen,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: AppColors.primary, size: 20),
-          ),
-
-          const SizedBox(width: 12),
-
-          Expanded(
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.slate,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 13,
+                const Text(
+                  'Select Access Role',
+                  style: TextStyle(
+                    fontFamily: 'HankenGrotesk',
+                    fontSize: 16,
                     fontWeight: FontWeight.w900,
                     color: AppColors.navy,
                   ),
                 ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Beralih role untuk mengubah tampilan dashboard dan fitur aplikasi.',
+                  style: TextStyle(fontSize: 12, color: AppColors.slate),
+                ),
+                const SizedBox(height: 18),
+                _roleOptionCard(
+                  context: context,
+                  title: 'Executive Administrator',
+                  description:
+                      'Akses penuh ke modul penjualan, pembelian, stok, dan ringkasan finansial.',
+                  icon: Icons.admin_panel_settings_rounded,
+                  isSelected: appState.userRole == 'Executive Administrator',
+                  onTap: () async {
+                    await appState.setUserRole('Executive Administrator');
+                    if (!sheetContext.mounted || !context.mounted) return;
+                    Navigator.pop(sheetContext);
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Tampilan Executive Administrator diaktifkan',
+                        ),
+                        backgroundColor: AppColors.primary,
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                _roleOptionCard(
+                  context: context,
+                  title: 'Sales',
+                  description:
+                      'Akses ke Sales Order, Collection, Sales Visit, dan histori approval.',
+                  icon: Icons.trending_up_rounded,
+                  isSelected: appState.userRole == 'Sales',
+                  onTap: () async {
+                    await appState.setUserRole('Sales');
+                    if (!sheetContext.mounted || !context.mounted) return;
+                    Navigator.pop(sheetContext);
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Tampilan Sales diaktifkan'),
+                        backgroundColor: AppColors.primary,
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
-        ],
+        );
+      },
+    );
+  }
+
+  Widget _roleOptionCard({
+    required BuildContext context,
+    required String title,
+    required String description,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: isSelected
+              ? AppColors.primary
+              : AppColors.primary.withValues(alpha: 0.08),
+          width: isSelected ? 1.8 : 1,
+        ),
+      ),
+      color: isSelected
+          ? AppColors.softGreen.withValues(alpha: 0.3)
+          : AppColors.white,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primary.withValues(alpha: 0.15)
+                      : AppColors.softGreen,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: isSelected ? AppColors.primary : AppColors.navy,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: AppColors.slate,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isSelected)
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _profileMenu({
+    required IconData icon,
+    required String title,
+    required String value,
+    VoidCallback? onTap,
+  }) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.06)),
+      ),
+      color: AppColors.white,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.softGreen,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.slate,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.navy,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (onTap != null)
+                const Icon(
+                  Icons.keyboard_arrow_right_rounded,
+                  color: AppColors.slate,
+                  size: 18,
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

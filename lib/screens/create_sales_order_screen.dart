@@ -1586,11 +1586,11 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     final costCenterOptions = _costCentersForWarehouse(warehouseOptions);
     final currencyOptions = _normalizeOptions([
       ..._currencyOptions,
-      if (_selectedCurrency != null) _selectedCurrency!,
+      ?_selectedCurrency,
     ]);
     final priceListOptions = _normalizeOptions([
       ..._priceListOptions,
-      if (_selectedPriceList != null) _selectedPriceList!,
+      ?_selectedPriceList,
     ]);
 
     return Scaffold(

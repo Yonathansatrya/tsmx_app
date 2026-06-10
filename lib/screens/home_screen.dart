@@ -8,6 +8,7 @@ import '../utils/erp_doc_utils.dart';
 import '../utils/erp_format.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
+import 'sales/sales_dashboard_screen.dart';
 
 import 'tabs/dashboard_tab.dart';
 import 'tabs/buying_tab.dart';
@@ -81,6 +82,10 @@ class _HomeScreenState extends State<HomeScreen> {
           child: CircularProgressIndicator(color: AppColors.primary),
         ),
       );
+    }
+
+    if (appState.userRole == 'Sales') {
+      return const SalesDashboardScreen();
     }
 
     return Scaffold(
