@@ -18,6 +18,7 @@ import '../models/warehouse_info.dart';
 import '../models/stock_area_option.dart';
 import '../models/erp_summary.dart';
 import '../models/sales_order_insight.dart';
+import '../models/sales_workspace.dart';
 import '../services/frappe_service.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/num_parse.dart';
@@ -30,6 +31,12 @@ class AppState with ChangeNotifier {
 
   String? _currentUser;
   String? get currentUser => _currentUser;
+  String? _currentEmployee;
+  String? get currentEmployee => _currentEmployee;
+  String? _currentSalesPerson;
+  String? get currentSalesPerson => _currentSalesPerson;
+  String? _salesIdentityError;
+  String? get salesIdentityError => _salesIdentityError;
 
   bool _rememberDevice = true;
   bool get rememberDevice => _rememberDevice;
@@ -41,8 +48,7 @@ class AppState with ChangeNotifier {
 
   String _userRole = 'Executive Administrator';
   String get userRole => _userRole;
-  bool get _shouldScopeSalesData =>
-      _userRole == 'Sales' && _currentUser?.isNotEmpty == true;
+  bool get _shouldScopeSalesData => _userRole == 'Sales';
 
   static const String _prefsUserRoleKey = 'user_role';
 
@@ -59,6 +65,7 @@ class AppState with ChangeNotifier {
   Future<void> refreshDataForCurrentRole() async {
     if (!_isAuthenticated) return;
     if (_userRole == 'Sales') {
+      await resolveCurrentSalesIdentity();
       await Future.wait([
         fetchSalesOrdersFromFrappe(),
         fetchSalesInvoicesFromFrappe(),
@@ -71,6 +78,91 @@ class AppState with ChangeNotifier {
       return;
     }
     await prefetchInitialData();
+  }
+
+  Future<void> syncCurrentUserRoleFromFrappe() async {
+    if (_currentUser == null || _currentUser!.isEmpty) return;
+    try {
+      final user = await _frappeService.fetchDocument('User', _currentUser!);
+      final roleProfile = user['role_profile_name']?.toString().trim() ?? '';
+      final roles = user['roles'];
+      final hasSalesRole =
+          roleProfile.toLowerCase() == 'sales' ||
+          (roles is List &&
+              roles.whereType<Map>().any(
+                (row) => row['role']?.toString().toLowerCase() == 'sales',
+              ));
+      if (hasSalesRole) {
+        _userRole = 'Sales';
+      } else if (roleProfile.isNotEmpty) {
+        _userRole = roleProfile;
+      }
+      final sp = await SharedPreferences.getInstance();
+      await sp.setString(_prefsUserRoleKey, _userRole);
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<String?> resolveCurrentSalesIdentity() async {
+    _currentEmployee = null;
+    _currentSalesPerson = null;
+    _salesIdentityError = null;
+    if (_currentUser == null || _currentUser!.isEmpty) {
+      _salesIdentityError = 'User login ERPNext tidak tersedia.';
+      notifyListeners();
+      return null;
+    }
+    try {
+      List<Map<String, dynamic>> employees;
+      try {
+        employees = await _frappeService.fetchResource(
+          'Employee',
+          fields: const ['name'],
+          filters: [
+            ['user_id', '=', _currentUser],
+          ],
+          limit: 1,
+        );
+      } catch (error) {
+        throw Exception(
+          'Role Sales tidak memiliki izin membaca mapping Employee.user_id. '
+          'Detail: $error',
+        );
+      }
+      if (employees.isEmpty) {
+        throw Exception(
+          'User ${_currentUser!} belum terhubung ke Employee melalui field User ID.',
+        );
+      }
+      _currentEmployee = employees.first['name']?.toString();
+      List<Map<String, dynamic>> salesPersons;
+      try {
+        salesPersons = await _frappeService.fetchResource(
+          'Sales Person',
+          fields: const ['name'],
+          filters: [
+            ['employee', '=', _currentEmployee],
+            ['is_group', '=', 0],
+          ],
+          limit: 1,
+        );
+      } catch (error) {
+        throw Exception(
+          'Role Sales tidak memiliki izin membaca mapping Sales Person.employee. '
+          'Detail: $error',
+        );
+      }
+      if (salesPersons.isEmpty) {
+        throw Exception(
+          'Employee $_currentEmployee belum terhubung ke Sales Person non-group.',
+        );
+      }
+      _currentSalesPerson = salesPersons.first['name']?.toString();
+    } catch (error) {
+      _salesIdentityError = error.toString();
+    }
+    notifyListeners();
+    return _currentSalesPerson;
   }
 
   Future<void> _restoreUserRole() async {
@@ -301,6 +393,7 @@ class AppState with ChangeNotifier {
       await _frappeService.login(cfg['username']!, password);
       _isAuthenticated = true;
       _currentUser = cfg['username'];
+      await syncCurrentUserRoleFromFrappe();
       _startNotificationPolling();
       await prefetchInitialData();
       notifyListeners();
@@ -420,6 +513,7 @@ class AppState with ChangeNotifier {
       await _frappeService.login(username, password);
       _isAuthenticated = true;
       _currentUser = username;
+      await syncCurrentUserRoleFromFrappe();
       await refreshNotifications();
       _startNotificationPolling();
       notifyListeners();
@@ -621,6 +715,250 @@ class AppState with ChangeNotifier {
     return SalesOrder.fromJson(doc);
   }
 
+  List<List<dynamic>> get _salesOwnerFilter => _shouldScopeSalesData
+      ? [
+          ['owner', '=', _currentUser ?? '__unmapped_sales_user__'],
+        ]
+      : const [];
+
+  Future<List<SalesCustomerOption>> fetchSalesCustomers() async {
+    if (_shouldScopeSalesData &&
+        (_currentSalesPerson == null || _currentSalesPerson!.isEmpty)) {
+      await resolveCurrentSalesIdentity();
+    }
+    List<Map<String, dynamic>> assignedSalesTeamRows = const [];
+    if (_shouldScopeSalesData) {
+      if (_currentSalesPerson == null || _currentSalesPerson!.isEmpty) {
+        throw Exception(
+          _salesIdentityError ?? 'Sales Person user login belum tersedia.',
+        );
+      }
+      assignedSalesTeamRows = await _fetchAllResourcePages(
+        doctype: 'Sales Team',
+        fields: const [
+          'parent',
+          'parenttype',
+          'sales_person',
+          'allocated_percentage',
+          'commission_rate',
+        ],
+        filters: [
+          ['parenttype', '=', 'Customer'],
+          ['sales_person', '=', _currentSalesPerson],
+        ],
+        maxRows: null,
+      );
+    }
+    final assignedCustomerIds = assignedSalesTeamRows
+        .map((row) => row['parent']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (_shouldScopeSalesData && assignedCustomerIds.isEmpty) return const [];
+    var salesTeamRows = assignedSalesTeamRows;
+    if (_shouldScopeSalesData) {
+      salesTeamRows = await _fetchAllResourcePages(
+        doctype: 'Sales Team',
+        fields: const [
+          'parent',
+          'parenttype',
+          'sales_person',
+          'allocated_percentage',
+          'commission_rate',
+        ],
+        filters: [
+          ['parenttype', '=', 'Customer'],
+          ['parent', 'in', assignedCustomerIds.toList()],
+        ],
+        maxRows: null,
+      );
+    }
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Customer',
+      fields: const ['name', 'customer_name', 'primary_address'],
+      filters: _shouldScopeSalesData
+          ? [
+              ['name', 'in', assignedCustomerIds.toList()],
+            ]
+          : null,
+      orderBy: 'customer_name asc',
+      maxRows: null,
+    );
+    final customers = rows
+        .map(SalesCustomerOption.fromJson)
+        .where((customer) => customer.id.isNotEmpty)
+        .toList();
+    if (!_shouldScopeSalesData) return customers;
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final row in salesTeamRows) {
+      final parent = row['parent']?.toString() ?? '';
+      if (parent.isEmpty) continue;
+      grouped.putIfAbsent(parent, () => []).add({
+        'sales_person': row['sales_person'],
+        'allocated_percentage':
+            NumParse.asDouble(row['allocated_percentage']) > 0
+            ? NumParse.asDouble(row['allocated_percentage'])
+            : 100,
+        if (row['commission_rate'] != null)
+          'commission_rate': row['commission_rate'],
+      });
+    }
+    return customers
+        .map(
+          (customer) => customer.copyWithSalesTeam(grouped[customer.id] ?? []),
+        )
+        .toList();
+  }
+
+  Future<List<PromiseToPay>> fetchPromisesToPay() async {
+    final rows = await _fetchAllResourcePages(
+      doctype: 'TMSX Promise To Pay',
+      fields: const [
+        'name',
+        'customer',
+        'sales_invoice',
+        'amount',
+        'promise_date',
+        'notes',
+        'status',
+      ],
+      filters: _shouldScopeSalesData
+          ? [
+              ['owner', '=', _currentUser ?? '__unmapped_sales_user__'],
+            ]
+          : null,
+      orderBy: 'promise_date desc, name desc',
+      maxRows: null,
+    );
+    return rows.map(PromiseToPay.fromJson).toList();
+  }
+
+  Future<PromiseToPay> createPromiseToPay({
+    required String customer,
+    String? salesInvoice,
+    required double amount,
+    required DateTime promiseDate,
+    String? notes,
+  }) async {
+    final created = await _frappeService.createDocument('TMSX Promise To Pay', {
+      'customer': customer,
+      if (salesInvoice?.trim().isNotEmpty == true)
+        'sales_invoice': salesInvoice!.trim(),
+      'amount': amount,
+      'promise_date': promiseDate.toIso8601String().split('T').first,
+      if (notes?.trim().isNotEmpty == true) 'notes': notes!.trim(),
+      'status': 'Pending',
+    });
+    return PromiseToPay.fromJson(created);
+  }
+
+  Future<List<CollectionRanking>> fetchCollectionRanking() async {
+    final invoiceRows = await _fetchAllResourcePages(
+      doctype: 'Sales Invoice',
+      fields: const ['name', 'grand_total', 'outstanding_amount', 'docstatus'],
+      filters: const [
+        ['docstatus', '=', 1],
+      ],
+      maxRows: null,
+    );
+    if (invoiceRows.isEmpty) return const [];
+    final invoiceById = {
+      for (final row in invoiceRows) row['name']?.toString() ?? '': row,
+    }..remove('');
+    final teamRows = await _fetchAllResourcePages(
+      doctype: 'Sales Team',
+      fields: const [
+        'parent',
+        'parenttype',
+        'sales_person',
+        'allocated_percentage',
+      ],
+      filters: [
+        ['parenttype', '=', 'Sales Invoice'],
+        ['parent', 'in', invoiceById.keys.toList()],
+      ],
+      maxRows: null,
+    );
+    final totals = <String, double>{};
+    for (final team in teamRows) {
+      final invoice = invoiceById[team['parent']?.toString() ?? ''];
+      final salesPerson = team['sales_person']?.toString() ?? '';
+      if (invoice == null || salesPerson.isEmpty) continue;
+      final percentage = NumParse.asDouble(team['allocated_percentage']);
+      final ratio = percentage > 0 ? percentage / 100 : 1.0;
+      final collected =
+          NumParse.asDouble(invoice['grand_total']) -
+          NumParse.asDouble(invoice['outstanding_amount']);
+      totals[salesPerson] =
+          (totals[salesPerson] ?? 0) +
+          collected.clamp(0, double.infinity) * ratio;
+    }
+    final sorted = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return [
+      for (var index = 0; index < sorted.length; index++)
+        CollectionRanking(
+          salesPerson: sorted[index].key,
+          amount: sorted[index].value,
+          rank: index + 1,
+        ),
+    ];
+  }
+
+  Future<List<SalesVisit>> fetchSalesVisits() async {
+    final rows = await _fetchAllResourcePages(
+      doctype: 'TMSX Sales Visit',
+      fields: const [
+        'name',
+        'customer',
+        'check_in_time',
+        'check_out_time',
+        'status',
+        'notes',
+      ],
+      filters: _shouldScopeSalesData
+          ? [
+              ['owner', '=', _currentUser ?? '__unmapped_sales_user__'],
+            ]
+          : null,
+      orderBy: 'check_in_time desc, name desc',
+      maxRows: null,
+    );
+    return rows.map(SalesVisit.fromJson).toList();
+  }
+
+  Future<SalesVisit> createSalesVisit({
+    required String customer,
+    String? notes,
+    List<Map<String, dynamic>> competitors = const [],
+    List<Map<String, dynamic>> potentialOrders = const [],
+    String? photoPath,
+  }) async {
+    final created = await _frappeService.createDocument('TMSX Sales Visit', {
+      'customer': customer,
+      'check_in_time': DateTime.now().toIso8601String(),
+      'status': 'Checked In',
+      if (notes?.trim().isNotEmpty == true) 'notes': notes!.trim(),
+      if (competitors.isNotEmpty) 'competitors': competitors,
+      if (potentialOrders.isNotEmpty) 'potential_orders': potentialOrders,
+    });
+    final visit = SalesVisit.fromJson(created);
+    if (photoPath?.isNotEmpty == true && visit.id.isNotEmpty) {
+      await uploadAttachment(
+        doctype: 'TMSX Sales Visit',
+        documentName: visit.id,
+        filePath: photoPath!,
+      );
+    }
+    return visit;
+  }
+
+  Future<void> checkOutSalesVisit(String visitId) async {
+    await _frappeService.updateDocument('TMSX Sales Visit', visitId, {
+      'check_out_time': DateTime.now().toIso8601String(),
+      'status': 'Checked Out',
+    });
+  }
+
   Future<CustomerSalesInsight> fetchCustomerSalesInsight(
     String customer, {
     String? company,
@@ -674,7 +1012,7 @@ class AppState with ChangeNotifier {
         if (company != null && company.isNotEmpty) ['company', '=', company],
         ['docstatus', '=', 1],
         ['outstanding_amount', '>', 0],
-        if (_shouldScopeSalesData) ['owner', '=', _currentUser],
+        ..._salesOwnerFilter,
       ],
       maxRows: null,
     );
@@ -836,7 +1174,7 @@ class AppState with ChangeNotifier {
       filters: [
         ['customer', '=', customer],
         if (company != null && company.isNotEmpty) ['company', '=', company],
-        if (_shouldScopeSalesData) ['owner', '=', _currentUser],
+        ..._salesOwnerFilter,
       ],
       orderBy:
           '${isInvoice ? 'posting_date' : 'transaction_date'} desc, name desc',
@@ -905,7 +1243,8 @@ class AppState with ChangeNotifier {
     String? sellingPriceList,
     String? priceListCurrency,
     bool ignorePricingRule = false,
-    required String salesPerson,
+    String? salesPerson,
+    List<Map<String, dynamic>>? salesTeam,
     DateTime? transactionDate,
     DateTime? deliveryDate,
   }) async {
@@ -961,9 +1300,12 @@ class AppState with ChangeNotifier {
         'naming_series': series.trim(),
       if (costCenter != null && costCenter.trim().isNotEmpty)
         'cost_center': costCenter.trim(),
-      'sales_team': [
-        {'sales_person': salesPerson.trim(), 'allocated_percentage': 100},
-      ],
+      if (salesTeam?.isNotEmpty == true)
+        'sales_team': salesTeam
+      else if (salesPerson?.trim().isNotEmpty == true)
+        'sales_team': [
+          {'sales_person': salesPerson!.trim(), 'allocated_percentage': 100},
+        ],
       'items': orderItems,
       if (warehouse != null && warehouse.trim().isNotEmpty)
         'set_warehouse': warehouse.trim(),
@@ -1022,6 +1364,7 @@ class AppState with ChangeNotifier {
     String? priceListCurrency,
     bool? ignorePricingRule,
     String? salesPerson,
+    List<Map<String, dynamic>>? salesTeam,
     DateTime? transactionDate,
     DateTime? deliveryDate,
     String? status,
@@ -1058,7 +1401,9 @@ class AppState with ChangeNotifier {
       if (status != null && status.trim().isNotEmpty) 'status': status.trim(),
       if (costCenter != null && costCenter.trim().isNotEmpty)
         'cost_center': costCenter.trim(),
-      if (salesPerson != null && salesPerson.trim().isNotEmpty)
+      if (salesTeam?.isNotEmpty == true)
+        'sales_team': salesTeam
+      else if (salesPerson != null && salesPerson.trim().isNotEmpty)
         'sales_team': [
           {'sales_person': salesPerson.trim(), 'allocated_percentage': 100},
         ],
@@ -2513,7 +2858,7 @@ class AppState with ChangeNotifier {
   }) async {
     final filters = <List<dynamic>>[
       ...?_salesOrderFilters(_salesOrderStatus),
-      if (_shouldScopeSalesData) ['owner', '=', _currentUser],
+      ..._salesOwnerFilter,
     ];
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Sales Order',
@@ -2580,7 +2925,7 @@ class AppState with ChangeNotifier {
   }) async {
     final filters = <List<dynamic>>[
       ...?_statusFilters(_salesInvoiceStatus),
-      if (_shouldScopeSalesData) ['owner', '=', _currentUser],
+      ..._salesOwnerFilter,
     ];
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Sales Invoice',

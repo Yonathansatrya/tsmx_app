@@ -3,11 +3,11 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../profile_screen.dart';
-import 'sales_home_tab.dart';
-import 'sales_order_tab.dart';
-import 'collection_dashboard_screen.dart';
-import 'sales_visit_screen.dart';
-import 'sales_histori_tab.dart';
+import 'sales_overview_tab.dart';
+import 'sales_order/sales_order_screen.dart';
+import 'collection/collection_dashboard_screen.dart';
+import 'sales_visit/sales_visit_screen.dart';
+import 'sales_order_history_tab.dart';
 
 class SalesDashboardScreen extends StatefulWidget {
   const SalesDashboardScreen({super.key});
@@ -20,11 +20,11 @@ class _SalesDashboardScreenState extends State<SalesDashboardScreen> {
   int _currentIndex = 0;
 
   late final List<Widget> _screens = [
-    SalesHomeTab(onMenuSelected: _changeTab),
-    const SalesOrderMobileScreen(),
+    SalesOverviewTab(onMenuSelected: _changeTab),
+    const SalesOrderScreen(),
     const CollectionDashboardScreen(),
     const SalesVisitScreen(),
-    const SalesHistoriTab(),
+    const SalesOrderHistoryTab(),
   ];
 
   void _changeTab(int index) {

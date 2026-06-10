@@ -31,7 +31,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   final List<_AdditionalItemRow> _additionalItems = [];
   final ImagePicker _imagePicker = ImagePicker();
   final List<XFile> _photos = [];
-  bool _attachPhotosToCustomer = false;
   CustomerSalesInsight? _customerInsight;
   final Map<String, ItemSalesInsight> _itemInsights = {};
   final Set<String> _loadingItemPrices = {};
@@ -733,6 +732,14 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }).toList();
   }
 
+  _CustomerOption? _selectedCustomerOption() {
+    final id = _customerCtrl.text.trim();
+    for (final customer in _customerOptions) {
+      if (customer.id == id) return customer;
+    }
+    return null;
+  }
+
   Future<void> _showCustomerSelectSheet() async {
     String? selectedCustomerId;
     var shouldAddCustomer = false;
@@ -799,14 +806,16 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                     onChanged: (value) => setSheetState(() => query = value),
                   ),
                   const SizedBox(height: 10),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(sheetContext, true);
-                    },
-                    icon: const Icon(Icons.person_add_alt_1_rounded),
-                    label: const Text('Add Customer Baru'),
-                  ),
-                  const SizedBox(height: 10),
+                  if (context.read<AppState>().userRole != 'Sales') ...[
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(sheetContext, true);
+                      },
+                      icon: const Icon(Icons.person_add_alt_1_rounded),
+                      label: const Text('Add Customer Baru'),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   SizedBox(
                     height: MediaQuery.of(sheetContext).size.height * 0.42,
                     child: customers.isEmpty
@@ -1152,7 +1161,23 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       );
       return;
     }
-    if (_selectedSalesPerson == null || _selectedSalesPerson!.trim().isEmpty) {
+    final appState = context.read<AppState>();
+    final customerSalesTeam = _selectedCustomerOption()?.salesTeam ?? const [];
+    if (appState.userRole == 'Sales' && customerSalesTeam.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            appState.salesIdentityError ??
+                'Customer belum memiliki Sales Team untuk akun Sales ini.',
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (appState.userRole != 'Sales' &&
+        (_selectedSalesPerson == null ||
+            _selectedSalesPerson!.trim().isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Sales Person wajib dipilih'),
@@ -1196,7 +1221,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         _isSaving = true;
       });
 
-      final appState = context.read<AppState>();
       await _ensureWarehouseEnabled(appState);
       final itemCode = (_selectedItemCode ?? '').isNotEmpty
           ? _selectedItemCode!
@@ -1221,7 +1245,10 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           sellingPriceList: _selectedPriceList,
           priceListCurrency: _priceListCurrency,
           ignorePricingRule: _ignorePricingRule,
-          salesPerson: _selectedSalesPerson,
+          salesPerson: appState.userRole == 'Sales'
+              ? null
+              : _selectedSalesPerson,
+          salesTeam: appState.userRole == 'Sales' ? customerSalesTeam : null,
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
         );
@@ -1236,23 +1263,22 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           sellingPriceList: _selectedPriceList,
           priceListCurrency: _priceListCurrency,
           ignorePricingRule: _ignorePricingRule,
-          salesPerson: _selectedSalesPerson!,
+          salesPerson: appState.userRole == 'Sales'
+              ? null
+              : _selectedSalesPerson,
+          salesTeam: appState.userRole == 'Sales' ? customerSalesTeam : null,
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
         );
       }
       var failedUploads = 0;
+      final uploadErrors = <String>[];
       for (final photo in _photos) {
         try {
-          await appState.uploadAttachment(
-            doctype: _attachPhotosToCustomer ? 'Customer' : 'Sales Order',
-            documentName: _attachPhotosToCustomer
-                ? _customerCtrl.text.trim()
-                : savedOrder.id,
-            filePath: photo.path,
-          );
-        } catch (_) {
+          await appState.uploadSalesOrderAttachment(savedOrder.id, photo.path);
+        } catch (error) {
           failedUploads++;
+          uploadErrors.add(error.toString());
         }
       }
       if (!mounted) return;
@@ -1262,9 +1288,21 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
             '${widget.isEditMode ? 'Sales Order berhasil diperbarui' : 'Sales Order berhasil dibuat'}'
             '${failedUploads > 0 ? ', tetapi $failedUploads foto gagal di-upload' : ''}',
           ),
-          backgroundColor: AppColors.primary,
+          backgroundColor: failedUploads > 0
+              ? Colors.orange
+              : AppColors.primary,
         ),
       );
+      if (uploadErrors.isNotEmpty && mounted) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Upload Attachment Gagal'),
+            content: Text(uploadErrors.join('\n\n')),
+          ),
+        );
+      }
+      if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
@@ -1358,29 +1396,15 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
             '';
       } catch (_) {}
 
-      List<Map<String, dynamic>> customerData;
-      try {
-        customerData = await appState.frappeService.fetchResource(
-          'Customer',
-          fields: const ['name', 'customer_name'],
-          orderBy: 'customer_name asc',
-        );
-      } catch (_) {
-        customerData = await appState.frappeService.fetchResource(
-          'Customer',
-          fields: const ['name'],
-          orderBy: 'name asc',
-        );
-      }
-
-      final customerOptions = customerData
-          .map((row) {
-            final id = row['name']?.toString() ?? '';
-            final name = row['customer_name']?.toString() ?? id;
-            if (id.isEmpty) return null;
-            return _CustomerOption(id: id, name: name);
-          })
-          .whereType<_CustomerOption>()
+      final salesCustomers = await appState.fetchSalesCustomers();
+      final customerOptions = salesCustomers
+          .map(
+            (customer) => _CustomerOption(
+              id: customer.id,
+              name: customer.name,
+              salesTeam: customer.salesTeam,
+            ),
+          )
           .toList();
 
       List<Map<String, dynamic>> itemData;
@@ -1470,12 +1494,13 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
             : (costCenterChoices.isNotEmpty
                   ? costCenterChoices.first.name
                   : null);
-        _selectedSalesPerson =
-            _salesPersonOptions.contains(_selectedSalesPerson)
-            ? _selectedSalesPerson
-            : (_salesPersonOptions.isNotEmpty
-                  ? _salesPersonOptions.first
-                  : null);
+        _selectedSalesPerson = appState.userRole == 'Sales'
+            ? appState.currentSalesPerson
+            : (_salesPersonOptions.contains(_selectedSalesPerson)
+                  ? _selectedSalesPerson
+                  : (_salesPersonOptions.isNotEmpty
+                        ? _salesPersonOptions.first
+                        : null));
         _itemOptions = itemOptions;
         _selectedWarehouse = selectedWarehouse;
         _selectedCurrency = _currencyOptions.contains(_selectedCurrency)
@@ -1898,42 +1923,63 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
                     const SizedBox(height: 12),
 
-                    DropdownButtonFormField<String>(
-                      initialValue:
-                          _salesPersonOptions.contains(_selectedSalesPerson)
-                          ? _selectedSalesPerson
-                          : null,
-                      decoration: InputDecoration(
-                        labelText: 'Sales Person',
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
+                    if (appState.userRole == 'Sales')
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Sales',
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
                           ),
                         ),
-                      ),
-                      items: _salesPersonOptions
-                          .map(
-                            (salesPerson) => DropdownMenuItem(
-                              value: salesPerson,
-                              child: Text(salesPerson),
+                        child: Text(
+                          appState.currentSalesPerson ??
+                              appState.salesIdentityError ??
+                              '-',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      )
+                    else
+                      DropdownButtonFormField<String>(
+                        initialValue:
+                            _salesPersonOptions.contains(_selectedSalesPerson)
+                            ? _selectedSalesPerson
+                            : null,
+                        decoration: InputDecoration(
+                          labelText: 'Sales Person',
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
                             ),
-                          )
-                          .toList(),
-                      onChanged: _salesPersonOptions.isEmpty
-                          ? null
-                          : (value) =>
-                                setState(() => _selectedSalesPerson = value),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Sales Person wajib dipilih'
-                          : null,
-                      hint: _isLoadingSelectors
-                          ? const Text('Loading sales persons...')
-                          : const Text('Pilih sales person'),
-                    ),
+                          ),
+                        ),
+                        items: _salesPersonOptions
+                            .map(
+                              (salesPerson) => DropdownMenuItem(
+                                value: salesPerson,
+                                child: Text(salesPerson),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _salesPersonOptions.isEmpty
+                            ? null
+                            : (value) =>
+                                  setState(() => _selectedSalesPerson = value),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? 'Sales Person wajib dipilih'
+                            : null,
+                        hint: _isLoadingSelectors
+                            ? const Text('Loading sales persons...')
+                            : const Text('Pilih sales person'),
+                      ),
 
                     const SizedBox(height: 12),
 
@@ -2663,9 +2709,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
               _AttachmentCard(
                 photos: _photos,
-                attachToCustomer: _attachPhotosToCustomer,
-                onTargetChanged: (value) =>
-                    setState(() => _attachPhotosToCustomer = value),
                 onCamera: () => _pickPhoto(ImageSource.camera),
                 onGallery: () => _pickPhoto(ImageSource.gallery),
                 onRemove: (index) => setState(() => _photos.removeAt(index)),
@@ -2727,8 +2770,13 @@ class _ItemOption {
 class _CustomerOption {
   final String id;
   final String name;
+  final List<Map<String, dynamic>> salesTeam;
 
-  const _CustomerOption({required this.id, required this.name});
+  const _CustomerOption({
+    required this.id,
+    required this.name,
+    this.salesTeam = const [],
+  });
 }
 
 class _CostCenterOption {
@@ -3145,16 +3193,12 @@ class _InsightMetric extends StatelessWidget {
 
 class _AttachmentCard extends StatelessWidget {
   final List<XFile> photos;
-  final bool attachToCustomer;
-  final ValueChanged<bool> onTargetChanged;
   final VoidCallback onCamera;
   final VoidCallback onGallery;
   final ValueChanged<int> onRemove;
 
   const _AttachmentCard({
     required this.photos,
-    required this.attachToCustomer,
-    required this.onTargetChanged,
     required this.onCamera,
     required this.onGallery,
     required this.onRemove,
@@ -3173,19 +3217,15 @@ class _AttachmentCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Foto Order / Customer',
+            'Attachment Sales Order',
             style: TextStyle(fontWeight: FontWeight.w800),
           ),
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            value: attachToCustomer,
-            onChanged: onTargetChanged,
-            title: Text(
-              attachToCustomer
-                  ? 'Lampirkan ke Customer'
-                  : 'Lampirkan ke Sales Order',
+          const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text(
+              'Foto akan masuk ke panel Attachments setelah Draft Sales Order berhasil disimpan.',
+              style: TextStyle(fontSize: 11, color: AppColors.slate),
             ),
-            subtitle: const Text('Pilih target penyimpanan foto di ERPNext'),
           ),
           const SizedBox(height: 10),
           Row(
