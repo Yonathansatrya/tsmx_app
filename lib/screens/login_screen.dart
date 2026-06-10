@@ -177,12 +177,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextFormField(
                           controller: _usernameController,
                           decoration: _inputDecoration(
-                            label: 'Username or ID',
+                            label: 'Email',
                             icon: Icons.person_outline,
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
-                              return 'Please enter your username';
+                              return 'Please enter your email';
                             }
                             return null;
                           },

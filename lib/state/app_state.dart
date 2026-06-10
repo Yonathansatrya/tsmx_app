@@ -48,7 +48,7 @@ class AppState with ChangeNotifier {
   String? _lastAuthError;
   String? get lastAuthError => _lastAuthError;
 
-  String _userRole = 'Executive Administrator';
+  String _userRole = 'Unassigned';
   String get userRole => _userRole;
   bool get _shouldScopeSalesData => _userRole == 'Sales';
 
@@ -73,26 +73,103 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> syncCurrentUserRoleFromFrappe() async {
-    if (_currentUser == null || _currentUser!.isEmpty) return;
+    final currentUser = _currentUser?.trim() ?? '';
+    if (currentUser.isEmpty) {
+      throw Exception('User login Frappe tidak tersedia.');
+    }
+    String roleProfile = '';
+    List<String> sessionRoles = const [];
+    Object? directLookupError;
+
     try {
-      final user = await _frappeService.fetchDocument('User', _currentUser!);
-      final roleProfile = user['role_profile_name']?.toString().trim() ?? '';
-      final roles = user['roles'];
-      final hasSalesRole =
-          roleProfile.toLowerCase() == 'sales' ||
-          (roles is List &&
-              roles.whereType<Map>().any(
-                (row) => row['role']?.toString().toLowerCase() == 'sales',
-              ));
-      if (hasSalesRole) {
-        _userRole = 'Sales';
-      } else if (roleProfile.isNotEmpty) {
-        _userRole = roleProfile;
+      final user = await _frappeService.fetchDocument('User', currentUser);
+      roleProfile = user['role_profile_name']?.toString().trim() ?? '';
+    } catch (error) {
+      directLookupError = error;
+    }
+
+    if (roleProfile.isEmpty) {
+      try {
+        final value = await _frappeService.callMethod(
+          'frappe.client.get_value',
+          args: {
+            'doctype': 'User',
+            'filters': {'name': currentUser},
+            'fieldname': 'role_profile_name',
+          },
+        );
+        if (value is Map) {
+          roleProfile = value['role_profile_name']?.toString().trim() ?? '';
+        }
+      } catch (error) {
+        directLookupError ??= error;
       }
-      final sp = await SharedPreferences.getInstance();
-      await sp.setString(_prefsUserRoleKey, _userRole);
-      notifyListeners();
-    } catch (_) {}
+    }
+
+    if (roleProfile.isEmpty) {
+      try {
+        final access = await _frappeService.callMethod(
+          'tmsx_current_user_access',
+        );
+        if (access is Map) {
+          final returnedUser = access['user']?.toString().trim() ?? '';
+          if (returnedUser.isNotEmpty && returnedUser != currentUser) {
+            throw Exception('Identitas session Frappe tidak sesuai.');
+          }
+          roleProfile = access['role_profile_name']?.toString().trim() ?? '';
+          final roles = access['roles'];
+          if (roles is List) {
+            sessionRoles = roles
+                .map((role) => role.toString().trim())
+                .where((role) => role.isNotEmpty)
+                .toList();
+          }
+        }
+      } catch (error, stackTrace) {
+        if (!kReleaseMode) {
+          developer.log(
+            'Current user access endpoint is unavailable',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+    }
+
+    final hasSalesRole = sessionRoles.any(
+      (role) => role.toLowerCase() == 'sales',
+    );
+    if (roleProfile.isEmpty && hasSalesRole) {
+      roleProfile = 'Sales';
+    }
+
+    if (roleProfile.isEmpty) {
+      if (!kReleaseMode && directLookupError != null) {
+        developer.log(
+          'Direct Role Profile lookup failed',
+          error: directLookupError,
+        );
+      }
+      throw Exception(
+        'Role Profile akun tidak dapat dibaca. Admin Frappe perlu membuat '
+        'Server Script API "tmsx_current_user_access".',
+      );
+    }
+
+    await _applyCurrentRole(roleProfile);
+  }
+
+  Future<void> _applyCurrentRole(String roleProfile) async {
+    _userRole = _normalizeRoleProfile(roleProfile);
+    final sp = await SharedPreferences.getInstance();
+    await sp.setString(_prefsUserRoleKey, _userRole);
+    notifyListeners();
+  }
+
+  String _normalizeRoleProfile(String roleProfile) {
+    final normalized = roleProfile.trim();
+    if (normalized.toLowerCase() == 'sales') return 'Sales';
+    return normalized;
   }
 
   Future<String?> resolveCurrentSalesIdentity() async {
@@ -178,16 +255,6 @@ class AppState with ChangeNotifier {
     }
     notifyListeners();
     return _currentSalesPerson;
-  }
-
-  Future<void> _restoreUserRole() async {
-    try {
-      final sp = await SharedPreferences.getInstance();
-      final saved = sp.getString(_prefsUserRoleKey);
-      if (saved != null) {
-        _userRole = saved;
-      }
-    } catch (_) {}
   }
 
   List<SalesOrder> _salesOrders = [];
@@ -376,7 +443,6 @@ class AppState with ChangeNotifier {
     () async {
       await _restoreFrappeConfig();
       await _restoreSummaryCache();
-      await _restoreUserRole();
       _isInitializing = false;
       notifyListeners();
     }();
@@ -405,6 +471,7 @@ class AppState with ChangeNotifier {
 
     try {
       _frappeService.baseUrl = cfg['baseUrl'] ?? _defaultFrappeBaseUrl;
+      _userRole = 'Unassigned';
       await _frappeService.login(cfg['username']!, password);
       _isAuthenticated = true;
       _currentUser = cfg['username'];
@@ -417,6 +484,7 @@ class AppState with ChangeNotifier {
       await clearSessionConfig();
       _isAuthenticated = false;
       _currentUser = null;
+      _userRole = 'Unassigned';
       notifyListeners();
       return false;
     }
@@ -507,6 +575,7 @@ class AppState with ChangeNotifier {
     try {
       final sp = await SharedPreferences.getInstance();
       await sp.remove(_prefsFrappeConfigKey);
+      await sp.remove(_prefsUserRoleKey);
     } catch (_) {}
     _frappeService.username = null;
     _frappeService.password = null;
@@ -525,6 +594,7 @@ class AppState with ChangeNotifier {
     try {
       _lastAuthError = null;
       _frappeService.baseUrl = baseUrl;
+      _userRole = 'Unassigned';
       await _frappeService.login(username, password);
       _isAuthenticated = true;
       _currentUser = username;
@@ -540,6 +610,7 @@ class AppState with ChangeNotifier {
       }
       _isAuthenticated = false;
       _currentUser = null;
+      _userRole = 'Unassigned';
       notifyListeners();
       return false;
     }
@@ -550,6 +621,7 @@ class AppState with ChangeNotifier {
     _notifications = [];
     _isAuthenticated = false;
     _currentUser = null;
+    _userRole = 'Unassigned';
     await clearSessionConfig();
     notifyListeners();
   }
