@@ -27,6 +27,7 @@ import '../services/domains/sales_invoice_service.dart';
 import '../services/domains/sales_order_service.dart';
 import '../services/erp_services.dart';
 import '../services/frappe_service.dart';
+import '../services/sales_visit_location_service.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/num_parse.dart';
 import '../utils/frappe_page_walker.dart';
@@ -289,6 +290,12 @@ class AppState with ChangeNotifier {
   static const String _prefsSummaryCacheKey = 'erp_summary_cache';
 
   final ErpServices services;
+  final SalesVisitLocationService _visitLocationService =
+      SalesVisitLocationService();
+  SalesVisit? _activeSalesVisit;
+  SalesVisit? get activeSalesVisit => _activeSalesVisit;
+  VisitLocationPoint? _latestVisitLocation;
+  VisitLocationPoint? get latestVisitLocation => _latestVisitLocation;
 
   FrappeService get _frappeService => services.frappe;
   AuthService get _authService => services.auth;
@@ -493,6 +500,9 @@ class AppState with ChangeNotifier {
 
   Future<void> logout() async {
     _stopNotificationPolling();
+    await _visitLocationService.stopTracking();
+    _activeSalesVisit = null;
+    _latestVisitLocation = null;
     _notifications = [];
     _isAuthenticated = false;
     _currentUser = null;
@@ -668,6 +678,7 @@ class AppState with ChangeNotifier {
   @override
   void dispose() {
     _stopNotificationPolling();
+    unawaited(_visitLocationService.stopTracking());
     super.dispose();
   }
 
@@ -946,7 +957,7 @@ class AppState with ChangeNotifier {
 
   Future<List<SalesVisit>> fetchSalesVisits() async {
     final rows = await _fetchAllResourcePages(
-      doctype: 'TMSX Sales Visit',
+      doctype: 'Sales Visit',
       fields: const [
         'name',
         'customer',
@@ -954,6 +965,16 @@ class AppState with ChangeNotifier {
         'check_out_time',
         'status',
         'notes',
+        'sales_person',
+        'journey_start_time',
+        'address',
+        'target_latitude',
+        'target_longitude',
+        'check_in_latitude',
+        'check_in_longitude',
+        'check_out_latitude',
+        'check_out_longitude',
+        'check_in_distance',
       ],
       filters: _shouldScopeSalesData
           ? [
@@ -961,42 +982,217 @@ class AppState with ChangeNotifier {
             ]
           : null,
       orderBy: 'check_in_time desc, name desc',
-      maxRows: null,
+      maxRows: 300,
     );
-    return rows.map(SalesVisit.fromJson).toList();
+    final visits = rows.map(SalesVisit.fromJson).toList();
+    if (_shouldScopeSalesData) {
+      _activeSalesVisit = null;
+      for (final visit in visits) {
+        final status = visit.status.toLowerCase();
+        if (status == 'traveling' || status == 'checked in') {
+          _activeSalesVisit = visit;
+          if (status == 'traveling') {
+            await _resumeSalesVisitTracking(visit);
+          }
+          break;
+        }
+      }
+    }
+    return visits;
   }
 
-  Future<SalesVisit> createSalesVisit({
+  Future<List<SalesTrackingPoint>> fetchLatestSalesTrackingPoints() async {
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Sales Tracking Point',
+      fields: const [
+        'name',
+        'sales_visit',
+        'sales_person',
+        'customer',
+        'captured_at',
+        'latitude',
+        'longitude',
+        'accuracy',
+      ],
+      orderBy: 'captured_at desc, name desc',
+      maxRows: 200,
+    );
+    final latest = <String, SalesTrackingPoint>{};
+    for (final row in rows) {
+      final point = SalesTrackingPoint.fromJson(row);
+      final key = point.salesPerson.isNotEmpty
+          ? point.salesPerson
+          : point.salesVisit;
+      if (key.isNotEmpty) latest.putIfAbsent(key, () => point);
+    }
+    return latest.values.toList();
+  }
+
+  Future<CustomerVisitLocation> fetchCustomerVisitLocation(String customer) {
+    return _customerService.fetchVisitLocation(customer);
+  }
+
+  Future<VisitLocationPoint> getCurrentVisitLocation() async {
+    final point = await _visitLocationService.currentPosition();
+    _latestVisitLocation = point;
+    notifyListeners();
+    return point;
+  }
+
+  double visitDistanceTo(
+    CustomerVisitLocation target,
+    VisitLocationPoint from,
+  ) {
+    return _visitLocationService.distanceMeters(
+      fromLatitude: from.latitude,
+      fromLongitude: from.longitude,
+      toLatitude: target.latitude,
+      toLongitude: target.longitude,
+    );
+  }
+
+  Future<SalesVisit> startSalesVisitJourney({
     required String customer,
+    required CustomerVisitLocation target,
+  }) async {
+    if (_activeSalesVisit != null) {
+      throw Exception('Selesaikan perjalanan aktif sebelum memulai yang baru.');
+    }
+    final point = await getCurrentVisitLocation();
+    final created = await _frappeService.createDocument('Sales Visit', {
+      'customer': customer,
+      'address': target.addressId,
+      if (_currentSalesPerson?.isNotEmpty == true)
+        'sales_person': _currentSalesPerson,
+      'status': 'Traveling',
+      'journey_start_time': DateTime.now().toIso8601String(),
+      'target_latitude': target.latitude,
+      'target_longitude': target.longitude,
+    });
+    final visit = SalesVisit.fromJson(created);
+    _activeSalesVisit = visit;
+    await _saveTrackingPoint(visit, point);
+    await _resumeSalesVisitTracking(visit);
+    notifyListeners();
+    return visit;
+  }
+
+  Future<void> _resumeSalesVisitTracking(SalesVisit visit) async {
+    final startedAt = DateTime.tryParse(visit.journeyStartTime);
+    if (startedAt != null &&
+        DateTime.now().difference(startedAt) >= const Duration(hours: 4)) {
+      await cancelSalesVisitJourney(visit.id);
+      return;
+    }
+    await _visitLocationService.startTracking((next) async {
+      final journeyStart = DateTime.tryParse(visit.journeyStartTime);
+      if (journeyStart != null &&
+          DateTime.now().difference(journeyStart) >= const Duration(hours: 4)) {
+        await cancelSalesVisitJourney(visit.id);
+        return;
+      }
+      _latestVisitLocation = next;
+      notifyListeners();
+      await _saveTrackingPoint(visit, next);
+      await _flushTrackingQueue(visit);
+    });
+  }
+
+  Future<SalesVisit> checkInSalesVisit({
+    required SalesVisit visit,
+    required CustomerVisitLocation target,
+    required String photoPath,
     String? notes,
     List<Map<String, dynamic>> competitors = const [],
     List<Map<String, dynamic>> potentialOrders = const [],
-    String? photoPath,
   }) async {
-    final created = await _frappeService.createDocument('TMSX Sales Visit', {
-      'customer': customer,
-      'check_in_time': DateTime.now().toIso8601String(),
+    final point = await getCurrentVisitLocation();
+    final distance = visitDistanceTo(target, point);
+    if (point.accuracy > 50) {
+      throw Exception(
+        'Akurasi GPS ${point.accuracy.toStringAsFixed(0)} meter terlalu rendah.',
+      );
+    }
+    if (distance > target.geofenceRadius) {
+      throw Exception(
+        'Anda masih ${distance.toStringAsFixed(0)} meter dari customer. '
+        'Check-in maksimal ${target.geofenceRadius.toStringAsFixed(0)} meter.',
+      );
+    }
+    await uploadAttachment(
+      doctype: 'Sales Visit',
+      documentName: visit.id,
+      filePath: photoPath,
+    );
+    await _frappeService.updateDocument('Sales Visit', visit.id, {
       'status': 'Checked In',
+      'check_in_time': DateTime.now().toIso8601String(),
+      'check_in_latitude': point.latitude,
+      'check_in_longitude': point.longitude,
+      'check_in_distance': distance,
       if (notes?.trim().isNotEmpty == true) 'notes': notes!.trim(),
       if (competitors.isNotEmpty) 'competitors': competitors,
       if (potentialOrders.isNotEmpty) 'potential_orders': potentialOrders,
     });
-    final visit = SalesVisit.fromJson(created);
-    if (photoPath?.isNotEmpty == true && visit.id.isNotEmpty) {
-      await uploadAttachment(
-        doctype: 'TMSX Sales Visit',
-        documentName: visit.id,
-        filePath: photoPath!,
-      );
-    }
-    return visit;
+    await _visitLocationService.stopTracking();
+    await _flushTrackingQueue(visit);
+    final updated = SalesVisit.fromJson(
+      await _frappeService.fetchDocument('Sales Visit', visit.id),
+    );
+    _activeSalesVisit = updated;
+    notifyListeners();
+    return updated;
   }
 
   Future<void> checkOutSalesVisit(String visitId) async {
-    await _frappeService.updateDocument('TMSX Sales Visit', visitId, {
+    final point = await getCurrentVisitLocation();
+    await _frappeService.updateDocument('Sales Visit', visitId, {
       'check_out_time': DateTime.now().toIso8601String(),
       'status': 'Checked Out',
+      'check_out_latitude': point.latitude,
+      'check_out_longitude': point.longitude,
     });
+    await _visitLocationService.stopTracking();
+    _activeSalesVisit = null;
+    notifyListeners();
+  }
+
+  Future<void> cancelSalesVisitJourney(String visitId) async {
+    await _frappeService.updateDocument('Sales Visit', visitId, {
+      'status': 'Cancelled',
+    });
+    await _visitLocationService.stopTracking();
+    _activeSalesVisit = null;
+    notifyListeners();
+  }
+
+  Future<void> _saveTrackingPoint(
+    SalesVisit visit,
+    VisitLocationPoint point,
+  ) async {
+    await _frappeService.createDocument('Sales Tracking Point', {
+      'sales_visit': visit.id,
+      if (_currentSalesPerson?.isNotEmpty == true)
+        'sales_person': _currentSalesPerson,
+      'customer': visit.customer,
+      'captured_at': point.capturedAt.toIso8601String(),
+      'latitude': point.latitude,
+      'longitude': point.longitude,
+      'accuracy': point.accuracy,
+    });
+  }
+
+  Future<void> _flushTrackingQueue(SalesVisit visit) async {
+    final queued = await _visitLocationService.queuedPoints();
+    if (queued.isEmpty) return;
+    for (final point in queued) {
+      try {
+        await _saveTrackingPoint(visit, point);
+      } catch (_) {
+        return;
+      }
+    }
+    await _visitLocationService.clearQueue();
   }
 
   Future<CustomerSalesInsight> fetchCustomerSalesInsight(

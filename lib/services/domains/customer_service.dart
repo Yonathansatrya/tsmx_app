@@ -8,6 +8,61 @@ class CustomerService {
 
   CustomerService(this._frappe);
 
+  Future<CustomerVisitLocation> fetchVisitLocation(String customer) async {
+    final customerDoc = await _frappe.fetchDocument('Customer', customer);
+    final addressId =
+        customerDoc['customer_primary_address']?.toString().trim() ?? '';
+    if (addressId.isEmpty) {
+      throw Exception(
+        'Customer belum memiliki Primary Address untuk validasi lokasi.',
+      );
+    }
+    final address = await _frappe.fetchDocument('Address', addressId);
+    final latitude = _coordinate(
+      address['custom_latitude_text'],
+      address['custom_latitude'],
+      address['latitude'],
+    );
+    final longitude = _coordinate(
+      address['custom_longitude_text'],
+      address['custom_longitude'],
+      address['longitude'],
+    );
+    if (latitude == 0 && longitude == 0) {
+      throw Exception(
+        'Koordinat Primary Address customer belum dikonfigurasi.',
+      );
+    }
+    if (latitude < -90 || latitude > 90) {
+      throw Exception('Latitude Primary Address harus antara -90 dan 90.');
+    }
+    if (longitude < -180 || longitude > 180) {
+      throw Exception('Longitude Primary Address harus antara -180 dan 180.');
+    }
+    return CustomerVisitLocation(
+      addressId: addressId,
+      displayAddress:
+          address['display']?.toString() ??
+          address['address_title']?.toString() ??
+          addressId,
+      latitude: latitude,
+      longitude: longitude,
+      geofenceRadius: NumParse.asDouble(address['custom_geofence_radius']) > 0
+          ? NumParse.asDouble(address['custom_geofence_radius'])
+          : 50,
+    );
+  }
+
+  double _coordinate(dynamic textValue, dynamic customValue, dynamic fallback) {
+    for (final value in [textValue, customValue, fallback]) {
+      final text = value?.toString().trim() ?? '';
+      if (text.isEmpty) continue;
+      final parsed = double.tryParse(text.replaceAll(',', '.'));
+      if (parsed != null) return parsed;
+    }
+    return 0;
+  }
+
   Future<List<SalesCustomerOption>> fetchSalesCustomers({
     String? salesPerson,
   }) async {

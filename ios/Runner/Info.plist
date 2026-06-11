@@ -6,6 +6,14 @@
 	<string>Digunakan untuk mengambil foto order atau customer.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Digunakan untuk memilih foto order atau customer.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Digunakan untuk validasi lokasi dan check-in kunjungan customer.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Digunakan untuk mencatat perjalanan menuju customer sampai check-in.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 		<key>CADisableMinimumFrameDurationOnPhone</key>
 		<true/>
 		<key>CFBundleDevelopmentRegion</key>
