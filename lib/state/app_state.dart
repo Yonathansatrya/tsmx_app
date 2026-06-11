@@ -697,91 +697,180 @@ class AppState with ChangeNotifier {
     );
   }
 
-  Future<List<PromiseToPay>> fetchPromisesToPay() async {
+  Future<List<SalesInvoice>> fetchCollectionOutstandingInvoices() async {
+    Set<String>? permittedCustomers;
+    if (_shouldScopeSalesData) {
+      final customers = await fetchSalesCustomers();
+      permittedCustomers = customers.map((customer) => customer.id).toSet();
+      if (permittedCustomers.isEmpty) return const [];
+    }
     final rows = await _fetchAllResourcePages(
-      doctype: 'TMSX Promise To Pay',
+      doctype: 'Sales Invoice',
       fields: const [
         'name',
+        'owner',
         'customer',
-        'sales_invoice',
-        'amount',
-        'promise_date',
-        'notes',
+        'customer_name',
         'status',
-      ],
-      filters: _shouldScopeSalesData
-          ? [
-              ['owner', '=', _currentUser ?? '__unmapped_sales_user__'],
-            ]
-          : null,
-      orderBy: 'promise_date desc, name desc',
-      maxRows: null,
-    );
-    return rows.map(PromiseToPay.fromJson).toList();
-  }
-
-  Future<PromiseToPay> createPromiseToPay({
-    required String customer,
-    String? salesInvoice,
-    required double amount,
-    required DateTime promiseDate,
-    String? notes,
-  }) async {
-    final created = await _frappeService.createDocument('TMSX Promise To Pay', {
-      'customer': customer,
-      if (salesInvoice?.trim().isNotEmpty == true)
-        'sales_invoice': salesInvoice!.trim(),
-      'amount': amount,
-      'promise_date': promiseDate.toIso8601String().split('T').first,
-      if (notes?.trim().isNotEmpty == true) 'notes': notes!.trim(),
-      'status': 'Pending',
-    });
-    return PromiseToPay.fromJson(created);
-  }
-
-  Future<List<CollectionRanking>> fetchCollectionRanking() async {
-    final invoiceRows = await _fetchAllResourcePages(
-      doctype: 'Sales Invoice',
-      fields: const ['name', 'grand_total', 'outstanding_amount', 'docstatus'],
-      filters: const [
-        ['docstatus', '=', 1],
-      ],
-      maxRows: null,
-    );
-    if (invoiceRows.isEmpty) return const [];
-    final invoiceById = {
-      for (final row in invoiceRows) row['name']?.toString() ?? '': row,
-    }..remove('');
-    final teamRows = await _fetchAllResourcePages(
-      doctype: 'Sales Team',
-      fields: const [
-        'parent',
-        'parenttype',
-        'sales_person',
-        'allocated_percentage',
+        'docstatus',
+        'posting_date',
+        'grand_total',
+        'outstanding_amount',
+        'due_date',
       ],
       filters: [
-        ['parenttype', '=', 'Sales Invoice'],
-        ['parent', 'in', invoiceById.keys.toList()],
+        ['docstatus', '=', 1],
+        ['outstanding_amount', '>', 0],
       ],
+      orderBy: 'due_date asc, name asc',
       maxRows: null,
     );
+    return rows
+        .where(
+          (row) =>
+              permittedCustomers == null ||
+              permittedCustomers.contains(row['customer']?.toString() ?? ''),
+        )
+        .map(SalesInvoice.fromJson)
+        .toList();
+  }
+
+  Future<List<CollectionRanking>> fetchCollectionRanking({
+    DateTime? from,
+    DateTime? to,
+    List<CollectionPayment>? collectionPayments,
+  }) async {
     final totals = <String, double>{};
-    for (final team in teamRows) {
-      final invoice = invoiceById[team['parent']?.toString() ?? ''];
-      final salesPerson = team['sales_person']?.toString() ?? '';
-      if (invoice == null || salesPerson.isEmpty) continue;
-      final percentage = NumParse.asDouble(team['allocated_percentage']);
-      final ratio = percentage > 0 ? percentage / 100 : 1.0;
-      final collected =
-          NumParse.asDouble(invoice['grand_total']) -
-          NumParse.asDouble(invoice['outstanding_amount']);
-      totals[salesPerson] =
-          (totals[salesPerson] ?? 0) +
-          collected.clamp(0, double.infinity) * ratio;
+    final salesPersons = await _fetchAllResourcePages(
+      doctype: 'Sales Person',
+      fields: const ['name', 'enabled', 'is_group'],
+      filters: const [
+        ['is_group', '=', 0],
+      ],
+      orderBy: 'name asc',
+      maxRows: null,
+    );
+    for (final row in salesPersons) {
+      final name = row['name']?.toString() ?? '';
+      final enabled = row['enabled'];
+      if (name.isEmpty || enabled == 0 || enabled == false) continue;
+      totals[name] = 0;
     }
+
+    final payments =
+        collectionPayments ??
+        await fetchCollectionPayments(
+          from: from,
+          to: to,
+          scopeToCurrentSales: false,
+        );
+    final invoiceAmounts = <String, double>{};
+    for (final payment in payments) {
+      for (final reference in payment.references) {
+        if (reference.doctype != 'Sales Invoice' ||
+            reference.documentName.isEmpty) {
+          continue;
+        }
+        invoiceAmounts[reference.documentName] =
+            (invoiceAmounts[reference.documentName] ?? 0) +
+            reference.allocatedAmount;
+      }
+    }
+    if (invoiceAmounts.isEmpty) {
+      final invoiceRows = await _fetchAllResourcePages(
+        doctype: 'Sales Invoice',
+        fields: const [
+          'name',
+          'grand_total',
+          'outstanding_amount',
+          'posting_date',
+          'docstatus',
+        ],
+        filters: [
+          ['docstatus', '=', 1],
+          if (from != null)
+            ['posting_date', '>=', DateRangePresets.toFrappeDate(from)],
+          if (to != null)
+            ['posting_date', '<=', DateRangePresets.toFrappeDate(to)],
+        ],
+        maxRows: null,
+      );
+      for (final invoice in invoiceRows) {
+        final id = invoice['name']?.toString() ?? '';
+        final collected =
+            NumParse.asDouble(invoice['grand_total']) -
+            NumParse.asDouble(invoice['outstanding_amount']);
+        if (id.isNotEmpty && collected > 0) {
+          invoiceAmounts[id] = collected;
+        }
+      }
+    }
+    if (invoiceAmounts.isEmpty) return _collectionRankingRows(totals);
+
+    final invoiceOrderAmounts = <String, Map<String, double>>{};
+    final invoiceDocuments = await _fetchDocumentsInBatches(
+      'Sales Invoice',
+      invoiceAmounts.keys,
+    );
+    for (final invoice in invoiceAmounts.keys) {
+      final document = invoiceDocuments[invoice];
+      if (document == null) continue;
+      for (final row in _documentChildRows(document['items'])) {
+        final salesOrder = row['sales_order']?.toString() ?? '';
+        if (salesOrder.isEmpty) continue;
+        final amount = NumParse.asDouble(row['net_amount'] ?? row['amount']);
+        final orders = invoiceOrderAmounts.putIfAbsent(invoice, () => {});
+        orders[salesOrder] = (orders[salesOrder] ?? 0) + amount;
+      }
+    }
+
+    final orderCollected = <String, double>{};
+    for (final invoice in invoiceAmounts.entries) {
+      final orders = invoiceOrderAmounts[invoice.key];
+      if (orders == null || orders.isEmpty) continue;
+      final invoiceTotal = orders.values.fold<double>(
+        0,
+        (sum, row) => sum + row,
+      );
+      for (final order in orders.entries) {
+        final ratio = invoiceTotal > 0
+            ? order.value / invoiceTotal
+            : 1 / orders.length;
+        orderCollected[order.key] =
+            (orderCollected[order.key] ?? 0) + invoice.value * ratio;
+      }
+    }
+    if (orderCollected.isEmpty) return _collectionRankingRows(totals);
+
+    final orderDocuments = await _fetchDocumentsInBatches(
+      'Sales Order',
+      orderCollected.keys,
+    );
+    for (final order in orderCollected.entries) {
+      final document = orderDocuments[order.key];
+      if (document == null) continue;
+      for (final team in _documentChildRows(document['sales_team'])) {
+        final salesPerson = team['sales_person']?.toString() ?? '';
+        if (salesPerson.isEmpty) continue;
+        final percentage = NumParse.asDouble(team['allocated_percentage']);
+        final ratio = percentage > 0 ? percentage / 100 : 1.0;
+        totals[salesPerson] =
+            (totals[salesPerson] ?? 0) +
+            order.value.clamp(0, double.infinity) * ratio;
+      }
+    }
+
+    return _collectionRankingRows(totals);
+  }
+
+  static List<CollectionRanking> _collectionRankingRows(
+    Map<String, double> totals,
+  ) {
     final sorted = totals.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+      ..sort((a, b) {
+        final valueComparison = b.value.compareTo(a.value);
+        return valueComparison != 0 ? valueComparison : a.key.compareTo(b.key);
+      });
     return [
       for (var index = 0; index < sorted.length; index++)
         CollectionRanking(
@@ -790,6 +879,69 @@ class AppState with ChangeNotifier {
           rank: index + 1,
         ),
     ];
+  }
+
+  Future<List<CollectionPayment>> fetchCollectionPayments({
+    DateTime? from,
+    DateTime? to,
+    bool scopeToCurrentSales = true,
+  }) async {
+    Set<String>? permittedCustomers;
+    if (_shouldScopeSalesData && scopeToCurrentSales) {
+      final customers = await fetchSalesCustomers();
+      permittedCustomers = customers.map((customer) => customer.id).toSet();
+      if (permittedCustomers.isEmpty) return const [];
+    }
+
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Payment Entry',
+      fields: const [
+        'name',
+        'party',
+        'party_name',
+        'posting_date',
+        'paid_amount',
+        'received_amount',
+        'reference_no',
+        'remarks',
+      ],
+      filters: [
+        ['docstatus', '=', 1],
+        ['payment_type', '=', 'Receive'],
+        ['party_type', '=', 'Customer'],
+        if (from != null)
+          ['posting_date', '>=', DateRangePresets.toFrappeDate(from)],
+        if (to != null)
+          ['posting_date', '<=', DateRangePresets.toFrappeDate(to)],
+      ],
+      orderBy: 'posting_date desc, name desc',
+      maxRows: null,
+    );
+    final payments = rows
+        .where(
+          (row) =>
+              permittedCustomers == null ||
+              permittedCustomers.contains(row['party']?.toString() ?? ''),
+        )
+        .map(CollectionPayment.fromJson)
+        .where((payment) => payment.id.isNotEmpty)
+        .toList();
+    if (payments.isEmpty) return payments;
+
+    final documents = await _fetchDocumentsInBatches(
+      'Payment Entry',
+      payments.map((payment) => payment.id),
+    );
+    return payments.map((payment) {
+      final document = documents[payment.id];
+      if (document != null) {
+        final references = _documentChildRows(
+          document['references'],
+        ).map(CollectionPaymentReference.fromJson).toList();
+        return payment.copyWithReferences(references);
+      }
+      return payment;
+    }).toList();
   }
 
   Future<List<SalesVisit>> fetchSalesVisits() async {
@@ -2945,6 +3097,46 @@ class AppState with ChangeNotifier {
         filters: filters,
       ),
     );
+  }
+
+  static List<Map<String, dynamic>> _documentChildRows(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Future<Map<String, Map<String, dynamic>>> _fetchDocumentsInBatches(
+    String doctype,
+    Iterable<String> names, {
+    int batchSize = 8,
+  }) async {
+    final uniqueNames = names.where((name) => name.isNotEmpty).toSet().toList();
+    final documents = <String, Map<String, dynamic>>{};
+    for (var start = 0; start < uniqueNames.length; start += batchSize) {
+      final end = start + batchSize > uniqueNames.length
+          ? uniqueNames.length
+          : start + batchSize;
+      final batch = uniqueNames.sublist(start, end);
+      final results = await Future.wait(
+        batch.map((name) async {
+          try {
+            return (
+              name: name,
+              document: await _frappeService.fetchDocument(doctype, name),
+            );
+          } catch (_) {
+            return (name: name, document: null);
+          }
+        }),
+      );
+      for (final result in results) {
+        final document = result.document;
+        if (document != null) documents[result.name] = document;
+      }
+    }
+    return documents;
   }
 
   Future<void> _forEachResourcePage({

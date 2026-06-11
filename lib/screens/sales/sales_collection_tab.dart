@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import 'collection/ar_aging_tab.dart';
 import 'collection/outstanding_invoice_tab.dart';
-import 'collection/promise_to_pay_tab.dart';
+import 'collection/customer_payment_schedule_tab.dart';
 
 class SalesCollectionTab extends StatelessWidget {
   const SalesCollectionTab({super.key});
@@ -32,7 +32,7 @@ class SalesCollectionTab extends StatelessWidget {
                 children: [
                   ArAgingTab(),
                   OutstandingInvoiceTab(),
-                  PromiseToPayTab(),
+                  CustomerPaymentScheduleTab(),
                 ],
               ),
             ),

@@ -628,10 +628,21 @@ class FrappeService {
   }
 
   Future<dynamic> _decodeJson(String source) async {
-    if (source.length < 50 * 1024) {
-      return jsonDecode(source);
+    try {
+      if (source.length < 50 * 1024) {
+        return jsonDecode(source);
+      }
+      return compute(jsonDecode, source);
+    } on FormatException {
+      final trimmed = source.trimLeft().toLowerCase();
+      if (trimmed.startsWith('<!doctype html') || trimmed.startsWith('<html')) {
+        throw Exception(
+          'ERPNext mengembalikan halaman HTML, bukan data API. '
+          'Periksa session login, permission DocType, dan endpoint ERPNext.',
+        );
+      }
+      rethrow;
     }
-    return compute(jsonDecode, source);
   }
 
   static String _extractFrappeError(dynamic decoded, int statusCode) {

@@ -33,41 +33,6 @@ class SalesCustomerOption {
   }
 }
 
-class PromiseToPay {
-  final String id;
-  final String customer;
-  final String salesPerson;
-  final String salesInvoice;
-  final double amount;
-  final String promiseDate;
-  final String notes;
-  final String status;
-
-  const PromiseToPay({
-    required this.id,
-    required this.customer,
-    required this.salesPerson,
-    this.salesInvoice = '',
-    required this.amount,
-    required this.promiseDate,
-    this.notes = '',
-    this.status = 'Pending',
-  });
-
-  factory PromiseToPay.fromJson(Map<String, dynamic> json) {
-    return PromiseToPay(
-      id: json['name']?.toString() ?? '',
-      customer: json['customer']?.toString() ?? '',
-      salesPerson: json['sales_person']?.toString() ?? '',
-      salesInvoice: json['sales_invoice']?.toString() ?? '',
-      amount: NumParse.asDouble(json['amount']),
-      promiseDate: json['promise_date']?.toString() ?? '',
-      notes: json['notes']?.toString() ?? '',
-      status: json['status']?.toString() ?? 'Pending',
-    );
-  }
-}
-
 class CollectionRanking {
   final String salesPerson;
   final double amount;
@@ -90,6 +55,76 @@ class CollectionRanking {
         json['amount'] ?? json['collected_amount'] ?? json['total'],
       ),
       rank: NumParse.asInt(json['rank']),
+    );
+  }
+}
+
+class CollectionPayment {
+  final String id;
+  final String customer;
+  final String customerName;
+  final String postingDate;
+  final double amount;
+  final String referenceNo;
+  final String remarks;
+  final List<CollectionPaymentReference> references;
+
+  const CollectionPayment({
+    required this.id,
+    required this.customer,
+    required this.customerName,
+    required this.postingDate,
+    required this.amount,
+    this.referenceNo = '',
+    this.remarks = '',
+    this.references = const [],
+  });
+
+  factory CollectionPayment.fromJson(Map<String, dynamic> json) {
+    final customer = json['party']?.toString() ?? '';
+    return CollectionPayment(
+      id: json['name']?.toString() ?? '',
+      customer: customer,
+      customerName: json['party_name']?.toString() ?? customer,
+      postingDate: json['posting_date']?.toString() ?? '',
+      amount: NumParse.asDouble(json['received_amount'] ?? json['paid_amount']),
+      referenceNo: json['reference_no']?.toString() ?? '',
+      remarks: json['remarks']?.toString() ?? '',
+    );
+  }
+
+  CollectionPayment copyWithReferences(
+    List<CollectionPaymentReference> references,
+  ) {
+    return CollectionPayment(
+      id: id,
+      customer: customer,
+      customerName: customerName,
+      postingDate: postingDate,
+      amount: amount,
+      referenceNo: referenceNo,
+      remarks: remarks,
+      references: references,
+    );
+  }
+}
+
+class CollectionPaymentReference {
+  final String doctype;
+  final String documentName;
+  final double allocatedAmount;
+
+  const CollectionPaymentReference({
+    required this.doctype,
+    required this.documentName,
+    required this.allocatedAmount,
+  });
+
+  factory CollectionPaymentReference.fromJson(Map<String, dynamic> json) {
+    return CollectionPaymentReference(
+      doctype: json['reference_doctype']?.toString() ?? '',
+      documentName: json['reference_name']?.toString() ?? '',
+      allocatedAmount: NumParse.asDouble(json['allocated_amount']),
     );
   }
 }
