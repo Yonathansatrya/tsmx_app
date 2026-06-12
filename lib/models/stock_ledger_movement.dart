@@ -102,3 +102,25 @@ class StockAgingItem {
 
   double get stockValue => quantity * valuationRate;
 }
+
+class DeadStockItem {
+  final String itemCode;
+  final String itemName;
+  final String warehouse;
+  final int quantity;
+  final double valuationRate;
+  final DateTime? lastMovementDate;
+  final int inactiveDays;
+
+  const DeadStockItem({
+    required this.itemCode,
+    required this.itemName,
+    required this.warehouse,
+    required this.quantity,
+    required this.valuationRate,
+    required this.lastMovementDate,
+    required this.inactiveDays,
+  });
+
+  double get stockValue => quantity * valuationRate;
+}

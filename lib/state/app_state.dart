@@ -3005,6 +3005,56 @@ class AppState with ChangeNotifier {
     ];
   }
 
+  Future<List<DeadStockItem>> fetchDeadStock({int lookbackDays = 365}) async {
+    await _frappeService.ensureLoggedIn();
+    if (_inventory.isEmpty) await refreshInventory();
+    final today = DateTime.now();
+    final from = today.subtract(Duration(days: lookbackDays));
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Stock Ledger Entry',
+      fields: const [
+        'name',
+        'posting_date',
+        'item_code',
+        'warehouse',
+        'actual_qty',
+      ],
+      filters: [
+        ['posting_date', '>=', DateRangePresets.toFrappeDate(from)],
+      ],
+      orderBy: 'posting_date desc, posting_time desc',
+      maxRows: 5000,
+    );
+    final latestMovement = <String, DateTime>{};
+    for (final row in rows) {
+      final item = row['item_code']?.toString() ?? '';
+      final warehouse = row['warehouse']?.toString() ?? '';
+      final date = DateTime.tryParse(row['posting_date']?.toString() ?? '');
+      if (item.isEmpty || warehouse.isEmpty || date == null) continue;
+      latestMovement.putIfAbsent('$item|$warehouse', () => date);
+    }
+    return [
+      for (final item in _inventory)
+        if (item.quantity > 0)
+          DeadStockItem(
+            itemCode: item.sku,
+            itemName: item.name,
+            warehouse: item.warehouseId,
+            quantity: item.quantity,
+            valuationRate: item.unitValue,
+            lastMovementDate: latestMovement['${item.sku}|${item.warehouseId}'],
+            inactiveDays:
+                latestMovement['${item.sku}|${item.warehouseId}'] == null
+                ? lookbackDays + 1
+                : today
+                      .difference(
+                        latestMovement['${item.sku}|${item.warehouseId}']!,
+                      )
+                      .inDays,
+          ),
+    ];
+  }
+
   Future<void> refreshSalesOrders() => fetchSalesOrdersFromFrappe();
   Future<void> refreshPurchaseOrders() => fetchPurchaseOrdersFromFrappe();
   Future<void> refreshInventory() => fetchInventoryFromFrappe();
