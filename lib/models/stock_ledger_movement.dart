@@ -80,3 +80,25 @@ class StockLedgerResult {
     );
   }
 }
+
+class StockAgingItem {
+  final String itemCode;
+  final String itemName;
+  final String warehouse;
+  final int quantity;
+  final double valuationRate;
+  final DateTime? lastIncomingDate;
+  final int ageDays;
+
+  const StockAgingItem({
+    required this.itemCode,
+    required this.itemName,
+    required this.warehouse,
+    required this.quantity,
+    required this.valuationRate,
+    required this.lastIncomingDate,
+    required this.ageDays,
+  });
+
+  double get stockValue => quantity * valuationRate;
+}

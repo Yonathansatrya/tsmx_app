@@ -3,48 +3,40 @@ import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../tabs/stock_tab.dart';
 import 'warehouse_inventory_valuation_view.dart';
+import 'warehouse_stock_aging_view.dart';
 
-class WarehouseInventoryTab extends StatefulWidget {
+class WarehouseInventoryTab extends StatelessWidget {
   const WarehouseInventoryTab({super.key});
 
   @override
-  State<WarehouseInventoryTab> createState() => _WarehouseInventoryTabState();
-}
-
-class _WarehouseInventoryTabState extends State<WarehouseInventoryTab> {
-  var _selected = 0;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Container(
-        color: AppColors.white,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-        child: SegmentedButton<int>(
-          segments: const [
-            ButtonSegment(
-              value: 0,
-              icon: Icon(Icons.inventory_2_outlined),
-              label: Text('Stok Realtime'),
+  Widget build(BuildContext context) => const DefaultTabController(
+    length: 3,
+    child: ColoredBox(
+      color: AppColors.background,
+      child: Column(
+        children: [
+          Material(
+            color: AppColors.white,
+            elevation: 1,
+            child: TabBar(
+              tabs: [
+                Tab(text: 'Stok Realtime'),
+                Tab(text: 'Valuasi'),
+                Tab(text: 'Aging'),
+              ],
             ),
-            ButtonSegment(
-              value: 1,
-              icon: Icon(Icons.payments_outlined),
-              label: Text('Valuasi'),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                StockTab(),
+                WarehouseInventoryValuationView(),
+                WarehouseStockAgingView(),
+              ],
             ),
-          ],
-          selected: {_selected},
-          showSelectedIcon: false,
-          onSelectionChanged: (value) =>
-              setState(() => _selected = value.first),
-        ),
+          ),
+        ],
       ),
-      Expanded(
-        child: IndexedStack(
-          index: _selected,
-          children: const [StockTab(), WarehouseInventoryValuationView()],
-        ),
-      ),
-    ],
+    ),
   );
 }
