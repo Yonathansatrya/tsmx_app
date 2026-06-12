@@ -1799,6 +1799,35 @@ class AppState with ChangeNotifier {
     return entry;
   }
 
+  Future<Map<String, dynamic>> createStockReconciliation({
+    required String company,
+    required String warehouse,
+    required List<Map<String, dynamic>> items,
+    DateTime? postingDate,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    if (company.trim().isEmpty) {
+      throw Exception('Company gudang belum tersedia.');
+    }
+    if (warehouse.trim().isEmpty) {
+      throw Exception('Warehouse wajib dipilih.');
+    }
+    if (items.isEmpty) {
+      throw Exception('Tambahkan minimal satu item stock opname.');
+    }
+    return _frappeService.createDocument('Stock Reconciliation', {
+      'company': company.trim(),
+      'purpose': 'Stock Reconciliation',
+      'posting_date': (postingDate ?? DateTime.now())
+          .toIso8601String()
+          .split('T')
+          .first,
+      'items': [
+        for (final item in items) {...item, 'warehouse': warehouse.trim()},
+      ],
+    });
+  }
+
   Future<void> fetchSalesOrdersFromFrappe({
     String baseUrl = _defaultFrappeBaseUrl,
     String? username,

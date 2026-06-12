@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import 'warehouse_stock_opname_screen.dart';
 import 'warehouse_stock_entry_screen.dart';
 
 class WarehouseOperationsTab extends StatelessWidget {
   const WarehouseOperationsTab({super.key});
 
   static const _features = [
-    ('Stock opname mobile', Icons.inventory_outlined, 'Menengah'),
     ('Barcode / QR Scan', Icons.qr_code_scanner_rounded, 'Menengah'),
     ('Batch & Serial Number tracking', Icons.numbers_rounded, 'Menengah'),
   ];
@@ -44,6 +44,29 @@ class WarehouseOperationsTab extends StatelessWidget {
         context,
         operation: WarehouseOperation.issue,
         subtitle: 'Catat barang yang keluar dari gudang',
+      ),
+      Card(
+        child: ListTile(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const WarehouseStockOpnameScreen(),
+            ),
+          ),
+          leading: const CircleAvatar(
+            backgroundColor: AppColors.softGreen,
+            foregroundColor: AppColors.primary,
+            child: Icon(Icons.inventory_outlined),
+          ),
+          title: const Text(
+            'Stock opname mobile',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          subtitle: const Text(
+            'Hitung stok fisik dan simpan selisih sebagai draft',
+          ),
+          trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+        ),
       ),
       ..._features.map(
         (feature) => Card(
