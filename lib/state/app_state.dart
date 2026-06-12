@@ -3055,6 +3055,50 @@ class AppState with ChangeNotifier {
     ];
   }
 
+  Future<List<StockMovementVelocityItem>> fetchStockMovementVelocity({
+    int periodDays = 30,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    if (_inventory.isEmpty) await refreshInventory();
+    final from = DateTime.now().subtract(Duration(days: periodDays));
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Stock Ledger Entry',
+      fields: const ['name', 'item_code', 'warehouse', 'actual_qty'],
+      filters: [
+        ['posting_date', '>=', DateRangePresets.toFrappeDate(from)],
+        ['actual_qty', '<', 0],
+      ],
+      orderBy: 'posting_date desc, posting_time desc',
+      maxRows: 5000,
+    );
+    final outgoingQuantity = <String, double>{};
+    final transactionCount = <String, int>{};
+    for (final row in rows) {
+      final item = row['item_code']?.toString() ?? '';
+      final warehouse = row['warehouse']?.toString() ?? '';
+      if (item.isEmpty || warehouse.isEmpty) continue;
+      final key = '$item|$warehouse';
+      outgoingQuantity[key] =
+          (outgoingQuantity[key] ?? 0) +
+          NumParse.asDouble(row['actual_qty']).abs();
+      transactionCount[key] = (transactionCount[key] ?? 0) + 1;
+    }
+    return [
+      for (final item in _inventory)
+        if (item.quantity > 0)
+          StockMovementVelocityItem(
+            itemCode: item.sku,
+            itemName: item.name,
+            warehouse: item.warehouseId,
+            currentQuantity: item.quantity,
+            outgoingQuantity:
+                outgoingQuantity['${item.sku}|${item.warehouseId}'] ?? 0,
+            transactionCount:
+                transactionCount['${item.sku}|${item.warehouseId}'] ?? 0,
+          ),
+    ];
+  }
+
   Future<void> refreshSalesOrders() => fetchSalesOrdersFromFrappe();
   Future<void> refreshPurchaseOrders() => fetchPurchaseOrdersFromFrappe();
   Future<void> refreshInventory() => fetchInventoryFromFrappe();

@@ -124,3 +124,21 @@ class DeadStockItem {
 
   double get stockValue => quantity * valuationRate;
 }
+
+class StockMovementVelocityItem {
+  final String itemCode;
+  final String itemName;
+  final String warehouse;
+  final int currentQuantity;
+  final double outgoingQuantity;
+  final int transactionCount;
+
+  const StockMovementVelocityItem({
+    required this.itemCode,
+    required this.itemName,
+    required this.warehouse,
+    required this.currentQuantity,
+    required this.outgoingQuantity,
+    required this.transactionCount,
+  });
+}
