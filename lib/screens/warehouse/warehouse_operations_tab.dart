@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import 'warehouse_stock_entry_screen.dart';
 
 class WarehouseOperationsTab extends StatelessWidget {
   const WarehouseOperationsTab({super.key});
 
   static const _features = [
-    ('Transfer antar gudang', Icons.swap_horiz_rounded, 'Mudah'),
-    ('Goods Receive', Icons.move_to_inbox_rounded, 'Mudah'),
-    ('Goods Issue', Icons.outbox_rounded, 'Mudah'),
     ('Stock opname mobile', Icons.inventory_outlined, 'Menengah'),
     ('Barcode / QR Scan', Icons.qr_code_scanner_rounded, 'Menengah'),
     ('Batch & Serial Number tracking', Icons.numbers_rounded, 'Menengah'),
@@ -32,6 +30,21 @@ class WarehouseOperationsTab extends StatelessWidget {
         style: TextStyle(color: AppColors.slate),
       ),
       const SizedBox(height: 14),
+      _operationCard(
+        context,
+        operation: WarehouseOperation.transfer,
+        subtitle: 'Pindahkan beberapa item antar gudang',
+      ),
+      _operationCard(
+        context,
+        operation: WarehouseOperation.receive,
+        subtitle: 'Catat barang yang masuk ke gudang',
+      ),
+      _operationCard(
+        context,
+        operation: WarehouseOperation.issue,
+        subtitle: 'Catat barang yang keluar dari gudang',
+      ),
       ..._features.map(
         (feature) => Card(
           child: ListTile(
@@ -50,5 +63,31 @@ class WarehouseOperationsTab extends StatelessWidget {
         ),
       ),
     ],
+  );
+
+  Widget _operationCard(
+    BuildContext context, {
+    required WarehouseOperation operation,
+    required String subtitle,
+  }) => Card(
+    child: ListTile(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WarehouseStockEntryScreen(operation: operation),
+        ),
+      ),
+      leading: CircleAvatar(
+        backgroundColor: AppColors.softGreen,
+        foregroundColor: AppColors.primary,
+        child: Icon(operation.icon),
+      ),
+      title: Text(
+        operation.title,
+        style: const TextStyle(fontWeight: FontWeight.w900),
+      ),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+    ),
   );
 }
