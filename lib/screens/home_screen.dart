@@ -9,6 +9,7 @@ import '../utils/erp_format.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
 import 'sales/sales_main_screen.dart';
+import 'warehouse/warehouse_main_screen.dart';
 
 import 'tabs/dashboard_tab.dart';
 import 'tabs/buying_tab.dart';
@@ -86,6 +87,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (appState.userRole == 'Sales') {
       return const SalesMainScreen();
+    }
+    if (appState.userRole == 'Warehouse') {
+      return const WarehouseMainScreen();
     }
 
     return Scaffold(

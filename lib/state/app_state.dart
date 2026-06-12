@@ -99,6 +99,7 @@ class AppState with ChangeNotifier {
   String _normalizeRoleProfile(String roleProfile) {
     final normalized = roleProfile.trim();
     if (normalized.toLowerCase() == 'sales') return 'Sales';
+    if (normalized.toLowerCase() == 'warehouse') return 'Warehouse';
     return normalized;
   }
 
