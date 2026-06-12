@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
+import 'warehouse_operation_history_screen.dart';
 import 'warehouse_stock_opname_screen.dart';
 import 'warehouse_stock_entry_screen.dart';
 
@@ -30,6 +31,27 @@ class WarehouseOperationsTab extends StatelessWidget {
         style: TextStyle(color: AppColors.slate),
       ),
       const SizedBox(height: 14),
+      Card(
+        child: ListTile(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const WarehouseOperationHistoryScreen(),
+            ),
+          ),
+          leading: const CircleAvatar(
+            backgroundColor: AppColors.softGreen,
+            foregroundColor: AppColors.primary,
+            child: Icon(Icons.history_rounded),
+          ),
+          title: const Text(
+            'Riwayat operasi gudang',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
+          subtitle: const Text('Periksa transaksi dan status draft terbaru'),
+          trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+        ),
+      ),
       _operationCard(
         context,
         operation: WarehouseOperation.transfer,

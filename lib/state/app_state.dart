@@ -132,6 +132,7 @@ class AppState with ChangeNotifier {
   List<PurchaseReceipt> _purchaseReceipts = [];
   List<PurchaseInvoice> _purchaseInvoices = [];
   List<StockEntry> _stockEntries = [];
+  List<StockReconciliationSummary> _stockReconciliations = [];
   List<InventoryItem> _inventory = [];
   DocumentSummary _salesOrderSummary = const DocumentSummary();
   DocumentSummary _deliveryNoteSummary = const DocumentSummary();
@@ -156,6 +157,8 @@ class AppState with ChangeNotifier {
   List<PurchaseReceipt> get purchaseReceipts => _purchaseReceipts;
   List<PurchaseInvoice> get purchaseInvoices => _purchaseInvoices;
   List<StockEntry> get stockEntries => _stockEntries;
+  List<StockReconciliationSummary> get stockReconciliations =>
+      _stockReconciliations;
   List<InventoryItem> get inventory => _inventory;
   List<SalesOrder> get dashboardSalesOrders => _salesOrders;
   List<PurchaseOrder> get dashboardPurchaseOrders => _purchaseOrders;
@@ -2472,6 +2475,8 @@ class AppState with ChangeNotifier {
           'docstatus',
           'posting_date',
           'total_qty',
+          'from_warehouse',
+          'to_warehouse',
         ],
         orderBy: 'posting_date desc',
         maxRows: _defaultFetchRowLimit,
@@ -2487,6 +2492,26 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> refreshStockEntries() => fetchStockEntriesFromFrappe();
+
+  Future<void> refreshStockReconciliations() async {
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Stock Reconciliation',
+      fields: const [
+        'name',
+        'company',
+        'posting_date',
+        'status',
+        'docstatus',
+        'difference_amount',
+      ],
+      orderBy: 'posting_date desc, name desc',
+      maxRows: _defaultFetchRowLimit,
+    );
+    _stockReconciliations = rows
+        .map(StockReconciliationSummary.fromJson)
+        .toList();
+    notifyListeners();
+  }
 
   Future<void> fetchWarehousesFromFrappe({
     String baseUrl = _defaultFrappeBaseUrl,
