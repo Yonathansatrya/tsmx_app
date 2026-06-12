@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/inventory_item.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import 'warehouse_widgets.dart';
 
 class WarehouseOverviewTab extends StatelessWidget {
   final ValueChanged<int> onMenuSelected;
@@ -26,22 +27,14 @@ class WarehouseOverviewTab extends StatelessWidget {
       },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+        padding: warehousePagePadding,
         children: [
-          const Text(
-            'Dashboard Warehouse',
-            style: TextStyle(
-              color: AppColors.navy,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
+          const WarehouseSectionHeader(
+            title: 'Dashboard Warehouse',
+            subtitle: 'Ringkasan stok dan akses aktivitas gudang',
+            icon: Icons.dashboard_rounded,
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'Pilih aktivitas yang ingin dikerjakan.',
-            style: TextStyle(color: AppColors.slate),
-          ),
-          const SizedBox(height: 16),
+          warehouseSectionGap,
           Row(
             children: [
               Expanded(
@@ -62,24 +55,30 @@ class WarehouseOverviewTab extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          _MenuCard(
+          warehouseSectionGap,
+          const WarehouseSectionHeader(
+            title: 'Menu Utama',
+            subtitle: 'Pilih area kerja sesuai kebutuhan',
+            icon: Icons.apps_rounded,
+          ),
+          const SizedBox(height: 12),
+          WarehouseActionCard(
             title: 'Operasi Gudang',
             subtitle: 'Transfer, penerimaan, pengeluaran, dan stock opname',
             icon: Icons.swap_horiz_rounded,
             onTap: () => onMenuSelected(1),
           ),
-          _MenuCard(
+          WarehouseActionCard(
             title: 'Monitoring Stok',
             subtitle: 'Cek stok realtime dan peringatan stok minimum',
             icon: Icons.inventory_2_rounded,
-            available: true,
             onTap: () => onMenuSelected(2),
           ),
-          _MenuCard(
+          WarehouseActionCard(
             title: 'Quality Control',
             subtitle: 'Incoming QC, hasil produksi, reject, dan approval',
             icon: Icons.fact_check_rounded,
+            status: 'Belum aktif',
             onTap: () => onMenuSelected(3),
           ),
         ],
@@ -108,6 +107,7 @@ class _MetricCard extends StatelessWidget {
       color: AppColors.white,
       borderRadius: BorderRadius.circular(16),
       border: Border.all(color: AppColors.border),
+      boxShadow: AppColors.cardShadow,
     ),
     child: Row(
       children: [
@@ -136,39 +136,6 @@ class _MetricCard extends StatelessWidget {
           ),
         ),
       ],
-    ),
-  );
-}
-
-class _MenuCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final bool available;
-  final VoidCallback onTap;
-
-  const _MenuCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.onTap,
-    this.available = false,
-  });
-
-  @override
-  Widget build(BuildContext context) => Card(
-    child: ListTile(
-      onTap: onTap,
-      leading: CircleAvatar(
-        backgroundColor: AppColors.softGreen,
-        foregroundColor: AppColors.primary,
-        child: Icon(icon),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
-      subtitle: Text(subtitle),
-      trailing: available
-          ? const Icon(Icons.arrow_forward_ios_rounded, size: 16)
-          : const Chip(label: Text('Berikutnya')),
     ),
   );
 }

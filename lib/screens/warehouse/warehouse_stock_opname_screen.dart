@@ -5,6 +5,7 @@ import '../../models/inventory_item.dart';
 import '../../models/warehouse_info.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import 'warehouse_widgets.dart';
 
 class WarehouseStockOpnameScreen extends StatefulWidget {
   const WarehouseStockOpnameScreen({super.key});
@@ -143,7 +144,7 @@ class _WarehouseStockOpnameScreenState
             onRefresh: _load,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              padding: warehousePagePadding,
               children: [
                 _instructionPanel(),
                 const SizedBox(height: 14),
@@ -211,28 +212,10 @@ class _WarehouseStockOpnameScreenState
           ),
   );
 
-  Widget _instructionPanel() => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: AppColors.softGreen,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: const Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.inventory_outlined, color: AppColors.primary),
-        SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            'Hitung stok fisik di satu gudang. Selisih akan dihitung otomatis dan disimpan sebagai draft untuk diperiksa.',
-            style: TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ],
-    ),
+  Widget _instructionPanel() => const WarehouseInfoPanel(
+    icon: Icons.inventory_outlined,
+    message:
+        'Hitung stok fisik di satu gudang. Selisih dihitung otomatis dan disimpan sebagai draft untuk diperiksa.',
   );
 
   Widget _warehouseSelector() {
@@ -316,43 +299,48 @@ class _WarehouseStockOpnameScreenState
     );
   }
 
-  Widget _itemCard(int index, _StockOpnameRow row) => Card(
-    child: ListTile(
-      onTap: () => _askPhysicalQty(row.item, existingIndex: index),
-      leading: CircleAvatar(
-        backgroundColor: row.difference == 0
-            ? AppColors.softGreen
-            : AppColors.warning.withValues(alpha: 0.12),
-        foregroundColor: row.difference == 0
-            ? AppColors.success
-            : AppColors.warning,
-        child: Text('${index + 1}'),
-      ),
-      title: Text(
-        row.item.name,
-        style: const TextStyle(fontWeight: FontWeight.w900),
-      ),
-      subtitle: Text(
-        '${row.item.sku}\nSistem ${row.systemQty} | Fisik ${row.physicalQty}',
-      ),
-      isThreeLine: true,
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            _signed(row.difference),
-            style: TextStyle(
-              color: row.difference == 0
-                  ? AppColors.success
-                  : AppColors.warning,
-              fontWeight: FontWeight.w900,
+  Widget _itemCard(int index, _StockOpnameRow row) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        onTap: () => _askPhysicalQty(row.item, existingIndex: index),
+        leading: CircleAvatar(
+          backgroundColor: row.difference == 0
+              ? AppColors.softGreen
+              : AppColors.warning.withValues(alpha: 0.12),
+          foregroundColor: row.difference == 0
+              ? AppColors.success
+              : AppColors.warning,
+          child: Text('${index + 1}'),
+        ),
+        title: Text(
+          row.item.name,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(
+          '${row.item.sku}\nSistem ${row.systemQty} | Fisik ${row.physicalQty}',
+        ),
+        isThreeLine: true,
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              _signed(row.difference),
+              style: TextStyle(
+                color: row.difference == 0
+                    ? AppColors.success
+                    : AppColors.warning,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-          ),
-          const Text(
-            'Selisih',
-            style: TextStyle(color: AppColors.slate, fontSize: 10),
-          ),
-        ],
+            const Text(
+              'Selisih',
+              style: TextStyle(color: AppColors.slate, fontSize: 10),
+            ),
+          ],
+        ),
       ),
     ),
   );

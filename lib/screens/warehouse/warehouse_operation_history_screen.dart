@@ -6,6 +6,7 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_status_badge.dart';
+import 'warehouse_widgets.dart';
 
 enum _HistoryType { all, transfer, receive, issue, opname }
 
@@ -77,8 +78,14 @@ class _WarehouseOperationHistoryScreenState
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+          padding: warehousePagePadding,
           children: [
+            const WarehouseSectionHeader(
+              title: 'Riwayat Transaksi',
+              subtitle: 'Cari dan periksa status transaksi gudang',
+              icon: Icons.history_rounded,
+            ),
+            const SizedBox(height: 14),
             TextField(
               controller: _search,
               decoration: const InputDecoration(
@@ -113,7 +120,7 @@ class _WarehouseOperationHistoryScreenState
                 ),
               ),
             ],
-            const SizedBox(height: 14),
+            warehouseSectionGap,
             if (entries.isEmpty && reconciliations.isEmpty && !_loading)
               const ErpEmptyState(
                 title: 'Belum ada riwayat operasi',
@@ -174,33 +181,49 @@ class _WarehouseOperationHistoryScreenState
         .toList();
   }
 
-  Widget _stockEntryCard(StockEntry row) => Card(
-    child: ListTile(
-      leading: CircleAvatar(
-        backgroundColor: AppColors.softGreen,
-        foregroundColor: AppColors.primary,
-        child: Icon(_iconForType(row.stockEntryType)),
+  Widget _stockEntryCard(StockEntry row) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(14),
+        leading: CircleAvatar(
+          backgroundColor: AppColors.softGreen,
+          foregroundColor: AppColors.primary,
+          child: Icon(_iconForType(row.stockEntryType)),
+        ),
+        title: Text(
+          row.id,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(
+          '${row.stockEntryType} | ${row.date}\n${_warehouseRoute(row)}',
+        ),
+        isThreeLine: true,
+        trailing: ErpStatusBadge(statusText: row.statusText),
       ),
-      title: Text(row.id, style: const TextStyle(fontWeight: FontWeight.w900)),
-      subtitle: Text(
-        '${row.stockEntryType} | ${row.date}\n${_warehouseRoute(row)}',
-      ),
-      isThreeLine: true,
-      trailing: ErpStatusBadge(statusText: row.statusText),
     ),
   );
 
-  Widget _reconciliationCard(StockReconciliationSummary row) => Card(
-    child: ListTile(
-      leading: const CircleAvatar(
-        backgroundColor: AppColors.softGreen,
-        foregroundColor: AppColors.primary,
-        child: Icon(Icons.inventory_outlined),
+  Widget _reconciliationCard(StockReconciliationSummary row) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(14),
+        leading: const CircleAvatar(
+          backgroundColor: AppColors.softGreen,
+          foregroundColor: AppColors.primary,
+          child: Icon(Icons.inventory_outlined),
+        ),
+        title: Text(
+          row.id,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text('Stock Opname | ${row.date}\n${row.company}'),
+        isThreeLine: true,
+        trailing: ErpStatusBadge(statusText: row.statusText),
       ),
-      title: Text(row.id, style: const TextStyle(fontWeight: FontWeight.w900)),
-      subtitle: Text('Stock Opname | ${row.date}\n${row.company}'),
-      isThreeLine: true,
-      trailing: ErpStatusBadge(statusText: row.statusText),
     ),
   );
 

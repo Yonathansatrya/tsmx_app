@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/app_colors.dart';
+import 'warehouse_widgets.dart';
 
 class WarehouseQualityTab extends StatelessWidget {
   const WarehouseQualityTab({super.key});
@@ -15,36 +15,20 @@ class WarehouseQualityTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
-    padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+    padding: warehousePagePadding,
     children: [
-      const Text(
-        'Quality Control',
-        style: TextStyle(
-          color: AppColors.navy,
-          fontSize: 21,
-          fontWeight: FontWeight.w900,
-        ),
+      const WarehouseSectionHeader(
+        title: 'Quality Control',
+        subtitle: 'Tahap lanjutan setelah operasi gudang stabil',
+        icon: Icons.fact_check_rounded,
       ),
-      const SizedBox(height: 4),
-      const Text(
-        'Tahap lanjutan setelah operasi gudang stabil.',
-        style: TextStyle(color: AppColors.slate),
-      ),
-      const SizedBox(height: 14),
+      warehouseSectionGap,
       ..._features.map(
-        (feature) => Card(
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: AppColors.softGreen,
-              foregroundColor: AppColors.primary,
-              child: Icon(feature.$2),
-            ),
-            title: Text(
-              feature.$1,
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-            trailing: const Chip(label: Text('Belum aktif')),
-          ),
+        (feature) => WarehouseActionCard(
+          title: feature.$1,
+          subtitle: 'Akan tersedia pada tahap Quality Control',
+          icon: feature.$2,
+          status: 'Belum aktif',
         ),
       ),
     ],

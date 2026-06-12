@@ -5,6 +5,7 @@ import '../../models/inventory_item.dart';
 import '../../models/warehouse_info.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import 'warehouse_widgets.dart';
 
 enum WarehouseOperation {
   transfer(
@@ -211,7 +212,7 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
         : Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              padding: warehousePagePadding,
               children: [
                 _instructionPanel(),
                 const SizedBox(height: 14),
@@ -311,34 +312,14 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
           ),
   );
 
-  Widget _instructionPanel() => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: AppColors.softGreen,
-      borderRadius: BorderRadius.circular(16),
-    ),
-    child: Row(
-      children: [
-        Icon(widget.operation.icon, color: AppColors.primary, size: 28),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            switch (widget.operation) {
-              WarehouseOperation.transfer =>
-                'Pindahkan beberapa item dari satu gudang ke gudang lain.',
-              WarehouseOperation.receive =>
-                'Catat barang yang masuk ke gudang tujuan.',
-              WarehouseOperation.issue =>
-                'Catat barang yang keluar dari gudang asal.',
-            },
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ],
-    ),
+  Widget _instructionPanel() => WarehouseInfoPanel(
+    icon: widget.operation.icon,
+    message: switch (widget.operation) {
+      WarehouseOperation.transfer =>
+        'Pindahkan beberapa item dari satu gudang ke gudang lain.',
+      WarehouseOperation.receive => 'Catat barang yang masuk ke gudang tujuan.',
+      WarehouseOperation.issue => 'Catat barang yang keluar dari gudang asal.',
+    },
   );
 
   Widget _warehouseField({
@@ -504,24 +485,29 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
     );
   }
 
-  Widget _itemCard(int index, _WarehouseOperationRow row) => Card(
-    child: ListTile(
-      leading: CircleAvatar(
-        backgroundColor: AppColors.softGreen,
-        foregroundColor: AppColors.primary,
-        child: Text('${index + 1}'),
+  Widget _itemCard(int index, _WarehouseOperationRow row) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Card(
+      margin: EdgeInsets.zero,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        leading: CircleAvatar(
+          backgroundColor: AppColors.softGreen,
+          foregroundColor: AppColors.primary,
+          child: Text('${index + 1}'),
+        ),
+        title: Text(
+          row.item.name,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text('${row.item.sku} | Qty ${row.qty}'),
+        trailing: IconButton(
+          tooltip: 'Hapus item',
+          onPressed: () => setState(() => _rows.removeAt(index)),
+          icon: const Icon(Icons.delete_outline_rounded),
+        ),
+        onTap: () => _askQuantity(row.item, existingIndex: index),
       ),
-      title: Text(
-        row.item.name,
-        style: const TextStyle(fontWeight: FontWeight.w900),
-      ),
-      subtitle: Text('${row.item.sku} | Qty ${row.qty}'),
-      trailing: IconButton(
-        tooltip: 'Hapus item',
-        onPressed: () => setState(() => _rows.removeAt(index)),
-        icon: const Icon(Icons.delete_outline_rounded),
-      ),
-      onTap: () => _askQuantity(row.item, existingIndex: index),
     ),
   );
 
