@@ -29,6 +29,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   final _customerCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
   final _rateCtrl = TextEditingController();
+  final _discountCtrl = TextEditingController(text: '0');
   final List<_AdditionalItemRow> _additionalItems = [];
   final ImagePicker _imagePicker = ImagePicker();
   final List<XFile> _photos = [];
@@ -42,7 +43,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   String? _selectedCurrency;
   String? _selectedPriceList;
   String? _priceListCurrency;
-  bool _ignorePricingRule = false;
 
   TextEditingController? _itemTextController;
   String? _initialItemText;
@@ -333,6 +333,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     super.initState();
     _qtyCtrl.addListener(_onPricingInputChanged);
     _rateCtrl.addListener(_calculateTotal);
+    _discountCtrl.addListener(_calculateTotal);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final appState = context.read<AppState>();
@@ -350,6 +351,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     _customerCtrl.dispose();
     _qtyCtrl.dispose();
     _rateCtrl.dispose();
+    _discountCtrl.dispose();
     for (final row in _additionalItems) {
       row.dispose();
     }
@@ -361,14 +363,19 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     setState(() {
       final qty = double.tryParse(_qtyCtrl.text.trim()) ?? 0;
       final rate = double.tryParse(_rateCtrl.text.trim()) ?? 0;
-      _totalAmount =
-          (qty * rate) +
+      final discount = double.tryParse(_discountCtrl.text.trim()) ?? 0;
+      final subtotal =
+          (qty * (rate - discount).clamp(0, double.infinity)) +
           _additionalItems.fold<double>(0, (total, row) {
             final rowQty = double.tryParse(row.qtyController.text.trim()) ?? 0;
             final rowRate =
                 double.tryParse(row.rateController.text.trim()) ?? 0;
-            return total + (rowQty * rowRate);
+            final rowDiscount =
+                double.tryParse(row.discountController.text.trim()) ?? 0;
+            return total +
+                (rowQty * (rowRate - rowDiscount).clamp(0, double.infinity));
           });
+      _totalAmount = subtotal;
     });
   }
 
@@ -381,6 +388,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     final row = _AdditionalItemRow();
     row.qtyController.addListener(_onPricingInputChanged);
     row.rateController.addListener(_calculateTotal);
+    row.discountController.addListener(_calculateTotal);
     setState(() => _additionalItems.add(row));
   }
 
@@ -420,6 +428,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       required String itemCode,
       required double qty,
       double? rate,
+      double? discountAmount,
       String? warehouse,
     }) {
       final pricing = _itemInsights[itemCode];
@@ -428,11 +437,17 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         'qty': qty,
         'delivery_date': deliveryDate,
         if (rate != null && rate > 0) 'rate': rate,
+        if (discountAmount != null && discountAmount > 0)
+          'discount_amount': discountAmount,
         if (pricing != null && pricing.priceListRate > 0)
           'price_list_rate': pricing.priceListRate,
-        if (pricing != null && pricing.discountPercentage > 0)
+        if ((discountAmount == null || discountAmount <= 0) &&
+            pricing != null &&
+            pricing.discountPercentage > 0)
           'discount_percentage': pricing.discountPercentage,
-        if (pricing != null && pricing.pricingRule.isNotEmpty)
+        if ((discountAmount == null || discountAmount <= 0) &&
+            pricing != null &&
+            pricing.pricingRule.isNotEmpty)
           'pricing_rule': pricing.pricingRule,
         if (warehouse != null && warehouse.trim().isNotEmpty)
           'warehouse': warehouse.trim(),
@@ -446,6 +461,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         itemCode: firstItemCode,
         qty: double.parse(_qtyCtrl.text.trim()),
         rate: double.tryParse(_rateCtrl.text.trim()),
+        discountAmount: double.tryParse(_discountCtrl.text.trim()),
         warehouse: _selectedWarehouse,
       ),
       ..._additionalItems.map(
@@ -453,6 +469,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           itemCode: row.itemCode!,
           qty: double.parse(row.qtyController.text.trim()),
           rate: double.tryParse(row.rateController.text.trim()),
+          discountAmount: double.tryParse(row.discountController.text.trim()),
           warehouse: row.warehouse ?? _selectedWarehouse,
         ),
       ),
@@ -493,28 +510,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }
   }
 
-  Future<void> _selectPriceList(String? value) async {
-    setState(() {
-      _selectedPriceList = value;
-      _priceListCurrency = _selectedCurrency;
-    });
-    if (value != null && value.isNotEmpty) {
-      try {
-        final doc = await context.read<AppState>().frappeService.fetchDocument(
-          'Price List',
-          value,
-        );
-        if (mounted) {
-          setState(() {
-            _priceListCurrency =
-                doc['currency']?.toString() ?? _selectedCurrency;
-          });
-        }
-      } catch (_) {}
-    }
-    _scheduleRepriceAllItems();
-  }
-
   Future<ItemSalesInsight?> _loadItemInsight(
     String itemCode, {
     bool applyPrice = false,
@@ -537,7 +532,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         warehouse: row?.warehouse ?? _selectedWarehouse,
         transactionDate: _selectedDate,
         qty: qty,
-        ignorePricingRule: _ignorePricingRule,
+        ignorePricingRule: false,
       );
       if (!mounted || requestVersion != _pricingRequestVersion) return insight;
       if (row == null && _selectedItemCode != itemCode) return insight;
@@ -1280,7 +1275,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           currency: _selectedCurrency,
           sellingPriceList: _selectedPriceList,
           priceListCurrency: _priceListCurrency,
-          ignorePricingRule: _ignorePricingRule,
+          ignorePricingRule: false,
           salesPerson: appState.userRole == 'Sales'
               ? null
               : _selectedSalesPerson,
@@ -1299,7 +1294,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           currency: _selectedCurrency,
           sellingPriceList: _selectedPriceList,
           priceListCurrency: _priceListCurrency,
-          ignorePricingRule: _ignorePricingRule,
           salesPerson: appState.userRole == 'Sales'
               ? null
               : _selectedSalesPerson,
@@ -1651,10 +1645,14 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         itemCode: item.itemCode,
         qty: item.qty.toString(),
         rate: item.rate > 0 ? item.rate.toString() : '',
+        discount: item.discountAmount > 0
+            ? item.discountAmount.toString()
+            : '0',
         warehouse: item.warehouse.isNotEmpty ? item.warehouse : null,
       );
       row.qtyController.addListener(_onPricingInputChanged);
       row.rateController.addListener(_calculateTotal);
+      row.discountController.addListener(_calculateTotal);
       _additionalItems.add(row);
     }
     setState(() {
@@ -1668,7 +1666,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       _priceListCurrency = order.priceListCurrency.isNotEmpty
           ? order.priceListCurrency
           : _priceListCurrency;
-      _ignorePricingRule = order.ignorePricingRule;
+      _discountCtrl.text = firstItem?.discountAmount.toString() ?? '0';
       _selectedDate = DateTime.tryParse(order.date) ?? _selectedDate;
       _selectedDeliveryDate = _selectedDate;
       if (firstItem != null) {
@@ -1697,14 +1695,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     final appState = context.watch<AppState>();
     final warehouseOptions = _warehouseOptions(appState);
     final costCenterOptions = _costCentersForWarehouse(warehouseOptions);
-    final currencyOptions = _normalizeOptions([
-      ..._currencyOptions,
-      ?_selectedCurrency,
-    ]);
-    final priceListOptions = _normalizeOptions([
-      ..._priceListOptions,
-      ?_selectedPriceList,
-    ]);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -2213,75 +2203,50 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            key: ValueKey('currency:$_selectedCurrency'),
-                            initialValue:
-                                currencyOptions.contains(_selectedCurrency)
-                                ? _selectedCurrency
-                                : null,
-                            isExpanded: true,
+                          child: InputDecorator(
                             decoration: const InputDecoration(
                               labelText: 'Currency',
+                              prefixIcon: Icon(Icons.lock_outline_rounded),
                             ),
-                            items: currencyOptions
-                                .map(
-                                  (value) => DropdownMenuItem(
-                                    value: value,
-                                    child: Text(value),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedCurrency = value;
-                                _priceListCurrency ??= value;
-                              });
-                              _scheduleRepriceAllItems();
-                            },
+                            child: Text(
+                              _selectedCurrency ?? '-',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.navy,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: DropdownButtonFormField<String>(
-                            key: ValueKey('price-list:$_selectedPriceList'),
-                            initialValue:
-                                priceListOptions.contains(_selectedPriceList)
-                                ? _selectedPriceList
-                                : null,
-                            isExpanded: true,
+                          child: InputDecorator(
                             decoration: const InputDecoration(
                               labelText: 'Selling Price List',
+                              prefixIcon: Icon(Icons.lock_outline_rounded),
                             ),
-                            items: priceListOptions
-                                .map(
-                                  (value) => DropdownMenuItem(
-                                    value: value,
-                                    child: Text(
-                                      value,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: _selectPriceList,
+                            child: Text(
+                              _selectedPriceList ?? '-',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.navy,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      value: _ignorePricingRule,
-                      onChanged: (value) {
-                        setState(() => _ignorePricingRule = value);
-                        _scheduleRepriceAllItems();
-                      },
-                      title: const Text('Ignore Pricing Rule'),
-                      subtitle: Text(
-                        _priceListCurrency == null
-                            ? 'Harga akan dihitung oleh ERPNext'
-                            : 'Price List Currency: $_priceListCurrency',
+                    if (_priceListCurrency != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Price List Currency: $_priceListCurrency',
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 11,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -2586,6 +2551,42 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _discountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Discount Amount',
+                        prefixIcon: const Icon(Icons.discount_outlined),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      validator: (value) {
+                        final discount = double.tryParse(value?.trim() ?? '');
+                        if (discount == null || discount < 0) {
+                          return 'Diskon harus 0 atau lebih';
+                        }
+                        final rate =
+                            double.tryParse(_rateCtrl.text.trim()) ?? 0;
+                        if (rate > 0 && discount > rate) {
+                          return 'Diskon tidak boleh melebihi harga';
+                        }
+                        return null;
+                      },
+                    ),
+
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(
@@ -2770,6 +2771,35 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                               ],
                             ),
                             const SizedBox(height: 10),
+                            TextFormField(
+                              controller: row.discountController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Discount Amount',
+                                prefixIcon: Icon(Icons.discount_outlined),
+                              ),
+                              validator: (value) {
+                                final discount = double.tryParse(
+                                  value?.trim() ?? '',
+                                );
+                                if (discount == null || discount < 0) {
+                                  return 'Diskon harus 0 atau lebih';
+                                }
+                                final rate =
+                                    double.tryParse(
+                                      row.rateController.text.trim(),
+                                    ) ??
+                                    0;
+                                if (rate > 0 && discount > rate) {
+                                  return 'Diskon tidak boleh melebihi harga';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 10),
                             Align(
                               alignment: Alignment.centerLeft,
                               child: TextButton.icon(
@@ -2921,19 +2951,23 @@ class _AdditionalItemRow {
   String? warehouse;
   final TextEditingController qtyController;
   final TextEditingController rateController;
+  final TextEditingController discountController;
   TextEditingController? itemTextController;
 
   _AdditionalItemRow({
     this.itemCode,
     String qty = '1',
     String rate = '',
+    String discount = '0',
     this.warehouse,
   }) : qtyController = TextEditingController(text: qty),
-       rateController = TextEditingController(text: rate);
+       rateController = TextEditingController(text: rate),
+       discountController = TextEditingController(text: discount);
 
   void dispose() {
     qtyController.dispose();
     rateController.dispose();
+    discountController.dispose();
   }
 }
 
