@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'warehouse_barcode_scanner_screen.dart';
+import 'warehouse_batch_serial_screen.dart';
 import 'warehouse_operation_history_screen.dart';
 import 'warehouse_stock_opname_screen.dart';
 import 'warehouse_stock_entry_screen.dart';
@@ -8,10 +9,6 @@ import 'warehouse_widgets.dart';
 
 class WarehouseOperationsTab extends StatelessWidget {
   const WarehouseOperationsTab({super.key});
-
-  static const _features = [
-    ('Batch & Serial Number tracking', Icons.numbers_rounded, 'Menengah'),
-  ];
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -69,13 +66,14 @@ class WarehouseOperationsTab extends StatelessWidget {
         title: 'Barcode / QR Scan',
         subtitle: 'Scan kode item untuk memeriksa stok per gudang',
       ),
-      ..._features.map(
-        (feature) => WarehouseActionCard(
-          icon: feature.$2,
-          title: feature.$1,
-          subtitle: 'Prioritas ${feature.$3}',
-          status: 'Belum aktif',
+      WarehouseActionCard(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WarehouseBatchSerialScreen()),
         ),
+        icon: Icons.numbers_rounded,
+        title: 'Batch & Serial Number tracking',
+        subtitle: 'Cari batch, expiry, serial number, dan lokasi gudang',
       ),
     ],
   );

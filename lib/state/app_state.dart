@@ -15,6 +15,7 @@ import '../models/stock_ledger_movement.dart';
 import '../models/inventory_item.dart';
 import '../utils/date_range_presets.dart';
 import '../models/warehouse_info.dart';
+import '../models/warehouse_tracking_record.dart';
 import '../models/stock_area_option.dart';
 import '../models/erp_summary.dart';
 import '../models/sales_order_insight.dart';
@@ -3097,6 +3098,34 @@ class AppState with ChangeNotifier {
                 transactionCount['${item.sku}|${item.warehouseId}'] ?? 0,
           ),
     ];
+  }
+
+  Future<List<WarehouseBatchRecord>> fetchWarehouseBatches() async {
+    await _frappeService.ensureLoggedIn();
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Batch',
+      fields: const [
+        'name',
+        'item',
+        'manufacturing_date',
+        'expiry_date',
+        'disabled',
+      ],
+      orderBy: 'expiry_date asc, name asc',
+      maxRows: 1000,
+    );
+    return rows.map(WarehouseBatchRecord.fromJson).toList();
+  }
+
+  Future<List<WarehouseSerialRecord>> fetchWarehouseSerialNumbers() async {
+    await _frappeService.ensureLoggedIn();
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Serial No',
+      fields: const ['name', 'item_code', 'warehouse', 'status', 'batch_no'],
+      orderBy: 'modified desc',
+      maxRows: 1000,
+    );
+    return rows.map(WarehouseSerialRecord.fromJson).toList();
   }
 
   Future<void> refreshSalesOrders() => fetchSalesOrdersFromFrappe();
