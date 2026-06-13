@@ -7,13 +7,21 @@ class AuthService {
   AuthService(this._frappe);
 
   Future<CurrentUserAccess> fetchCurrentUserAccess(String currentUser) async {
+    if (_isAdministrator(currentUser)) {
+      return CurrentUserAccess(
+        user: currentUser,
+        roleProfile: 'Administrator',
+        roles: const ['Administrator', 'System Manager'],
+      );
+    }
+
     var roleProfile = '';
     var roles = <String>[];
     Object? directLookupError;
 
     try {
       final user = await _frappe.fetchDocument('User', currentUser);
-      roleProfile = user['role_profile_name']?.toString().trim() ?? '';
+      roleProfile = _cleanValue(user['role_profile_name']);
     } catch (error) {
       directLookupError = error;
     }
@@ -29,7 +37,7 @@ class AuthService {
           },
         );
         if (value is Map) {
-          roleProfile = value['role_profile_name']?.toString().trim() ?? '';
+          roleProfile = _cleanValue(value['role_profile_name']);
         }
       } catch (error) {
         directLookupError ??= error;
@@ -40,15 +48,15 @@ class AuthService {
       try {
         final access = await _frappe.callMethod('tmsx_current_user_access');
         if (access is Map) {
-          final returnedUser = access['user']?.toString().trim() ?? '';
+          final returnedUser = _cleanValue(access['user']);
           if (returnedUser.isNotEmpty && returnedUser != currentUser) {
             throw Exception('Identitas session Frappe tidak sesuai.');
           }
-          roleProfile = access['role_profile_name']?.toString().trim() ?? '';
+          roleProfile = _cleanValue(access['role_profile_name']);
           final rawRoles = access['roles'];
           if (rawRoles is List) {
             roles = rawRoles
-                .map((role) => role.toString().trim())
+                .map(_cleanValue)
                 .where((role) => role.isNotEmpty)
                 .toList();
           }
@@ -73,6 +81,19 @@ class AuthService {
       roleProfile: roleProfile,
       roles: roles,
     );
+  }
+
+  bool _isAdministrator(String value) =>
+      value.trim().toLowerCase() == 'administrator';
+
+  String _cleanValue(Object? value) {
+    final cleaned = value?.toString().trim() ?? '';
+    if (cleaned.toLowerCase() == 'null' ||
+        cleaned.toLowerCase() == 'none' ||
+        cleaned.toLowerCase() == 'undefined') {
+      return '';
+    }
+    return cleaned;
   }
 
   Future<SalesIdentity> resolveSalesIdentity(String currentUser) async {
