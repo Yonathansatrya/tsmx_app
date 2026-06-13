@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'warehouse_barcode_scanner_screen.dart';
 import 'warehouse_operation_history_screen.dart';
 import 'warehouse_stock_opname_screen.dart';
 import 'warehouse_stock_entry_screen.dart';
@@ -9,7 +10,6 @@ class WarehouseOperationsTab extends StatelessWidget {
   const WarehouseOperationsTab({super.key});
 
   static const _features = [
-    ('Barcode / QR Scan', Icons.qr_code_scanner_rounded, 'Menengah'),
     ('Batch & Serial Number tracking', Icons.numbers_rounded, 'Menengah'),
   ];
 
@@ -57,6 +57,17 @@ class WarehouseOperationsTab extends StatelessWidget {
         icon: Icons.inventory_outlined,
         title: 'Stock opname mobile',
         subtitle: 'Hitung stok fisik dan simpan selisih sebagai draft',
+      ),
+      WarehouseActionCard(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const WarehouseBarcodeScannerScreen(),
+          ),
+        ),
+        icon: Icons.qr_code_scanner_rounded,
+        title: 'Barcode / QR Scan',
+        subtitle: 'Scan kode item untuk memeriksa stok per gudang',
       ),
       ..._features.map(
         (feature) => WarehouseActionCard(

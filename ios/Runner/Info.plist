@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Digunakan untuk mengambil foto order atau customer.</string>
+	<string>Digunakan untuk mengambil foto dan memindai barcode atau QR item.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Digunakan untuk memilih foto order atau customer.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
