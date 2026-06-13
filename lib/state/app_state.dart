@@ -10,6 +10,7 @@ import '../models/delivery_note.dart';
 import '../models/sales_invoice.dart';
 import '../models/purchase_receipt.dart';
 import '../models/purchase_invoice.dart';
+import '../models/quality_inspection_record.dart';
 import '../models/stock_entry.dart';
 import '../models/stock_ledger_movement.dart';
 import '../models/inventory_item.dart';
@@ -3126,6 +3127,35 @@ class AppState with ChangeNotifier {
       maxRows: 1000,
     );
     return rows.map(WarehouseSerialRecord.fromJson).toList();
+  }
+
+  Future<List<QualityInspectionRecord>> fetchRejectedQualityInspections({
+    int periodDays = 30,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final from = DateTime.now().subtract(Duration(days: periodDays));
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Quality Inspection',
+      fields: const [
+        'name',
+        'item_code',
+        'item_name',
+        'inspection_type',
+        'reference_type',
+        'reference_name',
+        'inspected_by',
+        'status',
+        'remarks',
+        'report_date',
+      ],
+      filters: [
+        ['status', '=', 'Rejected'],
+        ['report_date', '>=', DateRangePresets.toFrappeDate(from)],
+      ],
+      orderBy: 'report_date desc, modified desc',
+      maxRows: 1000,
+    );
+    return rows.map(QualityInspectionRecord.fromJson).toList();
   }
 
   Future<void> refreshSalesOrders() => fetchSalesOrdersFromFrappe();
