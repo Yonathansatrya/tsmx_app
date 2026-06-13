@@ -3164,6 +3164,35 @@ class AppState with ChangeNotifier {
     return rows.map(QualityInspectionRecord.fromJson).toList();
   }
 
+  Future<List<QualityInspectionRecord>> fetchProductionQualityInspections({
+    int periodDays = 30,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final from = DateTime.now().subtract(Duration(days: periodDays));
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Quality Inspection',
+      fields: const [
+        'name',
+        'item_code',
+        'item_name',
+        'inspection_type',
+        'reference_type',
+        'reference_name',
+        'inspected_by',
+        'status',
+        'remarks',
+        'report_date',
+      ],
+      filters: [
+        ['inspection_type', '=', 'In Process'],
+        ['report_date', '>=', DateRangePresets.toFrappeDate(from)],
+      ],
+      orderBy: 'report_date desc, modified desc',
+      maxRows: 1000,
+    );
+    return rows.map(QualityInspectionRecord.fromJson).toList();
+  }
+
   Future<void> refreshSalesOrders() => fetchSalesOrdersFromFrappe();
   Future<void> refreshPurchaseOrders() => fetchPurchaseOrdersFromFrappe();
   Future<void> refreshInventory() => fetchInventoryFromFrappe();

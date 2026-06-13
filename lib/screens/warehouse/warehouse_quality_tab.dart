@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'warehouse_production_qc_screen.dart';
 import 'warehouse_reject_monitoring_screen.dart';
 import 'warehouse_widgets.dart';
 
@@ -8,7 +9,6 @@ class WarehouseQualityTab extends StatelessWidget {
 
   static const _features = [
     ('QC incoming barang', Icons.move_to_inbox_rounded),
-    ('QC hasil produksi', Icons.precision_manufacturing_outlined),
     ('Foto QC evidence', Icons.camera_alt_outlined),
     ('Approval QC', Icons.approval_outlined),
   ];
@@ -23,6 +23,17 @@ class WarehouseQualityTab extends StatelessWidget {
         icon: Icons.fact_check_rounded,
       ),
       warehouseSectionGap,
+      WarehouseActionCard(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const WarehouseProductionQcScreen(),
+          ),
+        ),
+        title: 'QC hasil produksi',
+        subtitle: 'Pantau Quality Inspection selama proses produksi',
+        icon: Icons.precision_manufacturing_outlined,
+      ),
       WarehouseActionCard(
         onTap: () => Navigator.push(
           context,
