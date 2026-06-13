@@ -78,7 +78,6 @@ class WarehouseOverviewTab extends StatelessWidget {
             title: 'Quality Control',
             subtitle: 'Incoming QC, hasil produksi, reject, dan approval',
             icon: Icons.fact_check_rounded,
-            status: 'Belum aktif',
             onTap: () => onMenuSelected(3),
           ),
         ],

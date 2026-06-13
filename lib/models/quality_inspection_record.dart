@@ -9,6 +9,7 @@ class QualityInspectionRecord {
   final String status;
   final String remarks;
   final DateTime? reportDate;
+  final int docstatus;
 
   const QualityInspectionRecord({
     required this.name,
@@ -21,6 +22,7 @@ class QualityInspectionRecord {
     required this.status,
     required this.remarks,
     required this.reportDate,
+    required this.docstatus,
   });
 
   factory QualityInspectionRecord.fromJson(Map<String, dynamic> json) =>
@@ -35,5 +37,6 @@ class QualityInspectionRecord {
         status: json['status']?.toString() ?? '',
         remarks: json['remarks']?.toString() ?? '',
         reportDate: DateTime.tryParse(json['report_date']?.toString() ?? ''),
+        docstatus: int.tryParse(json['docstatus']?.toString() ?? '') ?? 0,
       );
 }

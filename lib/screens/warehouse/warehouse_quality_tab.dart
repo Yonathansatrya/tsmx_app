@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'warehouse_incoming_qc_screen.dart';
+import 'warehouse_qc_approval_screen.dart';
 import 'warehouse_qc_evidence_screen.dart';
 import 'warehouse_production_qc_screen.dart';
 import 'warehouse_reject_monitoring_screen.dart';
@@ -8,21 +10,34 @@ import 'warehouse_widgets.dart';
 class WarehouseQualityTab extends StatelessWidget {
   const WarehouseQualityTab({super.key});
 
-  static const _features = [
-    ('QC incoming barang', Icons.move_to_inbox_rounded),
-    ('Approval QC', Icons.approval_outlined),
-  ];
-
   @override
   Widget build(BuildContext context) => ListView(
     padding: warehousePagePadding,
     children: [
       const WarehouseSectionHeader(
         title: 'Quality Control',
-        subtitle: 'Tahap lanjutan setelah operasi gudang stabil',
+        subtitle: 'Pantau inspeksi, evidence, reject, dan approval QC',
         icon: Icons.fact_check_rounded,
       ),
       warehouseSectionGap,
+      WarehouseActionCard(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WarehouseIncomingQcScreen()),
+        ),
+        title: 'QC incoming barang',
+        subtitle: 'Pantau Quality Inspection barang masuk',
+        icon: Icons.move_to_inbox_rounded,
+      ),
+      WarehouseActionCard(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WarehouseQcApprovalScreen()),
+        ),
+        title: 'Approval QC',
+        subtitle: 'Review dan submit Quality Inspection draft',
+        icon: Icons.approval_outlined,
+      ),
       WarehouseActionCard(
         onTap: () => Navigator.push(
           context,
@@ -53,14 +68,6 @@ class WarehouseQualityTab extends StatelessWidget {
         title: 'Reject monitoring',
         subtitle: 'Pantau hasil Quality Inspection yang ditolak',
         icon: Icons.report_problem_outlined,
-      ),
-      ..._features.map(
-        (feature) => WarehouseActionCard(
-          title: feature.$1,
-          subtitle: 'Akan tersedia pada tahap Quality Control',
-          icon: feature.$2,
-          status: 'Belum aktif',
-        ),
       ),
     ],
   );
