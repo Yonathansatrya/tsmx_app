@@ -39,11 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final success = await appState.login(username, password);
 
     if (success) {
-      await appState.saveFrappeConfig(
-        baseUrl: 'http://apps.willshine.id:8014',
-        username: username,
-        password: password,
-      );
+      await appState.saveFrappeConfig(username: username, password: password);
 
       await appState.prefetchInitialData();
 

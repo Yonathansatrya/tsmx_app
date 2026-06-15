@@ -3,10 +3,9 @@ import 'dart:developer' as developer;
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../config/app_config.dart';
 
 class FrappeService {
-  static const String defaultBaseUrl = 'http://apps.willshine.id:8014';
-
   static const int maxPageLength = 10000;
 
   String baseUrl;
@@ -14,7 +13,8 @@ class FrappeService {
   String? password;
   final Map<String, String> _cookies = {};
 
-  FrappeService({this.baseUrl = defaultBaseUrl});
+  FrappeService({String? baseUrl})
+    : baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
 
   bool get hasCredentials => username != null && password != null;
 

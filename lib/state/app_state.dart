@@ -4,6 +4,7 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/app_config.dart';
 import '../models/sales_order.dart';
 import '../models/sales_order_approval.dart';
 import '../models/purchase_order.dart';
@@ -298,7 +299,6 @@ class AppState with ChangeNotifier {
   String? _inventoryError;
   String? get inventoryError => _inventoryError;
 
-  static const String _defaultFrappeBaseUrl = 'http://apps.willshine.id:8014';
   static const int _frappePageSize = 500;
   static const int _defaultFetchRowLimit = 500;
   static const int _documentPageSize = 50;
@@ -328,7 +328,7 @@ class AppState with ChangeNotifier {
     final cfg = await _loadFrappeConfig();
     if (cfg == null) return;
 
-    _frappeService.baseUrl = cfg['baseUrl'] ?? _defaultFrappeBaseUrl;
+    _frappeService.baseUrl = AppConfig.normalizedFrappeBaseUrl;
     if (cfg['username'] != null) {
       _frappeService.username = cfg['username'];
     }
@@ -368,7 +368,7 @@ class AppState with ChangeNotifier {
     }
 
     try {
-      _frappeService.baseUrl = cfg['baseUrl'] ?? _defaultFrappeBaseUrl;
+      _frappeService.baseUrl = AppConfig.normalizedFrappeBaseUrl;
       _userRole = 'Unassigned';
       await _frappeService.login(cfg['username']!, password);
       _isAuthenticated = true;
@@ -487,11 +487,11 @@ class AppState with ChangeNotifier {
   Future<bool> login(
     String username,
     String password, {
-    String baseUrl = FrappeService.defaultBaseUrl,
+    String? baseUrl,
   }) async {
     try {
       _lastAuthError = null;
-      _frappeService.baseUrl = baseUrl;
+      _frappeService.baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
       _userRole = 'Unassigned';
       await _frappeService.login(username, password);
       _isAuthenticated = true;
@@ -1845,7 +1845,7 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchSalesOrdersFromFrappe({
-    String baseUrl = _defaultFrappeBaseUrl,
+    String? baseUrl,
     String? username,
     String? password,
   }) async {
@@ -1857,7 +1857,7 @@ class AppState with ChangeNotifier {
     notifyListeners();
 
     try {
-      _frappeService.baseUrl = baseUrl;
+      _frappeService.baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
       if (username != null && password != null) {
         await _frappeService.login(username, password);
       } else {
@@ -1880,11 +1880,11 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchPurchaseOrdersFromFrappe({
-    String baseUrl = _defaultFrappeBaseUrl,
+    String? baseUrl,
     String? username,
     String? password,
   }) async {
-    _frappeService.baseUrl = baseUrl;
+    _frappeService.baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
     _isPurchaseOrdersLoading = true;
     _purchaseOrdersError = null;
     _hasMorePurchaseOrders = true;
@@ -2527,11 +2527,11 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchWarehousesFromFrappe({
-    String baseUrl = _defaultFrappeBaseUrl,
+    String? baseUrl,
     String? username,
     String? password,
   }) async {
-    _frappeService.baseUrl = baseUrl;
+    _frappeService.baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
 
     try {
       if (username != null && password != null) {
@@ -2635,12 +2635,12 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchInventoryFromFrappe({
-    String baseUrl = _defaultFrappeBaseUrl,
+    String? baseUrl,
     String? username,
     String? password,
     List<List<dynamic>>? filters,
   }) async {
-    _frappeService.baseUrl = baseUrl;
+    _frappeService.baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
     _isInventoryLoading = true;
     _inventoryError = null;
     notifyListeners();
@@ -2654,7 +2654,7 @@ class AppState with ChangeNotifier {
 
       if (_warehouses.isEmpty) {
         await fetchWarehousesFromFrappe(
-          baseUrl: baseUrl,
+          baseUrl: baseUrl ?? AppConfig.normalizedFrappeBaseUrl,
           username: username,
           password: password,
         );
@@ -3441,7 +3441,6 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> saveFrappeConfig({
-    required String baseUrl,
     required String username,
     String? password,
     bool savePassword = true,
@@ -3450,13 +3449,12 @@ class AppState with ChangeNotifier {
     final shouldSavePassword =
         savePassword || _rememberDevice || password != null;
     final cfg = {
-      'baseUrl': baseUrl,
       'username': username,
       if (shouldSavePassword && password != null) 'password': password,
     };
     await sp.setString(_prefsFrappeConfigKey, jsonEncode(cfg));
 
-    _frappeService.baseUrl = baseUrl;
+    _frappeService.baseUrl = AppConfig.normalizedFrappeBaseUrl;
     _frappeService.username = username;
     if (shouldSavePassword && password != null) {
       _frappeService.password = password;

@@ -1,5 +1,20 @@
 # tmsx_app
 
+## Environment
+
+Konfigurasi site ERPNext/Frappe dibaca dari `env.json`. File tersebut tidak
+masuk Git; gunakan `env.example.json` sebagai template.
+
+```powershell
+flutter run --dart-define-from-file=env.json
+flutter build apk --release --dart-define-from-file=env.json
+flutter build appbundle --release --dart-define-from-file=env.json
+```
+
+`FRAPPE_BASE_URL` bukan secret karena nilainya tetap dibundel ke aplikasi.
+Jangan simpan username, password, API key, atau API secret pada file env
+frontend.
+
 A new Flutter project.
 
 ## Getting Started
