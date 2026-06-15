@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../state/app_state.dart';
-import '../theme/app_colors.dart';
-import 'home_screen.dart';
+import '../../state/app_state.dart';
+import '../../theme/app_colors.dart';
+import '../app_main_screen.dart';
 import 'login_screen.dart';
 
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+class LoadingScreen extends StatefulWidget {
+  const LoadingScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  State<LoadingScreen> createState() => _LoadingScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _LoadingScreenState extends State<LoadingScreen> {
   @override
   void initState() {
     super.initState();
@@ -31,7 +31,7 @@ class _SplashScreenState extends State<SplashScreen> {
     if (!mounted) return;
 
     final destination = appState.isAuthenticated
-        ? const HomeScreen()
+        ? const AppMainScreen()
         : const LoginScreen();
 
     Navigator.of(
@@ -54,8 +54,9 @@ class _SplashScreenState extends State<SplashScreen> {
                 height: 118,
                 padding: const EdgeInsets.all(18),
                 child: Image.asset(
-                  'assets/images/logo.png',
+                  'assets/images/splash_logo.png',
                   fit: BoxFit.contain,
+                  cacheWidth: 512,
                 ),
               ),
               const SizedBox(height: 22),

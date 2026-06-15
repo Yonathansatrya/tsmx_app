@@ -13,7 +13,7 @@ import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
-import '../../create_sales_order_screen.dart';
+import '../../sales/sales_order/create_sales_order_screen.dart';
 
 enum _OrderDateFilter { all, today, last7Days, monthToDate, last30Days }
 

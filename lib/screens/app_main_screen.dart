@@ -7,8 +7,8 @@ import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/erp_format.dart';
-import 'login_screen.dart';
-import 'profile_screen.dart';
+import 'auth/login_screen.dart';
+import 'profile/profile_screen.dart';
 import 'sales/sales_main_screen.dart';
 import 'warehouse/warehouse_main_screen.dart';
 
@@ -16,21 +16,21 @@ import 'tabs/dashboard_tab.dart';
 import 'tabs/buying_tab.dart';
 import 'tabs/selling_tab.dart';
 import 'tabs/stock_tab.dart';
-import 'create_purchase_order_screen.dart';
-import 'create_purchase_invoice_screen.dart';
-import 'create_buying_document_screen.dart';
-import 'create_sales_order_screen.dart';
-import 'create_stock_entry_screen.dart';
-import 'sales_order_approval_screen.dart';
+import 'purchase/purchase_order/create_purchase_order_screen.dart';
+import 'purchase/purchase_invoice/create_purchase_invoice_screen.dart';
+import 'purchase/purchase_receipt/create_purchase_receipt_screen.dart';
+import 'stock/stock_entry/create_stock_entry_screen.dart';
+import 'sales/sales_order/create_sales_order_screen.dart';
+import 'todo/sales_order_approval_screen.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class AppMainScreen extends StatefulWidget {
+  const AppMainScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<AppMainScreen> createState() => _AppMainScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _AppMainScreenState extends State<AppMainScreen> {
   int _currentIndex = 0;
   String _salesSegment = 'so';
   String _buyingSegment = 'po';
@@ -309,7 +309,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => const CreateBuyingDocumentScreen(),
+                  builder: (_) => const CreatePurchaseReceiptScreen(),
                 ),
               );
             },

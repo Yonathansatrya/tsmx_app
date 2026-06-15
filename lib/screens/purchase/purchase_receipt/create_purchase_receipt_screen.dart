@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../models/warehouse_info.dart';
-import '../state/app_state.dart';
-import '../theme/app_colors.dart';
+import '../../../models/warehouse_info.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
 
-class CreateBuyingDocumentScreen extends StatefulWidget {
-  const CreateBuyingDocumentScreen({super.key});
+class CreatePurchaseReceiptScreen extends StatefulWidget {
+  const CreatePurchaseReceiptScreen({super.key});
 
   @override
-  State<CreateBuyingDocumentScreen> createState() =>
-      _CreateBuyingDocumentScreenState();
+  State<CreatePurchaseReceiptScreen> createState() =>
+      _CreatePurchaseReceiptScreenState();
 }
 
-class _CreateBuyingDocumentScreenState
-    extends State<CreateBuyingDocumentScreen> {
+class _CreatePurchaseReceiptScreenState
+    extends State<CreatePurchaseReceiptScreen> {
   static const _defaultWarehouse = 'Stores - Jakarta';
   final _formKey = GlobalKey<FormState>();
   final _qtyCtrl = TextEditingController(text: '1');

@@ -8,7 +8,7 @@ import '../../../widgets/erp/erp_detail_sheet.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_badge.dart';
-import '../../create_sales_order_screen.dart';
+import 'create_sales_order_screen.dart';
 
 class SalesOrderListTab extends StatelessWidget {
   const SalesOrderListTab({super.key});

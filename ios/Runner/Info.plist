@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<key>NSCameraUsageDescription</key>
-	<string>Digunakan untuk mengambil foto dan memindai barcode atau QR item.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Digunakan untuk memilih foto order atau customer.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Digunakan untuk validasi lokasi dan check-in kunjungan customer.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Digunakan untuk mencatat perjalanan menuju customer sampai check-in.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>location</string>
-	</array>
+	<dict>
+		<key>NSCameraUsageDescription</key>
+		<string>Digunakan untuk mengambil foto dan memindai barcode atau QR item.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Digunakan untuk memilih foto order atau customer.</string>
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>Digunakan untuk validasi lokasi dan check-in kunjungan customer.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>Digunakan untuk mencatat perjalanan menuju customer sampai check-in.</string>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>location</string>
+		</array>
 		<key>CADisableMinimumFrameDurationOnPhone</key>
 		<true/>
 		<key>CFBundleDevelopmentRegion</key>

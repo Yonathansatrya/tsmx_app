@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/sales_order_approval.dart';
-import '../state/app_state.dart';
-import '../theme/app_colors.dart';
-import '../utils/erp_format.dart';
-import '../utils/num_parse.dart';
-import '../widgets/erp/erp_empty_state.dart';
-import '../widgets/erp/erp_status_badge.dart';
+import '../../models/sales_order_approval.dart';
+import '../../state/app_state.dart';
+import '../../theme/app_colors.dart';
+import '../../utils/erp_format.dart';
+import '../../utils/num_parse.dart';
+import '../../widgets/erp/erp_empty_state.dart';
+import '../../widgets/erp/erp_status_badge.dart';
 
 class SalesOrderApprovalScreen extends StatefulWidget {
   final bool embedded;

@@ -4,12 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
-import '../models/sales_order.dart';
-import '../models/sales_order_insight.dart';
-import '../models/sales_workspace.dart';
-import '../models/warehouse_info.dart';
-import '../state/app_state.dart';
-import '../theme/app_colors.dart';
+import '../../../models/sales_order.dart';
+import '../../../models/sales_order_insight.dart';
+import '../../../models/sales_workspace.dart';
+import '../../../models/warehouse_info.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
 
 class CreateSalesOrderScreen extends StatefulWidget {
   final String? editOrderId;

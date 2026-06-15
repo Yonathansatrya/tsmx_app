@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
-import '../create_sales_order_screen.dart';
+import 'sales_order/create_sales_order_screen.dart';
 import 'sales_order/customer_insight_tab.dart';
 import 'sales_order/sales_order_list_tab.dart';
 import 'sales_order/stock_check_tab.dart';

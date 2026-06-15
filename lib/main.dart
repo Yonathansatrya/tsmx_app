@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'state/app_state.dart';
 import 'services/erp_services.dart';
-import 'screens/splash_screen.dart';
+import 'screens/auth/loading_screen.dart';
 import 'theme/app_colors.dart';
 
 void main() {
@@ -105,7 +105,7 @@ class TMSXLogisticsApp extends StatelessWidget {
         ),
       ),
 
-      home: const SplashScreen(),
+      home: const LoadingScreen(),
     );
   }
 }

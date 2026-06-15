@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../state/app_state.dart';
-import 'home_screen.dart';
-import '../theme/app_colors.dart';
+import '../../state/app_state.dart';
+import '../app_main_screen.dart';
+import '../../theme/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -48,9 +48,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await appState.prefetchInitialData();
 
       if (!mounted) return;
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const AppMainScreen()),
+      );
     } else {
       if (!mounted) return;
       final err = appState.lastAuthError;

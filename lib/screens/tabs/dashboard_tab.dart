@@ -114,7 +114,7 @@ class _DashboardTabState extends State<DashboardTab> {
                 onTap: widget.onTodoSelected,
                 leading: CircleAvatar(
                   backgroundColor: AppColors.softGreen,
-                  foregroundColor: AppColors.primary,
+                  foregroundColor: const Color.fromARGB(255, 24, 34, 29),
                   child: appState.salesOrderApprovalTodoCount > 0
                       ? Badge.count(
                           count: appState.salesOrderApprovalTodoCount,
