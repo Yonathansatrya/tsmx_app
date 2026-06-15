@@ -24,6 +24,8 @@ class CreateSalesOrderScreen extends StatefulWidget {
 
 class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   static const _defaultWarehouseName = 'Stores - Jakarta';
+  static const _defaultCompanyName = 'Distribusi Jakarta';
+  static const _defaultCostCenterName = 'Sales - Jakarta';
 
   final _formKey = GlobalKey<FormState>();
   final _customerCtrl = TextEditingController();
@@ -94,6 +96,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     for (final warehouse in warehouses) {
       if (warehouse.name.trim().toLowerCase() ==
           _defaultWarehouseName.toLowerCase()) {
+        return warehouse.name;
+      }
+    }
+    for (final warehouse in warehouses) {
+      if (warehouse.company.trim().toLowerCase() ==
+          _defaultCompanyName.toLowerCase()) {
         return warehouse.name;
       }
     }
@@ -1559,6 +1567,14 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       final costCenterChoices = availableCostCenters.isNotEmpty
           ? availableCostCenters
           : costCenters;
+      String? defaultCostCenter;
+      for (final center in costCenterChoices) {
+        if (center.name.trim().toLowerCase() ==
+            _defaultCostCenterName.toLowerCase()) {
+          defaultCostCenter = center.name;
+          break;
+        }
+      }
 
       if (!mounted) return;
       setState(() {
@@ -1585,9 +1601,10 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         _selectedCenter =
             costCenterChoices.any((center) => center.name == _selectedCenter)
             ? _selectedCenter
-            : (costCenterChoices.isNotEmpty
-                  ? costCenterChoices.first.name
-                  : null);
+            : (defaultCostCenter ??
+                  (costCenterChoices.isNotEmpty
+                      ? costCenterChoices.first.name
+                      : null));
         _selectedSalesPerson = appState.userRole == 'Sales'
             ? appState.currentSalesPerson
             : (_salesPersonOptions.contains(_selectedSalesPerson)
