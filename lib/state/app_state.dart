@@ -324,6 +324,30 @@ class AppState with ChangeNotifier {
 
   FrappeService get frappeService => _frappeService;
 
+  Future<Map<String, dynamic>> fetchCurrentUserProfile() {
+    final user = _currentUser?.trim() ?? '';
+    if (user.isEmpty) throw Exception('User login tidak tersedia.');
+    return _authService.fetchCurrentUserProfile(user);
+  }
+
+  Future<String> uploadCurrentUserImage(String filePath) {
+    final user = _currentUser?.trim() ?? '';
+    if (user.isEmpty) throw Exception('User login tidak tersedia.');
+    return _authService.uploadCurrentUserImage(user, filePath);
+  }
+
+  Future<void> changeCurrentUserPassword({
+    required String oldPassword,
+    required String newPassword,
+    bool logoutAllSessions = false,
+  }) {
+    return _authService.changeCurrentUserPassword(
+      oldPassword: oldPassword,
+      newPassword: newPassword,
+      logoutAllSessions: logoutAllSessions,
+    );
+  }
+
   Future<void> _restoreFrappeConfig() async {
     final cfg = await _loadFrappeConfig();
     if (cfg == null) return;

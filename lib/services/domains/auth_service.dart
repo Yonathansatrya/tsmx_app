@@ -83,6 +83,45 @@ class AuthService {
     );
   }
 
+  Future<Map<String, dynamic>> fetchCurrentUserProfile(
+    String currentUser,
+  ) async {
+    return _frappe.fetchDocument('User', currentUser);
+  }
+
+  Future<String> uploadCurrentUserImage(
+    String currentUser,
+    String filePath,
+  ) async {
+    final uploaded = await _frappe.uploadFile(
+      filePath: filePath,
+      doctype: 'User',
+      documentName: currentUser,
+    );
+    final fileUrl = uploaded['file_url']?.toString() ?? '';
+    if (fileUrl.isEmpty) {
+      throw Exception('URL foto profil tidak diterima dari ERPNext.');
+    }
+    await _frappe.updateDocument('User', currentUser, {'user_image': fileUrl});
+    return fileUrl;
+  }
+
+  Future<void> changeCurrentUserPassword({
+    required String oldPassword,
+    required String newPassword,
+    bool logoutAllSessions = false,
+  }) async {
+    await _frappe.callMethod(
+      'frappe.core.doctype.user.user.update_password',
+      args: {
+        'old_password': oldPassword,
+        'new_password': newPassword,
+        'logout_all_sessions': logoutAllSessions ? 1 : 0,
+      },
+    );
+    _frappe.password = newPassword;
+  }
+
   bool _isAdministrator(String value) =>
       value.trim().toLowerCase() == 'administrator';
 
