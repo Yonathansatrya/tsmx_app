@@ -7,7 +7,9 @@ import '../../utils/erp_format.dart';
 import '../../widgets/dashboard/dashboard_kpi_card.dart';
 
 class DashboardTab extends StatefulWidget {
-  const DashboardTab({super.key});
+  final VoidCallback? onTodoSelected;
+
+  const DashboardTab({super.key, this.onTodoSelected});
 
   @override
   State<DashboardTab> createState() => _DashboardTabState();
@@ -73,6 +75,7 @@ class _DashboardTabState extends State<DashboardTab> {
           appState.refreshPurchaseInvoices(),
           appState.refreshInventory(),
           appState.refreshAllSummaries(),
+          appState.fetchSalesOrderApprovals(),
         ]);
       },
       child: SingleChildScrollView(
@@ -102,7 +105,40 @@ class _DashboardTabState extends State<DashboardTab> {
                 ),
               ),
             ],
+
             const SizedBox(height: 18),
+
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                onTap: widget.onTodoSelected,
+                leading: CircleAvatar(
+                  backgroundColor: AppColors.softGreen,
+                  foregroundColor: AppColors.primary,
+                  child: appState.salesOrderApprovalTodoCount > 0
+                      ? Badge.count(
+                          count: appState.salesOrderApprovalTodoCount,
+                          backgroundColor: AppColors.danger,
+                          textColor: AppColors.white,
+                          child: const Icon(Icons.approval_outlined),
+                        )
+                      : const Icon(Icons.approval_outlined),
+                ),
+                title: const Text(
+                  'Todo List',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                subtitle: Text(
+                  appState.salesOrderApprovalTodoCount > 0
+                      ? '${appState.salesOrderApprovalTodoCount} Sales Order perlu keputusan'
+                      : 'Tidak ada approval yang menunggu',
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
             GridView.count(
               crossAxisCount: 2,
               crossAxisSpacing: 8,

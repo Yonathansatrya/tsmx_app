@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/sales_order.dart';
 import '../widgets/notifications/notification_sheet.dart';
 import '../state/app_state.dart';
@@ -20,6 +21,7 @@ import 'create_purchase_invoice_screen.dart';
 import 'create_buying_document_screen.dart';
 import 'create_sales_order_screen.dart';
 import 'create_stock_entry_screen.dart';
+import 'sales_order_approval_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -43,11 +45,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<Widget> get _tabs => [
-    const DashboardTab(),
+    DashboardTab(onTodoSelected: () => _changeTab(2)),
     SellingTab(
       selectedSegment: _salesSegment,
       onSegmentChanged: (segment) => setState(() => _salesSegment = segment),
     ),
+    const SalesOrderApprovalScreen(embedded: true),
     BuyingTab(
       selectedSegment: _buyingSegment,
       onSegmentChanged: (segment) => setState(() => _buyingSegment = segment),
@@ -215,23 +218,34 @@ class _HomeScreenState extends State<HomeScreen> {
           backgroundColor: AppColors.white,
           indicatorColor: AppColors.softGreen,
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: const [
-            NavigationDestination(
+          destinations: [
+            const NavigationDestination(
               icon: Icon(Icons.dashboard_outlined),
               selectedIcon: Icon(Icons.dashboard_rounded),
               label: 'Dashboard',
             ),
-            NavigationDestination(
+            const NavigationDestination(
               icon: Icon(Icons.point_of_sale_outlined),
               selectedIcon: Icon(Icons.point_of_sale_rounded),
               label: 'Sales',
             ),
             NavigationDestination(
+              icon: _todoIcon(
+                Icons.checklist_outlined,
+                appState.salesOrderApprovalTodoCount,
+              ),
+              selectedIcon: _todoIcon(
+                Icons.checklist_rounded,
+                appState.salesOrderApprovalTodoCount,
+              ),
+              label: 'Todo',
+            ),
+            const NavigationDestination(
               icon: Icon(Icons.shopping_bag_outlined),
               selectedIcon: Icon(Icons.shopping_bag_rounded),
               label: 'Buying',
             ),
-            NavigationDestination(
+            const NavigationDestination(
               icon: Icon(Icons.inventory_2_outlined),
               selectedIcon: Icon(Icons.inventory_2_rounded),
               label: 'Stock',
@@ -239,6 +253,16 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _todoIcon(IconData icon, int count) {
+    if (count <= 0) return Icon(icon);
+    return Badge.count(
+      count: count,
+      backgroundColor: AppColors.danger,
+      textColor: AppColors.white,
+      child: Icon(icon),
     );
   }
 
@@ -279,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
           label: const Text('Sales Order'),
         );
 
-      case 2:
+      case 3:
         if (_buyingSegment == 'pr') {
           return FloatingActionButton.extended(
             onPressed: () {
@@ -327,7 +351,7 @@ class _HomeScreenState extends State<HomeScreen> {
           label: const Text('Purchase Order'),
         );
 
-      case 3:
+      case 4:
         return FloatingActionButton.extended(
           onPressed: () {
             Navigator.of(context).push(

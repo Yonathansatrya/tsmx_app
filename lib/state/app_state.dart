@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sales_order.dart';
+import '../models/sales_order_approval.dart';
 import '../models/purchase_order.dart';
 import '../models/delivery_note.dart';
 import '../models/sales_invoice.dart';
@@ -178,6 +179,9 @@ class AppState with ChangeNotifier {
   List<AppNotification> get notifications => _notifications;
   bool get hasUnreadNotifications =>
       _notifications.any((notification) => !notification.isRead);
+
+  int _salesOrderApprovalTodoCount = 0;
+  int get salesOrderApprovalTodoCount => _salesOrderApprovalTodoCount;
 
   bool _isNotificationsLoading = false;
   bool get isNotificationsLoading => _isNotificationsLoading;
@@ -516,6 +520,7 @@ class AppState with ChangeNotifier {
     _activeSalesVisit = null;
     _latestVisitLocation = null;
     _notifications = [];
+    _salesOrderApprovalTodoCount = 0;
     _isAuthenticated = false;
     _currentUser = null;
     _userRole = 'Unassigned';
@@ -3282,6 +3287,132 @@ class AppState with ChangeNotifier {
       maxRows: 1000,
     );
     return rows.map(QualityInspectionRecord.fromJson).toList();
+  }
+
+  Future<List<SalesOrderApproval>> fetchSalesOrderApprovals() async {
+    await _frappeService.ensureLoggedIn();
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Sales Order',
+      fields: const [
+        'name',
+        'customer',
+        'customer_name',
+        'workflow_state',
+        'status',
+        'owner',
+        'transaction_date',
+        'grand_total',
+        'docstatus',
+      ],
+      filters: [
+        ['docstatus', '<', 2],
+      ],
+      orderBy: 'modified desc',
+      maxRows: 200,
+    );
+    final approvals = <SalesOrderApproval>[];
+    for (final row in rows) {
+      try {
+        final doc = await _frappeService.fetchDocument(
+          'Sales Order',
+          row['name']?.toString() ?? '',
+        );
+        final rawTransitions = await _frappeService.callMethod(
+          'frappe.model.workflow.get_transitions',
+          args: {'doc': doc},
+        );
+        final actions = rawTransitions is List
+            ? rawTransitions
+                  .whereType<Map>()
+                  .map((transition) => transition['action']?.toString() ?? '')
+                  .where((action) => action.isNotEmpty)
+                  .toSet()
+                  .toList()
+            : <String>[];
+        if (actions.isNotEmpty) {
+          approvals.add(SalesOrderApproval.fromJson(row, actions: actions));
+        }
+      } catch (_) {
+        // A document without an action for the current role is not a todo.
+      }
+    }
+    if (_salesOrderApprovalTodoCount != approvals.length) {
+      _salesOrderApprovalTodoCount = approvals.length;
+      notifyListeners();
+    }
+    return approvals;
+  }
+
+  Future<List<SalesOrderApprovalHistory>>
+  fetchSalesOrderApprovalHistory() async {
+    await _frappeService.ensureLoggedIn();
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Comment',
+      fields: const [
+        'name',
+        'reference_name',
+        'content',
+        'comment_by',
+        'owner',
+        'creation',
+      ],
+      filters: [
+        ['reference_doctype', '=', 'Sales Order'],
+        ['content', 'like', '%via TMSX App%'],
+      ],
+      orderBy: 'creation desc',
+      maxRows: 200,
+    );
+    return rows.map(SalesOrderApprovalHistory.fromJson).toList();
+  }
+
+  Future<Map<String, dynamic>> fetchSalesOrderApprovalDetail(String name) {
+    return _frappeService.fetchDocument('Sales Order', name);
+  }
+
+  Future<void> applySalesOrderWorkflow({
+    required SalesOrderApproval approval,
+    required String action,
+    String reason = '',
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final normalizedAction = action.trim();
+    final actionLower = normalizedAction.toLowerCase();
+    final isReject =
+        actionLower.contains('reject') ||
+        actionLower.contains('tolak') ||
+        actionLower.contains('decline');
+    if (isReject && reason.trim().isEmpty) {
+      throw Exception('Alasan reject wajib diisi.');
+    }
+    final doc = await _frappeService.fetchDocument(
+      'Sales Order',
+      approval.name,
+    );
+    await _frappeService.callMethod(
+      'frappe.model.workflow.apply_workflow',
+      args: {'doc': doc, 'action': normalizedAction},
+    );
+    final decision = isReject ? 'REJECT' : 'APPROVE';
+    final content = [
+      '$decision via TMSX App',
+      'Action: $normalizedAction',
+      if (reason.trim().isNotEmpty) 'Alasan: ${reason.trim()}',
+    ].join('\n');
+    await _frappeService.callMethod(
+      'frappe.desk.form.utils.add_comment',
+      args: {
+        'reference_doctype': 'Sales Order',
+        'reference_name': approval.name,
+        'content': content,
+        'comment_email': _currentUser ?? '',
+        'comment_by': _currentUser ?? '',
+      },
+    );
+    await Future.wait([
+      refreshSalesOrders(),
+      refreshNotifications(silent: true),
+    ]);
   }
 
   Future<void> refreshSalesOrders() => fetchSalesOrdersFromFrappe();
