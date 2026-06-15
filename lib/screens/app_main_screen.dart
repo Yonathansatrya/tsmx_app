@@ -147,6 +147,16 @@ class _AppMainScreenState extends State<AppMainScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: appState.salesOrderApprovalTodoCount > 0
+                ? '${appState.salesOrderApprovalTodoCount} approval menunggu'
+                : 'Tidak ada approval menunggu',
+            onPressed: () => _changeTab(2),
+            icon: _todoIcon(
+              Icons.assignment_turned_in_outlined,
+              appState.salesOrderApprovalTodoCount,
+            ),
+          ),
+          IconButton(
             tooltip: 'Notifications',
             icon: Stack(
               clipBehavior: Clip.none,
