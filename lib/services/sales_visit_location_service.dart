@@ -46,6 +46,7 @@ class VisitLocationPoint {
 
 class SalesVisitLocationService {
   static const _queueKey = 'sales_visit_tracking_queue';
+  static const trackingInterval = Duration(minutes: 5);
   StreamSubscription<Position>? _subscription;
 
   Future<VisitLocationPoint> currentPosition() async {
@@ -97,11 +98,11 @@ class SalesVisitLocationService {
         ? AndroidSettings(
             accuracy: LocationAccuracy.high,
             distanceFilter: 25,
-            intervalDuration: const Duration(minutes: 1),
+            intervalDuration: trackingInterval,
             foregroundNotificationConfig: const ForegroundNotificationConfig(
               notificationTitle: 'Perjalanan customer aktif',
               notificationText:
-                  'TMSX mencatat lokasi sampai Anda melakukan check-in.',
+                  'TMSX mencatat lokasi tiap 5 menit sampai check-in.',
               enableWakeLock: true,
             ),
           )

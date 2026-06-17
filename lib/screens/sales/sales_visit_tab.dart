@@ -196,7 +196,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
         children: [
           const CollectionSectionHeader(
             title: 'Perjalanan Customer',
-            subtitle: 'Lokasi dicatat sampai check-in berhasil',
+            subtitle: 'Lokasi dicatat tiap 5 menit sampai check-in berhasil',
             icon: Icons.route_rounded,
           ),
           _stepPanel(active),
@@ -728,7 +728,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
       children: [
         const CollectionSectionHeader(
           title: 'Lokasi Terakhir Salesman',
-          subtitle: 'Satu lokasi terbaru per salesman',
+          subtitle: 'Satu lokasi terbaru per salesman, update tiap 5 menit',
           icon: Icons.location_searching_rounded,
         ),
         if (trackingPoints.isEmpty)
