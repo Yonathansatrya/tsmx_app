@@ -18,6 +18,7 @@ class WarehouseBarcodeScannerScreen extends StatefulWidget {
 class _WarehouseBarcodeScannerScreenState
     extends State<WarehouseBarcodeScannerScreen> {
   final _controller = MobileScannerController(
+    autoStart: false,
     detectionSpeed: DetectionSpeed.normal,
     detectionTimeoutMs: 800,
   );
@@ -26,19 +27,51 @@ class _WarehouseBarcodeScannerScreenState
   List<InventoryItem> _matches = const [];
   bool _loading = true;
   bool _scanLocked = false;
+  bool _scannerStarted = false;
+  bool _scannerStarting = true;
   String? _error;
+  String? _scannerErrorText;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadInventory());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadInventory();
+      _startScanner();
+    });
   }
 
   @override
   void dispose() {
+    _controller.stop();
     _controller.dispose();
     _manualCode.dispose();
     super.dispose();
+  }
+
+  Future<void> _startScanner() async {
+    if (!mounted || _scannerStarted) return;
+    setState(() {
+      _scannerStarting = true;
+      _scannerErrorText = null;
+    });
+
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      await _controller.start();
+      if (!mounted) return;
+      setState(() {
+        _scannerStarted = true;
+        _scannerStarting = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _scannerStarted = false;
+        _scannerStarting = false;
+        _scannerErrorText = _friendlyError(error);
+      });
+    }
   }
 
   Future<void> _loadInventory() async {
@@ -93,6 +126,7 @@ class _WarehouseBarcodeScannerScreenState
       _error = null;
       _scanLocked = false;
     });
+    await _startScanner();
   }
 
   @override
@@ -178,6 +212,8 @@ class _WarehouseBarcodeScannerScreenState
             errorBuilder: (context, error) => _scannerError(error),
             placeholderBuilder: (context) => _scannerPlaceholder(),
           ),
+          if (_scannerStarting || _scannerErrorText != null)
+            _scannerStatusOverlay(),
           IgnorePointer(
             child: Center(
               child: Container(
@@ -206,16 +242,73 @@ class _WarehouseBarcodeScannerScreenState
 
   Future<void> _toggleTorch() async {
     try {
+      if (!_scannerStarted) {
+        await _startScanner();
+      }
       await _controller.toggleTorch();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = _friendlyError(error));
+      setState(() => _scannerErrorText = _friendlyError(error));
     }
   }
 
   Widget _scannerPlaceholder() => const ColoredBox(
     color: AppColors.primaryDark,
     child: Center(child: CircularProgressIndicator(color: AppColors.white)),
+  );
+
+  Widget _scannerStatusOverlay() => ColoredBox(
+    color: AppColors.primaryDark,
+    child: Padding(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _scannerErrorText == null
+                ? Icons.qr_code_scanner_rounded
+                : Icons.no_photography_outlined,
+            color: AppColors.white,
+            size: 42,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _scannerErrorText == null
+                ? 'Menyiapkan kamera scanner'
+                : 'Kamera scanner belum bisa dibuka',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: AppColors.white,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          if (_scannerErrorText != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _scannerErrorText!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.white.withValues(alpha: 0.75),
+                fontSize: 11,
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.white,
+                side: const BorderSide(color: AppColors.white),
+              ),
+              onPressed: _startScanner,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Coba buka kamera lagi'),
+            ),
+          ] else ...[
+            const SizedBox(height: 14),
+            const CircularProgressIndicator(color: AppColors.white),
+          ],
+        ],
+      ),
+    ),
   );
 
   Widget _scannerError(MobileScannerException error) => ColoredBox(
