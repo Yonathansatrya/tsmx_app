@@ -202,7 +202,11 @@ class _SerialViewState extends State<_SerialView> {
       _error = null;
     });
     try {
-      _rows = await context.read<AppState>().fetchWarehouseSerialNumbers();
+      final state = context.read<AppState>();
+      if (state.warehouses.isEmpty) {
+        await state.refreshWarehouses();
+      }
+      _rows = await state.fetchWarehouseSerialNumbers();
     } catch (error) {
       _error = _friendlyError(error);
     } finally {
@@ -212,16 +216,21 @@ class _SerialViewState extends State<_SerialView> {
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
     final query = _search.text.trim().toLowerCase();
-    final warehouses =
-        _rows
-            .map((row) => row.warehouse)
-            .where((value) => value.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
+    final warehouseSet = <String>{
+      ...state.warehouses
+          .map((row) => row.name)
+          .where((name) => name.isNotEmpty),
+      ..._rows.map((row) => row.warehouse).where((name) => name.isNotEmpty),
+    };
+    final warehouses = warehouseSet.toList()..sort();
+    final selectedWarehouse = warehouses.contains(_warehouse)
+        ? _warehouse
+        : null;
     final rows = _rows.where((row) {
-      return (_warehouse == null || row.warehouse == _warehouse) &&
+      return (selectedWarehouse == null ||
+              row.warehouse == selectedWarehouse) &&
           (query.isEmpty ||
               row.name.toLowerCase().contains(query) ||
               row.itemCode.toLowerCase().contains(query) ||
@@ -248,7 +257,7 @@ class _SerialViewState extends State<_SerialView> {
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(
-            initialValue: _warehouse,
+            initialValue: selectedWarehouse,
             isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Filter gudang',
@@ -267,6 +276,15 @@ class _SerialViewState extends State<_SerialView> {
               () => _warehouse = value?.isEmpty == true ? null : value,
             ),
           ),
+          if (warehouses.isEmpty && !_loading) ...[
+            const SizedBox(height: 10),
+            const WarehouseInfoPanel(
+              icon: Icons.info_outline_rounded,
+              color: AppColors.warning,
+              message:
+                  'Master Warehouse belum terbaca. Pastikan role memiliki Select dan Read pada Warehouse.',
+            ),
+          ],
           if (_loading) ...[
             const SizedBox(height: 12),
             const LinearProgressIndicator(),

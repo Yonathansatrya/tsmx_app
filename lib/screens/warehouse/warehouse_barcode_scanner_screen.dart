@@ -18,12 +18,14 @@ class WarehouseBarcodeScannerScreen extends StatefulWidget {
 class _WarehouseBarcodeScannerScreenState
     extends State<WarehouseBarcodeScannerScreen> {
   final _controller = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
+    detectionSpeed: DetectionSpeed.normal,
+    detectionTimeoutMs: 800,
   );
   final _manualCode = TextEditingController();
   String? _scannedCode;
   List<InventoryItem> _matches = const [];
   bool _loading = true;
+  bool _scanLocked = false;
   String? _error;
 
   @override
@@ -55,17 +57,17 @@ class _WarehouseBarcodeScannerScreenState
   }
 
   Future<void> _onDetect(BarcodeCapture capture) async {
-    if (_scannedCode != null) return;
+    if (_scanLocked || _scannedCode != null) return;
     for (final barcode in capture.barcodes) {
       final value = barcode.rawValue?.trim();
       if (value == null || value.isEmpty) continue;
+      _scanLocked = true;
       await _findCode(value);
       break;
     }
   }
 
   Future<void> _findCode(String value) async {
-    await _controller.stop();
     if (!mounted) return;
     final normalized = value.trim().toLowerCase();
     final inventory = context.read<AppState>().inventory;
@@ -89,8 +91,8 @@ class _WarehouseBarcodeScannerScreenState
       _scannedCode = null;
       _matches = const [];
       _error = null;
+      _scanLocked = false;
     });
-    await _controller.start();
   }
 
   @override
@@ -170,7 +172,12 @@ class _WarehouseBarcodeScannerScreenState
       child: Stack(
         fit: StackFit.expand,
         children: [
-          MobileScanner(controller: _controller, onDetect: _onDetect),
+          MobileScanner(
+            controller: _controller,
+            onDetect: _onDetect,
+            errorBuilder: (context, error) => _scannerError(error),
+            placeholderBuilder: (context) => _scannerPlaceholder(),
+          ),
           IgnorePointer(
             child: Center(
               child: Container(
@@ -188,8 +195,57 @@ class _WarehouseBarcodeScannerScreenState
             bottom: 10,
             child: IconButton.filled(
               tooltip: 'Nyalakan atau matikan flash',
-              onPressed: _controller.toggleTorch,
+              onPressed: _toggleTorch,
               icon: const Icon(Icons.flashlight_on_rounded),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Future<void> _toggleTorch() async {
+    try {
+      await _controller.toggleTorch();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = _friendlyError(error));
+    }
+  }
+
+  Widget _scannerPlaceholder() => const ColoredBox(
+    color: AppColors.primaryDark,
+    child: Center(child: CircularProgressIndicator(color: AppColors.white)),
+  );
+
+  Widget _scannerError(MobileScannerException error) => ColoredBox(
+    color: AppColors.primaryDark,
+    child: Padding(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.no_photography_outlined,
+            color: AppColors.white,
+            size: 42,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Kamera scanner belum bisa dibuka',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.white,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _friendlyError(error),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.white.withValues(alpha: 0.75),
+              fontSize: 11,
             ),
           ),
         ],
