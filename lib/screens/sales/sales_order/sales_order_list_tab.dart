@@ -8,6 +8,7 @@ import '../../../widgets/erp/erp_detail_sheet.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_badge.dart';
+import '../sales_ui.dart';
 import 'create_sales_order_screen.dart';
 
 class SalesOrderListTab extends StatelessWidget {
@@ -20,7 +21,7 @@ class SalesOrderListTab extends StatelessWidget {
       onRefresh: state.refreshSalesOrders,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+        padding: SalesUi.compactScreenPadding,
         children: [
           if (state.isSalesOrdersLoading) const LinearProgressIndicator(),
           if (state.salesOrdersError != null) ...[
@@ -37,8 +38,10 @@ class SalesOrderListTab extends StatelessWidget {
             const ErpEmptyState(title: 'Belum ada Sales Order')
           else if (state.salesOrders.isNotEmpty)
             ...state.salesOrders.map(
-              (order) => Card(
-                child: ListTile(
+              (order) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: SalesInfoCard(
+                  padding: const EdgeInsets.all(14),
                   onTap: () {
                     if (order.docStatus == 0) {
                       Navigator.push(
@@ -76,21 +79,58 @@ class SalesOrderListTab extends StatelessWidget {
                       ],
                     );
                   },
-                  title: Text(
-                    order.id,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  subtitle: Text('${order.customer}\n${order.date}'),
-                  isThreeLine: true,
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ErpStatusBadge(statusText: order.statusText),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Rp ${formatErpCurrency(order.value)}',
-                        style: const TextStyle(color: AppColors.primary),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              order.id,
+                              style: const TextStyle(
+                                color: AppColors.navy,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              order.customer,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.navy,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${order.date} • ${order.itemsCount} item',
+                              style: const TextStyle(
+                                color: AppColors.slate,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          ErpStatusBadge(statusText: order.statusText),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Rp ${formatErpCurrency(order.value)}',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

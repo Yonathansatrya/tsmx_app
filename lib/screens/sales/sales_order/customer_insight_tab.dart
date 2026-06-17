@@ -4,9 +4,11 @@ import 'package:provider/provider.dart';
 import '../../../models/sales_order_insight.dart';
 import '../../../models/sales_workspace.dart';
 import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
 import '../../../utils/erp_format.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
+import '../sales_ui.dart';
 
 class CustomerInsightTab extends StatefulWidget {
   const CustomerInsightTab({super.key});
@@ -97,7 +99,7 @@ class _CustomerInsightTabState extends State<CustomerInsightTab> {
         : () => _loadInsight(selected!),
     child: ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+      padding: SalesUi.compactScreenPadding,
       children: [
         DropdownButtonFormField<SalesCustomerOption>(
           key: ValueKey(selected?.id),
@@ -119,9 +121,19 @@ class _CustomerInsightTabState extends State<CustomerInsightTab> {
           decoration: InputDecoration(
             labelText: 'Customer',
             hintText: loading ? 'Memuat customer...' : 'Pilih customer',
-            border: const OutlineInputBorder(),
+            filled: true,
+            fillColor: AppColors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
           ),
         ),
+        SalesUi.gap(12),
         if (loading) const LinearProgressIndicator(),
         if (error != null) ...[
           ErpErrorBox(message: error!),
@@ -145,44 +157,138 @@ class _CustomerInsightTabState extends State<CustomerInsightTab> {
             title: 'Pilih customer untuk melihat informasi penjualan',
           ),
         if (selected?.address.isNotEmpty == true)
-          ListTile(
-            leading: const Icon(Icons.location_on_outlined),
-            title: const Text('Alamat customer'),
-            subtitle: Text(selected!.address),
-            trailing: const Chip(label: Text('Maps next')),
-          ),
-        if (insight != null) ...[
-          Card(
-            child: ListTile(
-              title: Text(
-                'Credit Limit: Rp ${formatErpCurrency(insight!.creditLimit)}',
-              ),
-              subtitle: Text(
-                'Outstanding: Rp ${formatErpCurrency(insight!.outstanding)}',
-              ),
-              trailing: Text(
-                'Sisa\nRp ${formatErpCurrency(insight!.availableCredit)}',
-                textAlign: TextAlign.end,
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: SalesInfoCard(
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.softGreen,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.location_on_outlined,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Alamat customer',
+                          style: TextStyle(
+                            color: AppColors.navy,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          selected!.address,
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          const Text(
-            'Histori Pembelian',
-            style: TextStyle(fontWeight: FontWeight.w900),
+        if (insight != null) ...[
+          SalesInfoCard(
+            child: Row(
+              children: [
+                Expanded(
+                  child: _InsightMetric(
+                    label: 'Credit Limit',
+                    value: 'Rp ${formatErpCurrency(insight!.creditLimit)}',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _InsightMetric(
+                    label: 'Outstanding',
+                    value: 'Rp ${formatErpCurrency(insight!.outstanding)}',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _InsightMetric(
+                    label: 'Sisa',
+                    value: 'Rp ${formatErpCurrency(insight!.availableCredit)}',
+                    highlight: true,
+                  ),
+                ),
+              ],
+            ),
           ),
+          SalesUi.gap(18),
+          const SalesSectionTitle(title: 'Histori Pembelian'),
+          SalesUi.gap(10),
           if (history.isEmpty)
             const ErpEmptyState(title: 'Belum ada histori pembelian')
           else
             ...history.map(
-              (row) => Card(
-                child: ListTile(
-                  title: Text(row.id),
-                  subtitle: Text(
-                    '${row.doctype} | ${row.date} | ${row.status}'
-                    '${row.outstanding > 0 ? '\nOutstanding: Rp ${formatErpCurrency(row.outstanding)}' : ''}',
+              (row) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: SalesInfoCard(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              row.id,
+                              style: const TextStyle(
+                                color: AppColors.navy,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${row.doctype} | ${row.date} | ${row.status}',
+                              maxLines: row.outstanding > 0 ? 2 : 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.slate,
+                                fontSize: 12,
+                              ),
+                            ),
+                            if (row.outstanding > 0) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                'Outstanding: Rp ${formatErpCurrency(row.outstanding)}',
+                                style: const TextStyle(
+                                  color: AppColors.danger,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Rp ${formatErpCurrency(row.total)}',
+                        textAlign: TextAlign.end,
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
                   ),
-                  isThreeLine: row.outstanding > 0,
-                  trailing: Text('Rp ${formatErpCurrency(row.total)}'),
                 ),
               ),
             ),
@@ -190,4 +296,40 @@ class _CustomerInsightTabState extends State<CustomerInsightTab> {
       ],
     ),
   );
+}
+
+class _InsightMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool highlight;
+
+  const _InsightMetric({
+    required this.label,
+    required this.value,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(color: AppColors.slate, fontSize: 10),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: highlight ? AppColors.primary : AppColors.navy,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
 }

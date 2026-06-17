@@ -19,16 +19,25 @@ class SalesOrderTab extends StatelessWidget {
           children: [
             const Column(
               children: [
-                Material(
-                  color: AppColors.white,
-                  child: TabBar(
-                    tabs: [
-                      Tab(text: 'Sales Order'),
-                      Tab(text: 'Cek Stok'),
-                      Tab(text: 'Cek Customer'),
-                    ],
+                SizedBox(height: 6),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Material(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.all(Radius.circular(16)),
+                    child: TabBar(
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      dividerColor: Colors.transparent,
+                      labelPadding: EdgeInsets.symmetric(horizontal: 4),
+                      tabs: [
+                        Tab(text: 'Sales Order'),
+                        Tab(text: 'Cek Stok'),
+                        Tab(text: 'Cek Customer'),
+                      ],
+                    ),
                   ),
                 ),
+                SizedBox(height: 2),
                 Expanded(
                   child: TabBarView(
                     children: [
@@ -42,8 +51,11 @@ class SalesOrderTab extends StatelessWidget {
             ),
             Positioned(
               right: 16,
-              bottom: 16,
+              bottom: 28,
               child: FloatingActionButton.extended(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.white,
+                elevation: 3,
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(

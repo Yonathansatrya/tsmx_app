@@ -5,6 +5,7 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/erp_format.dart';
 import '../../widgets/erp/erp_empty_state.dart';
+import 'sales_ui.dart';
 
 class SalesOverviewTab extends StatelessWidget {
   final ValueChanged<int> onMenuSelected;
@@ -22,7 +23,7 @@ class SalesOverviewTab extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: state.refreshDataForCurrentRole,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
+        padding: SalesUi.screenPadding,
         children: [
           Row(
             children: [
@@ -45,10 +46,10 @@ class SalesOverviewTab extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          SalesUi.gap(18),
           Wrap(
-            spacing: 8,
-            runSpacing: 8,
+            spacing: 10,
+            runSpacing: 10,
             children: [
               _Menu(
                 label: 'Sales Order',
@@ -72,25 +73,65 @@ class SalesOverviewTab extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          SalesUi.gap(22),
           const Text(
             'Order Terbaru',
-            style: TextStyle(fontWeight: FontWeight.w900),
+            style: TextStyle(
+              color: AppColors.navy,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
           ),
+          SalesUi.gap(10),
           if (orders.isEmpty)
             const ErpEmptyState(title: 'Belum ada Sales Order')
           else
             ...orders
                 .take(5)
                 .map(
-                  (order) => Card(
-                    child: ListTile(
-                      title: Text(
-                        order.id,
-                        style: const TextStyle(fontWeight: FontWeight.w900),
+                  (order) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: SalesInfoCard(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  order.id,
+                                  style: const TextStyle(
+                                    color: AppColors.navy,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  '${order.customer} - ${order.date}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: AppColors.slate,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            order.statusText,
+                            textAlign: TextAlign.end,
+                            style: const TextStyle(
+                              color: AppColors.navy,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
-                      subtitle: Text('${order.customer} - ${order.date}'),
-                      trailing: Text(order.statusText),
                     ),
                   ),
                 ),
@@ -106,11 +147,19 @@ class _Metric extends StatelessWidget {
   const _Metric({required this.label, required this.value});
   @override
   Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 56),
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: AppColors.white,
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: AppColors.border),
+      boxShadow: [
+        BoxShadow(
+          color: AppColors.primaryDark.withValues(alpha: 0.025),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+      ],
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,12 +186,34 @@ class _Menu extends StatelessWidget {
   const _Menu({required this.label, required this.icon, required this.tap});
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: (MediaQuery.sizeOf(context).width - 40) / 2,
-    child: Card(
-      child: ListTile(
-        onTap: tap,
-        leading: Icon(icon, color: AppColors.primary),
-        title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+    width: (MediaQuery.sizeOf(context).width - 42) / 2,
+    child: SalesInfoCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+      onTap: tap,
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: AppColors.softGreen,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 19),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.navy,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
       ),
     ),
   );
