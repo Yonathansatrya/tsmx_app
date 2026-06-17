@@ -398,9 +398,9 @@ class _StockTabState extends State<StockTab> {
 
   List<WarehouseType> _availableWarehouseTypes(List<StockAreaOption> areas) {
     const orderedTypes = [
-      WarehouseType.inbound,
-      WarehouseType.ripening,
       WarehouseType.stores,
+      WarehouseType.ripening,
+      WarehouseType.inbound,
     ];
     return orderedTypes
         .where((type) => areas.any((area) => area.warehouseType == type))
