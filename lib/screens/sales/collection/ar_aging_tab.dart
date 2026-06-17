@@ -43,7 +43,6 @@ class _ArAgingTabState extends State<ArAgingTab> {
       paymentError = null;
     });
     final state = context.read<AppState>();
-    List<CollectionPayment>? loadedPayments;
     await Future.wait([
       state.fetchCollectionOutstandingInvoices().then(
         (value) => outstanding = value,
@@ -57,14 +56,12 @@ class _ArAgingTabState extends State<ArAgingTab> {
           )
           .then((value) {
             payments = value;
-            loadedPayments = value;
           }, onError: (Object error) => paymentError = error.toString()),
     ]);
     try {
       ranking = await state.fetchCollectionRanking(
         from: range.from,
         to: range.to,
-        collectionPayments: loadedPayments,
       );
     } catch (error) {
       rankingError = error.toString();
@@ -228,7 +225,7 @@ class _ArAgingTabState extends State<ArAgingTab> {
 
         CollectionSectionHeader(
           title: 'Ranking Collection',
-          subtitle: 'Berdasarkan pembayaran yang diterima',
+          subtitle: 'Berdasarkan nilai Sales Order dari Sales Team',
           icon: Icons.emoji_events_rounded,
           trailing: IconButton.filledTonal(
             tooltip: 'Pilih periode',
@@ -243,10 +240,9 @@ class _ArAgingTabState extends State<ArAgingTab> {
           ErpErrorBox(message: rankingError!)
         else if (!loading && ranking.isEmpty)
           const ErpEmptyState(
-            title: 'Belum ada collection pada periode ini',
+            title: 'Belum ada Sales Order pada periode ini',
             message:
-                'Sales Team dibaca dari Sales Order. Ranking muncul setelah '
-                'Sales Order terhubung ke Sales Invoice dan pembayaran tercatat.',
+                'Ranking dibaca dari Sales Team pada Sales Order sesuai periode.',
           )
         else
           ...ranking.map(

@@ -790,7 +790,6 @@ class AppState with ChangeNotifier {
   Future<List<CollectionRanking>> fetchCollectionRanking({
     DateTime? from,
     DateTime? to,
-    List<CollectionPayment>? collectionPayments,
   }) async {
     final totals = <String, double>{};
     final salesPersons = await _fetchAllResourcePages(
@@ -809,96 +808,37 @@ class AppState with ChangeNotifier {
       totals[name] = 0;
     }
 
-    final payments =
-        collectionPayments ??
-        await fetchCollectionPayments(
-          from: from,
-          to: to,
-          scopeToCurrentSales: false,
-        );
-    final invoiceAmounts = <String, double>{};
-    for (final payment in payments) {
-      for (final reference in payment.references) {
-        if (reference.doctype != 'Sales Invoice' ||
-            reference.documentName.isEmpty) {
-          continue;
-        }
-        invoiceAmounts[reference.documentName] =
-            (invoiceAmounts[reference.documentName] ?? 0) +
-            reference.allocatedAmount;
-      }
-    }
-    if (invoiceAmounts.isEmpty) {
-      final invoiceRows = await _fetchAllResourcePages(
-        doctype: 'Sales Invoice',
-        fields: const [
-          'name',
-          'grand_total',
-          'outstanding_amount',
-          'posting_date',
-          'docstatus',
-        ],
-        filters: [
-          ['docstatus', '=', 1],
-          if (from != null)
-            ['posting_date', '>=', DateRangePresets.toFrappeDate(from)],
-          if (to != null)
-            ['posting_date', '<=', DateRangePresets.toFrappeDate(to)],
-        ],
-        maxRows: null,
-      );
-      for (final invoice in invoiceRows) {
-        final id = invoice['name']?.toString() ?? '';
-        final collected =
-            NumParse.asDouble(invoice['grand_total']) -
-            NumParse.asDouble(invoice['outstanding_amount']);
-        if (id.isNotEmpty && collected > 0) {
-          invoiceAmounts[id] = collected;
-        }
-      }
-    }
-    if (invoiceAmounts.isEmpty) return _collectionRankingRows(totals);
-
-    final invoiceOrderAmounts = <String, Map<String, double>>{};
-    final invoiceDocuments = await _fetchDocumentsInBatches(
-      'Sales Invoice',
-      invoiceAmounts.keys,
+    final orderRows = await _fetchAllResourcePages(
+      doctype: 'Sales Order',
+      fields: const ['name', 'grand_total', 'net_total', 'transaction_date'],
+      filters: [
+        ['docstatus', '!=', 2],
+        if (from != null)
+          ['transaction_date', '>=', DateRangePresets.toFrappeDate(from)],
+        if (to != null)
+          ['transaction_date', '<=', DateRangePresets.toFrappeDate(to)],
+      ],
+      orderBy: 'transaction_date desc, name desc',
+      maxRows: null,
     );
-    for (final invoice in invoiceAmounts.keys) {
-      final document = invoiceDocuments[invoice];
-      if (document == null) continue;
-      for (final row in _documentChildRows(document['items'])) {
-        final salesOrder = row['sales_order']?.toString() ?? '';
-        if (salesOrder.isEmpty) continue;
-        final amount = NumParse.asDouble(row['net_amount'] ?? row['amount']);
-        final orders = invoiceOrderAmounts.putIfAbsent(invoice, () => {});
-        orders[salesOrder] = (orders[salesOrder] ?? 0) + amount;
-      }
-    }
+    if (orderRows.isEmpty) return _collectionRankingRows(totals);
 
-    final orderCollected = <String, double>{};
-    for (final invoice in invoiceAmounts.entries) {
-      final orders = invoiceOrderAmounts[invoice.key];
-      if (orders == null || orders.isEmpty) continue;
-      final invoiceTotal = orders.values.fold<double>(
-        0,
-        (sum, row) => sum + row,
+    final orderAmounts = <String, double>{};
+    for (final order in orderRows) {
+      final id = order['name']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      final amount = NumParse.asDouble(
+        order['grand_total'] ?? order['net_total'],
       );
-      for (final order in orders.entries) {
-        final ratio = invoiceTotal > 0
-            ? order.value / invoiceTotal
-            : 1 / orders.length;
-        orderCollected[order.key] =
-            (orderCollected[order.key] ?? 0) + invoice.value * ratio;
-      }
+      orderAmounts[id] = amount.clamp(0, double.infinity);
     }
-    if (orderCollected.isEmpty) return _collectionRankingRows(totals);
+    if (orderAmounts.isEmpty) return _collectionRankingRows(totals);
 
     final orderDocuments = await _fetchDocumentsInBatches(
       'Sales Order',
-      orderCollected.keys,
+      orderAmounts.keys,
     );
-    for (final order in orderCollected.entries) {
+    for (final order in orderAmounts.entries) {
       final document = orderDocuments[order.key];
       if (document == null) continue;
       for (final team in _documentChildRows(document['sales_team'])) {
