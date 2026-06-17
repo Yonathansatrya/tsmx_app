@@ -205,6 +205,15 @@ class AppState with ChangeNotifier {
   String? _salesOrderStatus;
   int _salesOrderQueryVersion = 0;
 
+  int _sellingPeriodYear = DateTime.now().year;
+  int _sellingPeriodMonth = DateTime.now().month;
+  int get sellingPeriodYear => _sellingPeriodYear;
+  int get sellingPeriodMonth => _sellingPeriodMonth;
+  DateTime get sellingPeriodFrom =>
+      DateTime(_sellingPeriodYear, _sellingPeriodMonth, 1);
+  DateTime get sellingPeriodTo =>
+      DateTime(_sellingPeriodYear, _sellingPeriodMonth + 1, 0);
+
   bool _isPurchaseOrdersLoading = false;
   bool get isPurchaseOrdersLoading => _isPurchaseOrdersLoading;
 
@@ -1954,6 +1963,83 @@ class AppState with ChangeNotifier {
     return refreshAllSummaries(silent: silent);
   }
 
+  Future<void> refreshSellingSummaries() async {
+    _isOrderSummaryLoading = true;
+    _orderSummaryError = null;
+    notifyListeners();
+
+    try {
+      await _frappeService.ensureLoggedIn();
+      var salesTotal = 0.0;
+      var salesDocumentCount = 0;
+      await _forEachResourcePage(
+        doctype: 'Sales Order',
+        fields: const ['name', 'grand_total', 'transaction_date'],
+        filters: _sellingPeriodFilters('transaction_date'),
+        onRow: (row) {
+          salesTotal += NumParse.asDouble(row['grand_total']);
+          salesDocumentCount++;
+        },
+      );
+
+      var deliveryTotal = 0.0;
+      var deliveryCount = 0;
+      await _forEachResourcePage(
+        doctype: 'Delivery Note',
+        fields: const ['name', 'grand_total', 'posting_date'],
+        filters: _sellingPeriodFilters('posting_date'),
+        onRow: (row) {
+          deliveryTotal += NumParse.asDouble(row['grand_total']);
+          deliveryCount++;
+        },
+      );
+
+      var invoiceTotal = 0.0;
+      var invoiceCount = 0;
+      await _forEachResourcePage(
+        doctype: 'Sales Invoice',
+        fields: const ['name', 'grand_total', 'posting_date'],
+        filters: _sellingPeriodFilters('posting_date'),
+        onRow: (row) {
+          invoiceTotal += NumParse.asDouble(row['grand_total']);
+          invoiceCount++;
+        },
+      );
+
+      _salesOrderSummary = DocumentSummary(
+        totalValue: salesTotal,
+        documentCount: salesDocumentCount,
+      );
+      _deliveryNoteSummary = DocumentSummary(
+        totalValue: deliveryTotal,
+        documentCount: deliveryCount,
+      );
+      _salesInvoiceSummary = DocumentSummary(
+        totalValue: invoiceTotal,
+        documentCount: invoiceCount,
+      );
+      _orderSummaryError = null;
+    } catch (err) {
+      _orderSummaryError = err.toString();
+    } finally {
+      _isOrderSummaryLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> setSellingPeriod({required int year, required int month}) async {
+    if (_sellingPeriodYear == year && _sellingPeriodMonth == month) return;
+    _sellingPeriodYear = year;
+    _sellingPeriodMonth = month;
+    notifyListeners();
+    await Future.wait([
+      fetchSalesOrdersFromFrappe(),
+      fetchDeliveryNotesFromFrappe(),
+      fetchSalesInvoicesFromFrappe(),
+      refreshSellingSummaries(),
+    ]);
+  }
+
   Future<void> refreshAllSummaries({bool silent = false}) {
     if (!_isAuthenticated) return Future.value();
 
@@ -1992,6 +2078,7 @@ class AppState with ChangeNotifier {
           'docstatus',
           'delivery_date',
         ],
+        filters: _sellingPeriodFilters('transaction_date'),
         onRow: (row) {
           final order = SalesOrder.fromJson(row);
           salesDocumentCount++;
@@ -2013,6 +2100,7 @@ class AppState with ChangeNotifier {
       await _forEachResourcePage(
         doctype: 'Delivery Note',
         fields: const ['name', 'grand_total'],
+        filters: _sellingPeriodFilters('posting_date'),
         onRow: (row) {
           deliveryTotal += NumParse.asDouble(row['grand_total']);
           deliveryCount++;
@@ -2025,6 +2113,7 @@ class AppState with ChangeNotifier {
       await _forEachResourcePage(
         doctype: 'Sales Invoice',
         fields: const ['name', 'grand_total', 'status', 'docstatus'],
+        filters: _sellingPeriodFilters('posting_date'),
         onRow: (row) {
           final invoice = SalesInvoice.fromJson(row);
           invoiceTotal += invoice.value;
@@ -3469,6 +3558,7 @@ class AppState with ChangeNotifier {
     required int limitStart,
   }) async {
     final filters = <List<dynamic>>[
+      ..._sellingPeriodFilters('transaction_date'),
       ...?_salesOrderFilters(_salesOrderStatus),
       ..._salesOwnerFilter,
     ];
@@ -3507,6 +3597,10 @@ class AppState with ChangeNotifier {
   Future<List<DeliveryNote>> _fetchDeliveryNotePage({
     required int limitStart,
   }) async {
+    final filters = <List<dynamic>>[
+      ..._sellingPeriodFilters('posting_date'),
+      ...?_statusFilters(_deliveryNoteStatus),
+    ];
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Delivery Note',
       fields: const [
@@ -3522,7 +3616,7 @@ class AppState with ChangeNotifier {
       limit: _documentPageSize,
       limitStart: limitStart,
       orderBy: 'posting_date desc, name desc',
-      filters: _statusFilters(_deliveryNoteStatus),
+      filters: filters,
       orFilters: _searchFilters(_deliveryNoteSearch, const [
         'name',
         'customer',
@@ -3536,6 +3630,7 @@ class AppState with ChangeNotifier {
     required int limitStart,
   }) async {
     final filters = <List<dynamic>>[
+      ..._sellingPeriodFilters('posting_date'),
       ...?_statusFilters(_salesInvoiceStatus),
       ..._salesOwnerFilter,
     ];
@@ -3570,6 +3665,13 @@ class AppState with ChangeNotifier {
     if (status == null || status.isEmpty) return null;
     return [
       ['status', '=', status],
+    ];
+  }
+
+  List<List<dynamic>> _sellingPeriodFilters(String dateField) {
+    return [
+      [dateField, '>=', DateRangePresets.toFrappeDate(sellingPeriodFrom)],
+      [dateField, '<=', DateRangePresets.toFrappeDate(sellingPeriodTo)],
     ];
   }
 
