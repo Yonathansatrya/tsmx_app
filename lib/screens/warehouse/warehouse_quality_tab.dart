@@ -32,24 +32,6 @@ class WarehouseQualityTab extends StatelessWidget {
       WarehouseActionCard(
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const WarehouseQcApprovalScreen()),
-        ),
-        title: 'Approval QC',
-        subtitle: 'Review dan submit Quality Inspection draft',
-        icon: Icons.approval_outlined,
-      ),
-      WarehouseActionCard(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const WarehouseQcEvidenceScreen()),
-        ),
-        title: 'Foto QC evidence',
-        subtitle: 'Lampirkan foto bukti ke Quality Inspection',
-        icon: Icons.camera_alt_outlined,
-      ),
-      WarehouseActionCard(
-        onTap: () => Navigator.push(
-          context,
           MaterialPageRoute(
             builder: (_) => const WarehouseProductionQcScreen(),
           ),
@@ -68,6 +50,24 @@ class WarehouseQualityTab extends StatelessWidget {
         title: 'Reject monitoring',
         subtitle: 'Pantau hasil Quality Inspection yang ditolak',
         icon: Icons.report_problem_outlined,
+      ),
+      WarehouseActionCard(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WarehouseQcEvidenceScreen()),
+        ),
+        title: 'Foto QC evidence',
+        subtitle: 'Lampirkan foto bukti ke Quality Inspection',
+        icon: Icons.camera_alt_outlined,
+      ),
+      WarehouseActionCard(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WarehouseQcApprovalScreen()),
+        ),
+        title: 'Approval QC',
+        subtitle: 'Review dan submit Quality Inspection draft',
+        icon: Icons.approval_outlined,
       ),
     ],
   );
