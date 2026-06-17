@@ -119,55 +119,15 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
 
   Future<void> _chooseAction(SalesOrderApproval approval, String action) async {
     final reject = _isRejectAction(action);
-    final reason = TextEditingController();
-    final confirmed = await showDialog<bool>(
+    final decision = await showDialog<_ApprovalDecision>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(reject ? 'Reject Sales Order?' : 'Approve Sales Order?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '${approval.name}\n${approval.customerName}\n'
-              'Rp ${formatErpCurrency(approval.grandTotal)}',
-            ),
-            if (reject) ...[
-              const SizedBox(height: 14),
-              TextField(
-                controller: reason,
-                autofocus: true,
-                minLines: 3,
-                maxLines: 5,
-                decoration: const InputDecoration(
-                  labelText: 'Alasan reject',
-                  hintText: 'Wajib diisi agar sales dapat memperbaiki order',
-                ),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (reject && reason.text.trim().isEmpty) return;
-              Navigator.pop(dialogContext, true);
-            },
-            style: reject
-                ? FilledButton.styleFrom(backgroundColor: AppColors.danger)
-                : null,
-            child: Text(reject ? 'Reject' : 'Approve'),
-          ),
-        ],
+      builder: (dialogContext) => _ApprovalDecisionDialog(
+        approval: approval,
+        action: action,
+        isReject: reject,
       ),
     );
-    final reasonText = reason.text.trim();
-    reason.dispose();
-    if (confirmed != true || !mounted) return;
+    if (decision == null || !mounted) return;
     setState(() {
       _processingName = approval.name;
       _detailError = null;
@@ -176,7 +136,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
       await context.read<AppState>().applySalesOrderWorkflow(
         approval: approval,
         action: action,
-        reason: reasonText,
+        reason: decision.reason,
       );
       await _load(silent: true);
       if (!mounted) return;
@@ -854,4 +814,99 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _ApprovalDecision {
+  final String reason;
+
+  const _ApprovalDecision({this.reason = ''});
+}
+
+class _ApprovalDecisionDialog extends StatefulWidget {
+  final SalesOrderApproval approval;
+  final String action;
+  final bool isReject;
+
+  const _ApprovalDecisionDialog({
+    required this.approval,
+    required this.action,
+    required this.isReject,
+  });
+
+  @override
+  State<_ApprovalDecisionDialog> createState() =>
+      _ApprovalDecisionDialogState();
+}
+
+class _ApprovalDecisionDialogState extends State<_ApprovalDecisionDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _reasonController = TextEditingController();
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        widget.isReject ? 'Reject Sales Order?' : 'Approve Sales Order?',
+      ),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '${widget.approval.name}\n${widget.approval.customerName}\n'
+              'Rp ${formatErpCurrency(widget.approval.grandTotal)}',
+            ),
+            if (widget.isReject) ...[
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: _reasonController,
+                autofocus: true,
+                minLines: 3,
+                maxLines: 5,
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(
+                  labelText: 'Alasan reject',
+                  hintText: 'Wajib diisi agar sales dapat memperbaiki order',
+                  alignLabelWithHint: true,
+                ),
+                validator: (value) {
+                  if (!widget.isReject) return null;
+                  final reason = value?.trim() ?? '';
+                  if (reason.isEmpty) return 'Alasan reject wajib diisi';
+                  return null;
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) return;
+            Navigator.pop(
+              context,
+              _ApprovalDecision(reason: _reasonController.text.trim()),
+            );
+          },
+          style: widget.isReject
+              ? FilledButton.styleFrom(backgroundColor: AppColors.danger)
+              : null,
+          child: Text(widget.isReject ? 'Reject' : 'Approve'),
+        ),
+      ],
+    );
+  }
 }
