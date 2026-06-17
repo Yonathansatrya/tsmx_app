@@ -2625,6 +2625,21 @@ class AppState with ChangeNotifier {
     return warehouse.company == company;
   }
 
+  int _warehouseDisplayPriority(String warehouseName) {
+    final name = warehouseName.toLowerCase();
+    if (name.contains('stores') || name.contains('store')) return 0;
+    if (name.contains('inbound') || name.contains('receiving')) return 1;
+    return 2;
+  }
+
+  int _compareWarehouseNames(String a, String b) {
+    final priority = _warehouseDisplayPriority(
+      a,
+    ).compareTo(_warehouseDisplayPriority(b));
+    if (priority != 0) return priority;
+    return a.toLowerCase().compareTo(b.toLowerCase());
+  }
+
   List<StockAreaOption> stockWarehousesForCompany(String company) {
     final seen = <String>{};
     final areas = <StockAreaOption>[];
@@ -2647,15 +2662,18 @@ class AppState with ChangeNotifier {
       );
     }
 
+    areas.sort((a, b) => _compareWarehouseNames(a.title, b.title));
     return areas;
   }
 
   List<String> erpWarehouseNamesForCompany(String company) {
     if (_warehouses.isEmpty) return [];
-    return _warehouses
+    final names = _warehouses
         .where((w) => _warehouseBelongsToCompany(w, company))
         .map((w) => w.name)
         .toList();
+    names.sort(_compareWarehouseNames);
+    return names;
   }
 
   Future<void> fetchInventoryFromFrappe({
@@ -2695,6 +2713,8 @@ class AppState with ChangeNotifier {
             'actual_qty',
             'reserved_qty',
             'projected_qty',
+            'valuation_rate',
+            'stock_value',
           ],
           filters: filters,
           maxRows: maxRows,
@@ -2723,20 +2743,28 @@ class AppState with ChangeNotifier {
       final itemMeta = await _fetchItemMeta(
         items.map((i) => i.sku).where((s) => s.isNotEmpty).toSet(),
       );
+      final itemBuyingRates = await _fetchItemBuyingRates(
+        items.map((i) => i.sku).where((s) => s.isNotEmpty).toSet(),
+      );
 
       _inventory = items.map((inv) {
         final meta = itemMeta[inv.sku];
-        if (meta == null) return inv;
 
         var updated = inv;
-        if (meta.name.isNotEmpty && meta.name != inv.sku) {
+        if (meta != null && meta.name.isNotEmpty && meta.name != inv.sku) {
           updated = updated.copyWith(name: meta.name);
         }
-        if (meta.reorderLevel > 0) {
+        if (meta != null && meta.reorderLevel > 0) {
           updated = updated.copyWith(minStockThreshold: meta.reorderLevel);
         }
-        if (meta.valuationRate > 0) {
+        if (meta != null && meta.valuationRate > 0) {
           updated = updated.copyWith(unitValue: meta.valuationRate);
+        }
+        if (updated.unitValue <= 0) {
+          final buyingRate = itemBuyingRates[inv.sku] ?? 0;
+          if (buyingRate > 0) {
+            updated = updated.copyWith(unitValue: buyingRate);
+          }
         }
         return updated.withRecalculatedStatus();
       }).toList();
@@ -4010,6 +4038,71 @@ class AppState with ChangeNotifier {
     }
 
     return meta;
+  }
+
+  Future<Map<String, double>> _fetchItemBuyingRates(
+    Set<String> itemCodes,
+  ) async {
+    if (itemCodes.isEmpty) return {};
+
+    final codes = itemCodes.toList();
+    final rates = <String, double>{};
+
+    for (var i = 0; i < codes.length; i += 80) {
+      final chunk = codes.sublist(
+        i,
+        i + 80 > codes.length ? codes.length : i + 80,
+      );
+
+      try {
+        final data = await _fetchResourceWithFieldFallback(
+          doctype: 'Item Price',
+          fields: const [
+            'name',
+            'item_code',
+            'price_list',
+            'price_list_rate',
+            'currency',
+          ],
+          limit: chunk.length * 3,
+          orderBy: 'valid_from desc, modified desc',
+          filters: [
+            ['item_code', 'in', chunk],
+            ['buying', '=', 1],
+            ['price_list_rate', '>', 0],
+          ],
+        );
+        _addItemPriceRates(rates, data);
+      } catch (_) {
+        try {
+          final data = await _fetchResourceWithFieldFallback(
+            doctype: 'Item Price',
+            fields: const ['name', 'item_code', 'price_list_rate'],
+            limit: chunk.length * 3,
+            orderBy: 'modified desc',
+            filters: [
+              ['item_code', 'in', chunk],
+              ['price_list_rate', '>', 0],
+            ],
+          );
+          _addItemPriceRates(rates, data);
+        } catch (_) {}
+      }
+    }
+
+    return rates;
+  }
+
+  void _addItemPriceRates(
+    Map<String, double> rates,
+    List<Map<String, dynamic>> rows,
+  ) {
+    for (final row in rows) {
+      final code = row['item_code']?.toString() ?? '';
+      final rate = NumParse.asDouble(row['price_list_rate']);
+      if (code.isEmpty || rate <= 0) continue;
+      rates.putIfAbsent(code, () => rate);
+    }
   }
 
   IconData _iconForWarehouseName(String name) {

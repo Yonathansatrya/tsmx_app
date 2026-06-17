@@ -294,12 +294,30 @@ class _WarehouseInventoryValuationViewState
               const SizedBox(width: 8),
               Expanded(
                 child: _smallMetric(
-                  'Rate',
+                  'Harga/Unit',
                   'Rp ${formatErpCurrency(row.unitValue)}',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _smallMetric(
+                  'Nilai',
+                  'Rp ${formatErpCurrency(_value(row))}',
                 ),
               ),
             ],
           ),
+          if (row.unitValue <= 0) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Harga belum tersedia dari valuation rate ERPNext.',
+              style: TextStyle(
+                color: AppColors.danger,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ],
       ),
     ),

@@ -92,9 +92,13 @@ class InventoryItem {
       status = StockStatus.inStock;
     }
 
-    final unitValue = NumParse.asDouble(
-      json['valuation_rate'] ?? json['stock_value'],
-    );
+    final valuationRate = NumParse.asDouble(json['valuation_rate']);
+    final stockValue = NumParse.asDouble(json['stock_value']);
+    final unitValue = valuationRate > 0
+        ? valuationRate
+        : stockValue > 0 && quantity != 0
+        ? stockValue / quantity.abs()
+        : 0.0;
 
     final category =
         json['item_group']?.toString() ??

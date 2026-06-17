@@ -246,13 +246,24 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  'Qty ${row.quantity} | Rp ${formatErpCurrency(row.stockValue)}',
+                  'Qty ${row.quantity} x Rp ${formatErpCurrency(row.valuationRate)} = Rp ${formatErpCurrency(row.stockValue)}',
                   style: const TextStyle(
                     color: AppColors.primary,
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+                if (row.valuationRate <= 0) ...[
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Harga belum tersedia',
+                    style: TextStyle(
+                      color: AppColors.danger,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
