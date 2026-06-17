@@ -145,10 +145,8 @@ class _StockTabState extends State<StockTab> {
       (sum, item) => sum + item.quantity,
     );
 
-    final int estimatedMaxBoxCapacity = selectedAreas.fold<int>(
-      0,
-      (sum, area) => sum + area.maxCapacity,
-    );
+    final int estimatedMaxBoxCapacity =
+        _warehouseCapacityConfig(selectedWarehouseType)?.totalCapacity ?? 0;
 
     final capacityPercentage = estimatedMaxBoxCapacity > 0
         ? (totalBoxesInStock / estimatedMaxBoxCapacity).clamp(0.0, 1.0)
@@ -283,7 +281,7 @@ class _StockTabState extends State<StockTab> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      _capacitySummary(selectedAreas, estimatedMaxBoxCapacity),
+                      _capacitySummary(selectedWarehouseType),
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.slate.withValues(alpha: 0.9),
@@ -420,15 +418,32 @@ class _StockTabState extends State<StockTab> {
     };
   }
 
-  String _capacitySummary(List<StockAreaOption> areas, int totalCapacity) {
-    if (areas.isEmpty || totalCapacity <= 0) return 'Capacity not set';
+  _WarehouseCapacity? _warehouseCapacityConfig(WarehouseType? type) {
+    return switch (type) {
+      WarehouseType.stores => const _WarehouseCapacity(
+        roomCount: 5,
+        capacityPerRoom: 1000,
+        roomLabel: 'ruangan kecil',
+      ),
+      WarehouseType.ripening => const _WarehouseCapacity(
+        roomCount: 3,
+        capacityPerRoom: 1000,
+        roomLabel: 'ruangan kecil',
+      ),
+      WarehouseType.inbound => const _WarehouseCapacity(
+        roomCount: 2,
+        capacityPerRoom: 2000,
+        roomLabel: 'ruangan besar',
+      ),
+      null => null,
+    };
+  }
 
-    final roomCount = areas.length;
-    final capacityLabel = totalCapacity.toString();
-    if (_selectedWarehouseType == WarehouseType.inbound) {
-      return 'Capacity: $roomCount Inbound room${roomCount == 1 ? '' : 's'} x 2,000 = $capacityLabel boxes';
-    }
-    return 'Capacity: $roomCount small room${roomCount == 1 ? '' : 's'} = $capacityLabel boxes';
+  String _capacitySummary(WarehouseType? type) {
+    final config = _warehouseCapacityConfig(type);
+    if (config == null) return 'Capacity not set';
+
+    return 'Capacity: ${config.roomCount} ${config.roomLabel} x ${config.capacityPerRoomLabel} = ${config.totalCapacityLabel} boxes';
   }
 
   List<InventoryItem> _filterAndSortInventory(List<InventoryItem> items) {
@@ -1030,10 +1045,7 @@ class _StockTabState extends State<StockTab> {
           final typeAreas = groupedAreas[type] ?? const <StockAreaOption>[];
           final typeColor = _warehouseTypeColor(type);
           final isSelected = _selectedWarehouseType == type;
-          final totalCapacity = typeAreas.fold<int>(
-            0,
-            (sum, area) => sum + area.maxCapacity,
-          );
+          final capacity = _warehouseCapacityConfig(type);
 
           return Padding(
             padding: EdgeInsets.only(
@@ -1112,7 +1124,9 @@ class _StockTabState extends State<StockTab> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '${typeAreas.length} rooms - $totalCapacity box',
+                              capacity == null
+                                  ? '${typeAreas.length} rooms'
+                                  : '${capacity.roomCount} rooms - ${capacity.totalCapacityLabel} box',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -1366,5 +1380,36 @@ class _StockEmptyState extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _WarehouseCapacity {
+  final int roomCount;
+  final int capacityPerRoom;
+  final String roomLabel;
+
+  const _WarehouseCapacity({
+    required this.roomCount,
+    required this.capacityPerRoom,
+    required this.roomLabel,
+  });
+
+  int get totalCapacity => roomCount * capacityPerRoom;
+
+  String get capacityPerRoomLabel => _formatNumber(capacityPerRoom);
+
+  String get totalCapacityLabel => _formatNumber(totalCapacity);
+
+  static String _formatNumber(int value) {
+    final text = value.toString();
+    final buffer = StringBuffer();
+    for (var i = 0; i < text.length; i++) {
+      final remaining = text.length - i;
+      buffer.write(text[i]);
+      if (remaining > 1 && remaining % 3 == 1) {
+        buffer.write(',');
+      }
+    }
+    return buffer.toString();
   }
 }
