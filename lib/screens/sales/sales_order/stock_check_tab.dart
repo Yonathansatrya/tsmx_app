@@ -40,27 +40,34 @@ class _StockCheckTabState extends State<StockCheckTab> {
           SalesSectionTitle(
             title: 'Stok Realtime',
             subtitle: 'Gudang Stores - Jakarta',
-            trailing: Chip(
-              label: Text('${items.length} item'),
-              backgroundColor: AppColors.white,
-              side: const BorderSide(color: AppColors.border),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.softGreen,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                '${items.length} item',
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ),
           ),
           SalesUi.gap(12),
-          TextField(
-            onChanged: (value) => setState(() => query = value),
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search_rounded),
-              labelText: 'Cari stok Stores - Jakarta',
-              filled: true,
-              fillColor: AppColors.white,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: AppColors.border),
+          SalesInfoCard(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: TextField(
+              onChanged: (value) => setState(() => query = value),
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search_rounded),
+                labelText: 'Cari item atau kode barang',
+                hintText: 'Contoh: SPF-JKT-023',
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
               ),
             ),
           ),

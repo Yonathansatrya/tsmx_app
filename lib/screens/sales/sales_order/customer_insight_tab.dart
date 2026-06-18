@@ -101,35 +101,37 @@ class _CustomerInsightTabState extends State<CustomerInsightTab> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: SalesUi.compactScreenPadding,
       children: [
-        DropdownButtonFormField<SalesCustomerOption>(
-          key: ValueKey(selected?.id),
-          initialValue: selected,
-          isExpanded: true,
-          items: customers
-              .map(
-                (customer) => DropdownMenuItem(
-                  value: customer,
-                  child: Text(customer.name, overflow: TextOverflow.ellipsis),
-                ),
-              )
-              .toList(),
-          onChanged: loading
-              ? null
-              : (value) {
-                  if (value != null) _loadInsight(value);
-                },
-          decoration: InputDecoration(
-            labelText: 'Customer',
-            hintText: loading ? 'Memuat customer...' : 'Pilih customer',
-            filled: true,
-            fillColor: AppColors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.border),
+        const SalesSectionTitle(
+          title: 'Cek Customer',
+          subtitle: 'Credit limit, outstanding, dan histori pembelian',
+        ),
+        SalesUi.gap(12),
+        SalesInfoCard(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: DropdownButtonFormField<SalesCustomerOption>(
+            key: ValueKey(selected?.id),
+            initialValue: selected,
+            isExpanded: true,
+            items: customers
+                .map(
+                  (customer) => DropdownMenuItem(
+                    value: customer,
+                    child: Text(customer.name, overflow: TextOverflow.ellipsis),
+                  ),
+                )
+                .toList(),
+            onChanged: loading
+                ? null
+                : (value) {
+                    if (value != null) _loadInsight(value);
+                  },
+            decoration: InputDecoration(
+              labelText: 'Customer',
+              hintText: loading ? 'Memuat customer...' : 'Pilih customer',
+              prefixIcon: const Icon(Icons.storefront_outlined),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
             ),
           ),
         ),

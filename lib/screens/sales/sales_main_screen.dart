@@ -2,13 +2,29 @@ import 'package:flutter/material.dart';
 
 import '../shared/role_main_screen.dart';
 import 'sales_collection_tab.dart';
-import 'sales_history_tab.dart';
 import 'sales_order_tab.dart';
 import 'sales_overview_tab.dart';
 import 'sales_visit_tab.dart';
 
-class SalesMainScreen extends StatelessWidget {
+class SalesMainScreen extends StatefulWidget {
   const SalesMainScreen({super.key});
+
+  @override
+  State<SalesMainScreen> createState() => _SalesMainScreenState();
+}
+
+class _SalesMainScreenState extends State<SalesMainScreen> {
+  final _orderTabIndex = ValueNotifier<int>(0);
+
+  @override
+  void dispose() {
+    _orderTabIndex.dispose();
+    super.dispose();
+  }
+
+  void _selectOrderTab(int index) {
+    _orderTabIndex.value = index;
+  }
 
   @override
   Widget build(BuildContext context) => RoleMainScreen(
@@ -16,11 +32,13 @@ class SalesMainScreen extends StatelessWidget {
     fallbackUsername: 'Salesman',
     onInitialize: (state) => state.refreshDataForCurrentRole(),
     screensBuilder: (onMenuSelected) => [
-      SalesOverviewTab(onMenuSelected: onMenuSelected),
-      const SalesOrderTab(),
+      SalesOverviewTab(
+        onMenuSelected: onMenuSelected,
+        onOrderTabSelected: _selectOrderTab,
+      ),
+      SalesOrderTab(selectedTabIndex: _orderTabIndex),
       const SalesCollectionTab(),
       const SalesVisitTab(),
-      const SalesHistoryTab(),
     ],
     destinations: const [
       NavigationDestination(
@@ -42,11 +60,6 @@ class SalesMainScreen extends StatelessWidget {
         icon: Icon(Icons.location_on_outlined),
         selectedIcon: Icon(Icons.location_on_rounded),
         label: 'Kunjungan',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.history_outlined),
-        selectedIcon: Icon(Icons.history_rounded),
-        label: 'Histori',
       ),
     ],
   );

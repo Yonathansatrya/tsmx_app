@@ -9,6 +9,7 @@ import '../../theme/app_colors.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_error_box.dart';
 import 'collection/collection_widgets.dart';
+import 'sales_ui.dart';
 
 class SalesVisitTab extends StatefulWidget {
   const SalesVisitTab({super.key});
@@ -161,15 +162,12 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     length: 3,
     child: Column(
       children: [
-        const Material(
-          color: AppColors.white,
-          child: TabBar(
-            tabs: [
-              Tab(icon: Icon(Icons.route_rounded), text: 'Perjalanan'),
-              Tab(icon: Icon(Icons.storefront_rounded), text: 'Aktivitas'),
-              Tab(icon: Icon(Icons.history_rounded), text: 'Riwayat'),
-            ],
-          ),
+        const SalesPillTabBar(
+          tabs: [
+            Tab(icon: Icon(Icons.route_rounded), text: 'Perjalanan'),
+            Tab(icon: Icon(Icons.storefront_rounded), text: 'Aktivitas'),
+            Tab(icon: Icon(Icons.history_rounded), text: 'Riwayat'),
+          ],
         ),
         Expanded(
           child: TabBarView(

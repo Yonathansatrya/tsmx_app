@@ -6,22 +6,33 @@ import '../../theme/app_colors.dart';
 import '../../utils/erp_format.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_error_box.dart';
+import '../../widgets/erp/erp_status_badge.dart';
 import 'sales_ui.dart';
 
 class SalesHistoryTab extends StatelessWidget {
-  const SalesHistoryTab({super.key});
+  final bool compact;
+
+  const SalesHistoryTab({super.key, this.compact = false});
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return RefreshIndicator(
       onRefresh: state.refreshSalesOrders,
       child: ListView(
-        padding: SalesUi.screenPadding,
+        padding: compact ? SalesUi.compactScreenPadding : SalesUi.screenPadding,
         children: [
-          const SalesSectionTitle(
+          SalesSectionTitle(
             title: 'Histori Order & Approval',
             subtitle:
                 'Pantau status order dan hasil approval dari pihak berwenang.',
+            trailing: compact
+                ? IconButton(
+                    tooltip: 'Refresh',
+                    onPressed: state.refreshSalesOrders,
+                    icon: const Icon(Icons.refresh_rounded),
+                  )
+                : null,
           ),
           SalesUi.gap(14),
           if (state.salesOrdersError != null)
@@ -65,15 +76,7 @@ class SalesHistoryTab extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text(
-                            order.statusText,
-                            textAlign: TextAlign.end,
-                            style: const TextStyle(
-                              color: AppColors.navy,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
+                          ErpStatusBadge(statusText: order.statusText),
                           const SizedBox(height: 4),
                           Text(
                             'Rp ${formatErpCurrency(order.value)}',

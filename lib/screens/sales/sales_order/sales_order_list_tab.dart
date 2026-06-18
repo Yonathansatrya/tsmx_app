@@ -23,9 +23,20 @@ class SalesOrderListTab extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: SalesUi.compactScreenPadding,
         children: [
+          SalesSectionTitle(
+            title: 'Sales Order',
+            subtitle: '${state.salesOrders.length} order pada daftar Anda',
+            trailing: IconButton(
+              tooltip: 'Refresh',
+              onPressed: state.refreshSalesOrders,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ),
+          SalesUi.gap(12),
           if (state.isSalesOrdersLoading) const LinearProgressIndicator(),
           if (state.salesOrdersError != null) ...[
             ErpErrorBox(message: state.salesOrdersError!),
+            const SizedBox(height: 10),
             OutlinedButton.icon(
               onPressed: state.refreshSalesOrders,
               icon: const Icon(Icons.refresh_rounded),
@@ -41,7 +52,6 @@ class SalesOrderListTab extends StatelessWidget {
               (order) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: SalesInfoCard(
-                  padding: const EdgeInsets.all(14),
                   onTap: () {
                     if (order.docStatus == 0) {
                       Navigator.push(
@@ -107,7 +117,7 @@ class SalesOrderListTab extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '${order.date} • ${order.itemsCount} item',
+                              '${order.date} - ${order.itemsCount} item',
                               style: const TextStyle(
                                 color: AppColors.slate,
                                 fontSize: 11,
@@ -124,6 +134,7 @@ class SalesOrderListTab extends StatelessWidget {
                           const SizedBox(height: 8),
                           Text(
                             'Rp ${formatErpCurrency(order.value)}',
+                            textAlign: TextAlign.end,
                             style: const TextStyle(
                               color: AppColors.primary,
                               fontSize: 12,

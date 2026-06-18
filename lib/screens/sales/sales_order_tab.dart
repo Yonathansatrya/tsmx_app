@@ -1,61 +1,38 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../theme/app_colors.dart';
+import 'sales_history_tab.dart';
+import 'sales_ui.dart';
 import 'sales_order/create_sales_order_screen.dart';
 import 'sales_order/customer_insight_tab.dart';
 import 'sales_order/sales_order_list_tab.dart';
 import 'sales_order/stock_check_tab.dart';
 
 class SalesOrderTab extends StatelessWidget {
-  const SalesOrderTab({super.key});
+  final ValueListenable<int>? selectedTabIndex;
+
+  const SalesOrderTab({super.key, this.selectedTabIndex});
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: ColoredBox(
         color: AppColors.background,
         child: Stack(
           children: [
-            const Column(
-              children: [
-                SizedBox(height: 6),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Material(
-                    color: AppColors.white,
-                    borderRadius: BorderRadius.all(Radius.circular(16)),
-                    child: TabBar(
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      dividerColor: Colors.transparent,
-                      labelPadding: EdgeInsets.symmetric(horizontal: 4),
-                      tabs: [
-                        Tab(text: 'Sales Order'),
-                        Tab(text: 'Cek Stok'),
-                        Tab(text: 'Cek Customer'),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: 2),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      SalesOrderListTab(),
-                      StockCheckTab(),
-                      CustomerInsightTab(),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            _SalesOrderTabBody(selectedTabIndex: selectedTabIndex),
             Positioned(
               right: 16,
-              bottom: 28,
+              bottom: 24,
               child: FloatingActionButton.extended(
                 backgroundColor: AppColors.primary,
                 foregroundColor: AppColors.white,
                 elevation: 3,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 onPressed: () => Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -69,6 +46,83 @@ class SalesOrderTab extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _SalesOrderTabBody extends StatefulWidget {
+  final ValueListenable<int>? selectedTabIndex;
+
+  const _SalesOrderTabBody({this.selectedTabIndex});
+
+  @override
+  State<_SalesOrderTabBody> createState() => _SalesOrderTabBodyState();
+}
+
+class _SalesOrderTabBodyState extends State<_SalesOrderTabBody> {
+  TabController? _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.selectedTabIndex?.addListener(_syncSelectedTab);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _tabController = DefaultTabController.of(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncSelectedTab());
+  }
+
+  @override
+  void didUpdateWidget(covariant _SalesOrderTabBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedTabIndex == widget.selectedTabIndex) return;
+    oldWidget.selectedTabIndex?.removeListener(_syncSelectedTab);
+    widget.selectedTabIndex?.addListener(_syncSelectedTab);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncSelectedTab());
+  }
+
+  @override
+  void dispose() {
+    widget.selectedTabIndex?.removeListener(_syncSelectedTab);
+    super.dispose();
+  }
+
+  void _syncSelectedTab() {
+    if (!mounted) return;
+    final controller = _tabController;
+    final target = widget.selectedTabIndex?.value;
+    if (controller == null || target == null) return;
+    if (target < 0 || target >= controller.length) return;
+    if (controller.index == target) return;
+    controller.animateTo(target);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        SalesPillTabBar(
+          tabs: [
+            Tab(text: 'Sales Order'),
+            Tab(text: 'Cek Stok'),
+            Tab(text: 'Customer'),
+            Tab(text: 'Histori'),
+          ],
+        ),
+        Expanded(
+          child: TabBarView(
+            children: [
+              SalesOrderListTab(),
+              StockCheckTab(),
+              CustomerInsightTab(),
+              SalesHistoryTab(compact: true),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
