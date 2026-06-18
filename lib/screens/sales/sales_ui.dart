@@ -109,43 +109,36 @@ class SalesInfoCard extends StatelessWidget {
 
 class SalesPillTabBar extends StatelessWidget {
   final List<Widget> tabs;
+  final TabController? controller;
 
-  const SalesPillTabBar({super.key, required this.tabs});
+  const SalesPillTabBar({super.key, required this.tabs, this.controller});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border),
-          boxShadow: AppColors.cardShadow,
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.32)),
+      ),
+      child: TabBar(
+        controller: controller,
+        isScrollable: false,
+        dividerColor: Colors.transparent,
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicator: BoxDecoration(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(14),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: TabBar(
-            indicatorSize: TabBarIndicatorSize.tab,
-            dividerColor: Colors.transparent,
-            labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-            indicator: BoxDecoration(
-              color: AppColors.softGreen,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.slate,
-            labelStyle: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
-            unselectedLabelStyle: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-            tabs: tabs,
-          ),
+        labelColor: AppColors.white,
+        unselectedLabelColor: AppColors.slate,
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
         ),
+        tabs: tabs,
       ),
     );
   }

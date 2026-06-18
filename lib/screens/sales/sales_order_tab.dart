@@ -104,13 +104,16 @@ class _SalesOrderTabBodyState extends State<_SalesOrderTabBody> {
   Widget build(BuildContext context) {
     return const Column(
       children: [
-        SalesPillTabBar(
-          tabs: [
-            Tab(text: 'Sales Order'),
-            Tab(text: 'Cek Stok'),
-            Tab(text: 'Customer'),
-            Tab(text: 'Histori'),
-          ],
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: SalesPillTabBar(
+            tabs: const [
+              Tab(text: 'Sales Order'),
+              Tab(text: 'Cek Stok'),
+              Tab(text: 'Customer'),
+              Tab(text: 'Histori'),
+            ],
+          ),
         ),
         Expanded(
           child: TabBarView(

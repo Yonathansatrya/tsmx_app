@@ -17,12 +17,15 @@ class SalesCollectionTab extends StatelessWidget {
         color: AppColors.background,
         child: Column(
           children: [
-            const SalesPillTabBar(
-              tabs: [
-                Tab(text: 'AR Aging'),
-                Tab(text: 'Invoice'),
-                Tab(text: 'Janji Bayar'),
-              ],
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SalesPillTabBar(
+                tabs: const [
+                  Tab(text: 'AR Aging'),
+                  Tab(text: 'Invoice'),
+                  Tab(text: 'Janji Bayar'),
+                ],
+              ),
             ),
             const Expanded(
               child: TabBarView(

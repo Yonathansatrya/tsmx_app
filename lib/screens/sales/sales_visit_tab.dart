@@ -162,12 +162,15 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     length: 3,
     child: Column(
       children: [
-        const SalesPillTabBar(
-          tabs: [
-            Tab(icon: Icon(Icons.route_rounded), text: 'Perjalanan'),
-            Tab(icon: Icon(Icons.storefront_rounded), text: 'Aktivitas'),
-            Tab(icon: Icon(Icons.history_rounded), text: 'Riwayat'),
-          ],
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: SalesPillTabBar(
+            tabs: const [
+              Tab(icon: Icon(Icons.route_rounded), text: 'Perjalanan'),
+              Tab(icon: Icon(Icons.storefront_rounded), text: 'Aktivitas'),
+              Tab(icon: Icon(Icons.history_rounded), text: 'Riwayat'),
+            ],
+          ),
         ),
         Expanded(
           child: TabBarView(
