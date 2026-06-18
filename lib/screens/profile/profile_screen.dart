@@ -518,8 +518,13 @@ class _ProfileScreenState extends State<ProfileScreen>
         Container(
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: AppColors.primaryDark,
+            gradient: const LinearGradient(
+              colors: [AppColors.primary, AppColors.primaryLight],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
             borderRadius: BorderRadius.circular(22),
+            boxShadow: AppColors.cardShadow,
           ),
           child: const Row(
             children: [
@@ -533,14 +538,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                       'Keamanan Akun',
                       style: TextStyle(
                         color: AppColors.white,
-                        fontSize: 18,
+                        fontSize: 19,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    SizedBox(height: 3),
                     Text(
-                      'Gunakan password unik yang tidak dipakai pada akun lain.',
-                      style: TextStyle(color: Color(0xFFCBD5E1), fontSize: 12),
+                      'Kelola password dan sesi login akun ERPNext Anda.',
+                      style: TextStyle(color: AppColors.white, fontSize: 12),
                     ),
                   ],
                 ),
@@ -549,128 +554,149 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ),
         const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Form(
-            key: _passwordFormKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'Ubah Password',
-                  style: TextStyle(
-                    color: AppColors.navy,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
+        _SectionCard(
+          title: 'Ubah Password',
+          subtitle: 'Pastikan password baru aman dan mudah Anda ingat',
+          icon: Icons.lock_reset_rounded,
+          children: [
+            Form(
+              key: _passwordFormKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 8),
+                  _PasswordField(
+                    controller: _oldPasswordController,
+                    label: 'Password Lama',
+                    visible: _showOldPassword,
+                    onToggleVisibility: () {
+                      setState(() => _showOldPassword = !_showOldPassword);
+                    },
+                    validator: (value) => _requiredPassword(value),
                   ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Masukkan password lama untuk memastikan ini benar-benar Anda.',
-                  style: TextStyle(color: AppColors.slate, fontSize: 12),
-                ),
-                const SizedBox(height: 18),
-                _PasswordField(
-                  controller: _oldPasswordController,
-                  label: 'Password Lama',
-                  visible: _showOldPassword,
-                  onToggleVisibility: () {
-                    setState(() => _showOldPassword = !_showOldPassword);
-                  },
-                  validator: (value) => _requiredPassword(value),
-                ),
-                const SizedBox(height: 12),
-                _PasswordField(
-                  controller: _newPasswordController,
-                  label: 'Password Baru',
-                  visible: _showNewPassword,
-                  onToggleVisibility: () {
-                    setState(() => _showNewPassword = !_showNewPassword);
-                  },
-                  validator: (value) {
-                    final required = _requiredPassword(value);
-                    if (required != null) return required;
-                    if (value!.length < 8) return 'Minimal 8 karakter';
-                    if (value == _oldPasswordController.text) {
-                      return 'Password baru harus berbeda';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                _PasswordField(
-                  controller: _confirmPasswordController,
-                  label: 'Konfirmasi Password Baru',
-                  visible: _showConfirmPassword,
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _submitPasswordChange(),
-                  onToggleVisibility: () {
-                    setState(
-                      () => _showConfirmPassword = !_showConfirmPassword,
-                    );
-                  },
-                  validator: (value) {
-                    final required = _requiredPassword(value);
-                    if (required != null) return required;
-                    if (value != _newPasswordController.text) {
-                      return 'Konfirmasi password tidak cocok';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile.adaptive(
-                  contentPadding: EdgeInsets.zero,
-                  value: _logoutAllSessions,
-                  activeTrackColor: AppColors.primary,
-                  onChanged: (value) {
-                    setState(() => _logoutAllSessions = value);
-                  },
-                  title: const Text(
-                    'Keluar dari perangkat lain',
-                    style: TextStyle(
-                      color: AppColors.navy,
-                      fontWeight: FontWeight.w800,
+                  const SizedBox(height: 12),
+                  _PasswordField(
+                    controller: _newPasswordController,
+                    label: 'Password Baru',
+                    visible: _showNewPassword,
+                    onToggleVisibility: () {
+                      setState(() => _showNewPassword = !_showNewPassword);
+                    },
+                    validator: (value) {
+                      final required = _requiredPassword(value);
+                      if (required != null) return required;
+                      if (value!.length < 8) return 'Minimal 8 karakter';
+                      if (value == _oldPasswordController.text) {
+                        return 'Password baru harus berbeda';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _PasswordField(
+                    controller: _confirmPasswordController,
+                    label: 'Konfirmasi Password Baru',
+                    visible: _showConfirmPassword,
+                    textInputAction: TextInputAction.done,
+                    onFieldSubmitted: (_) => _submitPasswordChange(),
+                    onToggleVisibility: () {
+                      setState(
+                        () => _showConfirmPassword = !_showConfirmPassword,
+                      );
+                    },
+                    validator: (value) {
+                      final required = _requiredPassword(value);
+                      if (required != null) return required;
+                      if (value != _newPasswordController.text) {
+                        return 'Konfirmasi password tidak cocok';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
                     ),
-                  ),
-                  subtitle: const Text(
-                    'Disarankan jika Anda merasa akun digunakan orang lain.',
-                    style: TextStyle(color: AppColors.slate, fontSize: 11),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                FilledButton.icon(
-                  onPressed: _changingPassword ? null : _submitPasswordChange,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    minimumSize: const Size.fromHeight(50),
-                    shape: RoundedRectangleBorder(
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceMuted,
                       borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      value: _logoutAllSessions,
+                      activeTrackColor: AppColors.primary,
+                      onChanged: (value) {
+                        setState(() => _logoutAllSessions = value);
+                      },
+                      title: const Text(
+                        'Keluar dari perangkat lain',
+                        style: TextStyle(
+                          color: AppColors.navy,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      subtitle: const Text(
+                        'Disarankan jika akun terasa tidak aman.',
+                        style: TextStyle(color: AppColors.slate, fontSize: 11),
+                      ),
                     ),
                   ),
-                  icon: _changingPassword
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            color: AppColors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.lock_reset_rounded),
-                  label: Text(
-                    _changingPassword ? 'Memperbarui...' : 'Ubah Password',
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  const SizedBox(height: 14),
+                  FilledButton.icon(
+                    onPressed: _changingPassword ? null : _submitPasswordChange,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      minimumSize: const Size.fromHeight(50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: _changingPassword
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              color: AppColors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.lock_reset_rounded),
+                    label: Text(
+                      _changingPassword ? 'Memperbarui...' : 'Ubah Password',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        _SectionCard(
+          title: 'Tips Keamanan',
+          subtitle: 'Panduan singkat menjaga akun tetap aman',
+          icon: Icons.verified_user_outlined,
+          children: const [
+            _DetailRow(
+              icon: Icons.password_rounded,
+              label: 'Minimal password',
+              value: '8 karakter',
+            ),
+            _DetailRow(
+              icon: Icons.devices_other_rounded,
+              label: 'Perangkat lain',
+              value: 'Logout bila perlu',
+            ),
+            _DetailRow(
+              icon: Icons.privacy_tip_outlined,
+              label: 'Bagikan password',
+              value: 'Jangan pernah',
+              isLast: true,
+            ),
+          ],
         ),
       ],
     );
