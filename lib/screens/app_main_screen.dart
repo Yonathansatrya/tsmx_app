@@ -45,7 +45,7 @@ class _AppMainScreenState extends State<AppMainScreen> {
   }
 
   List<Widget> get _tabs => [
-    DashboardTab(onTodoSelected: () => _changeTab(2)),
+    const DashboardTab(),
     SellingTab(
       selectedSegment: _salesSegment,
       onSegmentChanged: (segment) => setState(() => _salesSegment = segment),

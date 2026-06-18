@@ -40,6 +40,14 @@ class AppNotification {
     );
   }
 
+  String get sourceLabel {
+    return switch (source) {
+      'notification_log' => 'ERPNext',
+      'activity_log' => 'Aktivitas ERP',
+      _ => source.isEmpty ? 'Aplikasi' : source,
+    };
+  }
+
   factory AppNotification.fromNotificationLog(Map<String, dynamic> json) {
     final typeRaw =
         json['type']?.toString() ?? json['notification_type']?.toString() ?? '';
@@ -158,10 +166,10 @@ class AppNotification {
     final now = DateTime.now();
     final diff = now.difference(local);
 
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
-    if (diff.inHours < 24) return '${diff.inHours} hr ago';
-    if (diff.inDays < 7) return '${diff.inDays} d ago';
+    if (diff.inMinutes < 1) return 'Baru saja';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} menit lalu';
+    if (diff.inHours < 24) return '${diff.inHours} jam lalu';
+    if (diff.inDays < 7) return '${diff.inDays} hari lalu';
 
     final day = local.day.toString().padLeft(2, '0');
     final month = local.month.toString().padLeft(2, '0');

@@ -8,9 +8,7 @@ import '../../utils/erp_format.dart';
 import '../../widgets/dashboard/dashboard_kpi_card.dart';
 
 class DashboardTab extends StatefulWidget {
-  final VoidCallback? onTodoSelected;
-
-  const DashboardTab({super.key, this.onTodoSelected});
+  const DashboardTab({super.key});
 
   @override
   State<DashboardTab> createState() => _DashboardTabState();
@@ -136,13 +134,6 @@ class _DashboardTabState extends State<DashboardTab> {
 
             const SizedBox(height: 18),
 
-            _ApprovalTodoCard(
-              count: appState.salesOrderApprovalTodoCount,
-              onTap: widget.onTodoSelected,
-            ),
-
-            const SizedBox(height: 18),
-
             _SalesmanLiveMapCard(
               points: _salesTrackingPoints,
               loading: _isTrackingLoading,
@@ -207,94 +198,6 @@ class _DashboardTabState extends State<DashboardTab> {
             const SizedBox(height: 20),
             _FinancialSnapshot(sales: salesStats, purchases: purchaseStats),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ApprovalTodoCard extends StatelessWidget {
-  final int count;
-  final VoidCallback? onTap;
-
-  const _ApprovalTodoCard({required this.count, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final hasTodo = count > 0;
-    final color = hasTodo ? AppColors.warning : AppColors.primary;
-    return Material(
-      color: hasTodo
-          ? AppColors.warning.withValues(alpha: 0.1)
-          : AppColors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: color.withValues(alpha: hasTodo ? 0.45 : 0.16)),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                alignment: Alignment.center,
-                child: hasTodo
-                    ? Badge.count(
-                        count: count,
-                        backgroundColor: AppColors.danger,
-                        textColor: AppColors.white,
-                        child: Icon(
-                          Icons.assignment_turned_in_outlined,
-                          color: color,
-                          size: 27,
-                        ),
-                      )
-                    : Icon(
-                        Icons.assignment_turned_in_outlined,
-                        color: color,
-                        size: 27,
-                      ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      hasTodo
-                          ? '$count Approval Perlu Keputusan'
-                          : 'Approval Sales Order',
-                      style: const TextStyle(
-                        color: AppColors.navy,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      hasTodo
-                          ? 'Buka Todo, periksa detail, lalu approve atau reject.'
-                          : 'Tidak ada pekerjaan approval yang menunggu.',
-                      style: const TextStyle(
-                        color: AppColors.slate,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(Icons.chevron_right_rounded, color: color),
-            ],
-          ),
         ),
       ),
     );

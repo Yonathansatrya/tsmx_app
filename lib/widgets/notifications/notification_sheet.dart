@@ -4,7 +4,7 @@ import '../../theme/app_colors.dart';
 import 'notification_card.dart';
 import 'notification_model.dart';
 
-enum _NotificationFilter { all, unread, action, warning, info }
+enum _NotificationFilter { all, unread, warning, info }
 
 class NotificationSheet extends StatefulWidget {
   final List<AppNotification> notifications;
@@ -50,10 +50,9 @@ class _NotificationSheetState extends State<NotificationSheet> {
 
   String _filterLabel(_NotificationFilter filter) {
     return switch (filter) {
-      _NotificationFilter.all => 'All',
-      _NotificationFilter.unread => 'Unread',
-      _NotificationFilter.action => 'Action',
-      _NotificationFilter.warning => 'Warning',
+      _NotificationFilter.all => 'Semua',
+      _NotificationFilter.unread => 'Baru',
+      _NotificationFilter.warning => 'Peringatan',
       _NotificationFilter.info => 'Info',
     };
   }
@@ -63,7 +62,6 @@ class _NotificationSheetState extends State<NotificationSheet> {
       return switch (_filter) {
         _NotificationFilter.all => true,
         _NotificationFilter.unread => !item.isRead,
-        _NotificationFilter.action => item.type == NotificationType.action,
         _NotificationFilter.warning => item.type == NotificationType.warning,
         _NotificationFilter.info => item.type == NotificationType.info,
       };
@@ -73,9 +71,6 @@ class _NotificationSheetState extends State<NotificationSheet> {
   @override
   Widget build(BuildContext context) {
     final unread = widget.notifications.where((n) => !n.isRead).length;
-    final actions = widget.notifications
-        .where((n) => n.type == NotificationType.action)
-        .length;
     final warnings = widget.notifications
         .where((n) => n.type == NotificationType.warning)
         .length;
@@ -122,7 +117,7 @@ class _NotificationSheetState extends State<NotificationSheet> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'ERP Inbox',
+                              'Kotak Masuk ERP',
                               style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w900,
@@ -130,7 +125,7 @@ class _NotificationSheetState extends State<NotificationSheet> {
                               ),
                             ),
                             Text(
-                              '${widget.notifications.length} notifications - $unread unread',
+                              '${widget.notifications.length} notifikasi - $unread belum dibaca',
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: AppColors.slate,
@@ -151,7 +146,7 @@ class _NotificationSheetState extends State<NotificationSheet> {
                     children: [
                       Expanded(
                         child: _InboxMetric(
-                          label: 'Unread',
+                          label: 'Baru',
                           value: unread,
                           color: AppColors.primary,
                         ),
@@ -159,15 +154,7 @@ class _NotificationSheetState extends State<NotificationSheet> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: _InboxMetric(
-                          label: 'Actions',
-                          value: actions,
-                          color: AppColors.success,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _InboxMetric(
-                          label: 'Warnings',
+                          label: 'Peringatan',
                           value: warnings,
                           color: AppColors.warning,
                         ),
@@ -211,7 +198,7 @@ class _NotificationSheetState extends State<NotificationSheet> {
                 child: Row(
                   children: [
                     const Text(
-                      'From ERPNext',
+                      'Dari ERPNext & aktivitas aplikasi',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w900,
@@ -224,7 +211,7 @@ class _NotificationSheetState extends State<NotificationSheet> {
                         onPressed: widget.onMarkAllRead,
                         icon: const Icon(Icons.done_all_rounded, size: 17),
                         label: const Text(
-                          'Mark read',
+                          'Tandai dibaca',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -325,7 +312,7 @@ class _EmptyNotifications extends StatelessWidget {
             ),
             SizedBox(height: 12),
             Text(
-              'No notifications',
+              'Belum ada notifikasi',
               style: TextStyle(
                 fontWeight: FontWeight.w900,
                 color: AppColors.navy,
@@ -333,7 +320,7 @@ class _EmptyNotifications extends StatelessWidget {
             ),
             SizedBox(height: 4),
             Text(
-              'Changes in ERPNext (create, update, delete) will appear here.',
+              'Approval, perubahan ERPNext, dan pesan dari sistem akan muncul di sini.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: AppColors.slate),
             ),

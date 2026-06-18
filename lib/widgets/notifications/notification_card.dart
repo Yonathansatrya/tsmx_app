@@ -38,6 +38,7 @@ class NotificationCard extends StatelessWidget {
                   : style.color.withValues(alpha: 0.045),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,10 +120,20 @@ class NotificationCard extends StatelessWidget {
                           spacing: 6,
                           runSpacing: 6,
                           children: [
+                            _MetaChip(
+                              label: item.sourceLabel,
+                              color: style.color,
+                            ),
+                            _MetaChip(
+                              label: item.isRead ? 'Sudah dibaca' : 'Baru',
+                              color: item.isRead
+                                  ? AppColors.slate
+                                  : AppColors.danger,
+                            ),
                             if (item.documentType?.isNotEmpty ?? false)
                               _MetaChip(
                                 label: item.documentType!,
-                                color: style.color,
+                                color: AppColors.primary,
                               ),
                             if (item.documentName?.isNotEmpty ?? false)
                               _MetaChip(
@@ -133,7 +144,24 @@ class NotificationCard extends StatelessWidget {
                         ),
                       )
                     else
-                      const Spacer(),
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _MetaChip(
+                              label: item.sourceLabel,
+                              color: style.color,
+                            ),
+                            _MetaChip(
+                              label: item.isRead ? 'Sudah dibaca' : 'Baru',
+                              color: item.isRead
+                                  ? AppColors.slate
+                                  : AppColors.danger,
+                            ),
+                          ],
+                        ),
+                      ),
                     const SizedBox(width: 8),
                     Text(
                       item.timeString,
