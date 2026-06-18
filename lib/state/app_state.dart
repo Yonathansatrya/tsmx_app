@@ -229,6 +229,15 @@ class AppState with ChangeNotifier {
   String? _purchaseOrderStatus;
   int _purchaseOrderQueryVersion = 0;
 
+  int _buyingPeriodYear = DateTime.now().year;
+  int _buyingPeriodMonth = DateTime.now().month;
+  int get buyingPeriodYear => _buyingPeriodYear;
+  int get buyingPeriodMonth => _buyingPeriodMonth;
+  DateTime get buyingPeriodFrom =>
+      DateTime(_buyingPeriodYear, _buyingPeriodMonth, 1);
+  DateTime get buyingPeriodTo =>
+      DateTime(_buyingPeriodYear, _buyingPeriodMonth + 1, 0);
+
   Future<void>? _orderSummaryJob;
   bool _isOrderSummaryLoading = false;
   bool get isOrderSummaryLoading => _isOrderSummaryLoading;
@@ -2040,6 +2049,83 @@ class AppState with ChangeNotifier {
     ]);
   }
 
+  Future<void> refreshBuyingSummaries() async {
+    _isOrderSummaryLoading = true;
+    _orderSummaryError = null;
+    notifyListeners();
+
+    try {
+      await _frappeService.ensureLoggedIn();
+      var purchaseTotal = 0.0;
+      var purchaseDocumentCount = 0;
+      await _forEachResourcePage(
+        doctype: 'Purchase Order',
+        fields: const ['name', 'grand_total', 'transaction_date'],
+        filters: _buyingPeriodFilters('transaction_date'),
+        onRow: (row) {
+          purchaseTotal += NumParse.asDouble(row['grand_total']);
+          purchaseDocumentCount++;
+        },
+      );
+
+      var receiptTotal = 0.0;
+      var receiptCount = 0;
+      await _forEachResourcePage(
+        doctype: 'Purchase Receipt',
+        fields: const ['name', 'grand_total', 'posting_date'],
+        filters: _buyingPeriodFilters('posting_date'),
+        onRow: (row) {
+          receiptTotal += NumParse.asDouble(row['grand_total']);
+          receiptCount++;
+        },
+      );
+
+      var invoiceTotal = 0.0;
+      var invoiceCount = 0;
+      await _forEachResourcePage(
+        doctype: 'Purchase Invoice',
+        fields: const ['name', 'grand_total', 'posting_date'],
+        filters: _buyingPeriodFilters('posting_date'),
+        onRow: (row) {
+          invoiceTotal += NumParse.asDouble(row['grand_total']);
+          invoiceCount++;
+        },
+      );
+
+      _purchaseOrderSummary = DocumentSummary(
+        totalValue: purchaseTotal,
+        documentCount: purchaseDocumentCount,
+      );
+      _purchaseReceiptSummary = DocumentSummary(
+        totalValue: receiptTotal,
+        documentCount: receiptCount,
+      );
+      _purchaseInvoiceSummary = DocumentSummary(
+        totalValue: invoiceTotal,
+        documentCount: invoiceCount,
+      );
+      _orderSummaryError = null;
+    } catch (err) {
+      _orderSummaryError = err.toString();
+    } finally {
+      _isOrderSummaryLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> setBuyingPeriod({required int year, required int month}) async {
+    if (_buyingPeriodYear == year && _buyingPeriodMonth == month) return;
+    _buyingPeriodYear = year;
+    _buyingPeriodMonth = month;
+    notifyListeners();
+    await Future.wait([
+      fetchPurchaseOrdersFromFrappe(),
+      fetchPurchaseReceiptsFromFrappe(),
+      fetchPurchaseInvoicesFromFrappe(),
+      refreshBuyingSummaries(),
+    ]);
+  }
+
   Future<void> refreshAllSummaries({bool silent = false}) {
     if (!_isAuthenticated) return Future.value();
 
@@ -2140,8 +2226,10 @@ class AppState with ChangeNotifier {
           'grand_total',
           'status',
           'docstatus',
+          'transaction_date',
           'schedule_date',
         ],
+        filters: _buyingPeriodFilters('transaction_date'),
         onRow: (row) {
           final order = PurchaseOrder.fromJson(row);
           purchaseDocumentCount++;
@@ -2163,6 +2251,7 @@ class AppState with ChangeNotifier {
       await _forEachResourcePage(
         doctype: 'Purchase Receipt',
         fields: const ['name', 'grand_total'],
+        filters: _buyingPeriodFilters('posting_date'),
         onRow: (row) {
           purchaseReceiptTotal += NumParse.asDouble(row['grand_total']);
           purchaseReceiptCount++;
@@ -2175,6 +2264,7 @@ class AppState with ChangeNotifier {
       await _forEachResourcePage(
         doctype: 'Purchase Invoice',
         fields: const ['name', 'grand_total', 'status', 'docstatus'],
+        filters: _buyingPeriodFilters('posting_date'),
         onRow: (row) {
           final invoice = PurchaseInvoice.fromJson(row);
           purchaseInvoiceTotal += invoice.value;
@@ -3672,6 +3762,15 @@ class AppState with ChangeNotifier {
     return [
       [dateField, '>=', DateRangePresets.toFrappeDate(sellingPeriodFrom)],
       [dateField, '<=', DateRangePresets.toFrappeDate(sellingPeriodTo)],
+      ['docstatus', '!=', 2],
+    ];
+  }
+
+  List<List<dynamic>> _buyingPeriodFilters(String dateField) {
+    return [
+      [dateField, '>=', DateRangePresets.toFrappeDate(buyingPeriodFrom)],
+      [dateField, '<=', DateRangePresets.toFrappeDate(buyingPeriodTo)],
+      ['docstatus', '!=', 2],
     ];
   }
 
@@ -3703,6 +3802,10 @@ class AppState with ChangeNotifier {
   Future<List<PurchaseOrder>> _fetchPurchaseOrderPage({
     required int limitStart,
   }) async {
+    final filters = <List<dynamic>>[
+      ..._buyingPeriodFilters('transaction_date'),
+      ...?_purchaseOrderFilters(_purchaseOrderStatus),
+    ];
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Purchase Order',
       fields: const [
@@ -3720,7 +3823,7 @@ class AppState with ChangeNotifier {
       limit: _documentPageSize,
       limitStart: limitStart,
       orderBy: 'modified desc, name desc',
-      filters: _purchaseOrderFilters(_purchaseOrderStatus),
+      filters: filters,
       orFilters: _searchFilters(_purchaseOrderSearch, const [
         'name',
         'supplier',
@@ -3736,6 +3839,10 @@ class AppState with ChangeNotifier {
   Future<List<PurchaseReceipt>> _fetchPurchaseReceiptPage({
     required int limitStart,
   }) async {
+    final filters = <List<dynamic>>[
+      ..._buyingPeriodFilters('posting_date'),
+      ...?_statusFilters(_purchaseReceiptStatus),
+    ];
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Purchase Receipt',
       fields: const [
@@ -3751,7 +3858,7 @@ class AppState with ChangeNotifier {
       limit: _documentPageSize,
       limitStart: limitStart,
       orderBy: 'posting_date desc, name desc',
-      filters: _statusFilters(_purchaseReceiptStatus),
+      filters: filters,
       orFilters: _searchFilters(_purchaseReceiptSearch, const [
         'name',
         'supplier',
@@ -3764,6 +3871,10 @@ class AppState with ChangeNotifier {
   Future<List<PurchaseInvoice>> _fetchPurchaseInvoicePage({
     required int limitStart,
   }) async {
+    final filters = <List<dynamic>>[
+      ..._buyingPeriodFilters('posting_date'),
+      ...?_statusFilters(_purchaseInvoiceStatus),
+    ];
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Purchase Invoice',
       fields: const [
@@ -3780,7 +3891,7 @@ class AppState with ChangeNotifier {
       limit: _documentPageSize,
       limitStart: limitStart,
       orderBy: 'posting_date desc, name desc',
-      filters: _statusFilters(_purchaseInvoiceStatus),
+      filters: filters,
       orFilters: _searchFilters(_purchaseInvoiceSearch, const [
         'name',
         'supplier',

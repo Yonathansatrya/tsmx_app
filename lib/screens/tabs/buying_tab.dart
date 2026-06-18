@@ -32,14 +32,22 @@ class BuyingTabState extends State<BuyingTab> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AppState>().refreshAllSummaries(silent: true);
+      final appState = context.read<AppState>();
+      appState.refreshBuyingSummaries();
+      if (appState.purchaseOrders.isEmpty) appState.refreshPurchaseOrders();
+      if (appState.purchaseReceipts.isEmpty) {
+        appState.refreshPurchaseReceipts();
+      }
+      if (appState.purchaseInvoices.isEmpty) {
+        appState.refreshPurchaseInvoices();
+      }
     });
   }
 
   Future<void> refreshCurrent() async {
     final appState = context.read<AppState>();
     await Future.wait([
-      appState.refreshAllSummaries(),
+      appState.refreshBuyingSummaries(),
       switch (widget.selectedSegment) {
         'pr' => appState.refreshPurchaseReceipts(),
         'pi' => appState.refreshPurchaseInvoices(),
@@ -50,6 +58,7 @@ class BuyingTabState extends State<BuyingTab> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: refreshCurrent,
@@ -72,6 +81,15 @@ class BuyingTabState extends State<BuyingTab> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
           children: [
+            _BuyingPeriodFilter(
+              selectedYear: appState.buyingPeriodYear,
+              selectedMonth: appState.buyingPeriodMonth,
+              loading: appState.isOrderSummaryLoading,
+              onChanged: (year, month) => context
+                  .read<AppState>()
+                  .setBuyingPeriod(year: year, month: month),
+            ),
+            const SizedBox(height: 12),
             ErpSegmentBar(
               options: segments,
               selectedId: widget.selectedSegment,
@@ -103,6 +121,145 @@ class BuyingTabState extends State<BuyingTab> {
             },
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _BuyingPeriodFilter extends StatelessWidget {
+  final int selectedYear;
+  final int selectedMonth;
+  final bool loading;
+  final void Function(int year, int month) onChanged;
+
+  const _BuyingPeriodFilter({
+    required this.selectedYear,
+    required this.selectedMonth,
+    required this.loading,
+    required this.onChanged,
+  });
+
+  static const _monthLabels = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final currentYear = DateTime.now().year;
+    final years = [
+      for (var year = currentYear; year >= currentYear - 5; year--) year,
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.softGreen,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.calendar_month_rounded,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Periode Pembelian',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      'PO, receipt, invoice, dan total Rp mengikuti bulan ini',
+                      style: TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (loading)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<int>(
+                  initialValue: selectedMonth,
+                  decoration: const InputDecoration(labelText: 'Bulan'),
+                  items: [
+                    for (var i = 0; i < _monthLabels.length; i++)
+                      DropdownMenuItem(
+                        value: i + 1,
+                        child: Text(_monthLabels[i]),
+                      ),
+                  ],
+                  onChanged: loading
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          onChanged(selectedYear, value);
+                        },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: DropdownButtonFormField<int>(
+                  initialValue: selectedYear,
+                  decoration: const InputDecoration(labelText: 'Tahun'),
+                  items: [
+                    for (final year in years)
+                      DropdownMenuItem(value: year, child: Text('$year')),
+                  ],
+                  onChanged: loading
+                      ? null
+                      : (value) {
+                          if (value == null) return;
+                          onChanged(value, selectedMonth);
+                        },
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
