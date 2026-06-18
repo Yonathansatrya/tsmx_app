@@ -63,7 +63,21 @@ class PurchaseOrder {
     this.items = const [],
   });
 
-  bool get isDelayed => statusKey == PurchaseOrderStatusKey.delayed;
+  bool get isOverdue {
+    final etaDate = _parseEta(eta);
+    final today = DateTime.now();
+    final isOverdue =
+        etaDate != null &&
+        etaDate.isBefore(DateTime(today.year, today.month, today.day));
+    final settled =
+        statusText.toLowerCase().contains('completed') ||
+        statusText.toLowerCase().contains('cancel') ||
+        statusText.toLowerCase().contains('closed') ||
+        statusText.toLowerCase().contains('delivered');
+    return isOverdue && !settled;
+  }
+
+  bool get isDelayed => isOverdue;
 
   PurchaseOrder copyWith({
     String? id,
@@ -122,21 +136,11 @@ class PurchaseOrder {
       docstatus: docstatus,
     );
 
-    final etaDate = _parseEta(eta);
-    final today = DateTime.now();
-    final isOverdue =
-        etaDate != null &&
-        etaDate.isBefore(DateTime(today.year, today.month, today.day));
-    final isDelayed =
-        isOverdue &&
-        !statusText.toLowerCase().contains('completed') &&
-        !statusText.toLowerCase().contains('cancel') &&
-        !statusText.toLowerCase().contains('closed');
-
+    final isOverdue = _isOverdueEta(eta, statusText);
     final statusKey = parsePurchaseOrderStatus(
       statusText,
       docstatus: docstatus,
-      isDelayed: isDelayed,
+      isOverdue: isOverdue,
     );
 
     final rawItems = json['items'];
@@ -155,7 +159,9 @@ class PurchaseOrder {
       supplierId: supplierId,
       vendor: vendor,
       statusKey: statusKey,
-      statusText: statusText,
+      statusText: statusKey == PurchaseOrderStatusKey.overdue
+          ? 'Overdue'
+          : statusText,
       docStatus: NumParse.asInt(json['docstatus']),
       perReceived: NumParse.asDouble(json['per_received']),
       perBilled: NumParse.asDouble(json['per_billed']),
@@ -196,5 +202,19 @@ class PurchaseOrder {
     }
 
     return null;
+  }
+
+  static bool _isOverdueEta(String eta, String statusText) {
+    final etaDate = _parseEta(eta);
+    final today = DateTime.now();
+    final isPast =
+        etaDate != null &&
+        etaDate.isBefore(DateTime(today.year, today.month, today.day));
+    final settled =
+        statusText.toLowerCase().contains('completed') ||
+        statusText.toLowerCase().contains('cancel') ||
+        statusText.toLowerCase().contains('closed') ||
+        statusText.toLowerCase().contains('delivered');
+    return isPast && !settled;
   }
 }

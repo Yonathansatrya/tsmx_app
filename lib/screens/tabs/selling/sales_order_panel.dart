@@ -15,8 +15,6 @@ import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../sales/sales_order/create_sales_order_screen.dart';
 
-enum _OrderDateFilter { all, today, last7Days, monthToDate, last30Days }
-
 enum _OrderSortOption { newest, oldest, valueHigh, valueLow }
 
 enum _DocStatusFilter { all, draft, submitted, cancelled }
@@ -32,7 +30,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
   final TextEditingController _searchController = TextEditingController();
   String _search = '';
   SalesOrderStatusKey? _statusFilter;
-  _OrderDateFilter _dateFilter = _OrderDateFilter.all;
   _OrderSortOption _sortOption = _OrderSortOption.newest;
   String _advancedCustomer = '';
   String _advancedItem = '';
@@ -58,7 +55,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
       label: 'To Deliver',
       value: SalesOrderStatusKey.toDeliver,
     ),
-    const ErpStatusChip(label: 'To Pay', value: SalesOrderStatusKey.toPay),
     const ErpStatusChip(
       label: 'Completed',
       value: SalesOrderStatusKey.completed,
@@ -108,7 +104,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     SalesOrderStatusKey.toDeliverAndBill => 'To Deliver and Bill',
     SalesOrderStatusKey.toBill => 'To Bill',
     SalesOrderStatusKey.toDeliver => 'To Deliver',
-    SalesOrderStatusKey.toPay => 'To Pay',
     SalesOrderStatusKey.completed => 'Completed',
     SalesOrderStatusKey.closed => 'Closed',
     SalesOrderStatusKey.cancelled => 'Cancelled',
@@ -123,11 +118,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
           o.id.toLowerCase().contains(q) ||
           o.customer.toLowerCase().contains(q);
       final matchStatus = _statusFilter == null || o.statusKey == _statusFilter;
-      final matchDate = _matchesDateFilter(o.date);
-      return matchSearch &&
-          matchStatus &&
-          matchDate &&
-          _matchesAdvancedFilters(o);
+      return matchSearch && matchStatus && _matchesAdvancedFilters(o);
     }).toList();
 
     filtered.sort((a, b) {
@@ -140,25 +131,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     });
 
     return filtered;
-  }
-
-  bool _matchesDateFilter(String rawDate) {
-    if (_dateFilter == _OrderDateFilter.all) return true;
-
-    final date = _parseDate(rawDate);
-    if (date == null) return false;
-
-    final today = _dateOnly(DateTime.now());
-    final value = _dateOnly(date);
-    final from = switch (_dateFilter) {
-      _OrderDateFilter.all => DateTime(1900),
-      _OrderDateFilter.today => today,
-      _OrderDateFilter.last7Days => today.subtract(const Duration(days: 6)),
-      _OrderDateFilter.monthToDate => DateTime(today.year, today.month, 1),
-      _OrderDateFilter.last30Days => today.subtract(const Duration(days: 29)),
-    };
-
-    return !value.isBefore(from) && !value.isAfter(today);
   }
 
   int _compareDateDesc(String a, String b) {
@@ -201,16 +173,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     }
 
     return null;
-  }
-
-  String _dateFilterLabel(_OrderDateFilter filter) {
-    return switch (filter) {
-      _OrderDateFilter.all => 'All dates',
-      _OrderDateFilter.today => 'Today',
-      _OrderDateFilter.last7Days => '7 days',
-      _OrderDateFilter.monthToDate => 'This month',
-      _OrderDateFilter.last30Days => '30 days',
-    };
   }
 
   String _sortLabel(_OrderSortOption option) {
@@ -488,18 +450,14 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
         ],
         const SizedBox(height: 10),
         _SalesOrderQuickFilters(
-          dateFilter: _dateFilter,
           sortOption: _sortOption,
-          dateLabel: _dateFilterLabel,
           sortLabel: _sortLabel,
-          onDateChanged: (v) => setState(() => _dateFilter = v),
           onSortChanged: (v) => setState(() => _sortOption = v),
           onReset: () {
             setState(() {
               _searchController.clear();
               _search = '';
               _statusFilter = null;
-              _dateFilter = _OrderDateFilter.all;
               _sortOption = _OrderSortOption.newest;
               _advancedCustomer = '';
               _advancedItem = '';
@@ -575,22 +533,16 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
 }
 
 class _SalesOrderQuickFilters extends StatelessWidget {
-  final _OrderDateFilter dateFilter;
   final _OrderSortOption sortOption;
-  final String Function(_OrderDateFilter) dateLabel;
   final String Function(_OrderSortOption) sortLabel;
-  final ValueChanged<_OrderDateFilter> onDateChanged;
   final ValueChanged<_OrderSortOption> onSortChanged;
   final VoidCallback onReset;
   final int advancedCount;
   final VoidCallback onAdvancedFilters;
 
   const _SalesOrderQuickFilters({
-    required this.dateFilter,
     required this.sortOption,
-    required this.dateLabel,
     required this.sortLabel,
-    required this.onDateChanged,
     required this.onSortChanged,
     required this.onReset,
     required this.advancedCount,
@@ -600,117 +552,89 @@ class _SalesOrderQuickFilters extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        boxShadow: AppColors.cardShadow,
       ),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.calendar_month_outlined,
-                color: AppColors.primary,
-                size: 18,
+          Expanded(
+            child: DropdownButtonFormField<_OrderSortOption>(
+              initialValue: sortOption,
+              decoration: const InputDecoration(
+                labelText: 'Urutkan',
+                prefixIcon: Icon(Icons.sort_rounded, size: 18),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SizedBox(
-                  height: 34,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: _OrderDateFilter.values.map((filter) {
-                      final selected = dateFilter == filter;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(dateLabel(filter)),
-                          selected: selected,
-                          showCheckmark: false,
-                          visualDensity: VisualDensity.compact,
-                          selectedColor: AppColors.primary,
-                          backgroundColor: AppColors.softGreen,
-                          labelStyle: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            color: selected
-                                ? AppColors.white
-                                : AppColors.primary,
-                          ),
-                          side: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                          ),
-                          onSelected: (_) => onDateChanged(filter),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-            ],
+              items: _OrderSortOption.values.map((option) {
+                return DropdownMenuItem<_OrderSortOption>(
+                  value: option,
+                  child: Text(sortLabel(option)),
+                );
+              }).toList(),
+              onChanged: (option) {
+                if (option != null) onSortChanged(option);
+              },
+            ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<_OrderSortOption>(
-                    value: sortOption,
-                    isDense: true,
-                    isExpanded: true,
-                    dropdownColor: AppColors.white,
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: AppColors.primary,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.navy,
-                    ),
-                    items: _OrderSortOption.values.map((option) {
-                      return DropdownMenuItem<_OrderSortOption>(
-                        value: option,
-                        child: Text('Sort: ${sortLabel(option)}'),
-                      );
-                    }).toList(),
-                    onChanged: (option) {
-                      if (option != null) onSortChanged(option);
-                    },
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: onAdvancedFilters,
-                icon: const Icon(Icons.tune_rounded, size: 17),
-                label: Text(
-                  advancedCount > 0 ? 'Filter ($advancedCount)' : 'Filter',
-                ),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: onReset,
-                icon: const Icon(Icons.restart_alt_rounded, size: 17),
-                label: const Text('Reset'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(width: 8),
+          _SalesFilterButton(
+            icon: Icons.tune_rounded,
+            label: advancedCount > 0 ? 'Filter $advancedCount' : 'Filter',
+            onTap: onAdvancedFilters,
+          ),
+          const SizedBox(width: 8),
+          _SalesFilterButton(
+            icon: Icons.restart_alt_rounded,
+            label: 'Reset',
+            onTap: onReset,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SalesFilterButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SalesFilterButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.softGreen,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: SizedBox(
+          width: 64,
+          height: 56,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: AppColors.primary, size: 18),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

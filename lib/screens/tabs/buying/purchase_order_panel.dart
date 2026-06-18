@@ -15,8 +15,6 @@ import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../purchase/purchase_order/create_purchase_order_screen.dart';
 
-enum _PurchaseDateFilter { all, today, last7Days, monthToDate, last30Days }
-
 enum _PurchaseSortOption { newestEta, oldestEta, valueHigh, valueLow }
 
 enum _PoDocStatusFilter { all, draft, submitted, cancelled }
@@ -32,8 +30,6 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   final TextEditingController _searchController = TextEditingController();
   String _search = '';
   PurchaseOrderStatusKey? _statusFilter;
-  bool _delayedOnly = false;
-  _PurchaseDateFilter _dateFilter = _PurchaseDateFilter.all;
   _PurchaseSortOption _sortOption = _PurchaseSortOption.newestEta;
   String _advancedSupplier = '';
   String _advancedItem = '';
@@ -58,7 +54,10 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
       value: PurchaseOrderStatusKey.toReceive,
     ),
     const ErpStatusChip(label: 'To Bill', value: PurchaseOrderStatusKey.toBill),
-    const ErpStatusChip(label: 'To Pay', value: PurchaseOrderStatusKey.toPay),
+    const ErpStatusChip(
+      label: 'Overdue',
+      value: PurchaseOrderStatusKey.overdue,
+    ),
     const ErpStatusChip(
       label: 'Completed',
       value: PurchaseOrderStatusKey.completed,
@@ -71,10 +70,6 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
     const ErpStatusChip(
       label: 'Cancelled',
       value: PurchaseOrderStatusKey.cancelled,
-    ),
-    const ErpStatusChip(
-      label: 'Delayed',
-      value: PurchaseOrderStatusKey.delayed,
     ),
   ];
 
@@ -97,14 +92,13 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   }
 
   String? get _statusText {
-    if (_delayedOnly) return 'Delayed';
     return switch (_statusFilter) {
       PurchaseOrderStatusKey.draft => 'Draft',
       PurchaseOrderStatusKey.onHold => 'On Hold',
       PurchaseOrderStatusKey.toReceiveAndBill => 'To Receive and Bill',
       PurchaseOrderStatusKey.toReceive => 'To Receive',
       PurchaseOrderStatusKey.toBill => 'To Bill',
-      PurchaseOrderStatusKey.toPay => 'To Pay',
+      PurchaseOrderStatusKey.overdue => 'Delayed',
       PurchaseOrderStatusKey.completed => 'Completed',
       PurchaseOrderStatusKey.delivered => 'Delivered',
       PurchaseOrderStatusKey.closed => 'Closed',
@@ -133,13 +127,8 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
           q.isEmpty ||
           o.id.toLowerCase().contains(q) ||
           o.vendor.toLowerCase().contains(q);
-      final matchDate = _matchesDateFilter(o.eta);
-      if (_delayedOnly) return matchSearch && matchDate && o.isDelayed;
       final matchStatus = _statusFilter == null || o.statusKey == _statusFilter;
-      return matchSearch &&
-          matchStatus &&
-          matchDate &&
-          _matchesAdvancedFilters(o);
+      return matchSearch && matchStatus && _matchesAdvancedFilters(o);
     }).toList();
 
     filtered.sort((a, b) {
@@ -152,27 +141,6 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
     });
 
     return filtered;
-  }
-
-  bool _matchesDateFilter(String rawDate) {
-    if (_dateFilter == _PurchaseDateFilter.all) return true;
-
-    final date = _parseDate(rawDate);
-    if (date == null) return false;
-
-    final today = _dateOnly(DateTime.now());
-    final value = _dateOnly(date);
-    final from = switch (_dateFilter) {
-      _PurchaseDateFilter.all => DateTime(1900),
-      _PurchaseDateFilter.today => today,
-      _PurchaseDateFilter.last7Days => today.subtract(const Duration(days: 6)),
-      _PurchaseDateFilter.monthToDate => DateTime(today.year, today.month, 1),
-      _PurchaseDateFilter.last30Days => today.subtract(
-        const Duration(days: 29),
-      ),
-    };
-
-    return !value.isBefore(from) && !value.isAfter(today);
   }
 
   int _compareDateDesc(String a, String b) {
@@ -215,16 +183,6 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
     }
 
     return null;
-  }
-
-  String _dateFilterLabel(_PurchaseDateFilter filter) {
-    return switch (filter) {
-      _PurchaseDateFilter.all => 'All dates',
-      _PurchaseDateFilter.today => 'Today',
-      _PurchaseDateFilter.last7Days => '7 days',
-      _PurchaseDateFilter.monthToDate => 'This month',
-      _PurchaseDateFilter.last30Days => '30 days',
-    };
   }
 
   String _sortLabel(_PurchaseSortOption option) {
@@ -293,10 +251,12 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
       context: context,
       title: detail.id,
       subtitle: detail.vendor,
-      statusText: detail.isDelayed ? 'Delayed (ETA)' : detail.statusText,
+      statusText: detail.statusText,
       rows: [
         docStatusRow(detail.docStatus),
         ErpDetailRow(label: 'ERP Status', value: detail.statusText),
+        if (detail.isOverdue)
+          const ErpDetailRow(label: 'ETA Risk', value: 'Overdue'),
         ErpDetailRow(
           label: 'Expected',
           value: detail.eta.isEmpty ? '—' : detail.eta,
@@ -536,8 +496,8 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final filtered = _filter(appState.purchaseOrders);
-    final delayedCount = appState.purchaseOrders
-        .where((o) => o.isDelayed)
+    final overdueCount = appState.purchaseOrders
+        .where((o) => o.isOverdue)
         .length;
 
     return Column(
@@ -550,7 +510,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
           documentCount: appState.purchaseOrderSummary.documentCount,
           subtitle:
               '${appState.summarySyncSubtitle} | ${filtered.length} loaded'
-              '${delayedCount > 0 ? ' | $delayedCount delayed' : ''}',
+              '${overdueCount > 0 ? ' | $overdueCount overdue' : ''}',
           isLoading:
               appState.isOrderSummaryLoading &&
               appState.purchaseOrderSummary.documentCount == 0,
@@ -584,19 +544,14 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
         ],
         const SizedBox(height: 10),
         _PurchaseOrderQuickFilters(
-          dateFilter: _dateFilter,
           sortOption: _sortOption,
-          dateLabel: _dateFilterLabel,
           sortLabel: _sortLabel,
-          onDateChanged: (v) => setState(() => _dateFilter = v),
           onSortChanged: (v) => setState(() => _sortOption = v),
           onReset: () {
             setState(() {
               _searchController.clear();
               _search = '';
               _statusFilter = null;
-              _delayedOnly = false;
-              _dateFilter = _PurchaseDateFilter.all;
               _sortOption = _PurchaseSortOption.newestEta;
               _advancedSupplier = '';
               _advancedItem = '';
@@ -618,19 +573,9 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
         const SizedBox(height: 10),
         ErpStatusChipBar<PurchaseOrderStatusKey?>(
           chips: _chips,
-          selected: _delayedOnly
-              ? PurchaseOrderStatusKey.delayed
-              : _statusFilter,
+          selected: _statusFilter,
           onSelected: (v) {
-            setState(() {
-              if (v == PurchaseOrderStatusKey.delayed) {
-                _delayedOnly = true;
-                _statusFilter = null;
-              } else {
-                _delayedOnly = false;
-                _statusFilter = v;
-              }
-            });
+            setState(() => _statusFilter = v);
             context.read<AppState>().setPurchaseOrderQuery(
               search: _search,
               status: _statusText,
@@ -645,7 +590,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
             (o) => ErpDocumentCard(
               id: o.id,
               party: o.vendor,
-              statusText: o.isDelayed ? 'Delayed' : o.statusText,
+              statusText: o.statusText,
               date: o.eta,
               value: o.totalValue,
               onTap: () => _openDetail(o),
@@ -683,22 +628,16 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
 }
 
 class _PurchaseOrderQuickFilters extends StatelessWidget {
-  final _PurchaseDateFilter dateFilter;
   final _PurchaseSortOption sortOption;
-  final String Function(_PurchaseDateFilter) dateLabel;
   final String Function(_PurchaseSortOption) sortLabel;
-  final ValueChanged<_PurchaseDateFilter> onDateChanged;
   final ValueChanged<_PurchaseSortOption> onSortChanged;
   final VoidCallback onReset;
   final int advancedCount;
   final VoidCallback onAdvancedFilters;
 
   const _PurchaseOrderQuickFilters({
-    required this.dateFilter,
     required this.sortOption,
-    required this.dateLabel,
     required this.sortLabel,
-    required this.onDateChanged,
     required this.onSortChanged,
     required this.onReset,
     required this.advancedCount,
@@ -708,117 +647,89 @@ class _PurchaseOrderQuickFilters extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        boxShadow: AppColors.cardShadow,
       ),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.event_available_outlined,
-                color: AppColors.primary,
-                size: 18,
+          Expanded(
+            child: DropdownButtonFormField<_PurchaseSortOption>(
+              initialValue: sortOption,
+              decoration: const InputDecoration(
+                labelText: 'Urutkan',
+                prefixIcon: Icon(Icons.sort_rounded, size: 18),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: SizedBox(
-                  height: 34,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: _PurchaseDateFilter.values.map((filter) {
-                      final selected = dateFilter == filter;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(dateLabel(filter)),
-                          selected: selected,
-                          showCheckmark: false,
-                          visualDensity: VisualDensity.compact,
-                          selectedColor: AppColors.primary,
-                          backgroundColor: AppColors.softGreen,
-                          labelStyle: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            color: selected
-                                ? AppColors.white
-                                : AppColors.primary,
-                          ),
-                          side: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                          ),
-                          onSelected: (_) => onDateChanged(filter),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ),
-            ],
+              items: _PurchaseSortOption.values.map((option) {
+                return DropdownMenuItem<_PurchaseSortOption>(
+                  value: option,
+                  child: Text(sortLabel(option)),
+                );
+              }).toList(),
+              onChanged: (option) {
+                if (option != null) onSortChanged(option);
+              },
+            ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<_PurchaseSortOption>(
-                    value: sortOption,
-                    isDense: true,
-                    isExpanded: true,
-                    dropdownColor: AppColors.white,
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: AppColors.primary,
-                    ),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.navy,
-                    ),
-                    items: _PurchaseSortOption.values.map((option) {
-                      return DropdownMenuItem<_PurchaseSortOption>(
-                        value: option,
-                        child: Text('Sort: ${sortLabel(option)}'),
-                      );
-                    }).toList(),
-                    onChanged: (option) {
-                      if (option != null) onSortChanged(option);
-                    },
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: onAdvancedFilters,
-                icon: const Icon(Icons.tune_rounded, size: 17),
-                label: Text(
-                  advancedCount > 0 ? 'Filter ($advancedCount)' : 'Filter',
-                ),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: onReset,
-                icon: const Icon(Icons.restart_alt_rounded, size: 17),
-                label: const Text('Reset'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
+          const SizedBox(width: 8),
+          _PurchaseFilterButton(
+            icon: Icons.tune_rounded,
+            label: advancedCount > 0 ? 'Filter $advancedCount' : 'Filter',
+            onTap: onAdvancedFilters,
+          ),
+          const SizedBox(width: 8),
+          _PurchaseFilterButton(
+            icon: Icons.restart_alt_rounded,
+            label: 'Reset',
+            onTap: onReset,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PurchaseFilterButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _PurchaseFilterButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.softGreen,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: SizedBox(
+          width: 64,
+          height: 56,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: AppColors.primary, size: 18),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

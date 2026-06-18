@@ -100,21 +100,7 @@ class SalesOrder {
       json['status']?.toString(),
       docstatus: docstatus,
     );
-    final deliveryDate = DateTime.tryParse(
-      json['delivery_date']?.toString() ?? '',
-    );
-    final today = DateTime.now();
-    final isOverdue =
-        deliveryDate != null &&
-        deliveryDate.isBefore(DateTime(today.year, today.month, today.day)) &&
-        !statusText.toLowerCase().contains('completed') &&
-        !statusText.toLowerCase().contains('cancel') &&
-        !statusText.toLowerCase().contains('closed');
-    final statusKey = parseSalesOrderStatus(
-      statusText,
-      docstatus: docstatus,
-      isOverdue: isOverdue,
-    );
+    final statusKey = parseSalesOrderStatus(statusText, docstatus: docstatus);
 
     final rawItems = json['items'];
     final items = rawItems is List
@@ -129,9 +115,7 @@ class SalesOrder {
       customer: customer,
       value: value,
       statusKey: statusKey,
-      statusText: statusKey == SalesOrderStatusKey.overdue
-          ? 'Overdue'
-          : statusText,
+      statusText: statusText,
       docStatus: NumParse.asInt(json['docstatus']),
       perDelivered: NumParse.asDouble(json['per_delivered']),
       perBilled: NumParse.asDouble(json['per_billed']),

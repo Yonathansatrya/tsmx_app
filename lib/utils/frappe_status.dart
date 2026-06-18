@@ -184,18 +184,13 @@ enum SalesOrderStatusKey {
   toDeliverAndBill,
   toBill,
   toDeliver,
-  toPay,
   completed,
   closed,
   cancelled,
   unknown,
 }
 
-SalesOrderStatusKey parseSalesOrderStatus(
-  String statusText, {
-  int? docstatus,
-  bool isOverdue = false,
-}) {
+SalesOrderStatusKey parseSalesOrderStatus(String statusText, {int? docstatus}) {
   final text = normalizeStatusText(statusText, docstatus: docstatus);
   final s = text.toLowerCase();
 
@@ -206,8 +201,7 @@ SalesOrderStatusKey parseSalesOrderStatus(
   }
   if (_contains(s, 'closed')) return SalesOrderStatusKey.closed;
   if (_contains(s, 'completed')) return SalesOrderStatusKey.completed;
-  if (isOverdue) return SalesOrderStatusKey.overdue;
-  if (_contains(s, 'to pay')) return SalesOrderStatusKey.toPay;
+  if (_contains(s, 'overdue')) return SalesOrderStatusKey.overdue;
   if (_contains(s, 'to deliver and bill')) {
     return SalesOrderStatusKey.toDeliverAndBill;
   }
@@ -223,21 +217,20 @@ enum PurchaseOrderStatusKey {
   toReceiveAndBill,
   toBill,
   toReceive,
-  toPay,
   completed,
   delivered,
   closed,
   cancelled,
-  delayed,
+  overdue,
   unknown,
 }
 
 PurchaseOrderStatusKey parsePurchaseOrderStatus(
   String statusText, {
   int? docstatus,
-  bool isDelayed = false,
+  bool isOverdue = false,
 }) {
-  if (isDelayed) return PurchaseOrderStatusKey.delayed;
+  if (isOverdue) return PurchaseOrderStatusKey.overdue;
 
   final text = normalizeStatusText(statusText, docstatus: docstatus);
   final s = text.toLowerCase();
@@ -249,8 +242,10 @@ PurchaseOrderStatusKey parsePurchaseOrderStatus(
   }
   if (_contains(s, 'closed')) return PurchaseOrderStatusKey.closed;
   if (_contains(s, 'completed')) return PurchaseOrderStatusKey.completed;
+  if (_contains(s, 'delayed') || _contains(s, 'overdue')) {
+    return PurchaseOrderStatusKey.overdue;
+  }
   if (_contains(s, 'delivered')) return PurchaseOrderStatusKey.delivered;
-  if (_contains(s, 'to pay')) return PurchaseOrderStatusKey.toPay;
   if (_contains(s, 'to receive and bill')) {
     return PurchaseOrderStatusKey.toReceiveAndBill;
   }
@@ -343,8 +338,6 @@ FrappeStatusStyle styleForSalesOrderKey(SalesOrderStatusKey key) {
       return styleForStatusText('To Bill');
     case SalesOrderStatusKey.toDeliver:
       return styleForStatusText('To Deliver');
-    case SalesOrderStatusKey.toPay:
-      return styleForStatusText('To Pay');
     case SalesOrderStatusKey.completed:
       return styleForStatusText('Completed');
     case SalesOrderStatusKey.closed:
