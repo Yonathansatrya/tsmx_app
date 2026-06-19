@@ -13,6 +13,7 @@ import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
+import 'selling_filter_widgets.dart';
 
 class SalesInvoicePanel extends StatefulWidget {
   const SalesInvoicePanel({super.key});
@@ -22,8 +23,11 @@ class SalesInvoicePanel extends StatefulWidget {
 }
 
 class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
+  final TextEditingController _searchController = TextEditingController();
   String _search = '';
   InvoiceStatusKey? _statusFilter;
+  SellingSortOption _sortOption = SellingSortOption.newest;
+  SellingAdvancedFilters _advancedFilters = SellingAdvancedFilters.empty;
   Timer? _searchDebounce;
 
   static final _chips = <ErpStatusChip<InvoiceStatusKey?>>[
@@ -54,6 +58,7 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -83,14 +88,152 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
 
   List<SalesInvoice> _filter(List<SalesInvoice> docs) {
     final q = _search.toLowerCase();
-    return docs.where((d) {
+    final filtered = docs.where((d) {
       final matchSearch =
           q.isEmpty ||
           d.id.toLowerCase().contains(q) ||
           d.customer.toLowerCase().contains(q);
       final matchStatus = _statusFilter == null || d.statusKey == _statusFilter;
-      return matchSearch && matchStatus;
+      return matchSearch && matchStatus && _matchesAdvancedFilters(d);
     }).toList();
+
+    filtered.sort((a, b) {
+      return switch (_sortOption) {
+        SellingSortOption.newest => _compareDateDesc(a.date, b.date),
+        SellingSortOption.oldest => _compareDateAsc(a.date, b.date),
+        SellingSortOption.valueHigh => b.value.compareTo(a.value),
+        SellingSortOption.valueLow => a.value.compareTo(b.value),
+      };
+    });
+
+    return filtered;
+  }
+
+  int _compareDateDesc(String a, String b) {
+    final left = _parseDate(a);
+    final right = _parseDate(b);
+    if (left == null && right == null) return 0;
+    if (left == null) return 1;
+    if (right == null) return -1;
+    return right.compareTo(left);
+  }
+
+  int _compareDateAsc(String a, String b) {
+    final left = _parseDate(a);
+    final right = _parseDate(b);
+    if (left == null && right == null) return 0;
+    if (left == null) return 1;
+    if (right == null) return -1;
+    return left.compareTo(right);
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  DateTime? _parseDate(String rawDate) {
+    final trimmed = rawDate.trim();
+    if (trimmed.isEmpty) return null;
+
+    final iso = DateTime.tryParse(trimmed);
+    if (iso != null) return iso;
+
+    final parts = trimmed.split('/');
+    if (parts.length == 3) {
+      final day = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final year = int.tryParse(parts[2]);
+      if (day != null && month != null && year != null) {
+        return DateTime(year, month, day);
+      }
+    }
+
+    return null;
+  }
+
+  String _sortLabel(SellingSortOption option) {
+    return switch (option) {
+      SellingSortOption.newest => 'Newest',
+      SellingSortOption.oldest => 'Oldest',
+      SellingSortOption.valueHigh => 'Value high',
+      SellingSortOption.valueLow => 'Value low',
+    };
+  }
+
+  bool _matchesAdvancedFilters(SalesInvoice doc) {
+    final filters = _advancedFilters;
+    final customer = filters.customer.toLowerCase();
+    if (customer.isNotEmpty && !doc.customer.toLowerCase().contains(customer)) {
+      return false;
+    }
+    if (filters.minValue != null && doc.value < filters.minValue!) {
+      return false;
+    }
+    if (filters.maxValue != null && doc.value > filters.maxValue!) {
+      return false;
+    }
+
+    final date = _parseDate(doc.date);
+    if (filters.from != null) {
+      if (date == null || _dateOnly(date).isBefore(_dateOnly(filters.from!))) {
+        return false;
+      }
+    }
+    if (filters.to != null) {
+      if (date == null || _dateOnly(date).isAfter(_dateOnly(filters.to!))) {
+        return false;
+      }
+    }
+
+    return switch (filters.docStatus) {
+      SellingDocStatusFilter.all => true,
+      SellingDocStatusFilter.draft => doc.docStatus == 0,
+      SellingDocStatusFilter.submitted => doc.docStatus == 1,
+      SellingDocStatusFilter.cancelled => doc.docStatus == 2,
+    };
+  }
+
+  int get _advancedFilterCount {
+    var count = 0;
+    if (_advancedFilters.customer.isNotEmpty) count++;
+    if (_advancedFilters.minValue != null) count++;
+    if (_advancedFilters.maxValue != null) count++;
+    if (_advancedFilters.from != null) count++;
+    if (_advancedFilters.to != null) count++;
+    if (_advancedFilters.docStatus != SellingDocStatusFilter.all) count++;
+    return count;
+  }
+
+  Future<void> _openAdvancedFilters() async {
+    final result = await showModalBottomSheet<SellingAdvancedFilters>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (_) {
+        return SellingAdvancedFilterSheet(
+          title: 'Advanced Invoice Filters',
+          initial: _advancedFilters,
+        );
+      },
+    );
+
+    if (result == null || !mounted) return;
+    setState(() => _advancedFilters = result);
+  }
+
+  void _resetFilters() {
+    _searchDebounce?.cancel();
+    _searchController.clear();
+    setState(() {
+      _search = '';
+      _statusFilter = null;
+      _sortOption = SellingSortOption.newest;
+      _advancedFilters = SellingAdvancedFilters.empty;
+    });
+    context.read<AppState>().setSalesInvoiceQuery(search: '', status: null);
   }
 
   Future<void> _openDetail(SalesInvoice doc) async {
@@ -172,6 +315,7 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
         ),
         const SizedBox(height: 12),
         TextField(
+          controller: _searchController,
           onChanged: _searchChanged,
           decoration: InputDecoration(
             hintText: 'Search SI or customer…',
@@ -196,6 +340,15 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
           const SizedBox(height: 10),
           ErpErrorBox(message: appState.salesInvoicesError!),
         ],
+        const SizedBox(height: 10),
+        SellingQuickFilters(
+          sortOption: _sortOption,
+          sortLabel: _sortLabel,
+          onSortChanged: (option) => setState(() => _sortOption = option),
+          onReset: _resetFilters,
+          advancedCount: _advancedFilterCount,
+          onAdvancedFilters: _openAdvancedFilters,
+        ),
         const SizedBox(height: 10),
         ErpStatusChipBar<InvoiceStatusKey?>(
           chips: _chips,
