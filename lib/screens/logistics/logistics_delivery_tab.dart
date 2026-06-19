@@ -260,6 +260,8 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
                     icon: const Icon(Icons.draw_rounded),
                     label: const Text('Tanda Tangan Customer'),
                   ),
+                  const SizedBox(height: 16),
+                  _DeliveryItemsSection(initialRow: row),
                 ],
               ),
             ),
@@ -726,6 +728,245 @@ class _SignatureCaptureSheetState extends State<_SignatureCaptureSheet> {
       ),
     );
   }
+}
+
+class _DeliveryItemsSection extends StatefulWidget {
+  const _DeliveryItemsSection({required this.initialRow});
+
+  final DeliveryNote initialRow;
+
+  @override
+  State<_DeliveryItemsSection> createState() => _DeliveryItemsSectionState();
+}
+
+class _DeliveryItemsSectionState extends State<_DeliveryItemsSection> {
+  late Future<DeliveryNote> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = context.read<AppState>().loadDeliveryNoteDetail(
+      widget.initialRow.id,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<DeliveryNote>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _ItemsLoadingCard();
+        }
+
+        if (snapshot.hasError) {
+          return LogisticsInfoPanel(
+            message:
+                'Item Delivery Note belum bisa dimuat. ${_friendlyError(snapshot.error!)}',
+            icon: Icons.error_outline_rounded,
+            color: AppColors.danger,
+          );
+        }
+
+        final detail = snapshot.data ?? widget.initialRow;
+        if (detail.items.isEmpty) {
+          return const LogisticsInfoPanel(
+            message:
+                'Item detail belum tersedia dari Delivery Note ini. Coba refresh atau cek permission Delivery Note Item.',
+            icon: Icons.inventory_2_outlined,
+            color: AppColors.warning,
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Item Dikirim',
+                    style: TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                LogisticsStatusChip(
+                  label: '${detail.items.length} item',
+                  color: AppColors.primary,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...detail.items.map(_DeliveryItemCard.new),
+          ],
+        );
+      },
+    );
+  }
+
+  static String _friendlyError(Object error) => error
+      .toString()
+      .replaceFirst(RegExp(r'^Exception:\s*'), '')
+      .replaceAll(RegExp(r'<[^>]*>'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+class _ItemsLoadingCard extends StatelessWidget {
+  const _ItemsLoadingCard();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppColors.background,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: const Row(
+      children: [
+        SizedBox.square(
+          dimension: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            'Memuat item Delivery Note...',
+            style: TextStyle(
+              color: AppColors.slate,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DeliveryItemCard extends StatelessWidget {
+  const _DeliveryItemCard(this.item);
+
+  final DeliveryNoteItem item;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AppColors.background,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          item.itemName,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          item.itemCode,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.slate,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _ItemMiniStat(
+                label: 'Qty',
+                value:
+                    '${formatErpCurrency(item.qty)}${item.uom.isEmpty ? '' : ' ${item.uom}'}',
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _ItemMiniStat(
+                label: 'Rate',
+                value: 'Rp ${formatErpCurrency(item.rate)}',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _ItemMiniStat(
+                label: 'Amount',
+                value: 'Rp ${formatErpCurrency(item.amount)}',
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _ItemMiniStat(
+                label: 'Gudang',
+                value: item.warehouse.isEmpty ? '-' : item.warehouse,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _ItemMiniStat extends StatelessWidget {
+  const _ItemMiniStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+    decoration: BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.slate,
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 enum _DeliveryScope { outstanding, draft, submitted, completed, all }
