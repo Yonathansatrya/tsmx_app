@@ -25,7 +25,7 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
   final _search = TextEditingController();
   final _picker = ImagePicker();
   Timer? _debounce;
-  _DeliveryScope _scope = _DeliveryScope.outstanding;
+  _DeliveryScope _scope = _DeliveryScope.all;
   String? _busyId;
   String? _error;
 
@@ -66,15 +66,16 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
   bool _matchesScope(DeliveryNote row) {
     return switch (_scope) {
       _DeliveryScope.all => true,
-      _DeliveryScope.outstanding => _isOutstanding(row),
-      _DeliveryScope.draft => row.docStatus == 0,
-      _DeliveryScope.submitted =>
-        row.docStatus == 1 &&
-            row.statusKey != DeliveryNoteStatusKey.completed &&
-            row.statusKey != DeliveryNoteStatusKey.cancelled &&
-            row.statusKey != DeliveryNoteStatusKey.closed,
+      _DeliveryScope.draft => row.statusKey == DeliveryNoteStatusKey.draft,
+      _DeliveryScope.toBill => row.statusKey == DeliveryNoteStatusKey.toBill,
       _DeliveryScope.completed =>
         row.statusKey == DeliveryNoteStatusKey.completed,
+      _DeliveryScope.returnIssued =>
+        row.statusKey == DeliveryNoteStatusKey.returnIssued ||
+            row.statusKey == DeliveryNoteStatusKey.returnDoc,
+      _DeliveryScope.cancelled =>
+        row.statusKey == DeliveryNoteStatusKey.cancelled,
+      _DeliveryScope.closed => row.statusKey == DeliveryNoteStatusKey.closed,
     };
   }
 
@@ -1415,7 +1416,15 @@ class _ItemMiniStat extends StatelessWidget {
   );
 }
 
-enum _DeliveryScope { outstanding, draft, submitted, completed, all }
+enum _DeliveryScope {
+  all,
+  draft,
+  toBill,
+  completed,
+  returnIssued,
+  cancelled,
+  closed,
+}
 
 class _DeliveryScopeSelector extends StatelessWidget {
   const _DeliveryScopeSelector({
@@ -1429,11 +1438,13 @@ class _DeliveryScopeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const options = [
-      (_DeliveryScope.outstanding, 'Outstanding'),
-      (_DeliveryScope.draft, 'Draft'),
-      (_DeliveryScope.submitted, 'Submitted'),
-      (_DeliveryScope.completed, 'Completed'),
       (_DeliveryScope.all, 'Semua'),
+      (_DeliveryScope.draft, 'Draft'),
+      (_DeliveryScope.toBill, 'To Bill'),
+      (_DeliveryScope.completed, 'Completed'),
+      (_DeliveryScope.returnIssued, 'Return Issued'),
+      (_DeliveryScope.cancelled, 'Cancelled'),
+      (_DeliveryScope.closed, 'Closed'),
     ];
 
     return SingleChildScrollView(

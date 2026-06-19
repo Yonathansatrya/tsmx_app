@@ -17,7 +17,7 @@ class LogisticsTrackingTab extends StatefulWidget {
 
 class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
   final _search = TextEditingController();
-  _TrackingScope _scope = _TrackingScope.outstanding;
+  _TrackingScope _scope = _TrackingScope.all;
 
   @override
   void initState() {
@@ -40,12 +40,19 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
     final state = context.watch<AppState>();
     final docs = state.deliveryNotes;
     final visibleDocs = docs.where(_matchesFilter).toList();
-    final outstanding = docs.where(_isOutstanding).length;
+    final toBill = docs
+        .where((doc) => doc.statusKey == DeliveryNoteStatusKey.toBill)
+        .length;
     final completed = docs
         .where((doc) => doc.statusKey == DeliveryNoteStatusKey.completed)
         .length;
-    final draft = docs.where((doc) => doc.docStatus == 0).length;
-    final inProgress = docs.length - completed - draft;
+    final returns = docs
+        .where(
+          (doc) =>
+              doc.statusKey == DeliveryNoteStatusKey.returnIssued ||
+              doc.statusKey == DeliveryNoteStatusKey.returnDoc,
+        )
+        .length;
 
     return RefreshIndicator(
       onRefresh: () => _refresh(context),
@@ -64,7 +71,7 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
               Expanded(
                 child: _TrackingMetricCard(
                   label: 'Outstanding',
-                  value: '$outstanding',
+                  value: '${docs.where(_isOutstanding).length}',
                   icon: Icons.pending_actions_rounded,
                   color: AppColors.warning,
                 ),
@@ -72,9 +79,9 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
               const SizedBox(width: 10),
               Expanded(
                 child: _TrackingMetricCard(
-                  label: 'In Progress',
-                  value: '$inProgress',
-                  icon: Icons.local_shipping_outlined,
+                  label: 'To Bill',
+                  value: '$toBill',
+                  icon: Icons.receipt_long_outlined,
                   color: AppColors.primary,
                 ),
               ),
@@ -94,10 +101,10 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
               const SizedBox(width: 10),
               Expanded(
                 child: _TrackingMetricCard(
-                  label: 'Draft',
-                  value: '$draft',
-                  icon: Icons.edit_note_rounded,
-                  color: AppColors.slate,
+                  label: 'Return',
+                  value: '$returns',
+                  icon: Icons.undo_rounded,
+                  color: AppColors.warning,
                 ),
               ),
             ],
@@ -165,15 +172,16 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
   bool _matchesScope(DeliveryNote doc) {
     return switch (_scope) {
       _TrackingScope.all => true,
-      _TrackingScope.outstanding => _isOutstanding(doc),
-      _TrackingScope.inProgress =>
-        doc.docStatus == 1 &&
-            doc.statusKey != DeliveryNoteStatusKey.completed &&
-            doc.statusKey != DeliveryNoteStatusKey.cancelled &&
-            doc.statusKey != DeliveryNoteStatusKey.closed,
+      _TrackingScope.draft => doc.statusKey == DeliveryNoteStatusKey.draft,
+      _TrackingScope.toBill => doc.statusKey == DeliveryNoteStatusKey.toBill,
       _TrackingScope.completed =>
         doc.statusKey == DeliveryNoteStatusKey.completed,
-      _TrackingScope.draft => doc.docStatus == 0,
+      _TrackingScope.returnIssued =>
+        doc.statusKey == DeliveryNoteStatusKey.returnIssued ||
+            doc.statusKey == DeliveryNoteStatusKey.returnDoc,
+      _TrackingScope.cancelled =>
+        doc.statusKey == DeliveryNoteStatusKey.cancelled,
+      _TrackingScope.closed => doc.statusKey == DeliveryNoteStatusKey.closed,
     };
   }
 
@@ -316,7 +324,11 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
         doc.statusKey == DeliveryNoteStatusKey.cancelled ||
         doc.statusKey == DeliveryNoteStatusKey.closed;
     final draft = doc.docStatus == 0;
+    final toBill = doc.statusKey == DeliveryNoteStatusKey.toBill;
     final completed = doc.statusKey == DeliveryNoteStatusKey.completed;
+    final returned =
+        doc.statusKey == DeliveryNoteStatusKey.returnIssued ||
+        doc.statusKey == DeliveryNoteStatusKey.returnDoc;
     final submitted = doc.docStatus == 1 && !cancelled;
 
     return [
@@ -326,30 +338,38 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
             ? 'Dokumen masih disiapkan.'
             : 'Barang siap diproses untuk pengiriman.',
         icon: Icons.inventory_2_outlined,
-        state: draft ? _JourneyStepState.active : _JourneyStepState.done,
+        state: cancelled
+            ? _JourneyStepState.cancelled
+            : draft
+            ? _JourneyStepState.active
+            : _JourneyStepState.done,
       ),
       _JourneyStep(
         title: 'Armada berangkat',
-        subtitle: submitted
+        subtitle: submitted || completed || toBill || returned
             ? 'Pengiriman sudah berjalan sesuai dokumen.'
             : 'Menunggu dokumen pengiriman disahkan.',
         icon: Icons.local_shipping_outlined,
         state: cancelled
             ? _JourneyStepState.cancelled
-            : submitted
+            : submitted || completed || toBill || returned
             ? _JourneyStepState.done
             : _JourneyStepState.pending,
       ),
       _JourneyStep(
         title: 'Status sampai tujuan',
-        subtitle: completed
-            ? 'Pengiriman sudah sampai dan selesai.'
-            : 'Menunggu konfirmasi pengiriman selesai.',
+        subtitle: completed || toBill
+            ? 'Barang sudah sampai tujuan.'
+            : returned
+            ? 'Pengiriman memiliki retur.'
+            : 'Menunggu konfirmasi sampai tujuan.',
         icon: Icons.flag_outlined,
         state: cancelled
             ? _JourneyStepState.cancelled
-            : completed
+            : completed || toBill
             ? _JourneyStepState.done
+            : returned
+            ? _JourneyStepState.cancelled
             : submitted
             ? _JourneyStepState.active
             : _JourneyStepState.pending,
@@ -358,12 +378,20 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
         title: 'Status bongkar / POD',
         subtitle: completed
             ? 'Pengiriman selesai. Foto POD dan tanda tangan bisa dicek di attachment.'
+            : toBill
+            ? 'Pengiriman selesai dan menunggu proses tagihan.'
+            : returned
+            ? 'Retur sudah tercatat pada dokumen.'
             : 'Upload foto POD dan tanda tangan di menu Delivery Monitoring.',
         icon: Icons.assignment_turned_in_outlined,
         state: cancelled
             ? _JourneyStepState.cancelled
             : completed
             ? _JourneyStepState.done
+            : toBill
+            ? _JourneyStepState.active
+            : returned
+            ? _JourneyStepState.cancelled
             : _JourneyStepState.pending,
       ),
     ];
@@ -539,7 +567,15 @@ class _LogisticsTrackingDetailScreen extends StatelessWidget {
   }
 }
 
-enum _TrackingScope { outstanding, inProgress, completed, draft, all }
+enum _TrackingScope {
+  all,
+  draft,
+  toBill,
+  completed,
+  returnIssued,
+  cancelled,
+  closed,
+}
 
 class _TrackingScopeSelector extends StatelessWidget {
   const _TrackingScopeSelector({
@@ -553,11 +589,13 @@ class _TrackingScopeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const options = [
-      (_TrackingScope.outstanding, 'Outstanding'),
-      (_TrackingScope.inProgress, 'In Progress'),
-      (_TrackingScope.completed, 'Completed'),
-      (_TrackingScope.draft, 'Draft'),
       (_TrackingScope.all, 'Semua'),
+      (_TrackingScope.draft, 'Draft'),
+      (_TrackingScope.toBill, 'To Bill'),
+      (_TrackingScope.completed, 'Completed'),
+      (_TrackingScope.returnIssued, 'Return Issued'),
+      (_TrackingScope.cancelled, 'Cancelled'),
+      (_TrackingScope.closed, 'Closed'),
     ];
 
     return SingleChildScrollView(
