@@ -16,7 +16,20 @@ class LogisticsTrackingTab extends StatefulWidget {
 }
 
 class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
+  final _search = TextEditingController();
   _TrackingScope _scope = _TrackingScope.outstanding;
+
+  @override
+  void initState() {
+    super.initState();
+    _search.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   Future<void> _refresh(BuildContext context) {
     return context.read<AppState>().refreshDeliveryNotes();
@@ -26,7 +39,7 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final docs = state.deliveryNotes;
-    final visibleDocs = docs.where(_matchesScope).toList();
+    final visibleDocs = docs.where(_matchesFilter).toList();
     final outstanding = docs.where(_isOutstanding).length;
     final completed = docs
         .where((doc) => doc.statusKey == DeliveryNoteStatusKey.completed)
@@ -119,6 +132,20 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
             onChanged: (scope) => setState(() => _scope = scope),
           ),
           const SizedBox(height: 12),
+          TextField(
+            controller: _search,
+            decoration: InputDecoration(
+              labelText: 'Cari Delivery Note atau customer',
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: _search.text.trim().isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: _search.clear,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 12),
           if (visibleDocs.isEmpty && !state.isDeliveryNotesLoading)
             const ErpEmptyState(
               title: 'Belum ada Delivery Note',
@@ -129,6 +156,16 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
         ],
       ),
     );
+  }
+
+  bool _matchesFilter(DeliveryNote doc) {
+    if (!_matchesScope(doc)) return false;
+    final query = _search.text.trim().toLowerCase();
+    return query.isEmpty ||
+        doc.id.toLowerCase().contains(query) ||
+        doc.customer.toLowerCase().contains(query) ||
+        doc.statusText.toLowerCase().contains(query) ||
+        doc.date.toLowerCase().contains(query);
   }
 
   bool _matchesScope(DeliveryNote doc) {
