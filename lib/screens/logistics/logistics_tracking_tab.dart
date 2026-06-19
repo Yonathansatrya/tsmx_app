@@ -8,8 +8,15 @@ import '../../utils/erp_format.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import 'logistics_widgets.dart';
 
-class LogisticsTrackingTab extends StatelessWidget {
+class LogisticsTrackingTab extends StatefulWidget {
   const LogisticsTrackingTab({super.key});
+
+  @override
+  State<LogisticsTrackingTab> createState() => _LogisticsTrackingTabState();
+}
+
+class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
+  _TrackingScope _scope = _TrackingScope.outstanding;
 
   Future<void> _refresh(BuildContext context) {
     return context.read<AppState>().refreshDeliveryNotes();
@@ -19,6 +26,7 @@ class LogisticsTrackingTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final docs = state.deliveryNotes;
+    final visibleDocs = docs.where(_matchesScope).toList();
     final outstanding = docs.where(_isOutstanding).length;
     final completed = docs
         .where((doc) => doc.statusKey == DeliveryNoteStatusKey.completed)
@@ -102,20 +110,40 @@ class LogisticsTrackingTab extends StatelessWidget {
           logisticsSectionGap,
           LogisticsSectionHeader(
             title: 'Monitoring Perjalanan',
-            subtitle: '${docs.length} Delivery Note dalam periode aktif',
+            subtitle: '${visibleDocs.length} dari ${docs.length} Delivery Note',
             icon: Icons.map_outlined,
           ),
           const SizedBox(height: 12),
-          if (docs.isEmpty && !state.isDeliveryNotesLoading)
+          _TrackingScopeSelector(
+            selected: _scope,
+            onChanged: (scope) => setState(() => _scope = scope),
+          ),
+          const SizedBox(height: 12),
+          if (visibleDocs.isEmpty && !state.isDeliveryNotesLoading)
             const ErpEmptyState(
               title: 'Belum ada Delivery Note',
-              message: 'Tarik untuk refresh atau cek permission Delivery Note.',
+              message: 'Ubah filter, tarik untuk refresh, atau cek permission.',
             )
           else
-            ...docs.map((doc) => _trackingCard(context, doc)),
+            ...visibleDocs.map((doc) => _trackingCard(context, doc)),
         ],
       ),
     );
+  }
+
+  bool _matchesScope(DeliveryNote doc) {
+    return switch (_scope) {
+      _TrackingScope.all => true,
+      _TrackingScope.outstanding => _isOutstanding(doc),
+      _TrackingScope.inProgress =>
+        doc.docStatus == 1 &&
+            doc.statusKey != DeliveryNoteStatusKey.completed &&
+            doc.statusKey != DeliveryNoteStatusKey.cancelled &&
+            doc.statusKey != DeliveryNoteStatusKey.closed,
+      _TrackingScope.completed =>
+        doc.statusKey == DeliveryNoteStatusKey.completed,
+      _TrackingScope.draft => doc.docStatus == 0,
+    };
   }
 
   static bool _isOutstanding(DeliveryNote doc) {
@@ -450,6 +478,62 @@ class LogisticsTrackingTab extends StatelessWidget {
       .trim();
 }
 
+enum _TrackingScope { outstanding, inProgress, completed, draft, all }
+
+class _TrackingScopeSelector extends StatelessWidget {
+  const _TrackingScopeSelector({
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final _TrackingScope selected;
+  final ValueChanged<_TrackingScope> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const options = [
+      (_TrackingScope.outstanding, 'Outstanding'),
+      (_TrackingScope.inProgress, 'In Progress'),
+      (_TrackingScope.completed, 'Completed'),
+      (_TrackingScope.draft, 'Draft'),
+      (_TrackingScope.all, 'Semua'),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: options.map((option) {
+          final scope = option.$1;
+          final active = selected == scope;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              selected: active,
+              label: Text(option.$2),
+              onSelected: (_) => onChanged(scope),
+              selectedColor: AppColors.softGreen,
+              backgroundColor: AppColors.white,
+              labelStyle: TextStyle(
+                color: active ? AppColors.primary : AppColors.slate,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+              side: BorderSide(
+                color: active
+                    ? AppColors.primary.withValues(alpha: 0.28)
+                    : AppColors.border,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
 enum _JourneyStepState { done, active, pending, cancelled }
 
 class _TrackingItemsSection extends StatefulWidget {
@@ -487,7 +571,7 @@ class _TrackingItemsSectionState extends State<_TrackingItemsSection> {
         if (snapshot.hasError) {
           return LogisticsInfoPanel(
             message:
-                'Item barang belum bisa dimuat. ${LogisticsTrackingTab._friendlyError(snapshot.error!)}',
+                'Item barang belum bisa dimuat. ${_LogisticsTrackingTabState._friendlyError(snapshot.error!)}',
             icon: Icons.error_outline_rounded,
             color: AppColors.danger,
           );
