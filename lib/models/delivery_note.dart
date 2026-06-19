@@ -13,6 +13,8 @@ class DeliveryNote {
   final int docStatus;
   final String date;
   final int itemsCount;
+  final String logisticsStatus;
+  final String logisticsUpdatedAt;
 
   DeliveryNote({
     required this.id,
@@ -23,6 +25,8 @@ class DeliveryNote {
     this.docStatus = 0,
     required this.date,
     required this.itemsCount,
+    this.logisticsStatus = '',
+    this.logisticsUpdatedAt = '',
   });
 
   factory DeliveryNote.fromJson(Map<String, dynamic> json) {
@@ -47,6 +51,8 @@ class DeliveryNote {
           json['transaction_date']?.toString() ??
           '',
       itemsCount: NumParse.asInt(json['total_qty']),
+      logisticsStatus: json['custom_logistics_status']?.toString() ?? '',
+      logisticsUpdatedAt: json['custom_logistics_updated_at']?.toString() ?? '',
     );
   }
 }

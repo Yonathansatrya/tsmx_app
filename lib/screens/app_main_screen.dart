@@ -8,6 +8,7 @@ import '../theme/app_colors.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/erp_format.dart';
 import 'auth/login_screen.dart';
+import 'logistics/logistics_main_screen.dart';
 import 'profile/profile_screen.dart';
 import 'sales/sales_main_screen.dart';
 import 'warehouse/warehouse_main_screen.dart';
@@ -93,6 +94,9 @@ class _AppMainScreenState extends State<AppMainScreen> {
     }
     if (appState.userRole == 'Warehouse') {
       return const WarehouseMainScreen();
+    }
+    if (appState.userRole == 'Logistics') {
+      return const LogisticsMainScreen();
     }
 
     return Scaffold(

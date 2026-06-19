@@ -70,6 +70,8 @@ class AuthService {
         roleProfile = 'Sales Manager';
       } else if (roleNames.contains('sales')) {
         roleProfile = 'Sales';
+      } else if (roleNames.contains('logistics')) {
+        roleProfile = 'Logistics';
       }
     }
     if (roleProfile.isEmpty) {
