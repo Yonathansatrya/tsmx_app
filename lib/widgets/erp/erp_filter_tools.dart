@@ -108,6 +108,10 @@ class ErpPeriodFilterCard extends StatelessWidget {
                     prefixIcon: Icon(Icons.calendar_today_rounded, size: 18),
                   ),
                   items: [
+                    const DropdownMenuItem(
+                      value: 0,
+                      child: Text('Semua Bulan'),
+                    ),
                     for (var i = 0; i < monthLabels.length; i++)
                       DropdownMenuItem(
                         value: i + 1,

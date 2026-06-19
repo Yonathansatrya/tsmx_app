@@ -151,6 +151,7 @@ class AppState with ChangeNotifier {
   DocumentSummary _purchaseReceiptSummary = const DocumentSummary();
   DocumentSummary _purchaseInvoiceSummary = const DocumentSummary();
   DashboardSummary _dashboardSummary = const DashboardSummary();
+  List<DocumentTrendPoint> _salesOrderTrendPoints = const [];
 
   DocumentSummary get salesOrderSummary => _salesOrderSummary;
   DocumentSummary get deliveryNoteSummary => _deliveryNoteSummary;
@@ -159,6 +160,7 @@ class AppState with ChangeNotifier {
   DocumentSummary get purchaseReceiptSummary => _purchaseReceiptSummary;
   DocumentSummary get purchaseInvoiceSummary => _purchaseInvoiceSummary;
   DashboardSummary get dashboardSummary => _dashboardSummary;
+  List<DocumentTrendPoint> get salesOrderTrendPoints => _salesOrderTrendPoints;
 
   List<SalesOrder> get salesOrders => _salesOrders;
   List<PurchaseOrder> get purchaseOrders => _purchaseOrders;
@@ -209,10 +211,12 @@ class AppState with ChangeNotifier {
   int _sellingPeriodMonth = DateTime.now().month;
   int get sellingPeriodYear => _sellingPeriodYear;
   int get sellingPeriodMonth => _sellingPeriodMonth;
-  DateTime get sellingPeriodFrom =>
-      DateTime(_sellingPeriodYear, _sellingPeriodMonth, 1);
-  DateTime get sellingPeriodTo =>
-      DateTime(_sellingPeriodYear, _sellingPeriodMonth + 1, 0);
+  DateTime get sellingPeriodFrom => _sellingPeriodMonth == 0
+      ? DateTime(_sellingPeriodYear, 1, 1)
+      : DateTime(_sellingPeriodYear, _sellingPeriodMonth, 1);
+  DateTime get sellingPeriodTo => _sellingPeriodMonth == 0
+      ? DateTime(_sellingPeriodYear, 12, 31)
+      : DateTime(_sellingPeriodYear, _sellingPeriodMonth + 1, 0);
 
   bool _isPurchaseOrdersLoading = false;
   bool get isPurchaseOrdersLoading => _isPurchaseOrdersLoading;
@@ -1979,6 +1983,7 @@ class AppState with ChangeNotifier {
 
     try {
       await _frappeService.ensureLoggedIn();
+      final salesTrend = _emptySalesOrderTrendPoints();
       var salesTotal = 0.0;
       var salesDocumentCount = 0;
       await _forEachResourcePage(
@@ -1986,8 +1991,14 @@ class AppState with ChangeNotifier {
         fields: const ['name', 'grand_total', 'transaction_date'],
         filters: _sellingPeriodFilters('transaction_date'),
         onRow: (row) {
-          salesTotal += NumParse.asDouble(row['grand_total']);
+          final value = NumParse.asDouble(row['grand_total']);
+          salesTotal += value;
           salesDocumentCount++;
+          _addSalesOrderTrendPoint(
+            salesTrend,
+            dateRaw: row['transaction_date'],
+            amount: value,
+          );
         },
       );
 
@@ -2019,6 +2030,7 @@ class AppState with ChangeNotifier {
         totalValue: salesTotal,
         documentCount: salesDocumentCount,
       );
+      _salesOrderTrendPoints = salesTrend;
       _deliveryNoteSummary = DocumentSummary(
         totalValue: deliveryTotal,
         documentCount: deliveryCount,
@@ -2047,6 +2059,52 @@ class AppState with ChangeNotifier {
       fetchSalesInvoicesFromFrappe(),
       refreshSellingSummaries(),
     ]);
+  }
+
+  List<DocumentTrendPoint> _emptySalesOrderTrendPoints() {
+    if (_sellingPeriodMonth == 0) {
+      const labels = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'Mei',
+        'Jun',
+        'Jul',
+        'Agu',
+        'Sep',
+        'Okt',
+        'Nov',
+        'Des',
+      ];
+      return [for (final label in labels) DocumentTrendPoint(label: label)];
+    }
+
+    final lastDay = DateTime(
+      _sellingPeriodYear,
+      _sellingPeriodMonth + 1,
+      0,
+    ).day;
+    final weekCount = (lastDay / 7).ceil();
+    return [
+      for (var i = 0; i < weekCount; i++)
+        DocumentTrendPoint(label: 'Minggu ${i + 1}'),
+    ];
+  }
+
+  void _addSalesOrderTrendPoint(
+    List<DocumentTrendPoint> points, {
+    required dynamic dateRaw,
+    required double amount,
+  }) {
+    final date = DateTime.tryParse(dateRaw?.toString() ?? '');
+    if (date == null || date.year != _sellingPeriodYear) return;
+
+    final index = _sellingPeriodMonth == 0
+        ? date.month - 1
+        : ((date.day - 1) ~/ 7).clamp(0, points.length - 1);
+    if (index < 0 || index >= points.length) return;
+    points[index] = points[index].add(amount);
   }
 
   Future<void> refreshBuyingSummaries() async {

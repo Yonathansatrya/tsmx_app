@@ -191,7 +191,9 @@ class SellingTabState extends State<SellingTab>
                 children: [
                   ErpPeriodFilterCard(
                     title: 'Periode Selling',
-                    subtitle: 'Total Rp dan daftar dokumen mengikuti bulan ini',
+                    subtitle: appState.sellingPeriodMonth == 0
+                        ? 'Total Rp dan daftar dokumen mengikuti tahun ini'
+                        : 'Total Rp dan daftar dokumen mengikuti bulan ini',
                     icon: Icons.point_of_sale_rounded,
                     selectedYear: appState.sellingPeriodYear,
                     selectedMonth: appState.sellingPeriodMonth,

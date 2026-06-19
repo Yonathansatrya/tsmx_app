@@ -19,6 +19,26 @@ class DocumentSummary {
   }
 }
 
+class DocumentTrendPoint {
+  final String label;
+  final double value;
+  final int documentCount;
+
+  const DocumentTrendPoint({
+    required this.label,
+    this.value = 0,
+    this.documentCount = 0,
+  });
+
+  DocumentTrendPoint add(double amount) {
+    return DocumentTrendPoint(
+      label: label,
+      value: value + amount,
+      documentCount: documentCount + 1,
+    );
+  }
+}
+
 class DashboardSummary {
   final double salesTotal;
   final double salesOpen;
