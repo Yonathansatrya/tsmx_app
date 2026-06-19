@@ -206,10 +206,11 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
       builder: (context) {
         final busy = _busyId == row.id;
         return SafeArea(
+          top: true,
           child: Padding(
             padding: EdgeInsets.fromLTRB(
               18,
-              18,
+              10,
               18,
               MediaQuery.of(context).viewInsets.bottom + 18,
             ),
@@ -218,27 +219,116 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    row.id,
-                    style: const TextStyle(
-                      color: AppColors.navy,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    row.customer,
-                    style: const TextStyle(
-                      color: AppColors.slate,
-                      fontWeight: FontWeight.w700,
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),
-                  _detailRow('Posting Date', row.date),
-                  _detailRow('ERP Status', row.statusText),
-                  _detailRow('Total', 'Rp ${formatErpCurrency(row.value)}'),
-                  _detailRow('Qty', '${row.itemsCount}'),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: AppColors.cardShadow,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: AppColors.white.withValues(alpha: 0.16),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Icon(
+                                Icons.local_shipping_rounded,
+                                color: AppColors.white,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    row.id,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: AppColors.white,
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    row.customer,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFFE3F2EA),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            LogisticsStatusChip(
+                              label: row.statusText,
+                              color: AppColors.white,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DetailMetricPill(
+                                label: 'Posting Date',
+                                value: row.date.isEmpty ? '-' : row.date,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _DetailMetricPill(
+                                label: 'Total',
+                                value: 'Rp ${formatErpCurrency(row.value)}',
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DetailMetricPill(
+                                label: 'Qty',
+                                value: '${row.itemsCount}',
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _DetailMetricPill(
+                                label: 'ERP Status',
+                                value: row.statusText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 14),
                   LogisticsInfoPanel(
                     message:
@@ -532,6 +622,49 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _DetailMetricPill extends StatelessWidget {
+  const _DetailMetricPill({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+    decoration: BoxDecoration(
+      color: AppColors.white.withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: AppColors.white.withValues(alpha: 0.12)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Color(0xFFE3F2EA),
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SignatureCaptureSheet extends StatefulWidget {
@@ -1034,6 +1167,10 @@ class _ProofFileTile extends StatelessWidget {
         file['name']?.toString() ??
         'Attachment';
     final creation = file['creation']?.toString() ?? '';
+    final url = file['file_url']?.toString() ?? '';
+    final imageUrl = _isImage(name, url) && url.isNotEmpty
+        ? _absoluteUrl(context, url)
+        : '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 7),
@@ -1043,45 +1180,91 @@ class _ProofFileTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.insert_drive_file_outlined,
-            color: AppColors.primary,
-            size: 18,
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.navy,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                if (creation.isNotEmpty)
-                  Text(
-                    creation,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.slate,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
+          if (imageUrl.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: AppColors.background,
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'Preview foto belum bisa dimuat',
+                      style: TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-              ],
+                ),
+              ),
             ),
+            const SizedBox(height: 9),
+          ],
+          Row(
+            children: [
+              Icon(
+                imageUrl.isNotEmpty
+                    ? Icons.image_outlined
+                    : Icons.insert_drive_file_outlined,
+                color: AppColors.primary,
+                size: 18,
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (creation.isNotEmpty)
+                      Text(
+                        creation,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  static bool _isImage(String name, String url) {
+    final value = '$name $url'.toLowerCase();
+    return value.contains('.jpg') ||
+        value.contains('.jpeg') ||
+        value.contains('.png') ||
+        value.contains('.webp') ||
+        value.contains('.gif');
+  }
+
+  static String _absoluteUrl(BuildContext context, String url) {
+    final appState = context.read<AppState>();
+    return Uri.parse(appState.frappeService.baseUrl).resolve(url).toString();
   }
 }
 
