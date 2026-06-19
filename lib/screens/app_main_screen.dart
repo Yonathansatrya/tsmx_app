@@ -88,7 +88,7 @@ class _AppMainScreenState extends State<AppMainScreen> {
       );
     }
 
-    if (appState.userRole == 'Sales') {
+    if (appState.isSalesAreaRole) {
       return const SalesMainScreen();
     }
     if (appState.userRole == 'Warehouse') {

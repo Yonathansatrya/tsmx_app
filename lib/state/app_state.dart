@@ -62,13 +62,16 @@ class AppState with ChangeNotifier {
 
   String _userRole = 'Unassigned';
   String get userRole => _userRole;
+  bool get isSalesUserRole => _userRole == 'Sales';
+  bool get isSalesManagerRole => _userRole == 'Sales Manager';
+  bool get isSalesAreaRole => isSalesUserRole || isSalesManagerRole;
   bool get _shouldScopeSalesData => _userRole == 'Sales';
 
   static const String _prefsUserRoleKey = 'user_role';
 
   Future<void> refreshDataForCurrentRole() async {
     if (!_isAuthenticated) return;
-    if (_userRole == 'Sales') {
+    if (isSalesUserRole) {
       await resolveCurrentSalesIdentity();
       await Future.wait([
         fetchSalesOrdersFromFrappe(),
@@ -102,12 +105,12 @@ class AppState with ChangeNotifier {
 
   String _normalizeRoleProfile(String roleProfile) {
     final normalized = roleProfile.trim();
-    if (normalized.toLowerCase() == 'administrator') return 'Administrator';
-    if (normalized.toLowerCase() == 'sales') return 'Sales';
-    if (normalized.toLowerCase() == 'warehouse') return 'Warehouse';
-    if (normalized.toLowerCase() == 'null' ||
-        normalized.toLowerCase() == 'none' ||
-        normalized.toLowerCase() == 'undefined') {
+    final lower = normalized.toLowerCase();
+    if (lower == 'administrator') return 'Administrator';
+    if (lower == 'sales' || lower == 'sales user') return 'Sales';
+    if (lower == 'sales manager') return 'Sales Manager';
+    if (lower == 'warehouse') return 'Warehouse';
+    if (lower == 'null' || lower == 'none' || lower == 'undefined') {
       return 'Unassigned';
     }
     return normalized;

@@ -64,9 +64,13 @@ class AuthService {
       } catch (_) {}
     }
 
-    if (roleProfile.isEmpty &&
-        roles.any((role) => role.toLowerCase() == 'sales')) {
-      roleProfile = 'Sales';
+    if (roleProfile.isEmpty) {
+      final roleNames = roles.map((role) => role.toLowerCase()).toSet();
+      if (roleNames.contains('sales manager')) {
+        roleProfile = 'Sales Manager';
+      } else if (roleNames.contains('sales')) {
+        roleProfile = 'Sales';
+      }
     }
     if (roleProfile.isEmpty) {
       throw Exception(
