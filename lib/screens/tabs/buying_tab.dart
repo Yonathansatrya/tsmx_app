@@ -192,8 +192,9 @@ class BuyingTabState extends State<BuyingTab>
                 children: [
                   ErpPeriodFilterCard(
                     title: 'Periode Pembelian',
-                    subtitle:
-                        'PO, receipt, invoice, dan total Rp mengikuti bulan ini',
+                    subtitle: appState.buyingPeriodMonth == 0
+                        ? 'PO, receipt, invoice, dan total Rp mengikuti tahun ini'
+                        : 'PO, receipt, invoice, dan total Rp mengikuti bulan ini',
                     icon: Icons.shopping_bag_rounded,
                     selectedYear: appState.buyingPeriodYear,
                     selectedMonth: appState.buyingPeriodMonth,

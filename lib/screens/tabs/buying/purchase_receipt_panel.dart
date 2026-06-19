@@ -6,6 +6,7 @@ import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../utils/erp_doc_utils.dart';
 import '../../../utils/erp_format.dart';
+import '../../../widgets/erp/document_trend_card.dart';
 import '../../../widgets/erp/erp_document_card.dart';
 import '../../../widgets/erp/erp_detail_sheet.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
@@ -176,6 +177,14 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
           isLoading:
               appState.isOrderSummaryLoading &&
               appState.purchaseReceiptSummary.documentCount == 0,
+        ),
+        const SizedBox(height: 12),
+        DocumentTrendCard(
+          title: 'Purchase Receipt',
+          emptyMessage: 'Belum ada Purchase Receipt aktif pada periode ini.',
+          points: appState.purchaseReceiptTrendPoints,
+          selectedYear: appState.buyingPeriodYear,
+          selectedMonth: appState.buyingPeriodMonth,
         ),
         const SizedBox(height: 12),
         TextField(

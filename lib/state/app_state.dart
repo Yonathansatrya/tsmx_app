@@ -154,6 +154,9 @@ class AppState with ChangeNotifier {
   List<DocumentTrendPoint> _salesOrderTrendPoints = const [];
   List<DocumentTrendPoint> _deliveryNoteTrendPoints = const [];
   List<DocumentTrendPoint> _salesInvoiceTrendPoints = const [];
+  List<DocumentTrendPoint> _purchaseOrderTrendPoints = const [];
+  List<DocumentTrendPoint> _purchaseReceiptTrendPoints = const [];
+  List<DocumentTrendPoint> _purchaseInvoiceTrendPoints = const [];
 
   DocumentSummary get salesOrderSummary => _salesOrderSummary;
   DocumentSummary get deliveryNoteSummary => _deliveryNoteSummary;
@@ -167,6 +170,12 @@ class AppState with ChangeNotifier {
       _deliveryNoteTrendPoints;
   List<DocumentTrendPoint> get salesInvoiceTrendPoints =>
       _salesInvoiceTrendPoints;
+  List<DocumentTrendPoint> get purchaseOrderTrendPoints =>
+      _purchaseOrderTrendPoints;
+  List<DocumentTrendPoint> get purchaseReceiptTrendPoints =>
+      _purchaseReceiptTrendPoints;
+  List<DocumentTrendPoint> get purchaseInvoiceTrendPoints =>
+      _purchaseInvoiceTrendPoints;
 
   List<SalesOrder> get salesOrders => _salesOrders;
   List<PurchaseOrder> get purchaseOrders => _purchaseOrders;
@@ -243,10 +252,12 @@ class AppState with ChangeNotifier {
   int _buyingPeriodMonth = DateTime.now().month;
   int get buyingPeriodYear => _buyingPeriodYear;
   int get buyingPeriodMonth => _buyingPeriodMonth;
-  DateTime get buyingPeriodFrom =>
-      DateTime(_buyingPeriodYear, _buyingPeriodMonth, 1);
-  DateTime get buyingPeriodTo =>
-      DateTime(_buyingPeriodYear, _buyingPeriodMonth + 1, 0);
+  DateTime get buyingPeriodFrom => _buyingPeriodMonth == 0
+      ? DateTime(_buyingPeriodYear, 1, 1)
+      : DateTime(_buyingPeriodYear, _buyingPeriodMonth, 1);
+  DateTime get buyingPeriodTo => _buyingPeriodMonth == 0
+      ? DateTime(_buyingPeriodYear, 12, 31)
+      : DateTime(_buyingPeriodYear, _buyingPeriodMonth + 1, 0);
 
   Future<void>? _orderSummaryJob;
   bool _isOrderSummaryLoading = false;
@@ -2129,6 +2140,9 @@ class AppState with ChangeNotifier {
 
     try {
       await _frappeService.ensureLoggedIn();
+      final purchaseTrend = _emptyBuyingTrendPoints();
+      final receiptTrend = _emptyBuyingTrendPoints();
+      final invoiceTrend = _emptyBuyingTrendPoints();
       var purchaseTotal = 0.0;
       var purchaseDocumentCount = 0;
       await _forEachResourcePage(
@@ -2136,8 +2150,14 @@ class AppState with ChangeNotifier {
         fields: const ['name', 'grand_total', 'transaction_date'],
         filters: _buyingPeriodFilters('transaction_date'),
         onRow: (row) {
-          purchaseTotal += NumParse.asDouble(row['grand_total']);
+          final value = NumParse.asDouble(row['grand_total']);
+          purchaseTotal += value;
           purchaseDocumentCount++;
+          _addBuyingTrendPoint(
+            purchaseTrend,
+            dateRaw: row['transaction_date'],
+            amount: value,
+          );
         },
       );
 
@@ -2148,8 +2168,14 @@ class AppState with ChangeNotifier {
         fields: const ['name', 'grand_total', 'posting_date'],
         filters: _buyingPeriodFilters('posting_date'),
         onRow: (row) {
-          receiptTotal += NumParse.asDouble(row['grand_total']);
+          final value = NumParse.asDouble(row['grand_total']);
+          receiptTotal += value;
           receiptCount++;
+          _addBuyingTrendPoint(
+            receiptTrend,
+            dateRaw: row['posting_date'],
+            amount: value,
+          );
         },
       );
 
@@ -2160,8 +2186,14 @@ class AppState with ChangeNotifier {
         fields: const ['name', 'grand_total', 'posting_date'],
         filters: _buyingPeriodFilters('posting_date'),
         onRow: (row) {
-          invoiceTotal += NumParse.asDouble(row['grand_total']);
+          final value = NumParse.asDouble(row['grand_total']);
+          invoiceTotal += value;
           invoiceCount++;
+          _addBuyingTrendPoint(
+            invoiceTrend,
+            dateRaw: row['posting_date'],
+            amount: value,
+          );
         },
       );
 
@@ -2177,6 +2209,9 @@ class AppState with ChangeNotifier {
         totalValue: invoiceTotal,
         documentCount: invoiceCount,
       );
+      _purchaseOrderTrendPoints = purchaseTrend;
+      _purchaseReceiptTrendPoints = receiptTrend;
+      _purchaseInvoiceTrendPoints = invoiceTrend;
       _orderSummaryError = null;
     } catch (err) {
       _orderSummaryError = err.toString();
@@ -2197,6 +2232,45 @@ class AppState with ChangeNotifier {
       fetchPurchaseInvoicesFromFrappe(),
       refreshBuyingSummaries(),
     ]);
+  }
+
+  List<DocumentTrendPoint> _emptyBuyingTrendPoints() {
+    if (_buyingPeriodMonth == 0) {
+      const labels = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'Mei',
+        'Jun',
+        'Jul',
+        'Agu',
+        'Sep',
+        'Okt',
+        'Nov',
+        'Des',
+      ];
+      return [for (final label in labels) DocumentTrendPoint(label: label)];
+    }
+
+    return [
+      for (var i = 0; i < 4; i++) DocumentTrendPoint(label: 'Minggu ${i + 1}'),
+    ];
+  }
+
+  void _addBuyingTrendPoint(
+    List<DocumentTrendPoint> points, {
+    required dynamic dateRaw,
+    required double amount,
+  }) {
+    final date = DateTime.tryParse(dateRaw?.toString() ?? '');
+    if (date == null || date.year != _buyingPeriodYear) return;
+
+    final index = _buyingPeriodMonth == 0
+        ? date.month - 1
+        : ((date.day - 1) ~/ 7).clamp(0, points.length - 1);
+    if (index < 0 || index >= points.length) return;
+    points[index] = points[index].add(amount);
   }
 
   Future<void> refreshAllSummaries({bool silent = false}) {
