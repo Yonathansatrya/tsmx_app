@@ -451,6 +451,7 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
                             label: row.statusText,
                             color: statusColor,
                           ),
+                          _ProofStatusChip(deliveryNoteId: row.id),
                         ],
                       ),
                     ],
@@ -964,6 +965,61 @@ class _DeliveryProofSectionState extends State<_DeliveryProofSection> {
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _ProofStatusChip extends StatefulWidget {
+  const _ProofStatusChip({required this.deliveryNoteId});
+
+  final String deliveryNoteId;
+
+  @override
+  State<_ProofStatusChip> createState() => _ProofStatusChipState();
+}
+
+class _ProofStatusChipState extends State<_ProofStatusChip> {
+  late Future<int> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _loadCount();
+  }
+
+  Future<int> _loadCount() async {
+    final files = await context.read<AppState>().fetchDocumentAttachments(
+      doctype: 'Delivery Note',
+      documentName: widget.deliveryNoteId,
+    );
+    return files.length;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<int>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LogisticsStatusChip(
+            label: 'Cek bukti...',
+            color: AppColors.slate,
+          );
+        }
+
+        if (snapshot.hasError) {
+          return const LogisticsStatusChip(
+            label: 'Bukti ?',
+            color: AppColors.slate,
+          );
+        }
+
+        final count = snapshot.data ?? 0;
+        return LogisticsStatusChip(
+          label: count > 0 ? 'Bukti $count' : 'Belum ada bukti',
+          color: count > 0 ? AppColors.success : AppColors.warning,
+        );
+      },
+    );
+  }
 }
 
 class _ProofFileTile extends StatelessWidget {
