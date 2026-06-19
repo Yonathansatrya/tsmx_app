@@ -1395,6 +1395,22 @@ class AppState with ChangeNotifier {
     );
   }
 
+  Future<List<Map<String, dynamic>>> fetchDocumentAttachments({
+    required String doctype,
+    required String documentName,
+  }) async {
+    return _frappeService.fetchResource(
+      'File',
+      fields: const ['name', 'file_name', 'file_url', 'creation'],
+      filters: [
+        ['attached_to_doctype', '=', doctype],
+        ['attached_to_name', '=', documentName],
+      ],
+      orderBy: 'creation desc',
+      limit: 50,
+    );
+  }
+
   Future<SalesOrder> createSalesOrder({
     required String customer,
     String? itemCode,

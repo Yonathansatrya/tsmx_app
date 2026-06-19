@@ -261,6 +261,8 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
                     label: const Text('Tanda Tangan Customer'),
                   ),
                   const SizedBox(height: 16),
+                  _DeliveryProofSection(deliveryNoteId: row.id),
+                  const SizedBox(height: 16),
                   _DeliveryItemsSection(initialRow: row),
                 ],
               ),
@@ -813,6 +815,218 @@ class _DeliveryItemsSectionState extends State<_DeliveryItemsSection> {
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _DeliveryProofSection extends StatefulWidget {
+  const _DeliveryProofSection({required this.deliveryNoteId});
+
+  final String deliveryNoteId;
+
+  @override
+  State<_DeliveryProofSection> createState() => _DeliveryProofSectionState();
+}
+
+class _DeliveryProofSectionState extends State<_DeliveryProofSection> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _loadProofs();
+  }
+
+  Future<List<Map<String, dynamic>>> _loadProofs() {
+    return context.read<AppState>().fetchDocumentAttachments(
+      doctype: 'Delivery Note',
+      documentName: widget.deliveryNoteId,
+    );
+  }
+
+  void _refresh() {
+    setState(() => _future = _loadProofs());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _future,
+      builder: (context, snapshot) {
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final rows = snapshot.data ?? const <Map<String, dynamic>>[];
+
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.attach_file_rounded,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Bukti Pengiriman',
+                          style: TextStyle(
+                            color: AppColors.navy,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          loading
+                              ? 'Memuat attachment...'
+                              : '${rows.length} attachment tersimpan',
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: loading ? null : _refresh,
+                    icon: const Icon(Icons.refresh_rounded),
+                    color: AppColors.primary,
+                  ),
+                ],
+              ),
+              if (loading) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ] else if (snapshot.hasError) ...[
+                const SizedBox(height: 10),
+                Text(
+                  _friendlyError(snapshot.error!),
+                  style: const TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ] else if (rows.isEmpty) ...[
+                const SizedBox(height: 10),
+                const Text(
+                  'Belum ada foto POD atau tanda tangan. Upload bukti dari tombol di atas.',
+                  style: TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 11,
+                    height: 1.3,
+                  ),
+                ),
+              ] else ...[
+                const SizedBox(height: 10),
+                ...rows.take(5).map(_ProofFileTile.new),
+                if (rows.length > 5)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      '+${rows.length - 5} attachment lainnya',
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static String _friendlyError(Object error) => error
+      .toString()
+      .replaceFirst(RegExp(r'^Exception:\s*'), '')
+      .replaceAll(RegExp(r'<[^>]*>'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+}
+
+class _ProofFileTile extends StatelessWidget {
+  const _ProofFileTile(this.file);
+
+  final Map<String, dynamic> file;
+
+  @override
+  Widget build(BuildContext context) {
+    final name =
+        file['file_name']?.toString() ??
+        file['name']?.toString() ??
+        'Attachment';
+    final creation = file['creation']?.toString() ?? '';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.insert_drive_file_outlined,
+            color: AppColors.primary,
+            size: 18,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (creation.isNotEmpty)
+                  Text(
+                    creation,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ItemsLoadingCard extends StatelessWidget {
