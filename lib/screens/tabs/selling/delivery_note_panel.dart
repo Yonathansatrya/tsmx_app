@@ -13,6 +13,7 @@ import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
+import '../../../widgets/erp/document_trend_card.dart';
 import 'selling_filter_widgets.dart';
 
 class DeliveryNotePanel extends StatefulWidget {
@@ -314,6 +315,14 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
           isLoading:
               appState.isOrderSummaryLoading &&
               appState.deliveryNoteSummary.documentCount == 0,
+        ),
+        const SizedBox(height: 12),
+        DocumentTrendCard(
+          title: 'Delivery Note',
+          emptyMessage: 'Belum ada Delivery Note aktif pada periode ini.',
+          points: appState.deliveryNoteTrendPoints,
+          selectedYear: appState.sellingPeriodYear,
+          selectedMonth: appState.sellingPeriodMonth,
         ),
         const SizedBox(height: 12),
         TextField(

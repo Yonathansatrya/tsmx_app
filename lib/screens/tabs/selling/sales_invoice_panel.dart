@@ -13,6 +13,7 @@ import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
+import '../../../widgets/erp/document_trend_card.dart';
 import 'selling_filter_widgets.dart';
 
 class SalesInvoicePanel extends StatefulWidget {
@@ -312,6 +313,14 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
           isLoading:
               appState.isOrderSummaryLoading &&
               appState.salesInvoiceSummary.documentCount == 0,
+        ),
+        const SizedBox(height: 12),
+        DocumentTrendCard(
+          title: 'Sales Invoice',
+          emptyMessage: 'Belum ada Sales Invoice aktif pada periode ini.',
+          points: appState.salesInvoiceTrendPoints,
+          selectedYear: appState.sellingPeriodYear,
+          selectedMonth: appState.sellingPeriodMonth,
         ),
         const SizedBox(height: 12),
         TextField(

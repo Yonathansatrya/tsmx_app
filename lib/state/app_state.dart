@@ -152,6 +152,8 @@ class AppState with ChangeNotifier {
   DocumentSummary _purchaseInvoiceSummary = const DocumentSummary();
   DashboardSummary _dashboardSummary = const DashboardSummary();
   List<DocumentTrendPoint> _salesOrderTrendPoints = const [];
+  List<DocumentTrendPoint> _deliveryNoteTrendPoints = const [];
+  List<DocumentTrendPoint> _salesInvoiceTrendPoints = const [];
 
   DocumentSummary get salesOrderSummary => _salesOrderSummary;
   DocumentSummary get deliveryNoteSummary => _deliveryNoteSummary;
@@ -161,6 +163,10 @@ class AppState with ChangeNotifier {
   DocumentSummary get purchaseInvoiceSummary => _purchaseInvoiceSummary;
   DashboardSummary get dashboardSummary => _dashboardSummary;
   List<DocumentTrendPoint> get salesOrderTrendPoints => _salesOrderTrendPoints;
+  List<DocumentTrendPoint> get deliveryNoteTrendPoints =>
+      _deliveryNoteTrendPoints;
+  List<DocumentTrendPoint> get salesInvoiceTrendPoints =>
+      _salesInvoiceTrendPoints;
 
   List<SalesOrder> get salesOrders => _salesOrders;
   List<PurchaseOrder> get purchaseOrders => _purchaseOrders;
@@ -1983,7 +1989,9 @@ class AppState with ChangeNotifier {
 
     try {
       await _frappeService.ensureLoggedIn();
-      final salesTrend = _emptySalesOrderTrendPoints();
+      final salesTrend = _emptySellingTrendPoints();
+      final deliveryTrend = _emptySellingTrendPoints();
+      final invoiceTrend = _emptySellingTrendPoints();
       var salesTotal = 0.0;
       var salesDocumentCount = 0;
       await _forEachResourcePage(
@@ -1994,7 +2002,7 @@ class AppState with ChangeNotifier {
           final value = NumParse.asDouble(row['grand_total']);
           salesTotal += value;
           salesDocumentCount++;
-          _addSalesOrderTrendPoint(
+          _addSellingTrendPoint(
             salesTrend,
             dateRaw: row['transaction_date'],
             amount: value,
@@ -2009,8 +2017,14 @@ class AppState with ChangeNotifier {
         fields: const ['name', 'grand_total', 'posting_date'],
         filters: _sellingPeriodFilters('posting_date'),
         onRow: (row) {
-          deliveryTotal += NumParse.asDouble(row['grand_total']);
+          final value = NumParse.asDouble(row['grand_total']);
+          deliveryTotal += value;
           deliveryCount++;
+          _addSellingTrendPoint(
+            deliveryTrend,
+            dateRaw: row['posting_date'],
+            amount: value,
+          );
         },
       );
 
@@ -2021,8 +2035,14 @@ class AppState with ChangeNotifier {
         fields: const ['name', 'grand_total', 'posting_date'],
         filters: _sellingPeriodFilters('posting_date'),
         onRow: (row) {
-          invoiceTotal += NumParse.asDouble(row['grand_total']);
+          final value = NumParse.asDouble(row['grand_total']);
+          invoiceTotal += value;
           invoiceCount++;
+          _addSellingTrendPoint(
+            invoiceTrend,
+            dateRaw: row['posting_date'],
+            amount: value,
+          );
         },
       );
 
@@ -2031,6 +2051,8 @@ class AppState with ChangeNotifier {
         documentCount: salesDocumentCount,
       );
       _salesOrderTrendPoints = salesTrend;
+      _deliveryNoteTrendPoints = deliveryTrend;
+      _salesInvoiceTrendPoints = invoiceTrend;
       _deliveryNoteSummary = DocumentSummary(
         totalValue: deliveryTotal,
         documentCount: deliveryCount,
@@ -2061,7 +2083,7 @@ class AppState with ChangeNotifier {
     ]);
   }
 
-  List<DocumentTrendPoint> _emptySalesOrderTrendPoints() {
+  List<DocumentTrendPoint> _emptySellingTrendPoints() {
     if (_sellingPeriodMonth == 0) {
       const labels = [
         'Jan',
@@ -2080,19 +2102,12 @@ class AppState with ChangeNotifier {
       return [for (final label in labels) DocumentTrendPoint(label: label)];
     }
 
-    final lastDay = DateTime(
-      _sellingPeriodYear,
-      _sellingPeriodMonth + 1,
-      0,
-    ).day;
-    final weekCount = (lastDay / 7).ceil();
     return [
-      for (var i = 0; i < weekCount; i++)
-        DocumentTrendPoint(label: 'Minggu ${i + 1}'),
+      for (var i = 0; i < 4; i++) DocumentTrendPoint(label: 'Minggu ${i + 1}'),
     ];
   }
 
-  void _addSalesOrderTrendPoint(
+  void _addSellingTrendPoint(
     List<DocumentTrendPoint> points, {
     required dynamic dateRaw,
     required double amount,
