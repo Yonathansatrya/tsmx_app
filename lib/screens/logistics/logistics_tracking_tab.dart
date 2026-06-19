@@ -316,6 +316,8 @@ class LogisticsTrackingTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
+                _TrackingItemsSection(initialRow: doc),
+                const SizedBox(height: 16),
                 const Text(
                   'Timeline Pengiriman',
                   style: TextStyle(
@@ -449,6 +451,202 @@ class LogisticsTrackingTab extends StatelessWidget {
 }
 
 enum _JourneyStepState { done, active, pending, cancelled }
+
+class _TrackingItemsSection extends StatefulWidget {
+  const _TrackingItemsSection({required this.initialRow});
+
+  final DeliveryNote initialRow;
+
+  @override
+  State<_TrackingItemsSection> createState() => _TrackingItemsSectionState();
+}
+
+class _TrackingItemsSectionState extends State<_TrackingItemsSection> {
+  late Future<DeliveryNote> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = context.read<AppState>().loadDeliveryNoteDetail(
+      widget.initialRow.id,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<DeliveryNote>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LogisticsInfoPanel(
+            message: 'Memuat item barang dari Delivery Note...',
+            icon: Icons.inventory_2_outlined,
+          );
+        }
+
+        if (snapshot.hasError) {
+          return LogisticsInfoPanel(
+            message:
+                'Item barang belum bisa dimuat. ${LogisticsTrackingTab._friendlyError(snapshot.error!)}',
+            icon: Icons.error_outline_rounded,
+            color: AppColors.danger,
+          );
+        }
+
+        final detail = snapshot.data ?? widget.initialRow;
+        if (detail.items.isEmpty) {
+          return const LogisticsInfoPanel(
+            message:
+                'Item barang belum tersedia. Cek permission Delivery Note Item jika data kosong.',
+            icon: Icons.inventory_2_outlined,
+            color: AppColors.warning,
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Barang Dalam Pengiriman',
+                    style: TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                LogisticsStatusChip(
+                  label: '${detail.items.length} item',
+                  color: AppColors.primary,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...detail.items.take(6).map(_TrackingItemCard.new),
+            if (detail.items.length > 6)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  '+${detail.items.length - 6} item lainnya',
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _TrackingItemCard extends StatelessWidget {
+  const _TrackingItemCard(this.item);
+
+  final DeliveryNoteItem item;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AppColors.background,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          item.itemName,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 13,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          item.itemCode,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.slate,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _TrackingItemStat(
+                label: 'Qty',
+                value:
+                    '${formatErpCurrency(item.qty)}${item.uom.isEmpty ? '' : ' ${item.uom}'}',
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _TrackingItemStat(
+                label: 'Gudang',
+                value: item.warehouse.isEmpty ? '-' : item.warehouse,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _TrackingItemStat extends StatelessWidget {
+  const _TrackingItemStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+    decoration: BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.slate,
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
 class _JourneyStep {
   final String title;
