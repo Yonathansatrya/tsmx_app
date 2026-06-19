@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import '../../theme/app_colors.dart';
 import 'sales_history_tab.dart';
 import 'sales_ui.dart';
-import 'sales_order/create_sales_order_screen.dart';
 import 'sales_order/customer_insight_tab.dart';
 import 'sales_order/sales_order_list_tab.dart';
 import 'sales_order/stock_check_tab.dart';
@@ -23,26 +22,27 @@ class SalesOrderTab extends StatelessWidget {
         child: Stack(
           children: [
             _SalesOrderTabBody(selectedTabIndex: selectedTabIndex),
-            Positioned(
-              right: 16,
-              bottom: 24,
-              child: FloatingActionButton.extended(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.white,
-                elevation: 3,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CreateSalesOrderScreen(),
-                  ),
-                ),
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Buat Sales Order'),
-              ),
-            ),
+            // disable for now, untuk testing team sales 
+            // Positioned(
+            //   right: 16,
+            //   bottom: 24,
+            //   child: FloatingActionButton.extended(
+            //     backgroundColor: AppColors.primary,
+            //     foregroundColor: AppColors.white,
+            //     elevation: 3,
+            //     shape: RoundedRectangleBorder(
+            //       borderRadius: BorderRadius.circular(16),
+            //     ),
+            //     onPressed: () => Navigator.push(
+            //       context,
+            //       MaterialPageRoute(
+            //         builder: (_) => const CreateSalesOrderScreen(),
+            //       ),
+            //     ),
+            //     icon: const Icon(Icons.add_rounded),
+            //     label: const Text('Buat Sales Order'),
+            //   ),
+            // ),
           ],
         ),
       ),
@@ -105,9 +105,9 @@ class _SalesOrderTabBodyState extends State<_SalesOrderTabBody> {
     return const Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.symmetric(horizontal: 16),
           child: SalesPillTabBar(
-            tabs: const [
+            tabs: [
               Tab(text: 'Sales Order'),
               Tab(text: 'Cek Stok'),
               Tab(text: 'Customer'),
