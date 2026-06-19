@@ -274,125 +274,9 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
   }
 
   static void _openTrackingDetail(BuildContext context, DeliveryNote doc) {
-    final color = _statusColor(doc);
-    final steps = _journeySteps(doc);
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(
-            18,
-            18,
-            18,
-            MediaQuery.of(context).viewInsets.bottom + 18,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: color.withValues(alpha: 0.1),
-                      foregroundColor: color,
-                      child: const Icon(Icons.route_rounded),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            doc.id,
-                            style: const TextStyle(
-                              color: AppColors.navy,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            doc.customer,
-                            style: const TextStyle(
-                              color: AppColors.slate,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    LogisticsStatusChip(label: doc.statusText, color: color),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.12),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(
-                            Icons.map_outlined,
-                            color: AppColors.primary,
-                            size: 20,
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            'Ringkasan Armada',
-                            style: TextStyle(
-                              color: AppColors.navy,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      _detailRow('Posting Date', doc.date),
-                      _detailRow(
-                        'Nilai Delivery',
-                        'Rp ${formatErpCurrency(doc.value)}',
-                      ),
-                      _detailRow('Total Qty', '${doc.itemsCount}'),
-                      _detailRow('Status', doc.statusText),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _TrackingItemsSection(initialRow: doc),
-                const SizedBox(height: 16),
-                _TrackingProofSummary(deliveryNoteId: doc.id),
-                const SizedBox(height: 16),
-                const Text(
-                  'Timeline Pengiriman',
-                  style: TextStyle(
-                    color: AppColors.navy,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ...steps.map((step) => _JourneyStepTile(step: step)),
-              ],
-            ),
-          ),
-        ),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _LogisticsTrackingDetailScreen(doc: doc),
       ),
     );
   }
@@ -503,6 +387,156 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _LogisticsTrackingDetailScreen extends StatelessWidget {
+  final DeliveryNote doc;
+
+  const _LogisticsTrackingDetailScreen({required this.doc});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _LogisticsTrackingTabState._statusColor(doc);
+    final steps = _LogisticsTrackingTabState._journeySteps(doc);
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        foregroundColor: AppColors.primary,
+        elevation: 0,
+        title: const Text(
+          'Detail Armada',
+          style: TextStyle(
+            color: AppColors.navy,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: logisticsPagePadding,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.border),
+                boxShadow: AppColors.cardShadow,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    backgroundColor: color.withValues(alpha: 0.1),
+                    foregroundColor: color,
+                    child: const Icon(Icons.route_rounded),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          doc.id,
+                          style: const TextStyle(
+                            color: AppColors.navy,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          doc.customer,
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        LogisticsStatusChip(
+                          label: doc.statusText,
+                          color: color,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.12),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.map_outlined,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Ringkasan Armada',
+                        style: TextStyle(
+                          color: AppColors.navy,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  _LogisticsTrackingTabState._detailRow(
+                    'Posting Date',
+                    doc.date,
+                  ),
+                  _LogisticsTrackingTabState._detailRow(
+                    'Nilai Delivery',
+                    'Rp ${formatErpCurrency(doc.value)}',
+                  ),
+                  _LogisticsTrackingTabState._detailRow(
+                    'Total Qty',
+                    '${doc.itemsCount}',
+                  ),
+                  _LogisticsTrackingTabState._detailRow(
+                    'Status',
+                    doc.statusText,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _TrackingItemsSection(initialRow: doc),
+            const SizedBox(height: 16),
+            _TrackingProofSummary(deliveryNoteId: doc.id),
+            const SizedBox(height: 16),
+            const Text(
+              'Timeline Pengiriman',
+              style: TextStyle(
+                color: AppColors.navy,
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 10),
+            ...steps.map((step) => _JourneyStepTile(step: step)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 enum _TrackingScope { outstanding, inProgress, completed, draft, all }

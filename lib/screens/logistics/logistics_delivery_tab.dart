@@ -196,163 +196,14 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
   }
 
   void _openDetail(DeliveryNote row) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _LogisticsDeliveryDetailScreen(
+          row: row,
+          onUploadPhoto: _chooseProofPhoto,
+          onCaptureSignature: _captureCustomerSignature,
+        ),
       ),
-      builder: (context) {
-        final busy = _busyId == row.id;
-        return SafeArea(
-          top: true,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              18,
-              10,
-              18,
-              MediaQuery.of(context).viewInsets.bottom + 18,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.border,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: AppColors.cardShadow,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: AppColors.white.withValues(alpha: 0.16),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Icon(
-                                Icons.local_shipping_rounded,
-                                color: AppColors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    row.id,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: AppColors.white,
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    row.customer,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Color(0xFFE3F2EA),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            LogisticsStatusChip(
-                              label: row.statusText,
-                              color: AppColors.white,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _DetailMetricPill(
-                                label: 'Posting Date',
-                                value: row.date.isEmpty ? '-' : row.date,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _DetailMetricPill(
-                                label: 'Total',
-                                value: 'Rp ${formatErpCurrency(row.value)}',
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _DetailMetricPill(
-                                label: 'Qty',
-                                value: '${row.itemsCount}',
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _DetailMetricPill(
-                                label: 'ERP Status',
-                                value: row.statusText,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  OutlinedButton.icon(
-                    onPressed: busy ? null : () => _chooseProofPhoto(row),
-                    icon: const Icon(Icons.add_a_photo_outlined),
-                    label: const Text('Upload Foto Bukti / POD'),
-                  ),
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                    onPressed: busy
-                        ? null
-                        : () => _captureCustomerSignature(row),
-                    icon: const Icon(Icons.draw_rounded),
-                    label: const Text('Tanda Tangan Customer'),
-                  ),
-                  const SizedBox(height: 16),
-                  _DeliveryProofSection(deliveryNoteId: row.id),
-                  const SizedBox(height: 16),
-                  _DeliveryItemsSection(initialRow: row),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -579,6 +430,191 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _LogisticsDeliveryDetailScreen extends StatefulWidget {
+  final DeliveryNote row;
+  final Future<void> Function(DeliveryNote row) onUploadPhoto;
+  final Future<void> Function(DeliveryNote row) onCaptureSignature;
+
+  const _LogisticsDeliveryDetailScreen({
+    required this.row,
+    required this.onUploadPhoto,
+    required this.onCaptureSignature,
+  });
+
+  @override
+  State<_LogisticsDeliveryDetailScreen> createState() =>
+      _LogisticsDeliveryDetailScreenState();
+}
+
+class _LogisticsDeliveryDetailScreenState
+    extends State<_LogisticsDeliveryDetailScreen> {
+  var _busy = false;
+  var _proofRefresh = 0;
+
+  Future<void> _run(Future<void> Function(DeliveryNote row) action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action(widget.row);
+      if (mounted) setState(() => _proofRefresh++);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final row = widget.row;
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        foregroundColor: AppColors.primary,
+        elevation: 0,
+        title: const Text(
+          'Detail Delivery',
+          style: TextStyle(
+            color: AppColors.navy,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: logisticsPagePadding,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: AppColors.cardShadow,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: AppColors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.local_shipping_rounded,
+                          color: AppColors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              row.id,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              row.customer,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFFE3F2EA),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      LogisticsStatusChip(
+                        label: row.statusText,
+                        color: AppColors.white,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DetailMetricPill(
+                          label: 'Posting Date',
+                          value: row.date.isEmpty ? '-' : row.date,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _DetailMetricPill(
+                          label: 'Total',
+                          value: 'Rp ${formatErpCurrency(row.value)}',
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DetailMetricPill(
+                          label: 'Qty',
+                          value: '${row.itemsCount}',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _DetailMetricPill(
+                          label: 'Status',
+                          value: row.statusText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : () => _run(widget.onUploadPhoto),
+              icon: _busy
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_a_photo_outlined),
+              label: const Text('Upload Foto Bukti / POD'),
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: _busy ? null : () => _run(widget.onCaptureSignature),
+              icon: const Icon(Icons.draw_rounded),
+              label: const Text('Tanda Tangan Customer'),
+            ),
+            const SizedBox(height: 16),
+            _DeliveryProofSection(
+              key: ValueKey('${row.id}-$_proofRefresh'),
+              deliveryNoteId: row.id,
+            ),
+            const SizedBox(height: 16),
+            _DeliveryItemsSection(initialRow: row),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _DetailMetricPill extends StatelessWidget {
@@ -909,7 +945,7 @@ class _DeliveryItemsSectionState extends State<_DeliveryItemsSection> {
 }
 
 class _DeliveryProofSection extends StatefulWidget {
-  const _DeliveryProofSection({required this.deliveryNoteId});
+  const _DeliveryProofSection({super.key, required this.deliveryNoteId});
 
   final String deliveryNoteId;
 
