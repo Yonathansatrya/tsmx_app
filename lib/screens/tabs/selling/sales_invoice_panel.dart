@@ -281,7 +281,7 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
     if (!await confirmErpAction(
       context,
       title: 'Submit Sales Invoice?',
-      message: 'Submit $id to ERPNext?',
+      message: 'Submit $id?',
     )) {
       return;
     }

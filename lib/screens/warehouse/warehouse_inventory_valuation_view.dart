@@ -74,7 +74,7 @@ class _WarehouseInventoryValuationViewState
         children: [
           const WarehouseSectionHeader(
             title: 'Inventory Valuation',
-            subtitle: 'Nilai stok berdasarkan qty dan valuation rate ERPNext',
+            subtitle: 'Nilai stok berdasarkan qty dan harga item',
             icon: Icons.payments_outlined,
           ),
           warehouseSectionGap,
@@ -310,7 +310,7 @@ class _WarehouseInventoryValuationViewState
           if (row.unitValue <= 0) ...[
             const SizedBox(height: 8),
             const Text(
-              'Harga belum tersedia dari valuation rate ERPNext.',
+              'Harga item belum tersedia.',
               style: TextStyle(
                 color: AppColors.danger,
                 fontSize: 11,

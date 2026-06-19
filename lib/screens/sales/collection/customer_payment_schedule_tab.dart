@@ -69,7 +69,7 @@ class _CustomerPaymentScheduleTabState
         children: [
           const CollectionSectionHeader(
             title: 'Janji Bayar Customer',
-            subtitle: 'Jadwal bayar mengikuti jatuh tempo invoice ERPNext',
+            subtitle: 'Jadwal bayar mengikuti jatuh tempo invoice customer',
             icon: Icons.event_available_rounded,
           ),
           Row(

@@ -106,7 +106,7 @@ class _WarehouseRejectMonitoringScreenState
               icon: Icons.info_outline_rounded,
               color: AppColors.warning,
               message:
-                  'Data berasal dari Quality Inspection dengan status Rejected. Buka ERPNext untuk tindakan koreksi atau keputusan akhir.',
+                  'Daftar ini berisi hasil inspeksi yang ditolak dan perlu ditindaklanjuti.',
             ),
             warehouseSectionGap,
             TextField(

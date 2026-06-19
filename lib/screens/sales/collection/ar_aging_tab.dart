@@ -181,7 +181,7 @@ class _ArAgingTabState extends State<ArAgingTab> {
         const SizedBox(height: 24),
         const CollectionSectionHeader(
           title: 'Jadwal Penagihan',
-          subtitle: 'Dikelompokkan dari due date hasil Payment Term ERPNext',
+          subtitle: 'Dikelompokkan dari due date dan payment term customer',
           icon: Icons.timelapse_rounded,
         ),
         ...agingBuckets.entries.indexed.map((indexed) {

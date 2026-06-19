@@ -145,7 +145,7 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
     if (!await confirmErpAction(
       context,
       title: 'Submit Purchase Receipt?',
-      message: 'Submit $id to ERPNext?',
+      message: 'Submit $id?',
     )) {
       return;
     }

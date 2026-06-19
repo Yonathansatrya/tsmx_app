@@ -55,14 +55,8 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
         children: [
           const LogisticsSectionHeader(
             title: 'Tracking Armada',
-            subtitle: 'Monitoring perjalanan berdasarkan Delivery Note ERPNext',
+            subtitle: 'Pantau proses pengiriman dan detail barang',
             icon: Icons.route_rounded,
-          ),
-          const SizedBox(height: 12),
-          const LogisticsInfoPanel(
-            message:
-                'Tahap ini memakai status bawaan Frappe. GPS tracking dan status granular seperti berangkat/bongkar bisa ditambahkan setelah data armada/driver tersedia.',
-            icon: Icons.info_outline_rounded,
           ),
           logisticsSectionGap,
           Row(
@@ -149,7 +143,7 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
           if (visibleDocs.isEmpty && !state.isDeliveryNotesLoading)
             const ErpEmptyState(
               title: 'Belum ada Delivery Note',
-              message: 'Ubah filter, tarik untuk refresh, atau cek permission.',
+              message: 'Ubah filter atau tarik layar untuk refresh.',
             )
           else
             ...visibleDocs.map((doc) => _trackingCard(context, doc)),
@@ -376,7 +370,7 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
                         'Rp ${formatErpCurrency(doc.value)}',
                       ),
                       _detailRow('Total Qty', '${doc.itemsCount}'),
-                      _detailRow('Sumber Status', 'Delivery Note ERPNext'),
+                      _detailRow('Status', doc.statusText),
                     ],
                   ),
                 ),
@@ -395,12 +389,6 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
                 ),
                 const SizedBox(height: 10),
                 ...steps.map((step) => _JourneyStepTile(step: step)),
-                const SizedBox(height: 8),
-                const LogisticsInfoPanel(
-                  message:
-                      'Tahapan ini dihitung dari status Delivery Note bawaan ERPNext. GPS driver dan lokasi real-time bisa disambungkan setelah data armada/driver tersedia.',
-                  icon: Icons.info_outline_rounded,
-                ),
               ],
             ),
           ),
@@ -451,16 +439,16 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
       _JourneyStep(
         title: 'Status loading barang',
         subtitle: draft
-            ? 'Delivery Note masih draft, barang belum dilepas.'
-            : 'Delivery Note sudah dibuat untuk proses pengiriman.',
+            ? 'Dokumen masih disiapkan.'
+            : 'Barang siap diproses untuk pengiriman.',
         icon: Icons.inventory_2_outlined,
         state: draft ? _JourneyStepState.active : _JourneyStepState.done,
       ),
       _JourneyStep(
         title: 'Armada berangkat',
         subtitle: submitted
-            ? 'Dokumen sudah submitted, armada dapat diproses berangkat.'
-            : 'Menunggu Delivery Note disubmit.',
+            ? 'Pengiriman sudah berjalan sesuai dokumen.'
+            : 'Menunggu dokumen pengiriman disahkan.',
         icon: Icons.local_shipping_outlined,
         state: cancelled
             ? _JourneyStepState.cancelled
@@ -471,8 +459,8 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
       _JourneyStep(
         title: 'Status sampai tujuan',
         subtitle: completed
-            ? 'Delivery Note sudah completed.'
-            : 'Belum ada status completed dari ERPNext.',
+            ? 'Pengiriman sudah sampai dan selesai.'
+            : 'Menunggu konfirmasi pengiriman selesai.',
         icon: Icons.flag_outlined,
         state: cancelled
             ? _JourneyStepState.cancelled
@@ -738,7 +726,7 @@ class _TrackingItemsSectionState extends State<_TrackingItemsSection> {
         if (detail.items.isEmpty) {
           return const LogisticsInfoPanel(
             message:
-                'Item barang belum tersedia. Cek permission Delivery Note Item jika data kosong.',
+                'Item barang belum tersedia. Tarik untuk refresh atau cek kembali dokumen pengiriman.',
             icon: Icons.inventory_2_outlined,
             color: AppColors.warning,
           );

@@ -418,7 +418,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
     if (!await confirmErpAction(
       context,
       title: 'Submit Purchase Order?',
-      message: 'Submit $id to ERPNext?',
+      message: 'Submit $id?',
     )) {
       return;
     }
@@ -436,7 +436,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
     if (!await confirmErpAction(
       context,
       title: 'Cancel Purchase Order?',
-      message: 'Cancel $id di ERPNext?',
+      message: 'Batalkan $id?',
     )) {
       return;
     }
@@ -454,7 +454,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
     if (!await confirmErpAction(
       context,
       title: 'Delete Draft Purchase Order?',
-      message: 'Delete draft $id dari ERPNext?',
+      message: 'Hapus draft $id?',
     )) {
       return;
     }

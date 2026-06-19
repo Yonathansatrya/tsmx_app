@@ -127,7 +127,7 @@ class LogisticsActionCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              LogisticsStatusChip(label: status),
+              LogisticsStatusChip(label: status, color: color),
             ],
           ),
         ),

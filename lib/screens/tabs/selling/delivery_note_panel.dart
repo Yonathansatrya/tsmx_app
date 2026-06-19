@@ -283,7 +283,7 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
     if (!await confirmErpAction(
       context,
       title: 'Submit Delivery Note?',
-      message: 'Submit $id to ERPNext?',
+      message: 'Submit $id?',
     )) {
       return;
     }

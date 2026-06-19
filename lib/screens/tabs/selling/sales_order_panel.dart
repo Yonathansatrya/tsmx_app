@@ -390,7 +390,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     if (!await confirmErpAction(
       context,
       title: 'Submit Sales Order?',
-      message: 'Submit $id to ERPNext?',
+      message: 'Submit $id?',
     )) {
       return;
     }

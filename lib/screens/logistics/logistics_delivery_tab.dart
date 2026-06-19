@@ -330,13 +330,6 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  LogisticsInfoPanel(
-                    message:
-                        'Status pengiriman memakai status bawaan ERPNext dari Delivery Note. Jika status berubah di Frappe, aplikasi akan ikut saat refresh.',
-                    icon: Icons.info_outline_rounded,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(height: 14),
                   OutlinedButton.icon(
                     onPressed: busy ? null : () => _chooseProofPhoto(row),
                     icon: const Icon(Icons.add_a_photo_outlined),
@@ -387,14 +380,8 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
         children: [
           LogisticsSectionHeader(
             title: 'Delivery Monitoring',
-            subtitle: '$outstanding outstanding delivery dari ERPNext',
+            subtitle: '$outstanding outstanding delivery perlu dicek',
             icon: Icons.assignment_turned_in_rounded,
-          ),
-          const SizedBox(height: 12),
-          const LogisticsInfoPanel(
-            message:
-                'List ini mengambil Delivery Note ERPNext. Status pengiriman mengikuti status bawaan Frappe, sedangkan bukti POD disimpan sebagai attachment Delivery Note.',
-            icon: Icons.info_outline_rounded,
           ),
           const SizedBox(height: 14),
           _DeliverySummaryGrid(
@@ -573,36 +560,6 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
       ),
     );
   }
-
-  Widget _detailRow(String label, String value) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 118,
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.slate,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value.isEmpty ? '-' : value,
-            style: const TextStyle(
-              color: AppColors.navy,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
 
   Color _deliveryStatusColor(DeliveryNote row) {
     if (row.statusKey == DeliveryNoteStatusKey.completed) {
@@ -908,7 +865,7 @@ class _DeliveryItemsSectionState extends State<_DeliveryItemsSection> {
         if (detail.items.isEmpty) {
           return const LogisticsInfoPanel(
             message:
-                'Item detail belum tersedia dari Delivery Note ini. Coba refresh atau cek permission Delivery Note Item.',
+                'Item detail belum tersedia. Tarik untuk refresh atau cek kembali dokumen pengiriman.',
             icon: Icons.inventory_2_outlined,
             color: AppColors.warning,
           );
@@ -1544,7 +1501,7 @@ class _DeliverySummaryGrid extends StatelessWidget {
       Align(
         alignment: Alignment.centerLeft,
         child: Text(
-          '$total Delivery Note dimuat dari ERPNext',
+          '$total dokumen pengiriman dimuat',
           style: const TextStyle(
             color: AppColors.slate,
             fontSize: 11,

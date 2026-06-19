@@ -971,7 +971,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text(
-                      'Series, type, dan payment terms wajib tersedia dari Frappe.',
+                      'Series, tipe customer, dan payment terms wajib tersedia.',
                     ),
                     backgroundColor: Colors.orange,
                   ),

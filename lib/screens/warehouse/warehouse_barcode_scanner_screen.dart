@@ -180,7 +180,7 @@ class _WarehouseBarcodeScannerScreenState
                 icon: Icons.search_off_rounded,
                 color: AppColors.warning,
                 message:
-                    'Item tidak ditemukan. Pastikan isi barcode atau QR sama dengan Item Code ERPNext.',
+                    'Item tidak ditemukan. Pastikan barcode atau QR berisi kode item yang benar.',
               )
             else ...[
               _summaryCard(),

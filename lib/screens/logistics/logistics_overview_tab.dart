@@ -40,7 +40,7 @@ class LogisticsOverviewTab extends StatelessWidget {
         children: [
           const LogisticsSectionHeader(
             title: 'Dashboard Logistics',
-            subtitle: 'Monitoring armada, delivery, dan bukti pengiriman',
+            subtitle: 'Pantau pengiriman, armada, dan bukti customer',
             icon: Icons.local_shipping_rounded,
           ),
           if (state.isDeliveryNotesLoading) ...[
@@ -87,17 +87,17 @@ class LogisticsOverviewTab extends StatelessWidget {
           logisticsSectionGap,
           const LogisticsSectionHeader(
             title: 'Aksi Cepat',
-            subtitle: 'Buka pekerjaan paling sering dipakai user logistics',
+            subtitle: 'Akses cepat untuk pekerjaan harian logistics',
             icon: Icons.touch_app_rounded,
           ),
           const SizedBox(height: 12),
           LogisticsActionCard(
             title: 'Tracking Armada',
             subtitle:
-                '$submitted delivery sedang diproses, $completed sudah completed',
+                '$submitted pengiriman berjalan, $completed sudah selesai',
             icon: Icons.route_rounded,
             onTap: () => onMenuSelected(1),
-            status: submitted > 0 ? 'On Progress' : 'Ready',
+            status: submitted > 0 ? 'Pantau' : 'Siap',
             color: AppColors.primary,
           ),
           LogisticsActionCard(
@@ -106,38 +106,23 @@ class LogisticsOverviewTab extends StatelessWidget {
                 '${outstandingRows.length} outstanding, upload POD dan tanda tangan customer',
             icon: Icons.assignment_turned_in_rounded,
             onTap: () => onMenuSelected(2),
-            status: outstandingRows.isEmpty ? 'Clear' : 'Action',
+            status: outstandingRows.isEmpty ? 'Aman' : 'Cek',
             color: outstandingRows.isEmpty
                 ? AppColors.success
                 : AppColors.warning,
           ),
           logisticsSectionGap,
           const LogisticsSectionHeader(
-            title: 'Status Fitur',
-            subtitle: 'Fitur yang sudah aktif dan yang butuh data tambahan',
-            icon: Icons.account_tree_rounded,
+            title: 'Ringkasan Kerja',
+            subtitle: 'Prioritas yang perlu dicek hari ini',
+            icon: Icons.fact_check_outlined,
           ),
           const SizedBox(height: 12),
-          const _FeatureStatusBlock(
-            title: 'Sudah aktif',
-            color: AppColors.success,
-            items: [
-              'Delivery Notes Mobile',
-              'Status pengiriman native ERPNext',
-              'Outstanding delivery monitoring',
-              'Foto bukti pengiriman / POD',
-              'Tanda tangan digital customer',
-              'Timeline armada berbasis Delivery Note',
-            ],
-          ),
-          const _FeatureStatusBlock(
-            title: 'Next setelah data armada siap',
-            color: AppColors.warning,
-            items: [
-              'GPS Tracking driver',
-              'Monitoring perjalanan real-time',
-              'Status granular per driver/armada jika ingin di luar status ERPNext',
-            ],
+          _LogisticsWorkSummary(
+            outstanding: outstandingRows.length,
+            submitted: submitted,
+            draft: draft,
+            completed: completed,
           ),
         ],
       ),
@@ -342,62 +327,94 @@ class _LogisticsMetricCard extends StatelessWidget {
   );
 }
 
-class _FeatureStatusBlock extends StatelessWidget {
-  final String title;
-  final Color color;
-  final List<String> items;
+class _LogisticsWorkSummary extends StatelessWidget {
+  final int outstanding;
+  final int submitted;
+  final int draft;
+  final int completed;
 
-  const _FeatureStatusBlock({
-    required this.title,
-    required this.color,
-    required this.items,
+  const _LogisticsWorkSummary({
+    required this.outstanding,
+    required this.submitted,
+    required this.draft,
+    required this.completed,
   });
 
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
-    margin: const EdgeInsets.only(bottom: 10),
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: AppColors.white,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: color.withValues(alpha: 0.18)),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: AppColors.border),
       boxShadow: AppColors.cardShadow,
     ),
     child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [LogisticsStatusChip(label: title, color: color)],
+        _summaryRow(
+          icon: Icons.priority_high_rounded,
+          label: 'Outstanding delivery',
+          value: '$outstanding',
+          color: outstanding > 0 ? AppColors.warning : AppColors.success,
         ),
-        const SizedBox(height: 10),
-        ...items.map(
-          (item) => Padding(
-            padding: const EdgeInsets.only(bottom: 7),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.check_circle_outline_rounded,
-                  size: 16,
-                  color: color,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    item,
-                    style: const TextStyle(
-                      color: AppColors.navy,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        const Divider(height: 18),
+        _summaryRow(
+          icon: Icons.local_shipping_outlined,
+          label: 'Pengiriman diproses',
+          value: '$submitted',
+          color: AppColors.primary,
+        ),
+        const Divider(height: 18),
+        _summaryRow(
+          icon: Icons.edit_note_rounded,
+          label: 'Draft belum diproses',
+          value: '$draft',
+          color: AppColors.slate,
+        ),
+        const Divider(height: 18),
+        _summaryRow(
+          icon: Icons.task_alt_rounded,
+          label: 'Pengiriman selesai',
+          value: '$completed',
+          color: AppColors.success,
         ),
       ],
     ),
+  );
+
+  static Widget _summaryRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) => Row(
+    children: [
+      CircleAvatar(
+        radius: 18,
+        backgroundColor: color.withValues(alpha: 0.1),
+        foregroundColor: color,
+        child: Icon(icon, size: 18),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+      Text(
+        value,
+        style: TextStyle(
+          color: color,
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    ],
   );
 }
