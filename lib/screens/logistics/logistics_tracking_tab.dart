@@ -383,6 +383,8 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
                 const SizedBox(height: 16),
                 _TrackingItemsSection(initialRow: doc),
                 const SizedBox(height: 16),
+                _TrackingProofSummary(deliveryNoteId: doc.id),
+                const SizedBox(height: 16),
                 const Text(
                   'Timeline Pengiriman',
                   style: TextStyle(
@@ -572,6 +574,124 @@ class _TrackingScopeSelector extends StatelessWidget {
 }
 
 enum _JourneyStepState { done, active, pending, cancelled }
+
+class _TrackingProofSummary extends StatefulWidget {
+  const _TrackingProofSummary({required this.deliveryNoteId});
+
+  final String deliveryNoteId;
+
+  @override
+  State<_TrackingProofSummary> createState() => _TrackingProofSummaryState();
+}
+
+class _TrackingProofSummaryState extends State<_TrackingProofSummary> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = context.read<AppState>().fetchDocumentAttachments(
+      doctype: 'Delivery Note',
+      documentName: widget.deliveryNoteId,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _future,
+      builder: (context, snapshot) {
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final rows = snapshot.data ?? const <Map<String, dynamic>>[];
+        final hasProof = rows.isNotEmpty;
+
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: hasProof
+                ? AppColors.success.withValues(alpha: 0.08)
+                : AppColors.warning.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: (hasProof ? AppColors.success : AppColors.warning)
+                  .withValues(alpha: 0.18),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: (hasProof ? AppColors.success : AppColors.warning)
+                      .withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  hasProof ? Icons.verified_rounded : Icons.attach_file_rounded,
+                  color: hasProof ? AppColors.success : AppColors.warning,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Bukti POD / Tanda Tangan',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      loading
+                          ? 'Memuat bukti...'
+                          : hasProof
+                          ? '${rows.length} attachment sudah tersimpan'
+                          : 'Belum ada attachment bukti pengiriman',
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (snapshot.hasError)
+                      Text(
+                        _LogisticsTrackingTabState._friendlyError(
+                          snapshot.error!,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.danger,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (loading)
+                const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                LogisticsStatusChip(
+                  label: hasProof ? 'Ada Bukti' : 'Perlu Bukti',
+                  color: hasProof ? AppColors.success : AppColors.warning,
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
 
 class _TrackingItemsSection extends StatefulWidget {
   const _TrackingItemsSection({required this.initialRow});
