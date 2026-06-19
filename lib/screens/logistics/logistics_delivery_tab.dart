@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -139,6 +142,42 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
     }
   }
 
+  Future<void> _captureCustomerSignature(DeliveryNote row) async {
+    final filePath = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (_) => _SignatureCaptureSheet(deliveryNoteId: row.id),
+    );
+    if (filePath == null || !mounted) return;
+
+    setState(() {
+      _busyId = row.id;
+      _error = null;
+    });
+    try {
+      await context.read<AppState>().uploadDeliveryNoteProof(
+        deliveryNoteId: row.id,
+        filePath: filePath,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Tanda tangan customer terpasang ke ${row.id}.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+      File(filePath).delete().ignore();
+    }
+  }
+
   void _openDetail(DeliveryNote row) {
     showModalBottomSheet<void>(
       context: context,
@@ -195,6 +234,14 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
                     onPressed: busy ? null : () => _chooseProofPhoto(row),
                     icon: const Icon(Icons.add_a_photo_outlined),
                     label: const Text('Upload Foto Bukti / POD'),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: busy
+                        ? null
+                        : () => _captureCustomerSignature(row),
+                    icon: const Icon(Icons.draw_rounded),
+                    label: const Text('Tanda Tangan Customer'),
                   ),
                 ],
               ),
@@ -455,4 +502,257 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _SignatureCaptureSheet extends StatefulWidget {
+  const _SignatureCaptureSheet({required this.deliveryNoteId});
+
+  final String deliveryNoteId;
+
+  @override
+  State<_SignatureCaptureSheet> createState() => _SignatureCaptureSheetState();
+}
+
+class _SignatureCaptureSheetState extends State<_SignatureCaptureSheet> {
+  final List<List<Offset>> _strokes = [];
+  Size _canvasSize = Size.zero;
+  bool _saving = false;
+
+  bool get _hasSignature => _strokes.any((stroke) => stroke.length > 1);
+
+  void _startStroke(Offset point, Size canvasSize) {
+    setState(() {
+      _canvasSize = canvasSize;
+      _strokes.add([_clampPoint(point, canvasSize)]);
+    });
+  }
+
+  void _appendStroke(Offset point, Size canvasSize) {
+    if (_strokes.isEmpty) return;
+    setState(() {
+      _canvasSize = canvasSize;
+      _strokes.last.add(_clampPoint(point, canvasSize));
+    });
+  }
+
+  Offset _clampPoint(Offset point, Size size) => Offset(
+    point.dx.clamp(0, size.width).toDouble(),
+    point.dy.clamp(0, size.height).toDouble(),
+  );
+
+  Future<void> _saveSignature() async {
+    if (!_hasSignature || _canvasSize == Size.zero) return;
+    setState(() => _saving = true);
+    try {
+      final safeName = widget.deliveryNoteId.replaceAll(
+        RegExp(r'[^A-Za-z0-9_-]+'),
+        '_',
+      );
+      final file = File(
+        '${Directory.systemTemp.path}/signature_$safeName'
+        '_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      final data = await _renderSignaturePng();
+      await file.writeAsBytes(data, flush: true);
+      if (mounted) Navigator.pop(context, file.path);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<List<int>> _renderSignaturePng() async {
+    const outputWidth = 1200;
+    const outputHeight = 520;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final paint = Paint()..color = AppColors.white;
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, outputWidth.toDouble(), outputHeight.toDouble()),
+      paint,
+    );
+    canvas.scale(
+      outputWidth / _canvasSize.width,
+      outputHeight / _canvasSize.height,
+    );
+    _SignaturePainter(
+      strokes: _strokes,
+      showGuide: false,
+    ).paint(canvas, _canvasSize);
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(outputWidth, outputHeight);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) {
+      throw Exception('Tanda tangan gagal dibuat. Coba ulangi.');
+    }
+    return byteData.buffer.asUint8List();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          16,
+          18,
+          MediaQuery.of(context).viewInsets.bottom + 18,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const CircleAvatar(
+                  backgroundColor: AppColors.softGreen,
+                  foregroundColor: AppColors.primary,
+                  child: Icon(Icons.draw_rounded),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Tanda Tangan Customer',
+                        style: TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        widget.deliveryNoteId,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Minta customer tanda tangan di area bawah ini. Hasilnya akan disimpan sebagai attachment Delivery Note.',
+              style: TextStyle(color: AppColors.slate, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final canvasSize = Size(constraints.maxWidth, 230);
+                return Container(
+                  height: canvasSize.height,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanStart: (details) =>
+                          _startStroke(details.localPosition, canvasSize),
+                      onPanUpdate: (details) =>
+                          _appendStroke(details.localPosition, canvasSize),
+                      child: CustomPaint(
+                        painter: _SignaturePainter(strokes: _strokes),
+                        size: canvasSize,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _saving || _strokes.isEmpty
+                        ? null
+                        : () => setState(_strokes.clear),
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Ulangi'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _saving || !_hasSignature
+                        ? null
+                        : _saveSignature,
+                    icon: _saving
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.save_alt_rounded),
+                    label: Text(_saving ? 'Menyimpan...' : 'Simpan'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SignaturePainter extends CustomPainter {
+  const _SignaturePainter({required this.strokes, this.showGuide = true});
+
+  final List<List<Offset>> strokes;
+  final bool showGuide;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (showGuide) {
+      final guidePaint = Paint()
+        ..color = AppColors.slate.withValues(alpha: 0.18)
+        ..strokeWidth = 1.4;
+      canvas.drawLine(
+        Offset(22, size.height - 46),
+        Offset(size.width - 22, size.height - 46),
+        guidePaint,
+      );
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: 'Tanda tangan di sini',
+          style: TextStyle(
+            color: AppColors.slate.withValues(alpha: 0.45),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      textPainter.paint(canvas, Offset(24, size.height - 36));
+    }
+
+    final signaturePaint = Paint()
+      ..color = AppColors.navy
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..strokeWidth = 3.4
+      ..style = PaintingStyle.stroke;
+
+    for (final stroke in strokes) {
+      if (stroke.length < 2) continue;
+      final path = Path()..moveTo(stroke.first.dx, stroke.first.dy);
+      for (var i = 1; i < stroke.length; i++) {
+        path.lineTo(stroke[i].dx, stroke[i].dy);
+      }
+      canvas.drawPath(path, signaturePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SignaturePainter oldDelegate) {
+    return oldDelegate.strokes != strokes || oldDelegate.showGuide != showGuide;
+  }
 }
