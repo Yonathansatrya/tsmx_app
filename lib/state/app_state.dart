@@ -1395,25 +1395,6 @@ class AppState with ChangeNotifier {
     );
   }
 
-  Future<void> updateDeliveryNoteLogisticsStatus({
-    required String deliveryNoteId,
-    required String status,
-  }) async {
-    final now = DateTime.now();
-    final timestamp =
-        '${now.year.toString().padLeft(4, '0')}-'
-        '${now.month.toString().padLeft(2, '0')}-'
-        '${now.day.toString().padLeft(2, '0')} '
-        '${now.hour.toString().padLeft(2, '0')}:'
-        '${now.minute.toString().padLeft(2, '0')}:'
-        '${now.second.toString().padLeft(2, '0')}';
-    await _frappeService.updateDocument('Delivery Note', deliveryNoteId, {
-      'custom_logistics_status': status,
-      'custom_logistics_updated_at': timestamp,
-    });
-    await refreshDeliveryNotes();
-  }
-
   Future<SalesOrder> createSalesOrder({
     required String customer,
     String? itemCode,
@@ -3233,8 +3214,6 @@ class AppState with ChangeNotifier {
         'posting_date',
         'grand_total',
         'total_qty',
-        'custom_logistics_status',
-        'custom_logistics_updated_at',
       ],
       filters: [
         ['Delivery Note Item', 'against_sales_order', '=', soId],

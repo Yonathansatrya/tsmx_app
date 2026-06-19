@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -26,14 +25,6 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
   bool _outstandingOnly = true;
   String? _busyId;
   String? _error;
-
-  static const _statuses = [
-    'Loading Barang',
-    'Armada Berangkat',
-    'Sampai Tujuan',
-    'Bongkar',
-    'Terkirim',
-  ];
 
   @override
   void initState() {
@@ -69,41 +60,8 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
       return query.isEmpty ||
           row.id.toLowerCase().contains(query) ||
           row.customer.toLowerCase().contains(query) ||
-          row.statusText.toLowerCase().contains(query) ||
-          row.logisticsStatus.toLowerCase().contains(query);
+          row.statusText.toLowerCase().contains(query);
     }).toList();
-  }
-
-  Future<void> _updateStatus(DeliveryNote row, String status) async {
-    setState(() {
-      _busyId = row.id;
-      _error = null;
-    });
-    try {
-      await context.read<AppState>().updateDeliveryNoteLogisticsStatus(
-        deliveryNoteId: row.id,
-        status: status,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${row.id} diperbarui: $status'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-      Navigator.maybePop(context);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = _friendlyError(error));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_statusFieldHelp(_error!)),
-          backgroundColor: AppColors.danger,
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _busyId = null);
-    }
   }
 
   Future<void> _chooseProofPhoto(DeliveryNote row) async {
@@ -223,50 +181,14 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
                   const SizedBox(height: 14),
                   _detailRow('Posting Date', row.date),
                   _detailRow('ERP Status', row.statusText),
-                  _detailRow(
-                    'Status Logistics',
-                    row.logisticsStatus.isEmpty
-                        ? 'Belum diupdate'
-                        : row.logisticsStatus,
-                  ),
-                  if (row.logisticsUpdatedAt.isNotEmpty)
-                    _detailRow('Update Terakhir', row.logisticsUpdatedAt),
                   _detailRow('Total', 'Rp ${formatErpCurrency(row.value)}'),
                   _detailRow('Qty', '${row.itemsCount}'),
                   const SizedBox(height: 14),
-                  const Text(
-                    'Update Status Pengiriman',
-                    style: TextStyle(
-                      color: AppColors.navy,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _statuses.map((status) {
-                      final selected = row.logisticsStatus == status;
-                      return ActionChip(
-                        avatar: busy
-                            ? const SizedBox.square(
-                                dimension: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Icon(
-                                selected
-                                    ? Icons.check_circle_rounded
-                                    : Icons.radio_button_unchecked_rounded,
-                                size: 17,
-                              ),
-                        label: Text(status),
-                        onPressed: busy
-                            ? null
-                            : () => _updateStatus(row, status),
-                      );
-                    }).toList(),
+                  LogisticsInfoPanel(
+                    message:
+                        'Status pengiriman memakai status bawaan ERPNext dari Delivery Note. Jika status berubah di Frappe, aplikasi akan ikut saat refresh.',
+                    icon: Icons.info_outline_rounded,
+                    color: AppColors.primary,
                   ),
                   const SizedBox(height: 14),
                   OutlinedButton.icon(
@@ -307,7 +229,7 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
           const SizedBox(height: 12),
           const LogisticsInfoPanel(
             message:
-                'List ini mengambil Delivery Note ERPNext. Update status logistics membutuhkan custom field pada Delivery Note.',
+                'List ini mengambil Delivery Note ERPNext. Status pengiriman mengikuti status bawaan Frappe, sedangkan bukti POD disimpan sebagai attachment Delivery Note.',
             icon: Icons.info_outline_rounded,
           ),
           const SizedBox(height: 14),
@@ -345,7 +267,7 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
           if (_error != null) ...[
             const SizedBox(height: 10),
             LogisticsInfoPanel(
-              message: _statusFieldHelp(_error!),
+              message: _error!,
               icon: Icons.error_outline_rounded,
               color: AppColors.danger,
             ),
@@ -394,14 +316,7 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
 
   Widget _deliveryCard(DeliveryNote row) {
     final busy = _busyId == row.id;
-    final logisticsStatus = row.logisticsStatus.isEmpty
-        ? 'Belum update'
-        : row.logisticsStatus;
-    final logisticsColor = row.logisticsStatus == 'Terkirim'
-        ? AppColors.success
-        : row.logisticsStatus.isEmpty
-        ? AppColors.warning
-        : AppColors.primary;
+    final statusColor = _deliveryStatusColor(row);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -421,8 +336,8 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
             child: Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: logisticsColor.withValues(alpha: 0.1),
-                  foregroundColor: logisticsColor,
+                  backgroundColor: statusColor.withValues(alpha: 0.1),
+                  foregroundColor: statusColor,
                   child: busy
                       ? const SizedBox.square(
                           dimension: 18,
@@ -458,13 +373,7 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
                         children: [
                           LogisticsStatusChip(
                             label: row.statusText,
-                            color: isDocSubmitted(row.docStatus)
-                                ? AppColors.primary
-                                : AppColors.warning,
-                          ),
-                          LogisticsStatusChip(
-                            label: logisticsStatus,
-                            color: logisticsColor,
+                            color: statusColor,
                           ),
                         ],
                       ),
@@ -528,12 +437,16 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
     ),
   );
 
-  String _statusFieldHelp(String message) {
-    if (message.contains('custom_logistics_status') ||
-        message.contains('custom_logistics_updated_at')) {
-      return 'Custom field Delivery Note belum lengkap. Tambahkan custom_logistics_status (Data/Select) dan custom_logistics_updated_at (Datetime). Detail: $message';
+  Color _deliveryStatusColor(DeliveryNote row) {
+    if (row.statusKey == DeliveryNoteStatusKey.completed) {
+      return AppColors.success;
     }
-    return message;
+    if (row.statusKey == DeliveryNoteStatusKey.cancelled ||
+        row.statusKey == DeliveryNoteStatusKey.closed) {
+      return AppColors.slate;
+    }
+    if (!isDocSubmitted(row.docStatus)) return AppColors.warning;
+    return AppColors.primary;
   }
 
   String _friendlyError(Object error) => error
