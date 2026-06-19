@@ -112,7 +112,7 @@ class LogisticsTrackingTab extends StatelessWidget {
               message: 'Tarik untuk refresh atau cek permission Delivery Note.',
             )
           else
-            ...docs.map(_trackingCard),
+            ...docs.map((doc) => _trackingCard(context, doc)),
         ],
       ),
     );
@@ -124,74 +124,308 @@ class LogisticsTrackingTab extends StatelessWidget {
         doc.statusKey != DeliveryNoteStatusKey.closed;
   }
 
-  static Widget _trackingCard(DeliveryNote doc) {
+  static Widget _trackingCard(BuildContext context, DeliveryNote doc) {
     final color = _statusColor(doc);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.white,
+      child: Material(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: () => _openTrackingDetail(context, doc),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-          boxShadow: AppColors.cardShadow,
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: color.withValues(alpha: 0.1),
-              foregroundColor: color,
-              child: const Icon(Icons.local_shipping_outlined),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+              boxShadow: AppColors.cardShadow,
             ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    doc.id,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.navy,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    doc.customer,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.slate,
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
+            child: Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: color.withValues(alpha: 0.1),
+                  foregroundColor: color,
+                  child: const Icon(Icons.local_shipping_outlined),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      LogisticsStatusChip(label: doc.statusText, color: color),
-                      LogisticsStatusChip(
-                        label: doc.date.isEmpty ? 'No Date' : doc.date,
-                        color: AppColors.slate,
+                      Text(
+                        doc.id,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      Text(
+                        doc.customer,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          LogisticsStatusChip(
+                            label: doc.statusText,
+                            color: color,
+                          ),
+                          LogisticsStatusChip(
+                            label: doc.date.isEmpty ? 'No Date' : doc.date,
+                            color: AppColors.slate,
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Rp ${formatErpCurrency(doc.value)}',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.slate,
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text(
-              'Rp ${formatErpCurrency(doc.value)}',
-              style: const TextStyle(
-                color: AppColors.primary,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  static void _openTrackingDetail(BuildContext context, DeliveryNote doc) {
+    final color = _statusColor(doc);
+    final steps = _journeySteps(doc);
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            18,
+            18,
+            18,
+            MediaQuery.of(context).viewInsets.bottom + 18,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: color.withValues(alpha: 0.1),
+                      foregroundColor: color,
+                      child: const Icon(Icons.route_rounded),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            doc.id,
+                            style: const TextStyle(
+                              color: AppColors.navy,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            doc.customer,
+                            style: const TextStyle(
+                              color: AppColors.slate,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    LogisticsStatusChip(label: doc.statusText, color: color),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(
+                            Icons.map_outlined,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Ringkasan Armada',
+                            style: TextStyle(
+                              color: AppColors.navy,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _detailRow('Posting Date', doc.date),
+                      _detailRow(
+                        'Nilai Delivery',
+                        'Rp ${formatErpCurrency(doc.value)}',
+                      ),
+                      _detailRow('Total Qty', '${doc.itemsCount}'),
+                      _detailRow('Sumber Status', 'Delivery Note ERPNext'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Timeline Pengiriman',
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ...steps.map((step) => _JourneyStepTile(step: step)),
+                const SizedBox(height: 8),
+                const LogisticsInfoPanel(
+                  message:
+                      'Tahapan ini dihitung dari status Delivery Note bawaan ERPNext. GPS driver dan lokasi real-time bisa disambungkan setelah data armada/driver tersedia.',
+                  icon: Icons.info_outline_rounded,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _detailRow(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 112,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value.isEmpty ? '-' : value,
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  static List<_JourneyStep> _journeySteps(DeliveryNote doc) {
+    final cancelled =
+        doc.statusKey == DeliveryNoteStatusKey.cancelled ||
+        doc.statusKey == DeliveryNoteStatusKey.closed;
+    final draft = doc.docStatus == 0;
+    final completed = doc.statusKey == DeliveryNoteStatusKey.completed;
+    final submitted = doc.docStatus == 1 && !cancelled;
+
+    return [
+      _JourneyStep(
+        title: 'Status loading barang',
+        subtitle: draft
+            ? 'Delivery Note masih draft, barang belum dilepas.'
+            : 'Delivery Note sudah dibuat untuk proses pengiriman.',
+        icon: Icons.inventory_2_outlined,
+        state: draft ? _JourneyStepState.active : _JourneyStepState.done,
+      ),
+      _JourneyStep(
+        title: 'Armada berangkat',
+        subtitle: submitted
+            ? 'Dokumen sudah submitted, armada dapat diproses berangkat.'
+            : 'Menunggu Delivery Note disubmit.',
+        icon: Icons.local_shipping_outlined,
+        state: cancelled
+            ? _JourneyStepState.cancelled
+            : submitted
+            ? _JourneyStepState.done
+            : _JourneyStepState.pending,
+      ),
+      _JourneyStep(
+        title: 'Status sampai tujuan',
+        subtitle: completed
+            ? 'Delivery Note sudah completed.'
+            : 'Belum ada status completed dari ERPNext.',
+        icon: Icons.flag_outlined,
+        state: cancelled
+            ? _JourneyStepState.cancelled
+            : completed
+            ? _JourneyStepState.done
+            : submitted
+            ? _JourneyStepState.active
+            : _JourneyStepState.pending,
+      ),
+      _JourneyStep(
+        title: 'Status bongkar / POD',
+        subtitle: completed
+            ? 'Pengiriman selesai. Foto POD dan tanda tangan bisa dicek di attachment.'
+            : 'Upload foto POD dan tanda tangan di menu Delivery Monitoring.',
+        icon: Icons.assignment_turned_in_outlined,
+        state: cancelled
+            ? _JourneyStepState.cancelled
+            : completed
+            ? _JourneyStepState.done
+            : _JourneyStepState.pending,
+      ),
+    ];
   }
 
   static Color _statusColor(DeliveryNote doc) {
@@ -212,6 +446,125 @@ class LogisticsTrackingTab extends StatelessWidget {
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+enum _JourneyStepState { done, active, pending, cancelled }
+
+class _JourneyStep {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final _JourneyStepState state;
+
+  const _JourneyStep({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.state,
+  });
+}
+
+class _JourneyStepTile extends StatelessWidget {
+  final _JourneyStep step;
+
+  const _JourneyStepTile({required this.step});
+
+  Color get _color {
+    return switch (step.state) {
+      _JourneyStepState.done => AppColors.success,
+      _JourneyStepState.active => AppColors.primary,
+      _JourneyStepState.cancelled => AppColors.danger,
+      _JourneyStepState.pending => AppColors.slate,
+    };
+  }
+
+  IconData get _stateIcon {
+    return switch (step.state) {
+      _JourneyStepState.done => Icons.check_rounded,
+      _JourneyStepState.active => step.icon,
+      _JourneyStepState.cancelled => Icons.close_rounded,
+      _JourneyStepState.pending => Icons.more_horiz_rounded,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _color;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(_stateIcon, color: color, size: 19),
+              ),
+              Container(width: 2, height: 42, color: AppColors.border),
+            ],
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          step.title,
+                          style: const TextStyle(
+                            color: AppColors.navy,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      LogisticsStatusChip(
+                        label: _labelForState(step.state),
+                        color: color,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    step.subtitle,
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 11,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _labelForState(_JourneyStepState state) {
+    return switch (state) {
+      _JourneyStepState.done => 'Done',
+      _JourneyStepState.active => 'Aktif',
+      _JourneyStepState.pending => 'Pending',
+      _JourneyStepState.cancelled => 'Batal',
+    };
+  }
 }
 
 class _TrackingMetricCard extends StatelessWidget {
