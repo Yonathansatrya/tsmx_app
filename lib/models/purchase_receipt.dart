@@ -4,6 +4,45 @@ import '../utils/num_parse.dart';
 export '../utils/frappe_status.dart'
     show DeliveryNoteStatusKey, parseDeliveryNoteStatus, normalizeStatusText;
 
+class PurchaseReceiptItem {
+  final String itemCode;
+  final String itemName;
+  final double qty;
+  final double rate;
+  final double amount;
+  final String warehouse;
+  final String uom;
+
+  const PurchaseReceiptItem({
+    required this.itemCode,
+    required this.itemName,
+    required this.qty,
+    required this.rate,
+    required this.amount,
+    this.warehouse = '',
+    this.uom = '',
+  });
+
+  factory PurchaseReceiptItem.fromJson(Map<String, dynamic> json) {
+    final itemCode = json['item_code']?.toString() ?? '';
+    return PurchaseReceiptItem(
+      itemCode: itemCode,
+      itemName:
+          json['item_name']?.toString() ??
+          (itemCode.isNotEmpty ? itemCode : null) ??
+          'Unknown Item',
+      qty: NumParse.asDouble(json['qty'] ?? json['stock_qty']),
+      rate: NumParse.asDouble(json['rate'] ?? json['net_rate']),
+      amount: NumParse.asDouble(json['amount'] ?? json['net_amount']),
+      warehouse:
+          json['warehouse']?.toString() ??
+          json['accepted_warehouse']?.toString() ??
+          '',
+      uom: json['uom']?.toString() ?? json['stock_uom']?.toString() ?? '',
+    );
+  }
+}
+
 class PurchaseReceipt {
   final String id;
   final String supplier;
@@ -13,6 +52,7 @@ class PurchaseReceipt {
   final int docStatus;
   final String date;
   final int itemsCount;
+  final List<PurchaseReceiptItem> items;
 
   PurchaseReceipt({
     required this.id,
@@ -23,6 +63,7 @@ class PurchaseReceipt {
     this.docStatus = 0,
     required this.date,
     required this.itemsCount,
+    this.items = const [],
   });
 
   factory PurchaseReceipt.fromJson(Map<String, dynamic> json) {
@@ -31,6 +72,16 @@ class PurchaseReceipt {
       json['status']?.toString(),
       docstatus: docstatus,
     );
+    final rawItems = json['items'];
+    final items = rawItems is List
+        ? rawItems
+              .whereType<Map>()
+              .map(
+                (e) =>
+                    PurchaseReceiptItem.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList()
+        : <PurchaseReceiptItem>[];
 
     return PurchaseReceipt(
       id: json['name']?.toString() ?? 'UNKNOWN',
@@ -44,6 +95,7 @@ class PurchaseReceipt {
       docStatus: docstatus,
       date: json['posting_date']?.toString() ?? '',
       itemsCount: NumParse.asInt(json['total_qty']),
+      items: items,
     );
   }
 }

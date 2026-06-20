@@ -8,13 +8,13 @@ import '../../../utils/erp_doc_utils.dart';
 import '../../../utils/erp_format.dart';
 import '../../../widgets/erp/document_trend_card.dart';
 import '../../../widgets/erp/erp_document_card.dart';
-import '../../../widgets/erp/erp_detail_sheet.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../purchase/purchase_order/create_purchase_order_screen.dart';
+import 'buying_document_detail_sheet.dart';
 
 enum _PurchaseSortOption { newestEta, oldestEta, valueHigh, valueLow }
 
@@ -248,45 +248,59 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
         detail.statusKey != PurchaseOrderStatusKey.closed &&
         detail.statusKey != PurchaseOrderStatusKey.cancelled;
 
-    showErpDetailSheet(
+    showBuyingDocumentDetailSheet(
       context: context,
       title: detail.id,
       subtitle: detail.vendor,
       statusText: detail.statusText,
-      rows: [
-        docStatusRow(detail.docStatus),
-        ErpDetailRow(label: 'ERP Status', value: detail.statusText),
-        if (detail.isOverdue)
-          const ErpDetailRow(label: 'ETA Risk', value: 'Overdue'),
-        ErpDetailRow(
-          label: 'Expected',
-          value: detail.eta.isEmpty ? '—' : detail.eta,
-        ),
-        if (isDocSubmitted(detail.docStatus)) ...[
-          ErpDetailRow(
-            label: '% Received',
-            value: '${detail.perReceived.toStringAsFixed(1)}%',
-          ),
-          ErpDetailRow(
-            label: '% Billed',
-            value: '${detail.perBilled.toStringAsFixed(1)}%',
-          ),
-        ],
-        ErpDetailRow(
+      icon: Icons.shopping_bag_rounded,
+      metrics: [
+        BuyingDetailMetric(
           label: 'Total',
           value: 'Rp ${formatErpCurrency(detail.totalValue)}',
+          icon: Icons.payments_outlined,
         ),
-        ErpDetailRow(label: 'Items', value: '${detail.itemsCount}'),
-        if (detail.items.isNotEmpty)
-          ...detail.items
-              .take(8)
-              .map(
-                (i) => ErpDetailRow(
-                  label: i.itemName,
-                  value: '${i.qty} × ${formatErpCurrency(i.rate)}',
-                ),
-              ),
+        BuyingDetailMetric(
+          label: 'Items',
+          value: '${detail.itemsCount}',
+          icon: Icons.inventory_2_outlined,
+        ),
+        BuyingDetailMetric(
+          label: 'Received',
+          value: '${detail.perReceived.toStringAsFixed(1)}%',
+          icon: Icons.move_to_inbox_outlined,
+        ),
+        BuyingDetailMetric(
+          label: 'Billed',
+          value: '${detail.perBilled.toStringAsFixed(1)}%',
+          icon: Icons.receipt_long_outlined,
+        ),
       ],
+      infos: [
+        BuyingDetailInfo(
+          label: 'Doc Status',
+          value: docStatusLabel(detail.docStatus),
+        ),
+        BuyingDetailInfo(label: 'ERP Status', value: detail.statusText),
+        BuyingDetailInfo(
+          label: 'Expected',
+          value: detail.eta.isEmpty ? '-' : detail.eta,
+        ),
+        if (detail.isOverdue)
+          const BuyingDetailInfo(label: 'ETA Risk', value: 'Overdue'),
+      ],
+      items: detail.items
+          .map(
+            (i) => BuyingDetailItem(
+              title: i.itemName,
+              subtitle: i.itemCode,
+              qty: '${i.qty}',
+              rate: 'Rp ${formatErpCurrency(i.rate)}',
+              amount: 'Rp ${formatErpCurrency(i.qty * i.rate)}',
+              note: i.warehouse,
+            ),
+          )
+          .toList(),
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
