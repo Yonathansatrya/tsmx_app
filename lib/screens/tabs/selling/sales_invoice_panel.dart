@@ -7,7 +7,6 @@ import '../../../theme/app_colors.dart';
 import '../../../utils/erp_doc_utils.dart';
 import '../../../utils/erp_format.dart';
 import '../../../widgets/erp/erp_document_card.dart';
-import '../../../widgets/erp/erp_detail_sheet.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
@@ -15,6 +14,7 @@ import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../../widgets/erp/document_trend_card.dart';
 import 'selling_filter_widgets.dart';
+import 'selling_document_detail_sheet.dart';
 
 class SalesInvoicePanel extends StatefulWidget {
   const SalesInvoicePanel({super.key});
@@ -245,27 +245,53 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
 
     final canSubmit = isDocDraft(detail.docStatus);
 
-    showErpDetailSheet(
+    showSellingDocumentDetailSheet(
       context: context,
       title: detail.id,
       subtitle: detail.customer,
       statusText: detail.statusText,
-      rows: [
-        docStatusRow(detail.docStatus),
-        ErpDetailRow(label: 'Posting Date', value: detail.date),
-        ErpDetailRow(
-          label: 'Due Date',
-          value: detail.dueDate.isEmpty ? '—' : detail.dueDate,
-        ),
-        ErpDetailRow(
+      icon: Icons.receipt_long_rounded,
+      metrics: [
+        SellingDetailMetric(
           label: 'Grand Total',
           value: 'Rp ${formatErpCurrency(detail.value)}',
+          icon: Icons.payments_outlined,
         ),
-        ErpDetailRow(
+        SellingDetailMetric(
           label: 'Outstanding',
           value: 'Rp ${formatErpCurrency(detail.outstandingAmount)}',
+          icon: Icons.account_balance_wallet_outlined,
+        ),
+        SellingDetailMetric(
+          label: 'Items',
+          value: '${detail.items.length}',
+          icon: Icons.inventory_2_outlined,
         ),
       ],
+      infos: [
+        SellingDetailInfo(
+          label: 'Doc Status',
+          value: docStatusLabel(detail.docStatus),
+        ),
+        SellingDetailInfo(label: 'Posting Date', value: detail.date),
+        SellingDetailInfo(
+          label: 'Due Date',
+          value: detail.dueDate.isEmpty ? '-' : detail.dueDate,
+        ),
+      ],
+      items: detail.items
+          .map(
+            (i) => SellingDetailItem(
+              title: i.itemName,
+              subtitle: i.itemCode,
+              qty:
+                  '${formatErpCurrency(i.qty)}${i.uom.isEmpty ? '' : ' ${i.uom}'}',
+              rate: 'Rp ${formatErpCurrency(i.rate)}',
+              amount: 'Rp ${formatErpCurrency(i.amount)}',
+              note: i.warehouse,
+            ),
+          )
+          .toList(),
       footer: canSubmit
           ? erpActionButton(
               label: 'Submit Sales Invoice',

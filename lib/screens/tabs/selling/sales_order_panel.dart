@@ -8,13 +8,13 @@ import '../../../utils/erp_doc_utils.dart';
 import '../../../utils/erp_format.dart';
 import '../../../widgets/erp/document_trend_card.dart';
 import '../../../widgets/erp/erp_document_card.dart';
-import '../../../widgets/erp/erp_detail_sheet.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../sales/sales_order/create_sales_order_screen.dart';
+import 'selling_document_detail_sheet.dart';
 
 enum _OrderSortOption { newest, oldest, valueHigh, valueLow }
 
@@ -234,39 +234,60 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     final canSubmit = isDocDraft(detail.docStatus);
     final canEdit = isDocDraft(detail.docStatus);
 
-    showErpDetailSheet(
+    showSellingDocumentDetailSheet(
       context: context,
       title: detail.id,
       subtitle: detail.customer,
       statusText: detail.statusText,
-      rows: [
-        docStatusRow(detail.docStatus),
-        ErpDetailRow(label: 'Date', value: detail.date),
-        if (isDocSubmitted(detail.docStatus)) ...[
-          ErpDetailRow(
-            label: '% Delivered',
-            value: '${detail.perDelivered.toStringAsFixed(1)}%',
-          ),
-          ErpDetailRow(
-            label: '% Billed',
-            value: '${detail.perBilled.toStringAsFixed(1)}%',
-          ),
-        ],
-        ErpDetailRow(
+      icon: Icons.point_of_sale_rounded,
+      metrics: [
+        SellingDetailMetric(
           label: 'Total',
           value: 'Rp ${formatErpCurrency(detail.value)}',
+          icon: Icons.payments_outlined,
         ),
-        ErpDetailRow(label: 'Items', value: '${detail.itemsCount}'),
-        if (detail.items.isNotEmpty)
-          ...detail.items
-              .take(8)
-              .map(
-                (i) => ErpDetailRow(
-                  label: i.itemName,
-                  value: '${i.qty} × ${formatErpCurrency(i.rate)}',
-                ),
-              ),
+        SellingDetailMetric(
+          label: 'Items',
+          value: '${detail.itemsCount}',
+          icon: Icons.inventory_2_outlined,
+        ),
+        SellingDetailMetric(
+          label: 'Delivered',
+          value: '${detail.perDelivered.toStringAsFixed(1)}%',
+          icon: Icons.local_shipping_outlined,
+        ),
+        SellingDetailMetric(
+          label: 'Billed',
+          value: '${detail.perBilled.toStringAsFixed(1)}%',
+          icon: Icons.receipt_long_outlined,
+        ),
       ],
+      infos: [
+        SellingDetailInfo(
+          label: 'Doc Status',
+          value: docStatusLabel(detail.docStatus),
+        ),
+        SellingDetailInfo(label: 'Date', value: detail.date),
+        if (detail.sellingPriceList.isNotEmpty)
+          SellingDetailInfo(
+            label: 'Price List',
+            value: detail.sellingPriceList,
+          ),
+        if (detail.currency.isNotEmpty)
+          SellingDetailInfo(label: 'Currency', value: detail.currency),
+      ],
+      items: detail.items
+          .map(
+            (i) => SellingDetailItem(
+              title: i.itemName,
+              subtitle: i.itemCode,
+              qty: '${i.qty}',
+              rate: 'Rp ${formatErpCurrency(i.rate)}',
+              amount: 'Rp ${formatErpCurrency(i.qty * i.rate)}',
+              note: i.warehouse,
+            ),
+          )
+          .toList(),
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
