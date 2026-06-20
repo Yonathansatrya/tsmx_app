@@ -9,6 +9,7 @@ import '../models/sales_order.dart';
 import '../models/sales_order_approval.dart';
 import '../models/purchase_order.dart';
 import '../models/delivery_note.dart';
+import '../models/delivery_activity_log.dart';
 import '../models/sales_invoice.dart';
 import '../models/purchase_receipt.dart';
 import '../models/purchase_invoice.dart';
@@ -1465,6 +1466,58 @@ class AppState with ChangeNotifier {
       'latitude': point.latitude,
       'longitude': point.longitude,
       'accuracy': point.accuracy,
+    });
+  }
+
+  Future<List<DeliveryActivityLog>> fetchDeliveryActivityLogs(
+    String deliveryNoteId,
+  ) async {
+    final rows = await _fetchResourceWithFieldFallback(
+      doctype: 'Delivery Activity Log',
+      fields: const [
+        'name',
+        'delivery_note',
+        'customer',
+        'driver',
+        'activity_status',
+        'notes',
+        'captured_at',
+        'latitude',
+        'longitude',
+        'accuracy',
+      ],
+      filters: [
+        ['delivery_note', '=', deliveryNoteId],
+      ],
+      orderBy: 'captured_at desc, creation desc',
+      limit: 100,
+    );
+    return rows.map(DeliveryActivityLog.fromJson).toList();
+  }
+
+  Future<void> recordDeliveryActivity({
+    required DeliveryNote deliveryNote,
+    required String activityStatus,
+    String notes = '',
+  }) async {
+    VisitLocationPoint? point;
+    try {
+      point = await _visitLocationService.currentPosition();
+    } catch (_) {
+      point = null;
+    }
+
+    final trimmedNotes = notes.trim();
+    await _frappeService.createDocument('Delivery Activity Log', {
+      'delivery_note': deliveryNote.id,
+      'customer': deliveryNote.customer,
+      if (_currentUser?.isNotEmpty == true) 'driver': _currentUser,
+      'activity_status': activityStatus,
+      if (trimmedNotes.isNotEmpty) 'notes': trimmedNotes,
+      'captured_at': (point?.capturedAt ?? DateTime.now()).toIso8601String(),
+      if (point != null) 'latitude': point.latitude.toStringAsFixed(7),
+      if (point != null) 'longitude': point.longitude.toStringAsFixed(7),
+      if (point != null) 'accuracy': point.accuracy,
     });
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/delivery_activity_log.dart';
 import '../../models/delivery_note.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
@@ -550,8 +551,10 @@ class _LogisticsTrackingDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _TrackingProofSummary(deliveryNoteId: doc.id),
             const SizedBox(height: 16),
+            _DeliveryActivitySection(deliveryNote: doc),
+            const SizedBox(height: 16),
             const Text(
-              'Timeline Pengiriman',
+              'Status Delivery Note',
               style: TextStyle(
                 color: AppColors.navy,
                 fontSize: 15,
@@ -750,6 +753,379 @@ class _TrackingProofSummaryState extends State<_TrackingProofSummary> {
         );
       },
     );
+  }
+}
+
+class _DeliveryActivitySection extends StatefulWidget {
+  const _DeliveryActivitySection({required this.deliveryNote});
+
+  final DeliveryNote deliveryNote;
+
+  @override
+  State<_DeliveryActivitySection> createState() =>
+      _DeliveryActivitySectionState();
+}
+
+class _DeliveryActivitySectionState extends State<_DeliveryActivitySection> {
+  static const _statuses = [
+    'Loading Barang',
+    'Armada Berangkat',
+    'Sampai Tujuan',
+    'Bongkar',
+    'Selesai',
+  ];
+
+  late Future<List<DeliveryActivityLog>> _future;
+  var _busyStatus = '';
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  Future<List<DeliveryActivityLog>> _load() {
+    return context.read<AppState>().fetchDeliveryActivityLogs(
+      widget.deliveryNote.id,
+    );
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _future = _load();
+      _error = null;
+    });
+  }
+
+  Future<void> _record(String status) async {
+    if (_busyStatus.isNotEmpty) return;
+    final notes = await _askNotes(status);
+    if (notes == null || !mounted) return;
+
+    setState(() {
+      _busyStatus = status;
+      _error = null;
+    });
+    try {
+      await context.read<AppState>().recordDeliveryActivity(
+        deliveryNote: widget.deliveryNote,
+        activityStatus: status,
+        notes: notes,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Status "$status" tersimpan.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      await _refresh();
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _error = _LogisticsTrackingTabState._friendlyError(error);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _busyStatus = '');
+    }
+  }
+
+  Future<String?> _askNotes(String status) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(status),
+          content: TextField(
+            controller: controller,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Catatan opsional',
+              hintText: 'Contoh: barang sudah dimuat lengkap',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: const Text('Simpan'),
+            ),
+          ],
+        );
+      },
+    ).whenComplete(controller.dispose);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Aktivitas Armada',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Update status manual driver',
+                      style: TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: _refresh,
+                icon: const Icon(Icons.refresh_rounded),
+                color: AppColors.primary,
+                tooltip: 'Refresh aktivitas',
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _statuses.map((status) {
+              final busy = _busyStatus == status;
+              return FilledButton.tonalIcon(
+                onPressed: _busyStatus.isEmpty ? () => _record(status) : null,
+                icon: busy
+                    ? const SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(_statusIcon(status), size: 18),
+                label: Text(status),
+              );
+            }).toList(),
+          ),
+          if (_error?.isNotEmpty == true) ...[
+            const SizedBox(height: 10),
+            Text(
+              _error!,
+              style: const TextStyle(
+                color: AppColors.danger,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+          const SizedBox(height: 16),
+          FutureBuilder<List<DeliveryActivityLog>>(
+            future: _future,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const LogisticsInfoPanel(
+                  message: 'Memuat aktivitas armada...',
+                  icon: Icons.timeline_rounded,
+                );
+              }
+
+              if (snapshot.hasError) {
+                return LogisticsInfoPanel(
+                  message:
+                      'Aktivitas belum bisa dimuat. ${_LogisticsTrackingTabState._friendlyError(snapshot.error!)}',
+                  icon: Icons.error_outline_rounded,
+                  color: AppColors.danger,
+                );
+              }
+
+              final rows = snapshot.data ?? const <DeliveryActivityLog>[];
+              if (rows.isEmpty) {
+                return const LogisticsInfoPanel(
+                  message:
+                      'Belum ada aktivitas manual. Driver bisa mulai dari Loading Barang.',
+                  icon: Icons.timeline_rounded,
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'Riwayat Aktivitas',
+                    style: TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...rows.map(_DeliveryActivityTile.new),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  static IconData _statusIcon(String status) {
+    final text = status.toLowerCase();
+    if (text.contains('loading')) return Icons.inventory_2_outlined;
+    if (text.contains('berangkat')) return Icons.local_shipping_outlined;
+    if (text.contains('tujuan')) return Icons.flag_outlined;
+    if (text.contains('bongkar')) return Icons.move_down_rounded;
+    return Icons.check_circle_outline_rounded;
+  }
+}
+
+class _DeliveryActivityTile extends StatelessWidget {
+  const _DeliveryActivityTile(this.log);
+
+  final DeliveryActivityLog log;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _color(log.activityStatus);
+    final coordinates = log.latitude.isEmpty || log.longitude.isEmpty
+        ? ''
+        : '${log.latitude}, ${log.longitude}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: color.withValues(alpha: 0.1),
+            foregroundColor: color,
+            child: Icon(_icon(log.activityStatus), size: 17),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        log.activityStatus.isEmpty
+                            ? 'Aktivitas'
+                            : log.activityStatus,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _shortDateTime(log.capturedAt),
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  log.driver.isEmpty ? 'Driver belum tercatat' : log.driver,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (log.notes.trim().isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Text(
+                    log.notes.trim(),
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                if (coordinates.isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Text(
+                    log.accuracy > 0
+                        ? '$coordinates | Akurasi ${log.accuracy.toStringAsFixed(0)} m'
+                        : coordinates,
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Color _color(String status) {
+    final text = status.toLowerCase();
+    if (text.contains('selesai')) return AppColors.success;
+    if (text.contains('tujuan') || text.contains('bongkar')) {
+      return AppColors.primary;
+    }
+    if (text.contains('berangkat')) return AppColors.primary;
+    return AppColors.warning;
+  }
+
+  static IconData _icon(String status) {
+    final text = status.toLowerCase();
+    if (text.contains('loading')) return Icons.inventory_2_outlined;
+    if (text.contains('berangkat')) return Icons.local_shipping_outlined;
+    if (text.contains('tujuan')) return Icons.flag_outlined;
+    if (text.contains('bongkar')) return Icons.move_down_rounded;
+    return Icons.check_circle_outline_rounded;
+  }
+
+  static String _shortDateTime(String value) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return value.isEmpty ? '-' : value;
+    return '${parsed.day.toString().padLeft(2, '0')}/'
+        '${parsed.month.toString().padLeft(2, '0')} '
+        '${parsed.hour.toString().padLeft(2, '0')}:'
+        '${parsed.minute.toString().padLeft(2, '0')}';
   }
 }
 
