@@ -107,7 +107,7 @@ class DocumentTrendCard extends StatelessWidget {
   }
 }
 
-class _DocumentTrendLineChart extends StatelessWidget {
+class _DocumentTrendLineChart extends StatefulWidget {
   final List<DocumentTrendPoint> points;
   final double maxValue;
   final double total;
@@ -121,8 +121,49 @@ class _DocumentTrendLineChart extends StatelessWidget {
   });
 
   @override
+  State<_DocumentTrendLineChart> createState() =>
+      _DocumentTrendLineChartState();
+}
+
+class _DocumentTrendLineChartState extends State<_DocumentTrendLineChart> {
+  int? _selectedIndex;
+
+  @override
+  void didUpdateWidget(covariant _DocumentTrendLineChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.points != widget.points) {
+      _selectedIndex = null;
+    }
+  }
+
+  void _selectNearestPoint(TapDownDetails details, Size size) {
+    if (widget.points.isEmpty || widget.maxValue <= 0) return;
+    final offsets = _DocumentTrendLineGeometry.offsets(
+      points: widget.points,
+      maxValue: widget.maxValue,
+      size: size,
+    );
+    if (offsets.isEmpty) return;
+
+    var selected = 0;
+    var nearestDistance = double.infinity;
+    for (var i = 0; i < offsets.length; i++) {
+      final distance = (offsets[i] - details.localPosition).distance;
+      if (distance < nearestDistance) {
+        selected = i;
+        nearestDistance = distance;
+      }
+    }
+    setState(() => _selectedIndex = selected);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final visibleLabels = _visibleLabels();
+    final selected = _selectedIndex == null
+        ? null
+        : widget.points[_selectedIndex!.clamp(0, widget.points.length - 1)];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -135,16 +176,93 @@ class _DocumentTrendLineChart extends StatelessWidget {
           ),
           child: Column(
             children: [
-              SizedBox(
-                height: 150,
-                width: double.infinity,
-                child: CustomPaint(
-                  painter: _DocumentTrendLinePainter(
-                    points: points,
-                    maxValue: maxValue,
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final chartSize = Size(constraints.maxWidth, 150);
+                  final selectedOffset = _selectedIndex == null
+                      ? null
+                      : _DocumentTrendLineGeometry.offsets(
+                          points: widget.points,
+                          maxValue: widget.maxValue,
+                          size: chartSize,
+                        )[_selectedIndex!.clamp(0, widget.points.length - 1)];
+                  final bubbleLeft = selectedOffset == null
+                      ? 0.0
+                      : (selectedOffset.dx - 68).clamp(
+                          0.0,
+                          (constraints.maxWidth - 136).clamp(
+                            0.0,
+                            double.infinity,
+                          ),
+                        );
+
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (details) =>
+                        _selectNearestPoint(details, chartSize),
+                    child: SizedBox(
+                      height: 150,
+                      width: double.infinity,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          CustomPaint(
+                            size: chartSize,
+                            painter: _DocumentTrendLinePainter(
+                              points: widget.points,
+                              maxValue: widget.maxValue,
+                              selectedIndex: _selectedIndex,
+                            ),
+                          ),
+                          if (selected != null && selectedOffset != null)
+                            Positioned(
+                              left: bubbleLeft,
+                              top: (selectedOffset.dy - 46).clamp(0.0, 104.0),
+                              child: _TrendPointTooltip(point: selected),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              if (selected != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          selected.label,
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        'Rp ${formatErpCurrency(selected.value)}',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+              ],
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -175,7 +293,7 @@ class _DocumentTrendLineChart extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  periodLabel,
+                  widget.periodLabel,
                   style: const TextStyle(
                     color: AppColors.slate,
                     fontSize: 11,
@@ -184,7 +302,7 @@ class _DocumentTrendLineChart extends StatelessWidget {
                 ),
               ),
               Text(
-                'Rp ${formatErpCurrency(total)}',
+                'Rp ${formatErpCurrency(widget.total)}',
                 style: const TextStyle(
                   color: AppColors.primary,
                   fontSize: 13,
@@ -199,15 +317,66 @@ class _DocumentTrendLineChart extends StatelessWidget {
   }
 
   List<String> _visibleLabels() {
-    if (points.isEmpty) return const [];
-    if (points.length <= 5) return points.map((point) => point.label).toList();
+    if (widget.points.isEmpty) return const [];
+    if (widget.points.length <= 5) {
+      return widget.points.map((point) => point.label).toList();
+    }
     return [
-      points.first.label,
-      points[(points.length * 0.25).floor()].label,
-      points[(points.length * 0.5).floor()].label,
-      points[(points.length * 0.75).floor()].label,
-      points.last.label,
+      widget.points.first.label,
+      widget.points[(widget.points.length * 0.25).floor()].label,
+      widget.points[(widget.points.length * 0.5).floor()].label,
+      widget.points[(widget.points.length * 0.75).floor()].label,
+      widget.points.last.label,
     ];
+  }
+}
+
+class _TrendPointTooltip extends StatelessWidget {
+  final DocumentTrendPoint point;
+
+  const _TrendPointTooltip({required this.point});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 136,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.primaryDark,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              point.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Rp ${formatErpCurrency(point.value)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -262,10 +431,12 @@ class _DocumentTrendBadge extends StatelessWidget {
 class _DocumentTrendLinePainter extends CustomPainter {
   final List<DocumentTrendPoint> points;
   final double maxValue;
+  final int? selectedIndex;
 
   const _DocumentTrendLinePainter({
     required this.points,
     required this.maxValue,
+    this.selectedIndex,
   });
 
   @override
@@ -280,14 +451,11 @@ class _DocumentTrendLinePainter extends CustomPainter {
 
     if (points.isEmpty || maxValue <= 0) return;
 
-    final chartPoints = <Offset>[];
-    final step = points.length <= 1 ? 0.0 : size.width / (points.length - 1);
-    for (var i = 0; i < points.length; i++) {
-      final x = points.length <= 1 ? size.width / 2 : step * i;
-      final normalized = (points[i].value / maxValue).clamp(0.0, 1.0);
-      final y = size.height - (normalized * (size.height - 12)) - 6;
-      chartPoints.add(Offset(x, y));
-    }
+    final chartPoints = _DocumentTrendLineGeometry.offsets(
+      points: points,
+      maxValue: maxValue,
+      size: size,
+    );
 
     final fillPath = Path()..moveTo(chartPoints.first.dx, size.height);
     for (final point in chartPoints) {
@@ -331,15 +499,50 @@ class _DocumentTrendLinePainter extends CustomPainter {
 
     final dotPaint = Paint()..color = AppColors.primary;
     final dotBorderPaint = Paint()..color = AppColors.white;
-    for (final point in chartPoints) {
-      canvas.drawCircle(point, 5, dotBorderPaint);
-      canvas.drawCircle(point, 3.2, dotPaint);
+    for (var i = 0; i < chartPoints.length; i++) {
+      final point = chartPoints[i];
+      final selected = selectedIndex == i;
+      if (selected) {
+        final selectedLinePaint = Paint()
+          ..color = AppColors.primary.withValues(alpha: 0.18)
+          ..strokeWidth = 1.4;
+        canvas.drawLine(
+          Offset(point.dx, 0),
+          Offset(point.dx, size.height),
+          selectedLinePaint,
+        );
+      }
+      canvas.drawCircle(point, selected ? 7 : 5, dotBorderPaint);
+      canvas.drawCircle(point, selected ? 4.8 : 3.2, dotPaint);
     }
   }
 
   @override
   bool shouldRepaint(covariant _DocumentTrendLinePainter oldDelegate) {
-    return oldDelegate.points != points || oldDelegate.maxValue != maxValue;
+    return oldDelegate.points != points ||
+        oldDelegate.maxValue != maxValue ||
+        oldDelegate.selectedIndex != selectedIndex;
+  }
+}
+
+class _DocumentTrendLineGeometry {
+  const _DocumentTrendLineGeometry._();
+
+  static List<Offset> offsets({
+    required List<DocumentTrendPoint> points,
+    required double maxValue,
+    required Size size,
+  }) {
+    if (points.isEmpty || maxValue <= 0) return const [];
+    final chartPoints = <Offset>[];
+    final step = points.length <= 1 ? 0.0 : size.width / (points.length - 1);
+    for (var i = 0; i < points.length; i++) {
+      final x = points.length <= 1 ? size.width / 2 : step * i;
+      final normalized = (points[i].value / maxValue).clamp(0.0, 1.0);
+      final y = size.height - (normalized * (size.height - 12)) - 6;
+      chartPoints.add(Offset(x, y));
+    }
+    return chartPoints;
   }
 }
 
