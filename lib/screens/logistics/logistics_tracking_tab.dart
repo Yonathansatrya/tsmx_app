@@ -911,26 +911,8 @@ class _DeliveryActivitySectionState extends State<_DeliveryActivitySection> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _statuses.map((status) {
-              final busy = _busyStatus == status;
-              return FilledButton.tonalIcon(
-                onPressed: _busyStatus.isEmpty ? () => _record(status) : null,
-                icon: busy
-                    ? const SizedBox.square(
-                        dimension: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(_statusIcon(status), size: 18),
-                label: Text(status),
-              );
-            }).toList(),
-          ),
           if (_error?.isNotEmpty == true) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Text(
               _error!,
               style: const TextStyle(
@@ -940,38 +922,77 @@ class _DeliveryActivitySectionState extends State<_DeliveryActivitySection> {
               ),
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           FutureBuilder<List<DeliveryActivityLog>>(
             future: _future,
             builder: (context, snapshot) {
+              final rows = snapshot.data ?? const <DeliveryActivityLog>[];
+              final loading =
+                  snapshot.connectionState == ConnectionState.waiting;
+              final nextStatus = _nextStatus(rows);
+              final alternateStatuses = _statuses
+                  .where((status) => status != nextStatus)
+                  .toList(growable: false);
+
+              final actionPanel = _DeliveryActivityActionPanel(
+                loading: loading,
+                busyStatus: _busyStatus,
+                nextStatus: nextStatus,
+                statuses: alternateStatuses,
+                onRecord: _record,
+                iconFor: _statusIcon,
+              );
+
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const LogisticsInfoPanel(
-                  message: 'Memuat aktivitas armada...',
-                  icon: Icons.timeline_rounded,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    actionPanel,
+                    const SizedBox(height: 14),
+                    const LogisticsInfoPanel(
+                      message: 'Memuat aktivitas armada...',
+                      icon: Icons.timeline_rounded,
+                    ),
+                  ],
                 );
               }
 
               if (snapshot.hasError) {
-                return LogisticsInfoPanel(
-                  message:
-                      'Aktivitas belum bisa dimuat. ${_LogisticsTrackingTabState._friendlyError(snapshot.error!)}',
-                  icon: Icons.error_outline_rounded,
-                  color: AppColors.danger,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    actionPanel,
+                    const SizedBox(height: 14),
+                    LogisticsInfoPanel(
+                      message:
+                          'Aktivitas belum bisa dimuat. ${_LogisticsTrackingTabState._friendlyError(snapshot.error!)}',
+                      icon: Icons.error_outline_rounded,
+                      color: AppColors.danger,
+                    ),
+                  ],
                 );
               }
 
-              final rows = snapshot.data ?? const <DeliveryActivityLog>[];
               if (rows.isEmpty) {
-                return const LogisticsInfoPanel(
-                  message:
-                      'Belum ada aktivitas manual. Driver bisa mulai dari Loading Barang.',
-                  icon: Icons.timeline_rounded,
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    actionPanel,
+                    const SizedBox(height: 14),
+                    const LogisticsInfoPanel(
+                      message:
+                          'Belum ada aktivitas manual. Driver bisa mulai dari Loading Barang.',
+                      icon: Icons.timeline_rounded,
+                    ),
+                  ],
                 );
               }
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  actionPanel,
+                  const SizedBox(height: 16),
                   const Text(
                     'Riwayat Aktivitas',
                     style: TextStyle(
@@ -998,6 +1019,126 @@ class _DeliveryActivitySectionState extends State<_DeliveryActivitySection> {
     if (text.contains('tujuan')) return Icons.flag_outlined;
     if (text.contains('bongkar')) return Icons.move_down_rounded;
     return Icons.check_circle_outline_rounded;
+  }
+
+  static String _nextStatus(List<DeliveryActivityLog> rows) {
+    if (rows.isEmpty) return _statuses.first;
+    final latest = rows.first.activityStatus.trim().toLowerCase();
+    final currentIndex = _statuses.indexWhere(
+      (status) => status.toLowerCase() == latest,
+    );
+    if (currentIndex < 0) return _statuses.first;
+    final nextIndex = currentIndex + 1;
+    if (nextIndex >= _statuses.length) return _statuses.last;
+    return _statuses[nextIndex];
+  }
+}
+
+class _DeliveryActivityActionPanel extends StatelessWidget {
+  const _DeliveryActivityActionPanel({
+    required this.loading,
+    required this.busyStatus,
+    required this.nextStatus,
+    required this.statuses,
+    required this.onRecord,
+    required this.iconFor,
+  });
+
+  final bool loading;
+  final String busyStatus;
+  final String nextStatus;
+  final List<String> statuses;
+  final ValueChanged<String> onRecord;
+  final IconData Function(String status) iconFor;
+
+  @override
+  Widget build(BuildContext context) {
+    final savingNext = busyStatus == nextStatus;
+    final disabled = loading || busyStatus.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.softGreen,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Langkah berikutnya',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: disabled ? null : () => onRecord(nextStatus),
+                icon: savingNext
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(iconFor(nextStatus)),
+                label: Text(nextStatus),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Ikuti tombol ini sesuai urutan kerja driver di lapangan.',
+                style: TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Ubah status lain jika diperlukan',
+          style: TextStyle(
+            color: AppColors.slate,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: statuses.map((status) {
+            final busy = busyStatus == status;
+            return OutlinedButton.icon(
+              onPressed: disabled ? null : () => onRecord(status),
+              icon: busy
+                  ? const SizedBox.square(
+                      dimension: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(iconFor(status), size: 18),
+              label: Text(status),
+            );
+          }).toList(),
+        ),
+      ],
+    );
   }
 }
 
