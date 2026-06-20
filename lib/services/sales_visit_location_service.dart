@@ -90,8 +90,12 @@ class SalesVisitLocationService {
   }
 
   Future<void> startTracking(
-    Future<void> Function(VisitLocationPoint point) onPoint,
-  ) async {
+    Future<void> Function(VisitLocationPoint point) onPoint, {
+    String notificationTitle = 'Perjalanan customer aktif',
+    String notificationText =
+        'TMSX mencatat lokasi tiap 5 menit sampai check-in.',
+    bool queueFailedPoints = true,
+  }) async {
     await stopTracking();
     await currentPosition();
     final settings = Platform.isAndroid
@@ -99,10 +103,9 @@ class SalesVisitLocationService {
             accuracy: LocationAccuracy.high,
             distanceFilter: 25,
             intervalDuration: trackingInterval,
-            foregroundNotificationConfig: const ForegroundNotificationConfig(
-              notificationTitle: 'Perjalanan customer aktif',
-              notificationText:
-                  'TMSX mencatat lokasi tiap 5 menit sampai check-in.',
+            foregroundNotificationConfig: ForegroundNotificationConfig(
+              notificationTitle: notificationTitle,
+              notificationText: notificationText,
               enableWakeLock: true,
             ),
           )
@@ -118,7 +121,7 @@ class SalesVisitLocationService {
           try {
             await onPoint(point);
           } catch (_) {
-            await enqueue(point);
+            if (queueFailedPoints) await enqueue(point);
           }
         });
   }

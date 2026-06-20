@@ -355,6 +355,15 @@ class AppState with ChangeNotifier {
   SalesVisit? get activeSalesVisit => _activeSalesVisit;
   VisitLocationPoint? _latestVisitLocation;
   VisitLocationPoint? get latestVisitLocation => _latestVisitLocation;
+  String? _activeDeliveryTrackingNote;
+  String? get activeDeliveryTrackingNote => _activeDeliveryTrackingNote;
+  String? _latestDeliveryTrackingNote;
+  String? get latestDeliveryTrackingNote => _latestDeliveryTrackingNote;
+  VisitLocationPoint? _latestDeliveryDriverLocation;
+  VisitLocationPoint? get latestDeliveryDriverLocation =>
+      _latestDeliveryDriverLocation;
+  bool get isDeliveryDriverTrackingActive =>
+      _activeDeliveryTrackingNote?.isNotEmpty == true;
 
   FrappeService get _frappeService => services.frappe;
   AuthService get _authService => services.auth;
@@ -1393,6 +1402,70 @@ class AppState with ChangeNotifier {
       documentName: deliveryNoteId,
       filePath: filePath,
     );
+  }
+
+  Future<VisitLocationPoint> recordDeliveryDriverLocation(
+    DeliveryNote deliveryNote,
+  ) async {
+    final point = await _visitLocationService.currentPosition();
+    await _saveDeliveryTrackingPoint(deliveryNote, point);
+    _latestDeliveryTrackingNote = deliveryNote.id;
+    _latestDeliveryDriverLocation = point;
+    notifyListeners();
+    return point;
+  }
+
+  Future<VisitLocationPoint> startDeliveryDriverTracking(
+    DeliveryNote deliveryNote,
+  ) async {
+    if (_activeSalesVisit != null) {
+      throw Exception(
+        'Selesaikan tracking sales visit sebelum tracking driver.',
+      );
+    }
+    if (_activeDeliveryTrackingNote != null &&
+        _activeDeliveryTrackingNote != deliveryNote.id) {
+      throw Exception(
+        'Selesaikan tracking ${_activeDeliveryTrackingNote!} sebelum memulai yang baru.',
+      );
+    }
+
+    final firstPoint = await recordDeliveryDriverLocation(deliveryNote);
+    _activeDeliveryTrackingNote = deliveryNote.id;
+    notifyListeners();
+    await _visitLocationService.startTracking(
+      (point) async {
+        _latestDeliveryTrackingNote = deliveryNote.id;
+        _latestDeliveryDriverLocation = point;
+        notifyListeners();
+        await _saveDeliveryTrackingPoint(deliveryNote, point);
+      },
+      notificationTitle: 'Tracking driver aktif',
+      notificationText: 'TMSX mencatat lokasi driver tiap 5 menit.',
+      queueFailedPoints: false,
+    );
+    return firstPoint;
+  }
+
+  Future<void> stopDeliveryDriverTracking() async {
+    await _visitLocationService.stopTracking();
+    _activeDeliveryTrackingNote = null;
+    notifyListeners();
+  }
+
+  Future<void> _saveDeliveryTrackingPoint(
+    DeliveryNote deliveryNote,
+    VisitLocationPoint point,
+  ) async {
+    await _frappeService.createDocument('Delivery Tracking Point', {
+      'delivery_note': deliveryNote.id,
+      'customer': deliveryNote.customer,
+      if (_currentUser?.isNotEmpty == true) 'driver': _currentUser,
+      'captured_at': point.capturedAt.toIso8601String(),
+      'latitude': point.latitude,
+      'longitude': point.longitude,
+      'accuracy': point.accuracy,
+    });
   }
 
   Future<List<Map<String, dynamic>>> fetchDocumentAttachments({
