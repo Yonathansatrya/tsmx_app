@@ -36,12 +36,12 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
     const ErpStatusChip(label: 'Draft', value: DeliveryNoteStatusKey.draft),
     const ErpStatusChip(label: 'To Bill', value: DeliveryNoteStatusKey.toBill),
     const ErpStatusChip(
-      label: 'Partly Billed',
-      value: DeliveryNoteStatusKey.partiallyBilled,
-    ),
-    const ErpStatusChip(
       label: 'Completed',
       value: DeliveryNoteStatusKey.completed,
+    ),
+    const ErpStatusChip(
+      label: 'Return Issued',
+      value: DeliveryNoteStatusKey.returnIssued,
     ),
     const ErpStatusChip(
       label: 'Return',
@@ -75,8 +75,8 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
   String? get _statusText => switch (_statusFilter) {
     DeliveryNoteStatusKey.draft => 'Draft',
     DeliveryNoteStatusKey.toBill => 'To Bill',
-    DeliveryNoteStatusKey.partiallyBilled => 'Partially Billed',
     DeliveryNoteStatusKey.completed => 'Completed',
+    DeliveryNoteStatusKey.returnIssued => 'Return Issued',
     DeliveryNoteStatusKey.returnDoc => 'Return',
     DeliveryNoteStatusKey.cancelled => 'Cancelled',
     DeliveryNoteStatusKey.closed => 'Closed',

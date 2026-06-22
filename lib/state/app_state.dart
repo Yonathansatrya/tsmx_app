@@ -3447,6 +3447,8 @@ class AppState with ChangeNotifier {
         'status',
         'docstatus',
         'posting_date',
+        'base_net_total',
+        'net_total',
         'grand_total',
         'total_qty',
       ],
@@ -4102,6 +4104,8 @@ class AppState with ChangeNotifier {
         'status',
         'docstatus',
         'posting_date',
+        'base_net_total',
+        'net_total',
         'grand_total',
         'total_qty',
       ],
@@ -4240,7 +4244,7 @@ class AppState with ChangeNotifier {
 
     final status = row['status']?.toString().trim().toLowerCase() ?? '';
     if (status == 'draft' || status == 'cancelled') return false;
-    if (status.contains('return')) return false;
+    if (status == 'return') return false;
 
     return true;
   }

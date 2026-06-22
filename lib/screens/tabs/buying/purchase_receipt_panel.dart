@@ -32,26 +32,22 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
     const ErpStatusChip(label: 'Draft', value: DeliveryNoteStatusKey.draft),
     const ErpStatusChip(label: 'To Bill', value: DeliveryNoteStatusKey.toBill),
     const ErpStatusChip(
-      label: 'Partly Billed',
-      value: DeliveryNoteStatusKey.partiallyBilled,
-    ),
-    const ErpStatusChip(
       label: 'Completed',
       value: DeliveryNoteStatusKey.completed,
+    ),
+    const ErpStatusChip(
+      label: 'Return Issued',
+      value: DeliveryNoteStatusKey.returnIssued,
     ),
     const ErpStatusChip(
       label: 'Return',
       value: DeliveryNoteStatusKey.returnDoc,
     ),
     const ErpStatusChip(
-      label: 'Return Issued',
-      value: DeliveryNoteStatusKey.returnIssued,
-    ),
-    const ErpStatusChip(label: 'Closed', value: DeliveryNoteStatusKey.closed),
-    const ErpStatusChip(
       label: 'Cancelled',
       value: DeliveryNoteStatusKey.cancelled,
     ),
+    const ErpStatusChip(label: 'Closed', value: DeliveryNoteStatusKey.closed),
   ];
 
   @override
@@ -74,12 +70,11 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
   String? get _statusText => switch (_statusFilter) {
     DeliveryNoteStatusKey.draft => 'Draft',
     DeliveryNoteStatusKey.toBill => 'To Bill',
-    DeliveryNoteStatusKey.partiallyBilled => 'Partially Billed',
     DeliveryNoteStatusKey.completed => 'Completed',
-    DeliveryNoteStatusKey.returnDoc => 'Return',
     DeliveryNoteStatusKey.returnIssued => 'Return Issued',
-    DeliveryNoteStatusKey.closed => 'Closed',
+    DeliveryNoteStatusKey.returnDoc => 'Return',
     DeliveryNoteStatusKey.cancelled => 'Cancelled',
+    DeliveryNoteStatusKey.closed => 'Closed',
     _ => null,
   };
 

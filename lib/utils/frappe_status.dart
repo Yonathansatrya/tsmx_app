@@ -256,7 +256,6 @@ PurchaseOrderStatusKey parsePurchaseOrderStatus(
 enum DeliveryNoteStatusKey {
   draft,
   toBill,
-  partiallyBilled,
   completed,
   returnDoc,
   returnIssued,
@@ -280,9 +279,6 @@ DeliveryNoteStatusKey parseDeliveryNoteStatus(
   if (_contains(s, 'return issued')) return DeliveryNoteStatusKey.returnIssued;
   if (_contains(s, 'return')) return DeliveryNoteStatusKey.returnDoc;
   if (_contains(s, 'completed')) return DeliveryNoteStatusKey.completed;
-  if (_contains(s, 'partially billed')) {
-    return DeliveryNoteStatusKey.partiallyBilled;
-  }
   if (_contains(s, 'to bill')) return DeliveryNoteStatusKey.toBill;
 
   return DeliveryNoteStatusKey.unknown;

@@ -85,7 +85,12 @@ class DeliveryNote {
           json['customer_name']?.toString() ??
           json['customer']?.toString() ??
           'Unknown Customer',
-      value: NumParse.asDouble(json['grand_total'] ?? json['rounded_total']),
+      value: NumParse.asDouble(
+        json['base_net_total'] ??
+            json['net_total'] ??
+            json['grand_total'] ??
+            json['rounded_total'],
+      ),
       statusKey: parseDeliveryNoteStatus(statusText, docstatus: docstatus),
       statusText: statusText,
       docStatus: docstatus,
