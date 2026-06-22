@@ -229,8 +229,16 @@ class AppState with ChangeNotifier {
 
   int _sellingPeriodYear = DateTime.now().year;
   int _sellingPeriodMonth = DateTime.now().month;
+  String _sellingCompanyFilter = '';
+  String _sellingCustomerTypeFilter = 'all';
+  List<String> _sellingCompanies = const [];
+  String? _sellingCustomerTypeIdsCacheKey;
+  List<String>? _sellingCustomerTypeIdsCache;
   int get sellingPeriodYear => _sellingPeriodYear;
   int get sellingPeriodMonth => _sellingPeriodMonth;
+  String get sellingCompanyFilter => _sellingCompanyFilter;
+  String get sellingCustomerTypeFilter => _sellingCustomerTypeFilter;
+  List<String> get sellingCompanies => _sellingCompanies;
   DateTime get sellingPeriodFrom => _sellingPeriodMonth == 0
       ? DateTime(_sellingPeriodYear, 1, 1)
       : DateTime(_sellingPeriodYear, _sellingPeriodMonth, 1);
@@ -2157,6 +2165,9 @@ class AppState with ChangeNotifier {
 
     try {
       await _frappeService.ensureLoggedIn();
+      final salesFilters = await _sellingDocumentFilters('transaction_date');
+      final postingFilters = await _sellingDocumentFilters('posting_date');
+      final customerTypeIds = await _sellingCustomerTypeCustomerIds();
       final salesTrend = _emptySellingTrendPoints();
       final deliveryTrend = _emptySellingTrendPoints();
       final invoiceTrend = _emptySellingTrendPoints();
@@ -2164,10 +2175,21 @@ class AppState with ChangeNotifier {
       var salesDocumentCount = 0;
       await _forEachResourcePage(
         doctype: 'Sales Order',
-        fields: const ['name', 'grand_total', 'transaction_date'],
-        filters: _sellingPeriodFilters('transaction_date'),
+        fields: const [
+          'name',
+          'base_net_total',
+          'net_total',
+          'grand_total',
+          'transaction_date',
+          'customer',
+          'status',
+          'docstatus',
+        ],
+        filters: salesFilters,
         onRow: (row) {
-          final value = NumParse.asDouble(row['grand_total']);
+          if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
+          if (!_isActiveSellingTrendRow(row)) return;
+          final value = _sellingAnalyticsValue(row);
           salesTotal += value;
           salesDocumentCount++;
           _addSellingTrendPoint(
@@ -2182,10 +2204,21 @@ class AppState with ChangeNotifier {
       var deliveryCount = 0;
       await _forEachResourcePage(
         doctype: 'Delivery Note',
-        fields: const ['name', 'grand_total', 'posting_date'],
-        filters: _sellingPeriodFilters('posting_date'),
+        fields: const [
+          'name',
+          'base_net_total',
+          'net_total',
+          'grand_total',
+          'posting_date',
+          'customer',
+          'status',
+          'docstatus',
+        ],
+        filters: postingFilters,
         onRow: (row) {
-          final value = NumParse.asDouble(row['grand_total']);
+          if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
+          if (!_isActiveSellingTrendRow(row)) return;
+          final value = _sellingAnalyticsValue(row);
           deliveryTotal += value;
           deliveryCount++;
           _addSellingTrendPoint(
@@ -2200,10 +2233,21 @@ class AppState with ChangeNotifier {
       var invoiceCount = 0;
       await _forEachResourcePage(
         doctype: 'Sales Invoice',
-        fields: const ['name', 'grand_total', 'posting_date'],
-        filters: _sellingPeriodFilters('posting_date'),
+        fields: const [
+          'name',
+          'base_net_total',
+          'net_total',
+          'grand_total',
+          'posting_date',
+          'customer',
+          'status',
+          'docstatus',
+        ],
+        filters: postingFilters,
         onRow: (row) {
-          final value = NumParse.asDouble(row['grand_total']);
+          if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
+          if (!_isActiveSellingTrendRow(row)) return;
+          final value = _sellingAnalyticsValue(row);
           invoiceTotal += value;
           invoiceCount++;
           _addSellingTrendPoint(
@@ -2238,10 +2282,28 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Future<void> setSellingPeriod({required int year, required int month}) async {
-    if (_sellingPeriodYear == year && _sellingPeriodMonth == month) return;
+  Future<void> setSellingPeriod({
+    required int year,
+    required int month,
+    String? company,
+    String? customerType,
+  }) async {
+    final nextCompany = company ?? _sellingCompanyFilter;
+    final nextCustomerType = customerType ?? _sellingCustomerTypeFilter;
+    if (_sellingPeriodYear == year &&
+        _sellingPeriodMonth == month &&
+        _sellingCompanyFilter == nextCompany &&
+        _sellingCustomerTypeFilter == nextCustomerType) {
+      return;
+    }
     _sellingPeriodYear = year;
     _sellingPeriodMonth = month;
+    _sellingCompanyFilter = nextCompany;
+    if (_sellingCustomerTypeFilter != nextCustomerType) {
+      _sellingCustomerTypeIdsCacheKey = null;
+      _sellingCustomerTypeIdsCache = null;
+    }
+    _sellingCustomerTypeFilter = nextCustomerType;
     notifyListeners();
     await Future.wait([
       fetchSalesOrdersFromFrappe(),
@@ -2249,6 +2311,28 @@ class AppState with ChangeNotifier {
       fetchSalesInvoicesFromFrappe(),
       refreshSellingSummaries(),
     ]);
+  }
+
+  Future<void> loadSellingFilterOptions() async {
+    if (_sellingCompanies.isNotEmpty || !_isAuthenticated) return;
+    try {
+      await _frappeService.ensureLoggedIn();
+      final rows = await _fetchAllResourcePages(
+        doctype: 'Company',
+        fields: const ['name'],
+        orderBy: 'name asc',
+        maxRows: 500,
+      );
+      final companies =
+          rows
+              .map((row) => row['name']?.toString() ?? '')
+              .where((name) => name.trim().isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+      _sellingCompanies = companies;
+      notifyListeners();
+    } catch (_) {}
   }
 
   List<DocumentTrendPoint> _emptySellingTrendPoints() {
@@ -2468,7 +2552,10 @@ class AppState with ChangeNotifier {
           'docstatus',
           'delivery_date',
         ],
-        filters: _sellingPeriodFilters('transaction_date'),
+        filters: [
+          ..._sellingPeriodFilters('transaction_date'),
+          ['docstatus', '!=', 2],
+        ],
         onRow: (row) {
           final order = SalesOrder.fromJson(row);
           salesDocumentCount++;
@@ -2490,7 +2577,10 @@ class AppState with ChangeNotifier {
       await _forEachResourcePage(
         doctype: 'Delivery Note',
         fields: const ['name', 'grand_total'],
-        filters: _sellingPeriodFilters('posting_date'),
+        filters: [
+          ..._sellingPeriodFilters('posting_date'),
+          ['docstatus', '!=', 2],
+        ],
         onRow: (row) {
           deliveryTotal += NumParse.asDouble(row['grand_total']);
           deliveryCount++;
@@ -2503,7 +2593,10 @@ class AppState with ChangeNotifier {
       await _forEachResourcePage(
         doctype: 'Sales Invoice',
         fields: const ['name', 'grand_total', 'status', 'docstatus'],
-        filters: _sellingPeriodFilters('posting_date'),
+        filters: [
+          ..._sellingPeriodFilters('posting_date'),
+          ['docstatus', '!=', 2],
+        ],
         onRow: (row) {
           final invoice = SalesInvoice.fromJson(row);
           invoiceTotal += invoice.value;
@@ -3952,10 +4045,11 @@ class AppState with ChangeNotifier {
     required int limitStart,
   }) async {
     final filters = <List<dynamic>>[
-      ..._sellingPeriodFilters('transaction_date'),
+      ...await _sellingDocumentFilters('transaction_date'),
       ...?_salesOrderFilters(_salesOrderStatus),
       ..._salesOwnerFilter,
     ];
+    final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Sales Order',
       fields: const [
@@ -3983,7 +4077,10 @@ class AppState with ChangeNotifier {
       ]),
     );
 
-    var orders = data.map((item) => SalesOrder.fromJson(item)).toList();
+    var orders = data
+        .where((item) => _matchesSellingCustomerType(item, customerTypeIds))
+        .map((item) => SalesOrder.fromJson(item))
+        .toList();
     orders = await _attachSalesOrderItems(orders);
     return orders;
   }
@@ -3992,9 +4089,10 @@ class AppState with ChangeNotifier {
     required int limitStart,
   }) async {
     final filters = <List<dynamic>>[
-      ..._sellingPeriodFilters('posting_date'),
+      ...await _sellingDocumentFilters('posting_date'),
       ...?_statusFilters(_deliveryNoteStatus),
     ];
+    final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Delivery Note',
       fields: const [
@@ -4017,17 +4115,21 @@ class AppState with ChangeNotifier {
         'customer_name',
       ]),
     );
-    return data.map(DeliveryNote.fromJson).toList();
+    return data
+        .where((item) => _matchesSellingCustomerType(item, customerTypeIds))
+        .map(DeliveryNote.fromJson)
+        .toList();
   }
 
   Future<List<SalesInvoice>> _fetchSalesInvoicePage({
     required int limitStart,
   }) async {
     final filters = <List<dynamic>>[
-      ..._sellingPeriodFilters('posting_date'),
+      ...await _sellingDocumentFilters('posting_date'),
       ...?_statusFilters(_salesInvoiceStatus),
       ..._salesOwnerFilter,
     ];
+    final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Sales Invoice',
       fields: const [
@@ -4052,7 +4154,10 @@ class AppState with ChangeNotifier {
         'customer_name',
       ]),
     );
-    return data.map(SalesInvoice.fromJson).toList();
+    return data
+        .where((item) => _matchesSellingCustomerType(item, customerTypeIds))
+        .map(SalesInvoice.fromJson)
+        .toList();
   }
 
   List<List<dynamic>>? _statusFilters(String? status) {
@@ -4066,8 +4171,78 @@ class AppState with ChangeNotifier {
     return [
       [dateField, '>=', DateRangePresets.toFrappeDate(sellingPeriodFrom)],
       [dateField, '<=', DateRangePresets.toFrappeDate(sellingPeriodTo)],
-      ['docstatus', '!=', 2],
     ];
+  }
+
+  Future<List<List<dynamic>>> _sellingDocumentFilters(String dateField) async {
+    final filters = <List<dynamic>>[
+      ..._sellingPeriodFilters(dateField),
+      if (_sellingCompanyFilter.trim().isNotEmpty)
+        ['company', '=', _sellingCompanyFilter.trim()],
+    ];
+
+    return filters;
+  }
+
+  bool _matchesSellingCustomerType(
+    Map<String, dynamic> row,
+    List<String>? customerIds,
+  ) {
+    if (customerIds == null) return true;
+    if (customerIds.isEmpty) return false;
+    return customerIds.contains(row['customer']?.toString() ?? '');
+  }
+
+  double _sellingAnalyticsValue(Map<String, dynamic> row) {
+    final baseNetTotal = NumParse.asDouble(row['base_net_total']);
+    if (baseNetTotal != 0) return baseNetTotal;
+    final netTotal = NumParse.asDouble(row['net_total']);
+    if (netTotal != 0) return netTotal;
+    return NumParse.asDouble(row['grand_total']);
+  }
+
+  Future<List<String>?> _sellingCustomerTypeCustomerIds() async {
+    final type = _sellingCustomerTypeFilter.trim().toLowerCase();
+    if (type.isEmpty || type == 'all') return null;
+    if (_sellingCustomerTypeIdsCacheKey == type &&
+        _sellingCustomerTypeIdsCache != null) {
+      return _sellingCustomerTypeIdsCache;
+    }
+
+    final internal = type == 'internal';
+    List<Map<String, dynamic>> rows;
+    try {
+      rows = await _fetchAllResourcePages(
+        doctype: 'Customer',
+        fields: const ['name', 'is_internal_customer'],
+        filters: [
+          ['is_internal_customer', '=', internal ? 1 : 0],
+        ],
+        orderBy: 'name asc',
+        maxRows: null,
+      );
+    } catch (_) {
+      return null;
+    }
+
+    final ids = rows
+        .map((row) => row['name']?.toString() ?? '')
+        .where((name) => name.trim().isNotEmpty)
+        .toList();
+    _sellingCustomerTypeIdsCacheKey = type;
+    _sellingCustomerTypeIdsCache = ids;
+    return ids;
+  }
+
+  bool _isActiveSellingTrendRow(Map<String, dynamic> row) {
+    final docstatus = NumParse.asInt(row['docstatus']);
+    if (docstatus != 1) return false;
+
+    final status = row['status']?.toString().trim().toLowerCase() ?? '';
+    if (status == 'draft' || status == 'cancelled') return false;
+    if (status.contains('return')) return false;
+
+    return true;
   }
 
   List<List<dynamic>> _buyingPeriodFilters(String dateField) {

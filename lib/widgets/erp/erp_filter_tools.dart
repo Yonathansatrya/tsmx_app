@@ -9,6 +9,11 @@ class ErpPeriodFilterCard extends StatelessWidget {
   final int selectedMonth;
   final bool loading;
   final void Function(int year, int month) onChanged;
+  final List<String> companyOptions;
+  final String selectedCompany;
+  final ValueChanged<String>? onCompanyChanged;
+  final String selectedCustomerType;
+  final ValueChanged<String>? onCustomerTypeChanged;
 
   const ErpPeriodFilterCard({
     super.key,
@@ -19,6 +24,11 @@ class ErpPeriodFilterCard extends StatelessWidget {
     required this.selectedMonth,
     required this.loading,
     required this.onChanged,
+    this.companyOptions = const [],
+    this.selectedCompany = '',
+    this.onCompanyChanged,
+    this.selectedCustomerType = 'all',
+    this.onCustomerTypeChanged,
   });
 
   static const monthLabels = [
@@ -42,6 +52,12 @@ class ErpPeriodFilterCard extends StatelessWidget {
     final years = [
       for (var year = currentYear; year >= currentYear - 5; year--) year,
     ];
+    final companies = [
+      ...companyOptions,
+      if (selectedCompany.isNotEmpty &&
+          !companyOptions.contains(selectedCompany))
+        selectedCompany,
+    ]..sort();
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -146,6 +162,89 @@ class ErpPeriodFilterCard extends StatelessWidget {
               ),
             ],
           ),
+          if (onCompanyChanged != null || onCustomerTypeChanged != null) ...[
+            const SizedBox(height: 10),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 390;
+                final companyDropdown = onCompanyChanged == null
+                    ? null
+                    : DropdownButtonFormField<String>(
+                        initialValue: selectedCompany,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Company',
+                          prefixIcon: Icon(Icons.business_rounded, size: 18),
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: '',
+                            child: Text('Semua Company'),
+                          ),
+                          for (final company in companies)
+                            DropdownMenuItem(
+                              value: company,
+                              child: Text(
+                                company,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                        onChanged: loading
+                            ? null
+                            : (value) => onCompanyChanged?.call(value ?? ''),
+                      );
+                final customerDropdown = onCustomerTypeChanged == null
+                    ? null
+                    : DropdownButtonFormField<String>(
+                        initialValue: selectedCustomerType,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Customer',
+                          prefixIcon: Icon(Icons.groups_2_rounded, size: 18),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'all', child: Text('Semua')),
+                          DropdownMenuItem(
+                            value: 'external',
+                            child: Text('External'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'internal',
+                            child: Text('Internal'),
+                          ),
+                        ],
+                        onChanged: loading
+                            ? null
+                            : (value) =>
+                                  onCustomerTypeChanged?.call(value ?? 'all'),
+                      );
+
+                if (compact) {
+                  return Column(
+                    children: [
+                      ?companyDropdown,
+                      if (companyDropdown != null && customerDropdown != null)
+                        const SizedBox(height: 10),
+                      ?customerDropdown,
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    if (companyDropdown != null)
+                      Expanded(flex: 3, child: companyDropdown),
+                    if (companyDropdown != null && customerDropdown != null)
+                      const SizedBox(width: 10),
+                    if (customerDropdown != null)
+                      Expanded(flex: 2, child: customerDropdown),
+                  ],
+                );
+              },
+            ),
+          ],
         ],
       ),
     );

@@ -45,7 +45,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
   static final _chips = <ErpStatusChip<SalesOrderStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
     const ErpStatusChip(label: 'Draft', value: SalesOrderStatusKey.draft),
-    const ErpStatusChip(label: 'On Hold', value: SalesOrderStatusKey.onHold),
     const ErpStatusChip(label: 'Overdue', value: SalesOrderStatusKey.overdue),
     const ErpStatusChip(
       label: 'Deliver & Bill',
@@ -100,7 +99,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
 
   String? get _statusText => switch (_statusFilter) {
     SalesOrderStatusKey.draft => 'Draft',
-    SalesOrderStatusKey.onHold => 'On Hold',
     SalesOrderStatusKey.overdue => 'Overdue',
     SalesOrderStatusKey.toDeliverAndBill => 'To Deliver and Bill',
     SalesOrderStatusKey.toBill => 'To Bill',

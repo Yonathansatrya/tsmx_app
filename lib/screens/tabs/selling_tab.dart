@@ -48,6 +48,7 @@ class SellingTabState extends State<SellingTab>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
 
+      appState.loadSellingFilterOptions();
       appState.refreshSellingSummaries();
 
       if (appState.salesOrders.isEmpty) {
@@ -198,10 +199,27 @@ class SellingTabState extends State<SellingTab>
                     selectedYear: appState.sellingPeriodYear,
                     selectedMonth: appState.sellingPeriodMonth,
                     loading: appState.isOrderSummaryLoading,
+                    companyOptions: appState.sellingCompanies,
+                    selectedCompany: appState.sellingCompanyFilter,
+                    selectedCustomerType: appState.sellingCustomerTypeFilter,
                     onChanged: (year, month) {
                       context.read<AppState>().setSellingPeriod(
                         year: year,
                         month: month,
+                      );
+                    },
+                    onCompanyChanged: (company) {
+                      context.read<AppState>().setSellingPeriod(
+                        year: appState.sellingPeriodYear,
+                        month: appState.sellingPeriodMonth,
+                        company: company,
+                      );
+                    },
+                    onCustomerTypeChanged: (customerType) {
+                      context.read<AppState>().setSellingPeriod(
+                        year: appState.sellingPeriodYear,
+                        month: appState.sellingPeriodMonth,
+                        customerType: customerType,
                       );
                     },
                   ),
