@@ -91,10 +91,22 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
 
   Future<void> _openDetail(MaterialRequest row) async {
     final appState = context.read<AppState>();
-    final doc = await appState.frappeService.fetchDocument(
-      'Material Request',
-      row.id,
-    );
+    Map<String, dynamic> doc;
+    try {
+      doc = await appState.frappeService.fetchDocument(
+        'Material Request',
+        row.id,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_friendlyError(error)),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+      return;
+    }
     final detail = MaterialRequest.fromJson(doc);
     var workflowActions = <String>[];
     try {
@@ -366,6 +378,9 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
           saving: _saving,
           lowStock: lowStock,
           onCreate: () => _openCreateSheet(),
+          onCreateBulk: lowStock.isEmpty
+              ? null
+              : () => _createBulkLowStock(lowStock),
           onUseSuggestion: (item) => _openCreateSheet(suggestion: item),
         ),
         const SizedBox(height: 12),
@@ -443,18 +458,77 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
   String _friendlyError(Object error) {
     return error.toString().replaceFirst('Exception: ', '');
   }
+
+  Future<void> _createBulkLowStock(List<InventoryItem> items) async {
+    if (items.isEmpty) return;
+    final ok = await confirmErpAction(
+      context,
+      title: 'Buat MR dari low stock?',
+      message:
+          'Aplikasi akan membuat 1 Material Request berisi ${items.length} item low stock.',
+    );
+    if (!ok || !mounted) return;
+
+    setState(() => _saving = true);
+    try {
+      final scheduleDate = DateTime.now()
+          .add(const Duration(days: 1))
+          .toIso8601String()
+          .split('T')
+          .first;
+      await context.read<AppState>().frappeService.createDocument(
+        'Material Request',
+        {
+          'material_request_type': 'Purchase',
+          'transaction_date': DateTime.now().toIso8601String().split('T').first,
+          'schedule_date': scheduleDate,
+          'items': items
+              .map(
+                (item) => {
+                  'item_code': item.sku,
+                  'qty': _suggestedQty(item),
+                  'schedule_date': scheduleDate,
+                  if (item.warehouseId.isNotEmpty)
+                    'warehouse': item.warehouseId,
+                },
+              )
+              .toList(),
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Material Request ${items.length} item berhasil dibuat',
+          ),
+        ),
+      );
+      await _load();
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  int _suggestedQty(InventoryItem item) {
+    final target = item.minStockThreshold <= 0 ? 1 : item.minStockThreshold;
+    return (target - item.quantity).clamp(1, 999999);
+  }
 }
 
 class _CreateMaterialRequestCard extends StatelessWidget {
   final bool saving;
   final List<InventoryItem> lowStock;
   final VoidCallback onCreate;
+  final VoidCallback? onCreateBulk;
   final ValueChanged<InventoryItem> onUseSuggestion;
 
   const _CreateMaterialRequestCard({
     required this.saving,
     required this.lowStock,
     required this.onCreate,
+    required this.onCreateBulk,
     required this.onUseSuggestion,
   });
 
@@ -483,6 +557,12 @@ class _CreateMaterialRequestCard extends StatelessWidget {
             label: const Text('Buat Request Barang'),
           ),
           if (lowStock.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: saving ? null : onCreateBulk,
+              icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+              label: Text('Buat MR dari ${lowStock.length} low stock'),
+            ),
             const SizedBox(height: 12),
             const Text(
               'Planning otomatis dari low stock',

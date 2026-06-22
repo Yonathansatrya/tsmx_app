@@ -157,7 +157,16 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
             ),
           )
           .toList(),
-      footer: _detailActions(detail, canSubmit: canSubmit),
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _ReceiptQtyVarianceCard(receipt: detail),
+          const SizedBox(height: 12),
+          _QcInfoCard(onOpen: _openIncomingQc),
+          const SizedBox(height: 12),
+          _detailActions(detail, canSubmit: canSubmit),
+        ],
+      ),
     );
   }
 
@@ -183,29 +192,22 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
           onPressed: () => _chooseReceiptPhoto(detail),
         ),
         const SizedBox(height: 10),
-        erpActionButton(
-          label: 'Lihat QC Penerimaan',
-          icon: Icons.fact_check_outlined,
-          onPressed: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const WarehouseIncomingQcScreen(),
-              ),
-            );
-          },
-        ),
-        if (canSubmit) ...[
-          const SizedBox(height: 10),
+        if (canSubmit)
           erpActionButton(
             label: 'Submit Purchase Receipt',
             icon: Icons.check_circle_outline_rounded,
             filled: true,
             onPressed: () => _submit(detail.id),
           ),
-        ],
       ],
+    );
+  }
+
+  void _openIncomingQc() {
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const WarehouseIncomingQcScreen()),
     );
   }
 
@@ -323,7 +325,7 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
         TextField(
           onChanged: _searchChanged,
           decoration: InputDecoration(
-            hintText: 'Search PR or supplier…',
+            hintText: 'Cari PR atau supplier',
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
             filled: true,
             fillColor: AppColors.white,
@@ -396,6 +398,203 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _ReceiptQtyVarianceCard extends StatelessWidget {
+  final PurchaseReceipt receipt;
+
+  const _ReceiptQtyVarianceCard({required this.receipt});
+
+  @override
+  Widget build(BuildContext context) {
+    final variance = receipt.varianceQty;
+    final varianceColor = variance == 0
+        ? AppColors.success
+        : variance < 0
+        ? AppColors.warning
+        : AppColors.danger;
+    final varianceLabel = variance == 0
+        ? 'Sesuai'
+        : variance < 0
+        ? 'Kurang ${formatErpCurrency(variance.abs())}'
+        : 'Lebih ${formatErpCurrency(variance)}';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: varianceColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.balance_rounded,
+                  color: varianceColor,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Tracking Selisih Quantity',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Ringkasan qty dari item Purchase Receipt',
+                      style: TextStyle(color: AppColors.slate, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _QtyPill(
+                label: 'Dipesan',
+                value: formatErpCurrency(receipt.orderedQty),
+              ),
+              _QtyPill(
+                label: 'Diterima',
+                value: formatErpCurrency(receipt.receivedQty),
+              ),
+              _QtyPill(
+                label: 'Ditolak',
+                value: formatErpCurrency(receipt.rejectedQty),
+              ),
+              _QtyPill(
+                label: 'Selisih',
+                value: varianceLabel,
+                color: varianceColor,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QtyPill extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _QtyPill({
+    required this.label,
+    required this.value,
+    this.color = AppColors.primary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: (MediaQuery.sizeOf(context).width - 56) / 2,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QcInfoCard extends StatelessWidget {
+  final VoidCallback onOpen;
+
+  const _QcInfoCard({required this.onOpen});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.softGreen,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.fact_check_outlined, color: AppColors.primary),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'QC Penerimaan Barang',
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'QC akan terbaca dari Quality Inspection tipe Incoming. Kalau permission QC belum aktif, menu ini tetap aman dan tidak membuat dokumen otomatis.',
+            style: TextStyle(
+              color: AppColors.slate,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: onOpen,
+            icon: const Icon(Icons.open_in_new_rounded, size: 18),
+            label: const Text('Lihat QC Incoming'),
+          ),
+        ],
+      ),
     );
   }
 }

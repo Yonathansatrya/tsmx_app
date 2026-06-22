@@ -29,6 +29,9 @@ class PurchaseReceiptItem {
     this.uom = '',
   });
 
+  double get effectiveReceivedQty => receivedQty > 0 ? receivedQty : qty;
+  double get varianceQty => effectiveReceivedQty - qty;
+
   factory PurchaseReceiptItem.fromJson(Map<String, dynamic> json) {
     final itemCode = json['item_code']?.toString() ?? '';
     return PurchaseReceiptItem(
@@ -78,6 +81,13 @@ class PurchaseReceipt {
     required this.itemsCount,
     this.items = const [],
   });
+
+  double get orderedQty => items.fold<double>(0, (sum, item) => sum + item.qty);
+  double get receivedQty =>
+      items.fold<double>(0, (sum, item) => sum + item.effectiveReceivedQty);
+  double get rejectedQty =>
+      items.fold<double>(0, (sum, item) => sum + item.rejectedQty);
+  double get varianceQty => receivedQty - orderedQty;
 
   factory PurchaseReceipt.fromJson(Map<String, dynamic> json) {
     final docstatus = NumParse.asInt(json['docstatus']);
