@@ -188,10 +188,10 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
 
   String _sortLabel(_PurchaseSortOption option) {
     return switch (option) {
-      _PurchaseSortOption.newestEta => 'Newest ETA',
-      _PurchaseSortOption.oldestEta => 'Oldest ETA',
-      _PurchaseSortOption.valueHigh => 'Value high',
-      _PurchaseSortOption.valueLow => 'Value low',
+      _PurchaseSortOption.newestEta => 'ETA terbaru',
+      _PurchaseSortOption.oldestEta => 'ETA terlama',
+      _PurchaseSortOption.valueHigh => 'Nilai tertinggi',
+      _PurchaseSortOption.valueLow => 'Nilai terendah',
     };
   }
 
@@ -660,7 +660,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
           controller: _searchController,
           onChanged: _searchChanged,
           decoration: InputDecoration(
-            hintText: 'Search PO or supplier…',
+            hintText: 'Cari PO atau supplier...',
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
             filled: true,
             fillColor: AppColors.white,
@@ -887,7 +887,12 @@ class _SupplierPriceComparisonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = _rows();
-    if (rows.isEmpty) return const SizedBox.shrink();
+    final higherCount = rows
+        .where((row) => row.item.rate > row.best.rate)
+        .length;
+    final lowerCount = rows
+        .where((row) => row.item.rate < row.best.rate)
+        .length;
 
     return Container(
       width: double.infinity,
@@ -900,29 +905,101 @@ class _SupplierPriceComparisonCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(
-                Icons.compare_arrows_rounded,
-                color: AppColors.primary,
-                size: 18,
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.softGreen,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.compare_arrows_rounded,
+                  color: AppColors.primary,
+                  size: 19,
+                ),
               ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Supplier Price Comparison',
-                  style: TextStyle(
-                    color: AppColors.navy,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                  ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Perbandingan Harga Supplier',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Rate PO dibandingkan dengan Item Price buying.',
+                      style: TextStyle(color: AppColors.slate, fontSize: 11),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          ...rows.map((row) => _comparisonRow(row)),
+          const SizedBox(height: 12),
+          if (rows.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Text(
+                'Belum ada harga referensi supplier untuk item di PO ini. Detail PO tetap bisa diproses.',
+                style: TextStyle(color: AppColors.slate, fontSize: 12),
+              ),
+            )
+          else ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _comparisonPill(
+                  label: '${rows.length} item dibandingkan',
+                  color: AppColors.primary,
+                ),
+                if (higherCount > 0)
+                  _comparisonPill(
+                    label: '$higherCount lebih tinggi',
+                    color: AppColors.danger,
+                  ),
+                if (lowerCount > 0)
+                  _comparisonPill(
+                    label: '$lowerCount lebih rendah',
+                    color: AppColors.success,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ...rows.map((row) => _comparisonRow(row)),
+          ],
         ],
+      ),
+    );
+  }
+
+  Widget _comparisonPill({required String label, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }
@@ -970,25 +1047,68 @@ class _SupplierPriceComparisonCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              row.item.itemName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.navy,
-                fontWeight: FontWeight.w900,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    row.item.itemName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    isHigher
+                        ? 'Lebih tinggi'
+                        : isLower
+                        ? 'Lebih rendah'
+                        : 'Sama',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 5),
-            Text(
-              [
-                'PO Rp ${formatErpCurrency(row.item.rate)}',
-                'Ref Rp ${formatErpCurrency(row.best.rate)}',
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _priceTile(
+                  label: 'PO',
+                  value: 'Rp ${formatErpCurrency(row.item.rate)}',
+                ),
+                _priceTile(
+                  label: 'Referensi',
+                  value: 'Rp ${formatErpCurrency(row.best.rate)}',
+                ),
+              ],
+            ),
+            if (row.best.source.isNotEmpty) ...[
+              const SizedBox(height: 7),
+              Text(
                 row.best.source,
-              ].where((text) => text.trim().isNotEmpty).join(' | '),
-              style: const TextStyle(color: AppColors.slate, fontSize: 11),
-            ),
-            const SizedBox(height: 5),
+                style: const TextStyle(color: AppColors.slate, fontSize: 11),
+              ),
+            ],
+            const SizedBox(height: 7),
             Text(
               label,
               style: TextStyle(
@@ -999,6 +1119,40 @@ class _SupplierPriceComparisonCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _priceTile({required String label, required String value}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
       ),
     );
   }

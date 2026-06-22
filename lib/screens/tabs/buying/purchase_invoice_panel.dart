@@ -164,6 +164,8 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _InvoiceMonitoringCard(invoice: detail),
+          const SizedBox(height: 12),
           ..._workflowButtons(
             doctype: 'Purchase Invoice',
             name: detail.id,
@@ -328,7 +330,7 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
         TextField(
           onChanged: _searchChanged,
           decoration: InputDecoration(
-            hintText: 'Search PI or supplier…',
+            hintText: 'Cari PI atau supplier...',
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
             filled: true,
             fillColor: AppColors.white,
@@ -401,6 +403,184 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _InvoiceMonitoringCard extends StatelessWidget {
+  final PurchaseInvoice invoice;
+
+  const _InvoiceMonitoringCard({required this.invoice});
+
+  @override
+  Widget build(BuildContext context) {
+    final dueDate = _parseDate(invoice.dueDate);
+    final today = DateTime.now();
+    final todayOnly = DateTime(today.year, today.month, today.day);
+    final dueOnly = dueDate == null
+        ? null
+        : DateTime(dueDate.year, dueDate.month, dueDate.day);
+    final outstanding = invoice.outstandingAmount;
+    final isPaid = outstanding <= 0;
+    final isOverdue = !isPaid && dueOnly != null && dueOnly.isBefore(todayOnly);
+    final days = dueOnly?.difference(todayOnly).inDays;
+    final stateColor = isPaid
+        ? AppColors.success
+        : isOverdue
+        ? AppColors.danger
+        : AppColors.warning;
+    final stateText = isPaid
+        ? 'Lunas'
+        : isOverdue
+        ? 'Overdue ${days?.abs() ?? 0} hari'
+        : days == null
+        ? 'Due date belum tersedia'
+        : days == 0
+        ? 'Jatuh tempo hari ini'
+        : 'Jatuh tempo $days hari lagi';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: stateColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isPaid
+                      ? Icons.check_circle_outline_rounded
+                      : Icons.account_balance_wallet_outlined,
+                  color: stateColor,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Monitoring Hutang Supplier',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Ringkasan pembayaran dan due date invoice.',
+                      style: TextStyle(color: AppColors.slate, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _InvoiceInfoTile(
+                label: 'Total Invoice',
+                value: 'Rp ${formatErpCurrency(invoice.value)}',
+              ),
+              _InvoiceInfoTile(
+                label: 'Outstanding',
+                value: 'Rp ${formatErpCurrency(outstanding)}',
+                valueColor: isPaid ? AppColors.success : AppColors.danger,
+              ),
+              _InvoiceInfoTile(
+                label: 'Due Date',
+                value: invoice.dueDate.isEmpty ? '-' : invoice.dueDate,
+              ),
+              _InvoiceInfoTile(
+                label: 'Kondisi',
+                value: stateText,
+                valueColor: stateColor,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  DateTime? _parseDate(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    final iso = DateTime.tryParse(trimmed);
+    if (iso != null) return iso;
+    final parts = trimmed.split('/');
+    if (parts.length == 3) {
+      final day = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final year = int.tryParse(parts[2]);
+      if (day != null && month != null && year != null) {
+        return DateTime(year, month, day);
+      }
+    }
+    return null;
+  }
+}
+
+class _InvoiceInfoTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? valueColor;
+
+  const _InvoiceInfoTile({
+    required this.label,
+    required this.value,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 132),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: valueColor ?? AppColors.navy,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
