@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../models/purchase_receipt.dart';
 import '../../../state/app_state.dart';
@@ -13,6 +14,7 @@ import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
+import '../../warehouse/warehouse_incoming_qc_screen.dart';
 import 'buying_document_detail_sheet.dart';
 
 class PurchaseReceiptPanel extends StatefulWidget {
@@ -23,6 +25,7 @@ class PurchaseReceiptPanel extends StatefulWidget {
 }
 
 class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
+  final _picker = ImagePicker();
   String _search = '';
   DeliveryNoteStatusKey? _statusFilter;
   Timer? _searchDebounce;
@@ -150,19 +153,125 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
                   '${formatErpCurrency(i.qty)}${i.uom.isEmpty ? '' : ' ${i.uom}'}',
               rate: 'Rp ${formatErpCurrency(i.rate)}',
               amount: 'Rp ${formatErpCurrency(i.amount)}',
-              note: i.warehouse,
+              note: _receiptItemNote(i),
             ),
           )
           .toList(),
-      footer: canSubmit
-          ? erpActionButton(
-              label: 'Submit Purchase Receipt',
-              icon: Icons.check_circle_outline_rounded,
-              filled: true,
-              onPressed: () => _submit(detail.id),
-            )
-          : null,
+      footer: _detailActions(detail, canSubmit: canSubmit),
     );
+  }
+
+  String _receiptItemNote(PurchaseReceiptItem item) {
+    final parts = <String>[];
+    if (item.warehouse.isNotEmpty) parts.add(item.warehouse);
+    if (item.receivedQty > 0 && item.receivedQty != item.qty) {
+      parts.add('Received ${formatErpCurrency(item.receivedQty)}');
+    }
+    if (item.rejectedQty > 0) {
+      parts.add('Rejected ${formatErpCurrency(item.rejectedQty)}');
+    }
+    return parts.join(' | ');
+  }
+
+  Widget _detailActions(PurchaseReceipt detail, {required bool canSubmit}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        erpActionButton(
+          label: 'Upload Foto Penerimaan',
+          icon: Icons.add_a_photo_outlined,
+          onPressed: () => _chooseReceiptPhoto(detail),
+        ),
+        const SizedBox(height: 10),
+        erpActionButton(
+          label: 'Lihat QC Penerimaan',
+          icon: Icons.fact_check_outlined,
+          onPressed: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const WarehouseIncomingQcScreen(),
+              ),
+            );
+          },
+        ),
+        if (canSubmit) ...[
+          const SizedBox(height: 10),
+          erpActionButton(
+            label: 'Submit Purchase Receipt',
+            icon: Icons.check_circle_outline_rounded,
+            filled: true,
+            onPressed: () => _submit(detail.id),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _chooseReceiptPhoto(PurchaseReceipt receipt) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Tambah foto penerimaan ${receipt.id}',
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(
+                  Icons.camera_alt_outlined,
+                  color: AppColors.primary,
+                ),
+                title: const Text('Ambil foto dengan kamera'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.photo_library_outlined,
+                  color: AppColors.primary,
+                ),
+                title: const Text('Pilih foto dari galeri'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    final photo = await _picker.pickImage(
+      source: source,
+      imageQuality: 75,
+      maxWidth: 1600,
+    );
+    if (photo == null || !mounted) return;
+
+    final ok = await runErpWorkflowAction(
+      context,
+      action: () => context.read<AppState>().uploadAttachment(
+        doctype: 'Purchase Receipt',
+        documentName: receipt.id,
+        filePath: photo.path,
+      ),
+      successMessage: 'Foto penerimaan tersimpan',
+    );
+    if (ok && mounted) Navigator.pop(context);
   }
 
   Future<void> _submit(String id) async {

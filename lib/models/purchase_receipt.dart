@@ -8,6 +8,9 @@ class PurchaseReceiptItem {
   final String itemCode;
   final String itemName;
   final double qty;
+  final double receivedQty;
+  final double acceptedQty;
+  final double rejectedQty;
   final double rate;
   final double amount;
   final String warehouse;
@@ -17,6 +20,9 @@ class PurchaseReceiptItem {
     required this.itemCode,
     required this.itemName,
     required this.qty,
+    this.receivedQty = 0,
+    this.acceptedQty = 0,
+    this.rejectedQty = 0,
     required this.rate,
     required this.amount,
     this.warehouse = '',
@@ -32,6 +38,13 @@ class PurchaseReceiptItem {
           (itemCode.isNotEmpty ? itemCode : null) ??
           'Unknown Item',
       qty: NumParse.asDouble(json['qty'] ?? json['stock_qty']),
+      receivedQty: NumParse.asDouble(
+        json['received_qty'] ?? json['received_stock_qty'],
+      ),
+      acceptedQty: NumParse.asDouble(
+        json['accepted_qty'] ?? json['sample_size'] ?? json['qty'],
+      ),
+      rejectedQty: NumParse.asDouble(json['rejected_qty']),
       rate: NumParse.asDouble(json['rate'] ?? json['net_rate']),
       amount: NumParse.asDouble(json['amount'] ?? json['net_amount']),
       warehouse:

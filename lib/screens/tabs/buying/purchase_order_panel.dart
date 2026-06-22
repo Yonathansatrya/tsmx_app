@@ -99,7 +99,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
       PurchaseOrderStatusKey.toReceiveAndBill => 'To Receive and Bill',
       PurchaseOrderStatusKey.toReceive => 'To Receive',
       PurchaseOrderStatusKey.toBill => 'To Bill',
-      PurchaseOrderStatusKey.overdue => 'Delayed',
+      PurchaseOrderStatusKey.overdue => 'Overdue',
       PurchaseOrderStatusKey.completed => 'Completed',
       PurchaseOrderStatusKey.delivered => 'Delivered',
       PurchaseOrderStatusKey.closed => 'Closed',
@@ -231,9 +231,21 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   }
 
   Future<void> _openDetail(PurchaseOrder order) async {
-    final detail = await context.read<AppState>().loadPurchaseOrderDetail(
-      order.id,
-    );
+    final appState = context.read<AppState>();
+    final detail = await appState.loadPurchaseOrderDetail(order.id);
+    var priceRows = <Map<String, dynamic>>[];
+    var workflowActions = <String>[];
+    try {
+      priceRows = await appState.fetchSupplierPriceComparison(
+        detail.items.map((item) => item.itemCode).toSet(),
+      );
+    } catch (_) {}
+    try {
+      workflowActions = await appState.fetchDocumentWorkflowActions(
+        doctype: 'Purchase Order',
+        name: detail.id,
+      );
+    } catch (_) {}
     if (!mounted) return;
 
     final canReceive =
@@ -304,6 +316,13 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _SupplierPriceComparisonCard(order: detail, priceRows: priceRows),
+          const SizedBox(height: 10),
+          ..._workflowButtons(
+            doctype: 'Purchase Order',
+            name: detail.id,
+            actions: workflowActions,
+          ),
           if (canEdit)
             erpActionButton(
               label: 'Edit Purchase Order',
@@ -505,6 +524,104 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
       Navigator.pop(context);
       await context.read<AppState>().refreshPurchaseInvoices();
     }
+  }
+
+  List<Widget> _workflowButtons({
+    required String doctype,
+    required String name,
+    required List<String> actions,
+  }) {
+    return actions.map((action) {
+      final lower = action.toLowerCase();
+      final needsReason =
+          lower.contains('reject') ||
+          lower.contains('tolak') ||
+          lower.contains('decline') ||
+          lower.contains('return');
+      final isApprove =
+          lower.contains('approve') ||
+          lower.contains('submit') ||
+          lower.contains('confirm');
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: erpActionButton(
+          label: action,
+          icon: needsReason
+              ? Icons.cancel_outlined
+              : isApprove
+              ? Icons.verified_outlined
+              : Icons.route_outlined,
+          filled: isApprove && !needsReason,
+          onPressed: () => _applyWorkflowAction(
+            doctype: doctype,
+            name: name,
+            action: action,
+            needsReason: needsReason,
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  Future<void> _applyWorkflowAction({
+    required String doctype,
+    required String name,
+    required String action,
+    required bool needsReason,
+  }) async {
+    var reason = '';
+    if (needsReason) {
+      reason = await _askReason(action) ?? '';
+      if (reason.trim().isEmpty) return;
+      if (!mounted) return;
+    } else {
+      final ok = await confirmErpAction(
+        context,
+        title: '$action $name?',
+        message: 'Lanjutkan action "$action" untuk $name?',
+      );
+      if (!ok || !mounted) return;
+    }
+
+    final ok = await runErpWorkflowAction(
+      context,
+      action: () => context.read<AppState>().applyDocumentWorkflow(
+        doctype: doctype,
+        name: name,
+        action: action,
+        reason: reason,
+      ),
+      successMessage: '$action berhasil',
+    );
+    if (ok && mounted) Navigator.pop(context);
+  }
+
+  Future<String?> _askReason(String action) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$action - alasan wajib'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Alasan',
+            hintText: 'Tulis alasan agar tercatat di ERPNext',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
   }
 
   @override
@@ -754,6 +871,159 @@ class _PurchaseFilterButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SupplierPriceComparisonCard extends StatelessWidget {
+  final PurchaseOrder order;
+  final List<Map<String, dynamic>> priceRows;
+
+  const _SupplierPriceComparisonCard({
+    required this.order,
+    required this.priceRows,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = _rows();
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.compare_arrows_rounded,
+                color: AppColors.primary,
+                size: 18,
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Supplier Price Comparison',
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...rows.map((row) => _comparisonRow(row)),
+        ],
+      ),
+    );
+  }
+
+  List<_PriceComparisonRow> _rows() {
+    return order.items
+        .map((item) {
+          final candidates =
+              priceRows
+                  .where((row) => row['item_code']?.toString() == item.itemCode)
+                  .map(_PriceCandidate.fromJson)
+                  .where((row) => row.rate > 0)
+                  .toList()
+                ..sort((a, b) => a.rate.compareTo(b.rate));
+          if (candidates.isEmpty) return null;
+          return _PriceComparisonRow(item: item, best: candidates.first);
+        })
+        .whereType<_PriceComparisonRow>()
+        .toList();
+  }
+
+  Widget _comparisonRow(_PriceComparisonRow row) {
+    final delta = row.item.rate - row.best.rate;
+    final isHigher = delta > 0;
+    final isLower = delta < 0;
+    final color = isHigher
+        ? AppColors.danger
+        : isLower
+        ? AppColors.success
+        : AppColors.slate;
+    final label = isHigher
+        ? 'PO lebih tinggi Rp ${formatErpCurrency(delta)}'
+        : isLower
+        ? 'PO lebih rendah Rp ${formatErpCurrency(delta.abs())}'
+        : 'Sama dengan referensi';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              row.item.itemName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.navy,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              [
+                'PO Rp ${formatErpCurrency(row.item.rate)}',
+                'Ref Rp ${formatErpCurrency(row.best.rate)}',
+                row.best.source,
+              ].where((text) => text.trim().isNotEmpty).join(' | '),
+              style: const TextStyle(color: AppColors.slate, fontSize: 11),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PriceComparisonRow {
+  final PurchaseOrderItem item;
+  final _PriceCandidate best;
+
+  const _PriceComparisonRow({required this.item, required this.best});
+}
+
+class _PriceCandidate {
+  final double rate;
+  final String source;
+
+  const _PriceCandidate({required this.rate, required this.source});
+
+  factory _PriceCandidate.fromJson(Map<String, dynamic> json) {
+    final supplier = json['supplier']?.toString() ?? '';
+    final priceList = json['price_list']?.toString() ?? '';
+    final source = supplier.isNotEmpty ? supplier : priceList;
+    return _PriceCandidate(
+      rate: double.tryParse(json['price_list_rate']?.toString() ?? '') ?? 0,
+      source: source,
     );
   }
 }

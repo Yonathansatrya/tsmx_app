@@ -4,6 +4,7 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/erp/erp_filter_tools.dart';
 import '../sales/sales_ui.dart';
+import '../purchase/material_request/material_request_panel.dart';
 import 'buying/purchase_order_panel.dart';
 import 'buying/purchase_receipt_panel.dart';
 import 'buying/purchase_invoice_panel.dart';
@@ -26,7 +27,7 @@ class BuyingTabState extends State<BuyingTab>
     with SingleTickerProviderStateMixin {
   TabController? _tabController;
 
-  static const _segmentIds = ['po', 'pr', 'pi'];
+  static const _segmentIds = ['po', 'pr', 'pi', 'mr'];
 
   int get _initialIndex {
     final index = _segmentIds.indexOf(widget.selectedSegment);
@@ -115,6 +116,9 @@ class BuyingTabState extends State<BuyingTab>
         }
         break;
 
+      case 'mr':
+        break;
+
       case 'po':
       default:
         if (appState.purchaseOrders.isEmpty) {
@@ -135,6 +139,7 @@ class BuyingTabState extends State<BuyingTab>
       switch (_segmentIds[controller.index]) {
         'pr' => appState.refreshPurchaseReceipts(),
         'pi' => appState.refreshPurchaseInvoices(),
+        'mr' => Future<void>.value(),
         _ => appState.refreshPurchaseOrders(),
       },
     ]);
@@ -154,6 +159,9 @@ class BuyingTabState extends State<BuyingTab>
 
       case 'pi':
         appState.loadMorePurchaseInvoices();
+        break;
+
+      case 'mr':
         break;
 
       case 'po':
@@ -215,6 +223,7 @@ class BuyingTabState extends State<BuyingTab>
                       Tab(text: 'Purchase Order'),
                       Tab(text: 'Receipt'),
                       Tab(text: 'Invoice'),
+                      Tab(text: 'Material Request'),
                     ],
                   ),
 
@@ -223,6 +232,7 @@ class BuyingTabState extends State<BuyingTab>
                   switch (controller.index) {
                     1 => const PurchaseReceiptPanel(),
                     2 => const PurchaseInvoicePanel(),
+                    3 => const MaterialRequestPanel(),
                     _ => const PurchaseOrderPanel(),
                   },
                 ],

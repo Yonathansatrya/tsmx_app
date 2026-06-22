@@ -101,9 +101,15 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
   }
 
   Future<void> _openDetail(PurchaseInvoice doc) async {
-    final detail = await context.read<AppState>().loadPurchaseInvoiceDetail(
-      doc.id,
-    );
+    final appState = context.read<AppState>();
+    final detail = await appState.loadPurchaseInvoiceDetail(doc.id);
+    var workflowActions = <String>[];
+    try {
+      workflowActions = await appState.fetchDocumentWorkflowActions(
+        doctype: 'Purchase Invoice',
+        name: detail.id,
+      );
+    } catch (_) {}
     if (!mounted) return;
 
     final canSubmit = isDocDraft(detail.docStatus);
@@ -155,14 +161,23 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
             ),
           )
           .toList(),
-      footer: canSubmit
-          ? erpActionButton(
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ..._workflowButtons(
+            doctype: 'Purchase Invoice',
+            name: detail.id,
+            actions: workflowActions,
+          ),
+          if (canSubmit)
+            erpActionButton(
               label: 'Submit Purchase Invoice',
               icon: Icons.check_circle_outline_rounded,
               filled: true,
               onPressed: () => _submit(detail.id),
-            )
-          : null,
+            ),
+        ],
+      ),
     );
   }
 
@@ -182,6 +197,104 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
       successMessage: 'Purchase Invoice submitted',
     );
     if (ok && mounted) Navigator.pop(context);
+  }
+
+  List<Widget> _workflowButtons({
+    required String doctype,
+    required String name,
+    required List<String> actions,
+  }) {
+    return actions.map((action) {
+      final lower = action.toLowerCase();
+      final needsReason =
+          lower.contains('reject') ||
+          lower.contains('tolak') ||
+          lower.contains('decline') ||
+          lower.contains('return');
+      final isApprove =
+          lower.contains('approve') ||
+          lower.contains('submit') ||
+          lower.contains('confirm');
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: erpActionButton(
+          label: action,
+          icon: needsReason
+              ? Icons.cancel_outlined
+              : isApprove
+              ? Icons.verified_outlined
+              : Icons.route_outlined,
+          filled: isApprove && !needsReason,
+          onPressed: () => _applyWorkflowAction(
+            doctype: doctype,
+            name: name,
+            action: action,
+            needsReason: needsReason,
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  Future<void> _applyWorkflowAction({
+    required String doctype,
+    required String name,
+    required String action,
+    required bool needsReason,
+  }) async {
+    var reason = '';
+    if (needsReason) {
+      reason = await _askReason(action) ?? '';
+      if (reason.trim().isEmpty) return;
+      if (!mounted) return;
+    } else {
+      final ok = await confirmErpAction(
+        context,
+        title: '$action $name?',
+        message: 'Lanjutkan action "$action" untuk $name?',
+      );
+      if (!ok || !mounted) return;
+    }
+
+    final ok = await runErpWorkflowAction(
+      context,
+      action: () => context.read<AppState>().applyDocumentWorkflow(
+        doctype: doctype,
+        name: name,
+        action: action,
+        reason: reason,
+      ),
+      successMessage: '$action berhasil',
+    );
+    if (ok && mounted) Navigator.pop(context);
+  }
+
+  Future<String?> _askReason(String action) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$action - alasan wajib'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Alasan',
+            hintText: 'Tulis alasan agar tercatat di ERPNext',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
   }
 
   @override

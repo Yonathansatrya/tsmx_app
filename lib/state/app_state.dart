@@ -112,6 +112,7 @@ class AppState with ChangeNotifier {
     if (lower == 'sales manager') return 'Sales Manager';
     if (lower == 'warehouse') return 'Warehouse';
     if (lower == 'logistics') return 'Logistics';
+    if (lower == 'purchase' || lower == 'purchase user') return 'Purchase';
     if (lower == 'null' || lower == 'none' || lower == 'undefined') {
       return 'Unassigned';
     }
@@ -3890,6 +3891,75 @@ class AppState with ChangeNotifier {
     ]);
   }
 
+  Future<List<String>> fetchDocumentWorkflowActions({
+    required String doctype,
+    required String name,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final doc = await _frappeService.fetchDocument(doctype, name);
+    final rawTransitions = await _frappeService.callMethod(
+      'frappe.model.workflow.get_transitions',
+      args: {'doc': doc},
+    );
+    return rawTransitions is List
+        ? rawTransitions
+              .whereType<Map>()
+              .map((transition) => transition['action']?.toString() ?? '')
+              .where((action) => action.trim().isNotEmpty)
+              .toSet()
+              .toList()
+        : <String>[];
+  }
+
+  Future<void> applyDocumentWorkflow({
+    required String doctype,
+    required String name,
+    required String action,
+    String reason = '',
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final normalizedAction = action.trim();
+    final actionLower = normalizedAction.toLowerCase();
+    final isReject =
+        actionLower.contains('reject') ||
+        actionLower.contains('tolak') ||
+        actionLower.contains('decline') ||
+        actionLower.contains('return');
+    if (isReject && reason.trim().isEmpty) {
+      throw Exception('Alasan reject/return wajib diisi.');
+    }
+    final doc = await _frappeService.fetchDocument(doctype, name);
+    await _frappeService.callMethod(
+      'frappe.model.workflow.apply_workflow',
+      args: {'doc': doc, 'action': normalizedAction},
+    );
+    final decision = isReject ? 'REJECT' : 'APPROVE';
+    final content = [
+      '$decision via TMSX App',
+      'Action: $normalizedAction',
+      if (reason.trim().isNotEmpty) 'Alasan: ${reason.trim()}',
+    ].join('\n');
+    await _frappeService.callMethod(
+      'frappe.desk.form.utils.add_comment',
+      args: {
+        'reference_doctype': doctype,
+        'reference_name': name,
+        'content': content,
+        'comment_email': _currentUser ?? '',
+        'comment_by': _currentUser ?? '',
+      },
+    );
+    await Future.wait([
+      switch (doctype) {
+        'Purchase Order' => refreshPurchaseOrders(),
+        'Purchase Receipt' => refreshPurchaseReceipts(),
+        'Purchase Invoice' => refreshPurchaseInvoices(),
+        _ => Future<void>.value(),
+      },
+      refreshNotifications(silent: true),
+    ]);
+  }
+
   Future<void> refreshSalesOrders() => fetchSalesOrdersFromFrappe();
   Future<void> refreshPurchaseOrders() => fetchPurchaseOrdersFromFrappe();
   Future<void> refreshInventory() => fetchInventoryFromFrappe();
@@ -4548,6 +4618,58 @@ class AppState with ChangeNotifier {
     }
 
     return rates;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSupplierPriceComparison(
+    Set<String> itemCodes,
+  ) async {
+    if (itemCodes.isEmpty) return const [];
+
+    final codes = itemCodes.where((code) => code.trim().isNotEmpty).toList();
+    final rows = <Map<String, dynamic>>[];
+
+    for (var i = 0; i < codes.length; i += 50) {
+      final chunk = codes.sublist(
+        i,
+        i + 50 > codes.length ? codes.length : i + 50,
+      );
+
+      try {
+        final data = await _fetchResourceWithFieldFallback(
+          doctype: 'Item Price',
+          fields: const [
+            'name',
+            'item_code',
+            'supplier',
+            'price_list',
+            'price_list_rate',
+            'currency',
+          ],
+          limit: chunk.length * 8,
+          orderBy: 'price_list_rate asc, modified desc',
+          filters: [
+            ['item_code', 'in', chunk],
+            ['buying', '=', 1],
+            ['price_list_rate', '>', 0],
+          ],
+        );
+        rows.addAll(data);
+      } catch (_) {
+        final data = await _fetchResourceWithFieldFallback(
+          doctype: 'Item Price',
+          fields: const ['name', 'item_code', 'price_list', 'price_list_rate'],
+          limit: chunk.length * 8,
+          orderBy: 'price_list_rate asc, modified desc',
+          filters: [
+            ['item_code', 'in', chunk],
+            ['price_list_rate', '>', 0],
+          ],
+        );
+        rows.addAll(data);
+      }
+    }
+
+    return rows;
   }
 
   void _addItemPriceRates(
