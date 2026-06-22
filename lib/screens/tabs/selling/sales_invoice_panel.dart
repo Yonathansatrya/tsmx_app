@@ -34,14 +34,18 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
   static final _chips = <ErpStatusChip<InvoiceStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
     const ErpStatusChip(label: 'Draft', value: InvoiceStatusKey.draft),
-    const ErpStatusChip(label: 'Unpaid', value: InvoiceStatusKey.unpaid),
+    const ErpStatusChip(label: 'Return', value: InvoiceStatusKey.returnDoc),
+    const ErpStatusChip(
+      label: 'Credit Note Issued',
+      value: InvoiceStatusKey.creditNoteIssued,
+    ),
+    const ErpStatusChip(label: 'Paid', value: InvoiceStatusKey.paid),
     const ErpStatusChip(
       label: 'Partly Paid',
       value: InvoiceStatusKey.partlyPaid,
     ),
-    const ErpStatusChip(label: 'Paid', value: InvoiceStatusKey.paid),
+    const ErpStatusChip(label: 'Unpaid', value: InvoiceStatusKey.unpaid),
     const ErpStatusChip(label: 'Overdue', value: InvoiceStatusKey.overdue),
-    const ErpStatusChip(label: 'Return', value: InvoiceStatusKey.returnDoc),
     const ErpStatusChip(label: 'Cancelled', value: InvoiceStatusKey.cancelled),
   ];
 
@@ -70,6 +74,7 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
     InvoiceStatusKey.paid => 'Paid',
     InvoiceStatusKey.overdue => 'Overdue',
     InvoiceStatusKey.returnDoc => 'Return',
+    InvoiceStatusKey.creditNoteIssued => 'Credit Note Issued',
     InvoiceStatusKey.cancelled => 'Cancelled',
     _ => null,
   };

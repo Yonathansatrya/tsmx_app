@@ -41,7 +41,7 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
     const ErpStatusChip(label: 'Return', value: InvoiceStatusKey.returnDoc),
     const ErpStatusChip(
       label: 'Credit Note',
-      value: InvoiceStatusKey.creditNote,
+      value: InvoiceStatusKey.creditNoteIssued,
     ),
     const ErpStatusChip(label: 'Cancelled', value: InvoiceStatusKey.cancelled),
   ];
@@ -70,7 +70,7 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
     InvoiceStatusKey.paid => 'Paid',
     InvoiceStatusKey.overdue => 'Overdue',
     InvoiceStatusKey.returnDoc => 'Return',
-    InvoiceStatusKey.creditNote => 'Credit Note',
+    InvoiceStatusKey.creditNoteIssued => 'Credit Note Issued',
     InvoiceStatusKey.cancelled => 'Cancelled',
     _ => null,
   };

@@ -94,7 +94,7 @@ FrappeStatusStyle styleForStatusText(String statusText) {
   }
   if (_contains(s, 'credit note')) {
     return const FrappeStatusStyle(
-      label: 'CREDIT NOTE',
+      label: 'CREDIT NOTE ISSUED',
       color: Color(0xFF64748B),
       icon: Icons.receipt_long_outlined,
     );
@@ -286,12 +286,12 @@ DeliveryNoteStatusKey parseDeliveryNoteStatus(
 
 enum InvoiceStatusKey {
   draft,
-  unpaid,
-  partlyPaid,
-  paid,
-  overdue,
   returnDoc,
-  creditNote,
+  creditNoteIssued,
+  paid,
+  partlyPaid,
+  unpaid,
+  overdue,
   cancelled,
   unknown,
 }
@@ -304,7 +304,7 @@ InvoiceStatusKey parseInvoiceStatus(String statusText, {int? docstatus}) {
   if (_contains(s, 'cancel') || docstatus == 2) {
     return InvoiceStatusKey.cancelled;
   }
-  if (_contains(s, 'credit note')) return InvoiceStatusKey.creditNote;
+  if (_contains(s, 'credit note')) return InvoiceStatusKey.creditNoteIssued;
   if (_contains(s, 'return')) return InvoiceStatusKey.returnDoc;
   if (_contains(s, 'overdue')) return InvoiceStatusKey.overdue;
   if (_contains(s, 'partly paid') || _contains(s, 'partially paid')) {
