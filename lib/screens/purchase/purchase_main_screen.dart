@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../state/app_state.dart';
+import '../../theme/app_colors.dart';
 import '../shared/role_main_screen.dart';
 import '../tabs/buying/purchase_invoice_panel.dart';
 import '../tabs/buying/purchase_order_panel.dart';
@@ -25,10 +28,37 @@ class PurchaseMainScreen extends StatelessWidget {
     },
     screensBuilder: (onMenuSelected) => [
       PurchaseOverviewTab(onMenuSelected: onMenuSelected),
-      const PurchaseOrderPanel(),
-      const PurchaseReceiptPanel(),
-      const PurchaseInvoicePanel(),
-      const MaterialRequestPanel(),
+      _PurchaseScrollPage(
+        onRefresh: (state) async {
+          await Future.wait([
+            state.refreshBuyingSummaries(),
+            state.refreshPurchaseOrders(),
+          ]);
+        },
+        child: const PurchaseOrderPanel(),
+      ),
+      _PurchaseScrollPage(
+        onRefresh: (state) async {
+          await Future.wait([
+            state.refreshBuyingSummaries(),
+            state.refreshPurchaseReceipts(),
+          ]);
+        },
+        child: const PurchaseReceiptPanel(),
+      ),
+      _PurchaseScrollPage(
+        onRefresh: (state) async {
+          await Future.wait([
+            state.refreshBuyingSummaries(),
+            state.refreshPurchaseInvoices(),
+          ]);
+        },
+        child: const PurchaseInvoicePanel(),
+      ),
+      _PurchaseScrollPage(
+        onRefresh: (state) => Future<void>.value(),
+        child: const MaterialRequestPanel(),
+      ),
     ],
     destinations: const [
       NavigationDestination(
@@ -58,4 +88,27 @@ class PurchaseMainScreen extends StatelessWidget {
       ),
     ],
   );
+}
+
+class _PurchaseScrollPage extends StatelessWidget {
+  final Widget child;
+  final Future<void> Function(AppState state) onRefresh;
+
+  const _PurchaseScrollPage({required this.child, required this.onRefresh});
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: AppColors.background,
+      child: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () => onRefresh(context.read<AppState>()),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 96),
+          children: [child],
+        ),
+      ),
+    );
+  }
 }

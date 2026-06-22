@@ -29,20 +29,19 @@ class ErpDocumentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final formattedValue = 'Rp ${formatErpCurrency(value)}';
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppColors.primary.withValues(alpha: 0.06),
-            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.border),
             boxShadow: AppColors.cardShadow,
           ),
           child: Column(
@@ -63,9 +62,10 @@ class ErpDocumentCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
                   ErpStatusBadge(statusText: statusText),
                   if (onEdit != null || onDelete != null) ...[
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 2),
                     PopupMenuButton<String>(
                       tooltip: 'Actions',
                       icon: const Icon(
@@ -108,7 +108,7 @@ class ErpDocumentCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 party,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 12,
@@ -116,25 +116,20 @@ class ErpDocumentCard extends StatelessWidget {
                   color: AppColors.slate,
                 ),
               ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text(
-                    date.isEmpty ? '-' : date,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: AppColors.slate,
-                    ),
+                  _InfoPill(
+                    icon: Icons.calendar_month_outlined,
+                    label: date.isEmpty ? '-' : date,
                   ),
-                  Text(
-                    'Rp ${formatErpCurrency(value)}',
-                    style: const TextStyle(
-                      fontFamily: 'HankenGrotesk',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.primary,
-                    ),
+                  _InfoPill(
+                    icon: Icons.payments_outlined,
+                    label: formattedValue,
+                    strong: true,
                   ),
                 ],
               ),
@@ -148,6 +143,53 @@ class ErpDocumentCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool strong;
+
+  const _InfoPill({
+    required this.icon,
+    required this.label,
+    this.strong = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: strong ? AppColors.softGreen : AppColors.background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: strong ? AppColors.primary : AppColors.slate,
+          ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: 'HankenGrotesk',
+                fontSize: strong ? 12 : 10,
+                fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
+                color: strong ? AppColors.primary : AppColors.slate,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

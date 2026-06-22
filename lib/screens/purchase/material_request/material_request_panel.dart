@@ -62,7 +62,6 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
           'transaction_date',
           'schedule_date',
           'company',
-          'total_estimated_cost',
         ],
         filters: _status == null
             ? null
