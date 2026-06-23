@@ -72,23 +72,6 @@ class _DashboardTabState extends State<DashboardTab> {
     final unpaidSiCount = summary.unpaidSalesInvoices;
     final overduePiCount = summary.overduePurchaseInvoices;
 
-    final salesStats = _SalesMoneyStats(
-      total: summary.salesTotal,
-      open: summary.salesOpen,
-      completed: summary.salesCompleted,
-      draftCount: summary.salesDraftCount,
-      openCount: summary.salesOpenCount,
-      completedCount: summary.salesCompletedCount,
-    );
-    final purchaseStats = _PurchaseMoneyStats(
-      total: summary.purchaseTotal,
-      pending: summary.purchasePending,
-      delayed: summary.purchaseDelayed,
-      draftCount: summary.purchaseDraftCount,
-      pendingCount: summary.purchasePendingCount,
-      completedCount: summary.purchaseCompletedCount,
-    );
-
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: () async {
@@ -612,42 +595,6 @@ class _SalesTrackingMapPainter extends CustomPainter {
   bool shouldRepaint(covariant _SalesTrackingMapPainter oldDelegate) {
     return oldDelegate.points != points;
   }
-}
-
-class _SalesMoneyStats {
-  final double total;
-  final double open;
-  final double completed;
-  final int draftCount;
-  final int openCount;
-  final int completedCount;
-
-  const _SalesMoneyStats({
-    required this.total,
-    required this.open,
-    required this.completed,
-    required this.draftCount,
-    required this.openCount,
-    required this.completedCount,
-  });
-}
-
-class _PurchaseMoneyStats {
-  final double total;
-  final double pending;
-  final double delayed;
-  final int draftCount;
-  final int pendingCount;
-  final int completedCount;
-
-  const _PurchaseMoneyStats({
-    required this.total,
-    required this.pending,
-    required this.delayed,
-    required this.draftCount,
-    required this.pendingCount,
-    required this.completedCount,
-  });
 }
 
 class _OperationsSnapshot extends StatelessWidget {
