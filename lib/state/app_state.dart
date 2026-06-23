@@ -10,6 +10,7 @@ import '../models/sales_order_approval.dart';
 import '../models/purchase_order.dart';
 import '../models/delivery_note.dart';
 import '../models/delivery_activity_log.dart';
+import '../models/erp_approval_todo.dart';
 import '../models/sales_invoice.dart';
 import '../models/purchase_receipt.dart';
 import '../models/purchase_invoice.dart';
@@ -4257,6 +4258,107 @@ class AppState with ChangeNotifier {
     return approvals;
   }
 
+  Future<List<ErpApprovalTodo>> fetchApprovalTodos() async {
+    await _frappeService.ensureLoggedIn();
+    const configs = [
+      (
+        doctype: 'Sales Order',
+        fields: [
+          'name',
+          'customer',
+          'customer_name',
+          'workflow_state',
+          'status',
+          'owner',
+          'transaction_date',
+          'grand_total',
+          'docstatus',
+        ],
+      ),
+      (
+        doctype: 'Purchase Order',
+        fields: [
+          'name',
+          'supplier',
+          'supplier_name',
+          'workflow_state',
+          'status',
+          'owner',
+          'transaction_date',
+          'grand_total',
+          'docstatus',
+        ],
+      ),
+      (
+        doctype: 'Purchase Invoice',
+        fields: [
+          'name',
+          'supplier',
+          'supplier_name',
+          'workflow_state',
+          'status',
+          'owner',
+          'posting_date',
+          'due_date',
+          'grand_total',
+          'outstanding_amount',
+          'docstatus',
+        ],
+      ),
+      (
+        doctype: 'Material Request',
+        fields: [
+          'name',
+          'material_request_type',
+          'workflow_state',
+          'status',
+          'owner',
+          'company',
+          'transaction_date',
+          'schedule_date',
+          'total_qty',
+          'docstatus',
+        ],
+      ),
+    ];
+
+    final todos = <ErpApprovalTodo>[];
+    for (final config in configs) {
+      final rows = await _fetchAllResourcePages(
+        doctype: config.doctype,
+        fields: config.fields,
+        filters: [
+          ['docstatus', '<', 2],
+        ],
+        orderBy: 'modified desc',
+        maxRows: 200,
+      );
+      for (final row in rows) {
+        final name = row['name']?.toString() ?? '';
+        if (name.isEmpty) continue;
+        try {
+          final actions = await fetchDocumentWorkflowActions(
+            doctype: config.doctype,
+            name: name,
+          );
+          if (actions.isEmpty) continue;
+          todos.add(
+            ErpApprovalTodo.fromJson(config.doctype, row, actions: actions),
+          );
+        } catch (_) {
+          // Documents without workflow action for the current role are ignored.
+        }
+      }
+    }
+
+    todos.sort((a, b) => b.date.compareTo(a.date));
+    if (_salesOrderApprovalTodoCount != todos.length) {
+      _salesOrderApprovalTodoCount = todos.length;
+      notifyListeners();
+    }
+    return todos;
+  }
+
   Future<List<SalesOrderApprovalHistory>>
   fetchSalesOrderApprovalHistory() async {
     await _frappeService.ensureLoggedIn();
@@ -4282,6 +4384,13 @@ class AppState with ChangeNotifier {
 
   Future<Map<String, dynamic>> fetchSalesOrderApprovalDetail(String name) {
     return _frappeService.fetchDocument('Sales Order', name);
+  }
+
+  Future<Map<String, dynamic>> fetchApprovalDocument({
+    required String doctype,
+    required String name,
+  }) {
+    return _frappeService.fetchDocument(doctype, name);
   }
 
   Future<void> applySalesOrderWorkflow({
@@ -4392,6 +4501,8 @@ class AppState with ChangeNotifier {
         'Purchase Order' => refreshPurchaseOrders(),
         'Purchase Receipt' => refreshPurchaseReceipts(),
         'Purchase Invoice' => refreshPurchaseInvoices(),
+        'Material Request' => refreshMaterialRequests(),
+        'Sales Order' => refreshSalesOrders(),
         _ => Future<void>.value(),
       },
       refreshNotifications(silent: true),

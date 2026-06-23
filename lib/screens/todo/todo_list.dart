@@ -3,13 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/erp_approval_todo.dart';
 import '../../models/sales_order_approval.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/erp_doc_utils.dart';
 import '../../utils/erp_format.dart';
 import '../../utils/num_parse.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_status_badge.dart';
+import '../../widgets/erp/erp_workflow_helper.dart';
 
 class SalesOrderApprovalScreen extends StatefulWidget {
   final bool embedded;
@@ -25,7 +28,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     with SingleTickerProviderStateMixin {
   final _search = TextEditingController();
   late final TabController _tabController;
-  List<SalesOrderApproval> _rows = const [];
+  List<ErpApprovalTodo> _rows = const [];
   List<SalesOrderApprovalHistory> _history = const [];
   Timer? _syncTimer;
   bool _loading = true;
@@ -64,7 +67,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     }
     final appState = context.read<AppState>();
     try {
-      final rows = await appState.fetchSalesOrderApprovals();
+      final rows = await appState.fetchApprovalTodos();
       if (!mounted) return;
       setState(() => _rows = rows);
     } catch (error) {
@@ -81,11 +84,11 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     if (!silent && mounted) setState(() => _loading = false);
   }
 
-  Future<void> _selectApproval(SalesOrderApproval approval) async {
+  Future<void> _selectApproval(ErpApprovalTodo approval) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _SalesOrderApprovalDetailPage(
+        builder: (_) => _ErpApprovalDetailPage(
           approval: approval,
           onChanged: () => _load(silent: true),
         ),
@@ -155,8 +158,9 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     final rows = _rows.where((row) {
       return query.isEmpty ||
           row.name.toLowerCase().contains(query) ||
-          row.customer.toLowerCase().contains(query) ||
-          row.customerName.toLowerCase().contains(query) ||
+          row.doctype.toLowerCase().contains(query) ||
+          row.party.toLowerCase().contains(query) ||
+          row.partyName.toLowerCase().contains(query) ||
           row.workflowState.toLowerCase().contains(query);
     }).toList();
     return RefreshIndicator(
@@ -169,13 +173,13 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
             icon: Icons.checklist_rounded,
             title: '${_rows.length} Todo Approval',
             message:
-                'Pilih Sales Order untuk melihat detail sebelum memberi keputusan.',
+                'Pilih dokumen untuk melihat detail sebelum memberi keputusan.',
           ),
           const SizedBox(height: 14),
           TextField(
             controller: _search,
             decoration: const InputDecoration(
-              labelText: 'Cari Sales Order atau customer',
+              labelText: 'Cari dokumen, customer, supplier, atau status',
               prefixIcon: Icon(Icons.search_rounded),
             ),
           ),
@@ -274,7 +278,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     ),
   );
 
-  Widget _approvalCard(SalesOrderApproval row) => Padding(
+  Widget _approvalCard(ErpApprovalTodo row) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
     child: InkWell(
       onTap: () => _selectApproval(row),
@@ -284,10 +288,10 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
         decoration: _cardDecoration(),
         child: Row(
           children: [
-            const CircleAvatar(
+            CircleAvatar(
               backgroundColor: AppColors.softGreen,
               foregroundColor: AppColors.primary,
-              child: Icon(Icons.receipt_long_outlined),
+              child: Icon(_approvalIcon(row.doctype)),
             ),
             const SizedBox(width: 11),
             Expanded(
@@ -314,7 +318,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    row.customerName,
+                    row.partyLabel,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.slate,
@@ -323,8 +327,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Rp ${formatErpCurrency(row.grandTotal)}'
-                    '${row.transactionDate.isEmpty ? '' : ' | ${row.transactionDate}'}',
+                    _approvalAmount(row),
                     style: const TextStyle(
                       color: AppColors.primary,
                       fontSize: 11,
@@ -341,6 +344,21 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
       ),
     ),
   );
+
+  IconData _approvalIcon(String doctype) => switch (doctype) {
+    'Sales Order' => Icons.point_of_sale_rounded,
+    'Purchase Order' => Icons.shopping_bag_rounded,
+    'Purchase Invoice' => Icons.receipt_long_rounded,
+    'Material Request' => Icons.assignment_turned_in_rounded,
+    _ => Icons.approval_outlined,
+  };
+
+  String _approvalAmount(ErpApprovalTodo row) {
+    final value = row.doctype == 'Material Request'
+        ? '${formatErpCurrency(row.amount)} qty'
+        : 'Rp ${formatErpCurrency(row.amount)}';
+    return '$value${row.date.isEmpty ? '' : ' | ${row.date}'}';
+  }
 
   Widget _historyGroupCard(_ApprovalHistoryGroup group) {
     final latest = group.latest;
@@ -513,6 +531,482 @@ class _ApprovalHistoryGroup {
     : items = List.unmodifiable(items);
 
   SalesOrderApprovalHistory get latest => items.first;
+}
+
+class _ErpApprovalDetailPage extends StatefulWidget {
+  final ErpApprovalTodo approval;
+  final FutureOr<void> Function() onChanged;
+
+  const _ErpApprovalDetailPage({
+    required this.approval,
+    required this.onChanged,
+  });
+
+  @override
+  State<_ErpApprovalDetailPage> createState() => _ErpApprovalDetailPageState();
+}
+
+class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
+  Map<String, dynamic>? _detail;
+  String? _error;
+  bool _loading = true;
+  bool _processing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadDetail());
+  }
+
+  Future<void> _loadDetail() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final detail = await context.read<AppState>().fetchApprovalDocument(
+        doctype: widget.approval.doctype,
+        name: widget.approval.name,
+      );
+      if (!mounted) return;
+      setState(() => _detail = detail);
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _chooseAction(String action) async {
+    final reject = _isRejectAction(action);
+    var reason = '';
+    if (reject) {
+      reason = await _askReason(action) ?? '';
+      if (reason.trim().isEmpty || !mounted) return;
+    } else {
+      final ok = await confirmErpAction(
+        context,
+        title: '$action ${widget.approval.name}?',
+        message: 'Lanjutkan action "$action" untuk dokumen ini?',
+      );
+      if (!ok || !mounted) return;
+    }
+
+    setState(() {
+      _processing = true;
+      _error = null;
+    });
+    try {
+      await context.read<AppState>().applyDocumentWorkflow(
+        doctype: widget.approval.doctype,
+        name: widget.approval.name,
+        action: action,
+        reason: reason,
+      );
+      await widget.onChanged();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${widget.approval.name}: action $action berhasil.'),
+          backgroundColor: reject ? AppColors.danger : AppColors.success,
+        ),
+      );
+      Navigator.pop(context);
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _processing = false);
+    }
+  }
+
+  Future<String?> _askReason(String action) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$action - alasan wajib'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 3,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            labelText: 'Alasan',
+            hintText: 'Tulis alasan agar tercatat di ERPNext',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detail = _detail;
+    final items = _mapRows(detail?['items']);
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        surfaceTintColor: Colors.transparent,
+        title: const Text(
+          'Detail Approval',
+          style: TextStyle(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _loading || _processing ? null : _loadDetail,
+            icon: const Icon(Icons.sync_rounded),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadDetail,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+          children: [
+            _detailHeader(),
+            if (_loading) ...[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator(),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              _errorBox(_error!),
+            ],
+            if (detail != null) ...[
+              const SizedBox(height: 14),
+              _sectionCard(
+                title: 'Informasi Dokumen',
+                children: _documentInfoRows(detail),
+              ),
+              const SizedBox(height: 12),
+              _sectionCard(
+                title: widget.approval.doctype == 'Material Request'
+                    ? 'Kebutuhan'
+                    : 'Nilai Dokumen',
+                children: _amountRows(detail),
+              ),
+              const SizedBox(height: 12),
+              _sectionCard(
+                title: 'Item (${items.length})',
+                children: items.isEmpty
+                    ? [const Text('Tidak ada item.')]
+                    : items.map(_itemRow).toList(),
+              ),
+            ],
+            const SizedBox(height: 16),
+            _decisionCard(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailHeader() => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: _cardDecoration(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                widget.approval.name,
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            ErpStatusBadge(
+              statusText: widget.approval.workflowState.isEmpty
+                  ? widget.approval.status
+                  : widget.approval.workflowState,
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          widget.approval.moduleLabel,
+          style: const TextStyle(
+            color: AppColors.primary,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          widget.approval.partyLabel,
+          style: const TextStyle(color: AppColors.slate),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          widget.approval.doctype == 'Material Request'
+              ? '${formatErpCurrency(widget.approval.amount)} qty'
+              : 'Rp ${formatErpCurrency(widget.approval.amount)}',
+          style: const TextStyle(
+            color: AppColors.primary,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    ),
+  );
+
+  List<Widget> _documentInfoRows(Map<String, dynamic> detail) {
+    final partnerLabel = widget.approval.doctype == 'Sales Order'
+        ? 'Customer'
+        : widget.approval.doctype == 'Material Request'
+        ? 'Tipe Request'
+        : 'Supplier';
+    return [
+      _detailRow(partnerLabel, widget.approval.partyLabel),
+      _detailRow('Company', _text(detail['company'])),
+      _detailRow(
+        'Tanggal',
+        _text(detail['transaction_date']).isNotEmpty
+            ? _text(detail['transaction_date'])
+            : _text(detail['posting_date']),
+      ),
+      _detailRow('Dibutuhkan', _text(detail['schedule_date'])),
+      _detailRow('Jatuh Tempo', _text(detail['due_date'])),
+      _detailRow('Dibuat oleh', _text(detail['owner'])),
+    ];
+  }
+
+  List<Widget> _amountRows(Map<String, dynamic> detail) {
+    if (widget.approval.doctype == 'Material Request') {
+      return [
+        _detailRow('Total Qty', formatErpCurrency(detail['total_qty'])),
+        _detailRow('Status Dokumen', docStatusLabel(widget.approval.docStatus)),
+      ];
+    }
+    return [
+      _moneyRow('Subtotal', detail['net_total']),
+      _moneyRow('Diskon', detail['discount_amount']),
+      _moneyRow('Pajak & Biaya', detail['total_taxes_and_charges']),
+      _moneyRow('Outstanding', detail['outstanding_amount']),
+      _moneyRow('Grand Total', detail['grand_total'], emphasized: true),
+    ];
+  }
+
+  Widget _sectionCard({
+    required String title,
+    required List<Widget> children,
+  }) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: _cardDecoration(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const Divider(height: 22),
+        ...children,
+      ],
+    ),
+  );
+
+  Widget _detailRow(String label, String value) => Padding(
+    padding: const EdgeInsets.only(bottom: 9),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 115,
+          child: Text(
+            label,
+            style: const TextStyle(color: AppColors.slate, fontSize: 11),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value.isEmpty ? '-' : value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _moneyRow(String label, dynamic value, {bool emphasized = false}) {
+    final formatted = 'Rp ${formatErpCurrency(NumParse.asDouble(value))}';
+    if (!emphasized) return _detailRow(label, formatted);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          Text(
+            formatted,
+            style: const TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _itemRow(Map<String, dynamic> item) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _text(item['item_name']).isEmpty
+              ? _text(item['item_code'])
+              : _text(item['item_name']),
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '${_number(item['qty'])} ${_text(item['uom'])} x '
+          'Rp ${formatErpCurrency(NumParse.asDouble(item['rate']))} = '
+          'Rp ${formatErpCurrency(NumParse.asDouble(item['amount']))}',
+          style: const TextStyle(color: AppColors.slate, fontSize: 11),
+        ),
+      ],
+    ),
+  );
+
+  Widget _decisionCard() => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: _cardDecoration(),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Keputusan Approval',
+          style: TextStyle(color: AppColors.navy, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 5),
+        const Text(
+          'Periksa detail, lalu pilih action sesuai Workflow ERPNext.',
+          style: TextStyle(color: AppColors.slate, fontSize: 11),
+        ),
+        const SizedBox(height: 14),
+        if (_processing)
+          const LinearProgressIndicator()
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: widget.approval.actions.map((action) {
+              final reject = _isRejectAction(action);
+              return reject
+                  ? OutlinedButton.icon(
+                      onPressed: () => _chooseAction(action),
+                      icon: const Icon(Icons.close_rounded),
+                      label: Text(action),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.danger,
+                      ),
+                    )
+                  : FilledButton.icon(
+                      onPressed: () => _chooseAction(action),
+                      icon: const Icon(Icons.check_rounded),
+                      label: Text(action),
+                    );
+            }).toList(),
+          ),
+      ],
+    ),
+  );
+
+  Widget _errorBox(String message) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: AppColors.danger.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(14),
+    ),
+    child: Text(
+      message,
+      style: const TextStyle(
+        color: AppColors.danger,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
+
+  BoxDecoration _cardDecoration() => BoxDecoration(
+    color: AppColors.white,
+    borderRadius: BorderRadius.circular(16),
+    border: Border.all(color: AppColors.border),
+    boxShadow: AppColors.cardShadow,
+  );
+
+  List<Map<String, dynamic>> _mapRows(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  String _text(dynamic value) => value?.toString().trim() ?? '';
+
+  String _number(dynamic value) {
+    final number = NumParse.asDouble(value);
+    return number == number.roundToDouble()
+        ? number.toInt().toString()
+        : number.toStringAsFixed(2);
+  }
+
+  bool _isRejectAction(String action) {
+    final normalized = action.toLowerCase();
+    return normalized.contains('reject') ||
+        normalized.contains('tolak') ||
+        normalized.contains('decline') ||
+        normalized.contains('return');
+  }
+
+  String _friendlyError(Object error) => error
+      .toString()
+      .replaceFirst(RegExp(r'^Exception:\s*'), '')
+      .replaceAll(RegExp(r'<[^>]*>'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
 }
 
 class _SalesOrderApprovalHistoryDetailPage extends StatefulWidget {
