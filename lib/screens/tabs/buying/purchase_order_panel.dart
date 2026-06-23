@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../models/purchase_order.dart';
+import '../../../models/supplier_price_comparison.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../utils/erp_doc_utils.dart';
@@ -291,6 +292,12 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (detail.items.isNotEmpty)
+            erpActionButton(
+              label: 'Bandingkan Harga Supplier',
+              icon: Icons.compare_arrows_rounded,
+              onPressed: () => _openSupplierComparison(detail.items),
+            ),
           if (canEdit)
             erpActionButton(
               label: 'Edit Purchase Order',
@@ -492,6 +499,15 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
       Navigator.pop(context);
       await context.read<AppState>().refreshPurchaseInvoices();
     }
+  }
+
+  Future<void> _openSupplierComparison(List<PurchaseOrderItem> items) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _SupplierPriceComparisonSheet(items: items),
+    );
   }
 
   @override
@@ -734,6 +750,379 @@ class _PurchaseFilterButton extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _SupplierPriceComparisonSheet extends StatefulWidget {
+  final List<PurchaseOrderItem> items;
+
+  const _SupplierPriceComparisonSheet({required this.items});
+
+  @override
+  State<_SupplierPriceComparisonSheet> createState() =>
+      _SupplierPriceComparisonSheetState();
+}
+
+class _SupplierPriceComparisonSheetState
+    extends State<_SupplierPriceComparisonSheet> {
+  late PurchaseOrderItem _selectedItem;
+  SupplierPriceComparison? _comparison;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedItem = widget.items.first;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result = await context
+          .read<AppState>()
+          .fetchSupplierPriceComparison(
+            itemCode: _selectedItem.itemCode,
+            itemName: _selectedItem.itemName,
+          );
+      if (!mounted) return;
+      setState(() => _comparison = result);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final comparison = _comparison;
+    final cheapest = comparison?.cheapest;
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.72,
+      minChildSize: 0.42,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _ComparisonHeader(onClose: () => Navigator.pop(context)),
+              const SizedBox(height: 12),
+              if (widget.items.length > 1)
+                DropdownButtonFormField<PurchaseOrderItem>(
+                  initialValue: _selectedItem,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Pilih Item',
+                    prefixIcon: Icon(Icons.inventory_2_outlined),
+                  ),
+                  items: widget.items
+                      .map(
+                        (item) => DropdownMenuItem(
+                          value: item,
+                          child: Text(
+                            '${item.itemName} (${item.itemCode})',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (item) {
+                    if (item == null) return;
+                    _selectedItem = item;
+                    _load();
+                  },
+                )
+              else
+                _SelectedItemCard(item: _selectedItem),
+              const SizedBox(height: 12),
+              if (_loading)
+                const LinearProgressIndicator()
+              else if (_error != null)
+                ErpErrorBox(message: _error!)
+              else if (comparison == null || comparison.options.isEmpty)
+                const ErpEmptyState(
+                  title: 'Belum ada pembanding harga',
+                  message:
+                      'Tambahkan Item Price buying atau histori Purchase Order agar rekomendasi muncul.',
+                )
+              else ...[
+                if (cheapest != null) _CheapestSupplierCard(option: cheapest),
+                const SizedBox(height: 12),
+                const Text(
+                  'Daftar Pembanding',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                ...comparison.options.map(
+                  (option) => _SupplierPriceOptionCard(
+                    option: option,
+                    cheapest: option == cheapest,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ComparisonHeader extends StatelessWidget {
+  final VoidCallback onClose;
+
+  const _ComparisonHeader({required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: AppColors.softGreen,
+            foregroundColor: AppColors.primary,
+            child: Icon(Icons.price_check_rounded),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Supplier Price Comparison',
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'Bandingkan price list dan histori PO terakhir.',
+                  style: TextStyle(color: AppColors.slate, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          IconButton(onPressed: onClose, icon: const Icon(Icons.close_rounded)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SelectedItemCard extends StatelessWidget {
+  final PurchaseOrderItem item;
+
+  const _SelectedItemCard({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.inventory_2_outlined, color: AppColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.itemName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                Text(
+                  item.itemCode,
+                  style: const TextStyle(color: AppColors.slate, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheapestSupplierCard extends StatelessWidget {
+  final SupplierPriceOption option;
+
+  const _CheapestSupplierCard({required this.option});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.softGreen,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        children: [
+          const CircleAvatar(
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.white,
+            child: Icon(Icons.recommend_rounded),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Rekomendasi termurah',
+                  style: TextStyle(color: AppColors.slate, fontSize: 12),
+                ),
+                Text(
+                  option.displaySupplier,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            'Rp ${formatErpCurrency(option.rate)}',
+            style: const TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SupplierPriceOptionCard extends StatelessWidget {
+  final SupplierPriceOption option;
+  final bool cheapest;
+
+  const _SupplierPriceOptionCard({
+    required this.option,
+    required this.cheapest,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: cheapest
+              ? AppColors.primary.withValues(alpha: 0.35)
+              : AppColors.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  option.displaySupplier,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              if (cheapest)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.softGreen,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text(
+                    'Termurah',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                option.source,
+                style: const TextStyle(color: AppColors.slate, fontSize: 12),
+              ),
+              Text(
+                'Rp ${formatErpCurrency(option.rate)}',
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            [
+              if (option.priceList.isNotEmpty) option.priceList,
+              if (option.reference.isNotEmpty) option.reference,
+              if (option.date.isNotEmpty) option.date,
+            ].join(' | '),
+            style: const TextStyle(color: AppColors.slate, fontSize: 11),
+          ),
+        ],
       ),
     );
   }

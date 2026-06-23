@@ -13,7 +13,9 @@ import '../models/delivery_activity_log.dart';
 import '../models/sales_invoice.dart';
 import '../models/purchase_receipt.dart';
 import '../models/purchase_invoice.dart';
+import '../models/material_request.dart';
 import '../models/quality_inspection_record.dart';
+import '../models/supplier_price_comparison.dart';
 import '../models/stock_entry.dart';
 import '../models/stock_ledger_movement.dart';
 import '../models/inventory_item.dart';
@@ -112,6 +114,7 @@ class AppState with ChangeNotifier {
     if (lower == 'sales manager') return 'Sales Manager';
     if (lower == 'warehouse') return 'Warehouse';
     if (lower == 'logistics') return 'Logistics';
+    if (lower == 'purchase' || lower == 'purchase user') return 'Purchase';
     if (lower == 'null' || lower == 'none' || lower == 'undefined') {
       return 'Unassigned';
     }
@@ -146,6 +149,7 @@ class AppState with ChangeNotifier {
   List<SalesInvoice> _salesInvoices = [];
   List<PurchaseReceipt> _purchaseReceipts = [];
   List<PurchaseInvoice> _purchaseInvoices = [];
+  List<MaterialRequest> _materialRequests = [];
   List<StockEntry> _stockEntries = [];
   List<StockReconciliationSummary> _stockReconciliations = [];
   List<InventoryItem> _inventory = [];
@@ -188,6 +192,7 @@ class AppState with ChangeNotifier {
   List<SalesInvoice> get salesInvoices => _salesInvoices;
   List<PurchaseReceipt> get purchaseReceipts => _purchaseReceipts;
   List<PurchaseInvoice> get purchaseInvoices => _purchaseInvoices;
+  List<MaterialRequest> get materialRequests => _materialRequests;
   List<StockEntry> get stockEntries => _stockEntries;
   List<StockReconciliationSummary> get stockReconciliations =>
       _stockReconciliations;
@@ -347,6 +352,18 @@ class AppState with ChangeNotifier {
   String _purchaseInvoiceSearch = '';
   String? _purchaseInvoiceStatus;
   int _purchaseInvoiceQueryVersion = 0;
+
+  bool _isMaterialRequestsLoading = false;
+  bool get isMaterialRequestsLoading => _isMaterialRequestsLoading;
+  bool _isMoreMaterialRequestsLoading = false;
+  bool get isMoreMaterialRequestsLoading => _isMoreMaterialRequestsLoading;
+  bool _hasMoreMaterialRequests = true;
+  bool get hasMoreMaterialRequests => _hasMoreMaterialRequests;
+  String? _materialRequestsError;
+  String? get materialRequestsError => _materialRequestsError;
+  String _materialRequestSearch = '';
+  String? _materialRequestStatus;
+  int _materialRequestQueryVersion = 0;
 
   bool _isStockEntriesLoading = false;
   bool get isStockEntriesLoading => _isStockEntriesLoading;
@@ -1373,6 +1390,96 @@ class AppState with ChangeNotifier {
     );
   }
 
+  Future<SupplierPriceComparison> fetchSupplierPriceComparison({
+    required String itemCode,
+    String itemName = '',
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final options = <SupplierPriceOption>[];
+
+    try {
+      final rows = await _fetchResourceWithFieldFallback(
+        doctype: 'Item Price',
+        fields: const [
+          'name',
+          'item_code',
+          'price_list',
+          'price_list_rate',
+          'currency',
+          'supplier',
+          'supplier_name',
+          'valid_from',
+        ],
+        limit: 30,
+        orderBy: 'price_list_rate asc, valid_from desc, modified desc',
+        filters: [
+          ['item_code', '=', itemCode],
+          ['buying', '=', 1],
+          ['price_list_rate', '>', 0],
+        ],
+      );
+      options.addAll(rows.map(SupplierPriceOption.fromItemPrice));
+    } catch (_) {
+      // Item Price is helpful but not mandatory for comparison.
+    }
+
+    try {
+      final rows = await _fetchResourceWithFieldFallback(
+        doctype: 'Purchase Order Item',
+        fields: const [
+          'parent',
+          'item_code',
+          'item_name',
+          'rate',
+          'base_rate',
+          'schedule_date',
+        ],
+        limit: 30,
+        orderBy: 'modified desc',
+        filters: [
+          ['item_code', '=', itemCode],
+        ],
+      );
+      final parents = await _fetchDocumentsInBatches(
+        'Purchase Order',
+        rows.map((row) => row['parent']?.toString() ?? ''),
+      );
+      for (final row in rows) {
+        final parentName = row['parent']?.toString() ?? '';
+        final parent = parents[parentName];
+        if (parent == null) continue;
+        if (NumParse.asInt(parent['docstatus']) != 1) continue;
+        options.add(
+          SupplierPriceOption.fromPurchaseHistory(row: row, parent: parent),
+        );
+      }
+    } catch (_) {
+      // Some roles do not expose Purchase Order Item. Item Price data still works.
+    }
+
+    final deduped = <String, SupplierPriceOption>{};
+    for (final option in options.where((option) => option.rate > 0)) {
+      final key = [
+        option.supplier,
+        option.supplierName,
+        option.source,
+        option.reference,
+        option.priceList,
+        option.rate.toStringAsFixed(4),
+      ].join('|');
+      deduped.putIfAbsent(key, () => option);
+    }
+
+    final sorted = deduped.values.toList()
+      ..sort((a, b) => a.rate.compareTo(b.rate));
+
+    return SupplierPriceComparison(
+      itemCode: itemCode,
+      itemName: itemName.trim().isNotEmpty ? itemName : itemCode,
+      options: sorted,
+    );
+  }
+
   Future<List<CustomerPurchaseHistory>> fetchCustomerPurchaseHistory({
     required String customer,
     required String doctype,
@@ -1797,6 +1904,49 @@ class AppState with ChangeNotifier {
 
   Future<PurchaseInvoice> loadPurchaseInvoiceDetail(String id) async {
     return _purchaseInvoiceService.load(id);
+  }
+
+  Future<MaterialRequest> loadMaterialRequestDetail(String id) async {
+    await _frappeService.ensureLoggedIn();
+    final doc = await _frappeService.fetchDocument('Material Request', id);
+    return MaterialRequest.fromJson(doc);
+  }
+
+  Future<MaterialRequest> createMaterialRequest({
+    required String materialRequestType,
+    required String itemCode,
+    required double qty,
+    required DateTime transactionDate,
+    required DateTime scheduleDate,
+    String? company,
+    String? warehouse,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final date = DateRangePresets.toFrappeDate(transactionDate);
+    final requiredBy = DateRangePresets.toFrappeDate(scheduleDate);
+    final payload = <String, dynamic>{
+      'material_request_type': materialRequestType,
+      'transaction_date': date,
+      'schedule_date': requiredBy,
+      if (company?.trim().isNotEmpty == true) 'company': company!.trim(),
+      'items': [
+        {
+          'item_code': itemCode.trim(),
+          'qty': qty,
+          'schedule_date': requiredBy,
+          if (warehouse?.trim().isNotEmpty == true)
+            'warehouse': warehouse!.trim(),
+        },
+      ],
+    };
+
+    final created = await _frappeService.createDocument(
+      'Material Request',
+      payload,
+    );
+    final request = MaterialRequest.fromJson(created);
+    await refreshMaterialRequests();
+    return request;
   }
 
   Future<PurchaseInvoice> createPurchaseInvoice({
@@ -2561,6 +2711,7 @@ class AppState with ChangeNotifier {
       fetchPurchaseOrdersFromFrappe(),
       fetchPurchaseReceiptsFromFrappe(),
       fetchPurchaseInvoicesFromFrappe(),
+      fetchMaterialRequestsFromFrappe(),
       refreshBuyingSummaries(),
     ]);
   }
@@ -2951,6 +3102,32 @@ class AppState with ChangeNotifier {
     }
   }
 
+  Future<void> fetchMaterialRequestsFromFrappe() async {
+    _isMaterialRequestsLoading = true;
+    _materialRequestsError = null;
+    _hasMoreMaterialRequests = true;
+    _isMoreMaterialRequestsLoading = false;
+    final version = ++_materialRequestQueryVersion;
+    notifyListeners();
+
+    try {
+      await _frappeService.ensureLoggedIn();
+      final docs = await _fetchMaterialRequestPage(limitStart: 0);
+      if (version != _materialRequestQueryVersion) return;
+      _materialRequests = docs;
+      _hasMoreMaterialRequests = docs.isNotEmpty;
+      _materialRequestsError = null;
+    } catch (err) {
+      if (version != _materialRequestQueryVersion) return;
+      _materialRequestsError = err.toString();
+    } finally {
+      if (version == _materialRequestQueryVersion) {
+        _isMaterialRequestsLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> refreshDeliveryNotes() => fetchDeliveryNotesFromFrappe();
   Future<void> refreshSalesInvoices() => fetchSalesInvoicesFromFrappe();
 
@@ -3030,6 +3207,7 @@ class AppState with ChangeNotifier {
 
   Future<void> refreshPurchaseReceipts() => fetchPurchaseReceiptsFromFrappe();
   Future<void> refreshPurchaseInvoices() => fetchPurchaseInvoicesFromFrappe();
+  Future<void> refreshMaterialRequests() => fetchMaterialRequestsFromFrappe();
 
   Future<void> setPurchaseOrderQuery({String? search, String? status}) async {
     _purchaseOrderSearch = search?.trim() ?? _purchaseOrderSearch;
@@ -3047,6 +3225,12 @@ class AppState with ChangeNotifier {
     _purchaseInvoiceSearch = search?.trim() ?? _purchaseInvoiceSearch;
     _purchaseInvoiceStatus = status;
     await fetchPurchaseInvoicesFromFrappe();
+  }
+
+  Future<void> setMaterialRequestQuery({String? search, String? status}) async {
+    _materialRequestSearch = search?.trim() ?? _materialRequestSearch;
+    _materialRequestStatus = status;
+    await fetchMaterialRequestsFromFrappe();
   }
 
   Future<void> loadMorePurchaseReceipts() async {
@@ -3075,6 +3259,38 @@ class AppState with ChangeNotifier {
     } finally {
       if (version == _purchaseReceiptQueryVersion) {
         _isMorePurchaseReceiptsLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadMoreMaterialRequests() async {
+    if (_isMaterialRequestsLoading ||
+        _isMoreMaterialRequestsLoading ||
+        !_hasMoreMaterialRequests) {
+      return;
+    }
+    _isMoreMaterialRequestsLoading = true;
+    final version = _materialRequestQueryVersion;
+    notifyListeners();
+    try {
+      final page = await _fetchMaterialRequestPage(
+        limitStart: _materialRequests.length,
+      );
+      if (version != _materialRequestQueryVersion) return;
+      final ids = _materialRequests.map((e) => e.id).toSet();
+      _materialRequests = [
+        ..._materialRequests,
+        ...page.where((e) => ids.add(e.id)),
+      ];
+      _hasMoreMaterialRequests = page.isNotEmpty;
+      _materialRequestsError = null;
+    } catch (err) {
+      if (version != _materialRequestQueryVersion) return;
+      _materialRequestsError = err.toString();
+    } finally {
+      if (version == _materialRequestQueryVersion) {
+        _isMoreMaterialRequestsLoading = false;
         notifyListeners();
       }
     }
@@ -4573,6 +4789,41 @@ class AppState with ChangeNotifier {
         .toList();
   }
 
+  Future<List<MaterialRequest>> _fetchMaterialRequestPage({
+    required int limitStart,
+  }) async {
+    final filters = <List<dynamic>>[
+      ..._buyingPeriodFilters('transaction_date'),
+      ...?_statusFilters(_materialRequestStatus),
+    ];
+    final data = await _fetchResourceWithFieldFallback(
+      doctype: 'Material Request',
+      fields: const [
+        'name',
+        'material_request_type',
+        'status',
+        'docstatus',
+        'transaction_date',
+        'schedule_date',
+        'company',
+        'total_qty',
+      ],
+      limit: _documentPageSize,
+      limitStart: limitStart,
+      orderBy: 'transaction_date desc, name desc',
+      filters: filters,
+      orFilters: _searchFilters(_materialRequestSearch, const [
+        'name',
+        'material_request_type',
+        'company',
+      ]),
+    );
+
+    var requests = data.map(MaterialRequest.fromJson).toList();
+    requests = await _attachMaterialRequestItems(requests);
+    return requests;
+  }
+
   List<List<dynamic>>? _purchaseOrderFilters(String? status) {
     if (status == 'To Receive and To Bill') {
       return [
@@ -4657,6 +4908,47 @@ class AppState with ChangeNotifier {
           .toList();
     } catch (_) {
       return orders;
+    }
+  }
+
+  Future<List<MaterialRequest>> _attachMaterialRequestItems(
+    List<MaterialRequest> requests,
+  ) async {
+    if (requests.isEmpty) return requests;
+    try {
+      final rows = await _fetchAllResourcePages(
+        doctype: 'Material Request Item',
+        fields: const [
+          'parent',
+          'item_code',
+          'item_name',
+          'qty',
+          'ordered_qty',
+          'stock_uom',
+          'warehouse',
+          'schedule_date',
+        ],
+        filters: [
+          ['parent', 'in', requests.map((request) => request.id).toList()],
+        ],
+        maxRows: 2000,
+      );
+      final grouped = <String, List<MaterialRequestItem>>{};
+      for (final row in rows) {
+        final parent = row['parent']?.toString() ?? '';
+        if (parent.isEmpty) continue;
+        grouped
+            .putIfAbsent(parent, () => [])
+            .add(MaterialRequestItem.fromJson(row));
+      }
+      return requests
+          .map(
+            (request) =>
+                request.copyWith(items: grouped[request.id] ?? request.items),
+          )
+          .toList();
+    } catch (_) {
+      return requests;
     }
   }
 
