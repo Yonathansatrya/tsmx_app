@@ -162,10 +162,7 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
               filled: true,
               onPressed: () => _submit(detail.id),
             )
-          : const Text(
-              'Approval mengikuti Workflow ERPNext jika role dan workflow sudah aktif.',
-              style: TextStyle(color: AppColors.slate, fontSize: 12),
-            ),
+          : const _MaterialRequestApprovalInfoCard(),
     );
   }
 
@@ -205,6 +202,10 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
           valuePrefix: '',
           valueSuffix: ' qty',
         ),
+
+        const SizedBox(height: 12),
+
+        _MaterialRequestSummaryCard(requests: filtered),
 
         const SizedBox(height: 12),
 
@@ -398,6 +399,206 @@ class _MaterialRequestCard extends StatelessWidget {
   }
 }
 
+class _MaterialRequestSummaryCard extends StatelessWidget {
+  final List<MaterialRequest> requests;
+
+  const _MaterialRequestSummaryCard({required this.requests});
+
+  @override
+  Widget build(BuildContext context) {
+    final draftCount = requests
+        .where((doc) => isDocDraft(doc.docStatus))
+        .length;
+    final activeQty = requests.fold<double>(
+      0,
+      (sum, doc) => sum + doc.totalQty,
+    );
+    final activeCount = requests.where((doc) {
+      final status = doc.statusText.toLowerCase();
+      return !status.contains('cancel') &&
+          !status.contains('stopped') &&
+          !status.contains('ordered');
+    }).length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.softGreen,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.assignment_turned_in_outlined,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Kebutuhan Barang',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Ringkasan request sesuai filter aktif.',
+                      style: TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _MaterialRequestSummaryTile(
+                  label: 'Aktif',
+                  value: '$activeCount request',
+                  icon: Icons.pending_actions_rounded,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MaterialRequestSummaryTile(
+                  label: 'Draft',
+                  value: '$draftCount draft',
+                  icon: Icons.edit_note_rounded,
+                  color: AppColors.warning,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MaterialRequestSummaryTile(
+                  label: 'Qty',
+                  value: formatErpCurrency(activeQty),
+                  icon: Icons.inventory_2_outlined,
+                  color: AppColors.slate,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MaterialRequestSummaryTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _MaterialRequestSummaryTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 7),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MaterialRequestApprovalInfoCard extends StatelessWidget {
+  const _MaterialRequestApprovalInfoCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.softGreen,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.verified_user_outlined,
+            color: AppColors.primary,
+            size: 19,
+          ),
+          SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              'Action approval akan muncul otomatis jika Workflow ERPNext untuk Material Request sudah aktif dan role user sesuai.',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PlanningCard extends StatelessWidget {
   final List<InventoryItem> items;
   final ValueChanged<InventoryItem> onPick;
@@ -418,15 +619,58 @@ class _PlanningCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Planning otomatis dari low stock',
-            style: TextStyle(fontWeight: FontWeight.w900),
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_motion_outlined,
+                  color: AppColors.warning,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Rekomendasi Pembelian',
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              if (items.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.warning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${items.length} item',
+                    style: const TextStyle(
+                      color: AppColors.warning,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             items.isEmpty
                 ? 'Belum ada item stok kosong dari data inventory saat ini.'
-                : 'Pilih item untuk membuat request dengan data item terisi otomatis.',
+                : 'Item stok kosong bisa langsung dibuatkan request barang.',
             style: const TextStyle(
               color: AppColors.slate,
               fontSize: 12,
@@ -444,8 +688,11 @@ class _PlanningCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-                subtitle: Text('${item.sku} | Stok ${item.quantity}'),
-                trailing: const Icon(Icons.chevron_right_rounded),
+                subtitle: Text('${item.sku} | Stok saat ini ${item.quantity}'),
+                trailing: const Icon(
+                  Icons.add_circle_outline_rounded,
+                  color: AppColors.primary,
+                ),
                 onTap: () => onPick(item),
               ),
             ),
