@@ -10,7 +10,6 @@ import '../../../widgets/erp/erp_document_card.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
-import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../../widgets/erp/document_trend_card.dart';
 import 'selling_filter_widgets.dart';
@@ -328,19 +327,6 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ErpSummaryCard(
-          title: 'Delivery Notes',
-          valueLabel: 'documents',
-          totalValue: appState.deliveryNoteSummary.totalValue,
-          documentCount: appState.deliveryNoteSummary.documentCount,
-          subtitle:
-              '${appState.summarySyncSubtitle} | '
-              '${filtered.length} loaded for current filters',
-          isLoading:
-              appState.isOrderSummaryLoading &&
-              appState.deliveryNoteSummary.documentCount == 0,
-        ),
-        const SizedBox(height: 12),
         DocumentTrendCard(
           title: 'Delivery Note',
           emptyMessage: 'Belum ada Delivery Note aktif pada periode ini.',
@@ -348,7 +334,9 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
           selectedYear: appState.sellingPeriodYear,
           selectedMonth: appState.sellingPeriodMonth,
         ),
+
         const SizedBox(height: 12),
+
         TextField(
           controller: _searchController,
           onChanged: _searchChanged,
@@ -371,11 +359,14 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
             ),
           ),
         ),
+
         if (appState.deliveryNotesError != null) ...[
           const SizedBox(height: 10),
           ErpErrorBox(message: appState.deliveryNotesError!),
         ],
+
         const SizedBox(height: 10),
+
         SellingQuickFilters(
           sortOption: _sortOption,
           sortLabel: _sortLabel,
@@ -384,7 +375,9 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
           advancedCount: _advancedFilterCount,
           onAdvancedFilters: _openAdvancedFilters,
         ),
+
         const SizedBox(height: 10),
+
         ErpStatusChipBar<DeliveryNoteStatusKey?>(
           chips: _chips,
           selected: _statusFilter,
@@ -396,7 +389,9 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
             );
           },
         ),
+
         const SizedBox(height: 12),
+
         if (filtered.isEmpty && !appState.isDeliveryNotesLoading)
           const ErpEmptyState(title: 'No delivery notes found')
         else
@@ -410,6 +405,7 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
               onTap: () => _openDetail(d),
             ),
           ),
+
         if (appState.hasMoreDeliveryNotes ||
             appState.isMoreDeliveryNotesLoading) ...[
           const SizedBox(height: 8),

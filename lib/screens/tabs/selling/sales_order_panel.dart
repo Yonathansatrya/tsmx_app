@@ -11,7 +11,6 @@ import '../../../widgets/erp/erp_document_card.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
-import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../sales/sales_order/create_sales_order_screen.dart';
 import 'selling_document_detail_sheet.dart';
@@ -429,21 +428,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ErpSummaryCard(
-          title: 'Sales Orders',
-          valueLabel: 'orders',
-          totalValue: appState.salesOrderSummary.totalValue,
-          documentCount: appState.salesOrderSummary.documentCount,
-          subtitle:
-              '${appState.summarySyncSubtitle} | '
-              '${filtered.length} loaded for current filters',
-          isLoading:
-              appState.isOrderSummaryLoading &&
-              appState.salesOrderSummary.documentCount == 0,
-        ),
-
-        const SizedBox(height: 12),
-
         DocumentTrendCard(
           title: 'Pendapatan',
           emptyMessage: 'Belum ada Sales Order aktif pada periode ini.',

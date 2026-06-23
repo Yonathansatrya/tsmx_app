@@ -10,7 +10,6 @@ import '../../../widgets/erp/erp_document_card.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
-import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../../widgets/erp/document_trend_card.dart';
 import 'selling_filter_widgets.dart';
@@ -333,19 +332,6 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ErpSummaryCard(
-          title: 'Sales Invoices',
-          valueLabel: 'invoices',
-          totalValue: appState.salesInvoiceSummary.totalValue,
-          documentCount: appState.salesInvoiceSummary.documentCount,
-          subtitle:
-              '${appState.summarySyncSubtitle} | '
-              '${filtered.length} loaded for current filters',
-          isLoading:
-              appState.isOrderSummaryLoading &&
-              appState.salesInvoiceSummary.documentCount == 0,
-        ),
-        const SizedBox(height: 12),
         DocumentTrendCard(
           title: 'Sales Invoice',
           emptyMessage: 'Belum ada Sales Invoice aktif pada periode ini.',
@@ -353,7 +339,9 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
           selectedYear: appState.sellingPeriodYear,
           selectedMonth: appState.sellingPeriodMonth,
         ),
+
         const SizedBox(height: 12),
+
         TextField(
           controller: _searchController,
           onChanged: _searchChanged,
@@ -376,11 +364,14 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
             ),
           ),
         ),
+
         if (appState.salesInvoicesError != null) ...[
           const SizedBox(height: 10),
           ErpErrorBox(message: appState.salesInvoicesError!),
         ],
+
         const SizedBox(height: 10),
+
         SellingQuickFilters(
           sortOption: _sortOption,
           sortLabel: _sortLabel,
@@ -389,7 +380,9 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
           advancedCount: _advancedFilterCount,
           onAdvancedFilters: _openAdvancedFilters,
         ),
+
         const SizedBox(height: 10),
+
         ErpStatusChipBar<InvoiceStatusKey?>(
           chips: _chips,
           selected: _statusFilter,
@@ -401,7 +394,9 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
             );
           },
         ),
+
         const SizedBox(height: 12),
+
         if (filtered.isEmpty && !appState.isSalesInvoicesLoading)
           const ErpEmptyState(title: 'No sales invoices found')
         else
@@ -415,6 +410,7 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
               onTap: () => _openDetail(d),
             ),
           ),
+
         if (appState.hasMoreSalesInvoices ||
             appState.isMoreSalesInvoicesLoading) ...[
           const SizedBox(height: 8),
