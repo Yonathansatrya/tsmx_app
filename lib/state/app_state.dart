@@ -4366,6 +4366,7 @@ class AppState with ChangeNotifier {
       doctype: 'Comment',
       fields: const [
         'name',
+        'reference_doctype',
         'reference_name',
         'content',
         'comment_by',
@@ -4373,7 +4374,16 @@ class AppState with ChangeNotifier {
         'creation',
       ],
       filters: [
-        ['reference_doctype', '=', 'Sales Order'],
+        [
+          'reference_doctype',
+          'in',
+          [
+            'Sales Order',
+            'Purchase Order',
+            'Purchase Invoice',
+            'Material Request',
+          ],
+        ],
         ['content', 'like', '%via TMSX App%'],
       ],
       orderBy: 'creation desc',

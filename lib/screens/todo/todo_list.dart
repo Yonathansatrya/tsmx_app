@@ -325,6 +325,15 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                       fontSize: 11,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    row.moduleLabel,
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Text(
                     _approvalAmount(row),
@@ -394,7 +403,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                       children: [
                         Expanded(
                           child: Text(
-                            group.salesOrder,
+                            group.documentName,
                             style: const TextStyle(
                               color: AppColors.navy,
                               fontWeight: FontWeight.w900,
@@ -433,6 +442,15 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                     ),
                     const SizedBox(height: 6),
                     Text(
+                      latest.doctype,
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
                       '${latest.actor} | ${latest.createdAt}',
                       style: const TextStyle(
                         color: AppColors.slate,
@@ -463,7 +481,8 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   List<_ApprovalHistoryGroup> _groupedHistory() {
     final grouped = <String, List<SalesOrderApprovalHistory>>{};
     for (final item in _history) {
-      final key = item.salesOrder.isEmpty ? item.id : item.salesOrder;
+      final documentName = item.salesOrder.isEmpty ? item.id : item.salesOrder;
+      final key = '${item.doctype}::$documentName';
       grouped.putIfAbsent(key, () => []).add(item);
     }
     final groups = grouped.entries
@@ -524,13 +543,19 @@ class _SalesOrderApprovalDetailPage extends StatefulWidget {
 }
 
 class _ApprovalHistoryGroup {
-  final String salesOrder;
+  final String key;
   final List<SalesOrderApprovalHistory> items;
 
-  _ApprovalHistoryGroup(this.salesOrder, List<SalesOrderApprovalHistory> items)
+  _ApprovalHistoryGroup(this.key, List<SalesOrderApprovalHistory> items)
     : items = List.unmodifiable(items);
 
   SalesOrderApprovalHistory get latest => items.first;
+  String get doctype => latest.doctype;
+  String get documentName {
+    if (latest.salesOrder.isNotEmpty) return latest.salesOrder;
+    final parts = key.split('::');
+    return parts.length == 2 ? parts.last : key;
+  }
 }
 
 class _ErpApprovalDetailPage extends StatefulWidget {
@@ -1037,9 +1062,10 @@ class _SalesOrderApprovalHistoryDetailPageState
       _error = null;
     });
     try {
-      final detail = await context
-          .read<AppState>()
-          .fetchSalesOrderApprovalDetail(widget.group.salesOrder);
+      final detail = await context.read<AppState>().fetchApprovalDocument(
+        doctype: widget.group.doctype,
+        name: widget.group.documentName,
+      );
       if (!mounted) return;
       setState(() => _detail = detail);
     } catch (error) {
@@ -1053,9 +1079,7 @@ class _SalesOrderApprovalHistoryDetailPageState
   @override
   Widget build(BuildContext context) {
     final detail = _detail;
-    final customer = _text(detail?['customer_name']).isEmpty
-        ? _text(detail?['customer'])
-        : _text(detail?['customer_name']);
+    final party = _historyPartyName(detail);
     final state = _text(detail?['workflow_state']).isEmpty
         ? _text(detail?['status'])
         : _text(detail?['workflow_state']);
@@ -1089,10 +1113,11 @@ class _SalesOrderApprovalHistoryDetailPageState
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
           children: [
             _summaryHeader(
-              salesOrder: widget.group.salesOrder,
-              customer: customer,
+              documentName: widget.group.documentName,
+              doctype: widget.group.doctype,
+              party: party,
               state: state,
-              total: NumParse.asDouble(detail?['grand_total']),
+              total: _historyTotal(detail),
             ),
             if (_loading) ...[
               const SizedBox(height: 12),
@@ -1105,39 +1130,19 @@ class _SalesOrderApprovalHistoryDetailPageState
             if (detail != null) ...[
               const SizedBox(height: 14),
               _sectionCard(
-                title: 'Detail Order',
-                children: [
-                  _detailRow('Customer ID', _text(detail['customer'])),
-                  _detailRow('Customer', customer),
-                  _detailRow(
-                    'Tanggal Order',
-                    _text(detail['transaction_date']),
-                  ),
-                  _detailRow('Tanggal Kirim', _text(detail['delivery_date'])),
-                  _detailRow('Company', _text(detail['company'])),
-                  _detailRow('Gudang', _text(detail['set_warehouse'])),
-                  _detailRow('Price List', _text(detail['selling_price_list'])),
-                  _detailRow('Currency', _text(detail['currency'])),
-                  _detailRow('Dibuat oleh', _text(detail['owner'])),
-                ],
+                title: 'Detail Dokumen',
+                children: _historyDetailRows(detail, party),
               ),
               const SizedBox(height: 12),
               _sectionCard(
-                title: 'Nilai Order',
-                children: [
-                  _moneyRow('Subtotal', detail['net_total']),
-                  _moneyRow('Diskon', detail['discount_amount']),
-                  _moneyRow('Pajak & Biaya', detail['total_taxes_and_charges']),
-                  _moneyRow(
-                    'Grand Total',
-                    detail['grand_total'],
-                    emphasized: true,
-                  ),
-                ],
+                title: widget.group.doctype == 'Material Request'
+                    ? 'Kebutuhan'
+                    : 'Nilai Dokumen',
+                children: _historyAmountRows(detail),
               ),
               const SizedBox(height: 12),
               _sectionCard(
-                title: 'Item Order (${items.length})',
+                title: 'Item (${items.length})',
                 children: items.isEmpty
                     ? [const Text('Tidak ada item.')]
                     : items.map(_itemRow).toList(),
@@ -1183,8 +1188,9 @@ class _SalesOrderApprovalHistoryDetailPageState
   }
 
   Widget _summaryHeader({
-    required String salesOrder,
-    required String customer,
+    required String documentName,
+    required String doctype,
+    required String party,
     required String state,
     required double total,
   }) => Container(
@@ -1197,7 +1203,7 @@ class _SalesOrderApprovalHistoryDetailPageState
           children: [
             Expanded(
               child: Text(
-                salesOrder,
+                documentName,
                 style: const TextStyle(
                   color: AppColors.navy,
                   fontSize: 17,
@@ -1210,7 +1216,16 @@ class _SalesOrderApprovalHistoryDetailPageState
         ),
         const SizedBox(height: 6),
         Text(
-          customer.isEmpty ? 'Customer belum terbaca' : customer,
+          doctype,
+          style: const TextStyle(
+            color: AppColors.primary,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          party.isEmpty ? 'Party belum terbaca' : party,
           style: const TextStyle(color: AppColors.slate),
         ),
         const SizedBox(height: 10),
@@ -1218,7 +1233,9 @@ class _SalesOrderApprovalHistoryDetailPageState
           children: [
             Expanded(
               child: Text(
-                'Rp ${formatErpCurrency(total)}',
+                doctype == 'Material Request'
+                    ? '${formatErpCurrency(total)} qty'
+                    : 'Rp ${formatErpCurrency(total)}',
                 style: const TextStyle(
                   color: AppColors.primary,
                   fontSize: 17,
@@ -1239,6 +1256,70 @@ class _SalesOrderApprovalHistoryDetailPageState
       ],
     ),
   );
+
+  String _historyPartyName(Map<String, dynamic>? detail) {
+    if (detail == null) return '';
+    if (widget.group.doctype == 'Sales Order') {
+      return _text(detail['customer_name']).isEmpty
+          ? _text(detail['customer'])
+          : _text(detail['customer_name']);
+    }
+    if (widget.group.doctype == 'Material Request') {
+      return _text(detail['company']).isEmpty
+          ? _text(detail['material_request_type'])
+          : _text(detail['company']);
+    }
+    return _text(detail['supplier_name']).isEmpty
+        ? _text(detail['supplier'])
+        : _text(detail['supplier_name']);
+  }
+
+  double _historyTotal(Map<String, dynamic>? detail) {
+    if (detail == null) return 0;
+    if (widget.group.doctype == 'Material Request') {
+      return NumParse.asDouble(detail['total_qty']);
+    }
+    return NumParse.asDouble(detail['grand_total'] ?? detail['rounded_total']);
+  }
+
+  List<Widget> _historyDetailRows(Map<String, dynamic> detail, String party) {
+    final partnerLabel = widget.group.doctype == 'Sales Order'
+        ? 'Customer'
+        : widget.group.doctype == 'Material Request'
+        ? 'Tipe Request'
+        : 'Supplier';
+    return [
+      _detailRow(partnerLabel, party),
+      _detailRow('Company', _text(detail['company'])),
+      _detailRow(
+        'Tanggal',
+        _text(detail['transaction_date']).isNotEmpty
+            ? _text(detail['transaction_date'])
+            : _text(detail['posting_date']),
+      ),
+      _detailRow('Dibutuhkan', _text(detail['schedule_date'])),
+      _detailRow('Jatuh Tempo', _text(detail['due_date'])),
+      _detailRow('Gudang', _text(detail['set_warehouse'])),
+      _detailRow('Currency', _text(detail['currency'])),
+      _detailRow('Dibuat oleh', _text(detail['owner'])),
+    ];
+  }
+
+  List<Widget> _historyAmountRows(Map<String, dynamic> detail) {
+    if (widget.group.doctype == 'Material Request') {
+      return [
+        _detailRow('Total Qty', formatErpCurrency(detail['total_qty'])),
+        _detailRow('Status Dokumen', _text(detail['status'])),
+      ];
+    }
+    return [
+      _moneyRow('Subtotal', detail['net_total']),
+      _moneyRow('Diskon', detail['discount_amount']),
+      _moneyRow('Pajak & Biaya', detail['total_taxes_and_charges']),
+      _moneyRow('Outstanding', detail['outstanding_amount']),
+      _moneyRow('Grand Total', detail['grand_total'], emphasized: true),
+    ];
+  }
 
   Widget _timelineItem(
     SalesOrderApprovalHistory item, {
@@ -1354,6 +1435,8 @@ class _SalesOrderApprovalHistoryDetailPageState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _miniRow('Tipe', item.doctype),
+                        const SizedBox(height: 3),
                         _miniRow('Dokumen', item.salesOrder),
                         const SizedBox(height: 6),
                         Text(
