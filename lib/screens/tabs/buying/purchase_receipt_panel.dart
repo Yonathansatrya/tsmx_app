@@ -186,18 +186,6 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ErpSummaryCard(
-          title: 'Purchase Receipts',
-          valueLabel: 'documents',
-          totalValue: appState.purchaseReceiptSummary.totalValue,
-          documentCount: appState.purchaseReceiptSummary.documentCount,
-          subtitle:
-              '${appState.summarySyncSubtitle} | ${filtered.length} loaded',
-          isLoading:
-              appState.isOrderSummaryLoading &&
-              appState.purchaseReceiptSummary.documentCount == 0,
-        ),
-        const SizedBox(height: 12),
         DocumentTrendCard(
           title: 'Purchase Receipt',
           emptyMessage: 'Belum ada Purchase Receipt aktif pada periode ini.',
@@ -205,7 +193,9 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
           selectedYear: appState.buyingPeriodYear,
           selectedMonth: appState.buyingPeriodMonth,
         ),
+
         const SizedBox(height: 12),
+
         TextField(
           onChanged: _searchChanged,
           decoration: InputDecoration(
@@ -227,11 +217,14 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
             ),
           ),
         ),
+
         if (appState.purchaseReceiptsError != null) ...[
           const SizedBox(height: 10),
           ErpErrorBox(message: appState.purchaseReceiptsError!),
         ],
+
         const SizedBox(height: 10),
+
         ErpStatusChipBar<DeliveryNoteStatusKey?>(
           chips: _chips,
           selected: _statusFilter,
@@ -243,7 +236,9 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
             );
           },
         ),
+
         const SizedBox(height: 12),
+
         if (filtered.isEmpty && !appState.isPurchaseReceiptsLoading)
           const ErpEmptyState(title: 'No purchase receipts found')
         else
@@ -257,6 +252,7 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
               onTap: () => _openDetail(d),
             ),
           ),
+
         if (appState.hasMorePurchaseReceipts ||
             appState.isMorePurchaseReceiptsLoading) ...[
           const SizedBox(height: 8),

@@ -12,7 +12,6 @@ import '../../../widgets/erp/erp_document_card.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
-import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import 'buying_document_detail_sheet.dart';
 
@@ -192,18 +191,6 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ErpSummaryCard(
-          title: 'Purchase Invoices',
-          valueLabel: 'invoices',
-          totalValue: appState.purchaseInvoiceSummary.totalValue,
-          documentCount: appState.purchaseInvoiceSummary.documentCount,
-          subtitle:
-              '${appState.summarySyncSubtitle} | ${filtered.length} loaded',
-          isLoading:
-              appState.isOrderSummaryLoading &&
-              appState.purchaseInvoiceSummary.documentCount == 0,
-        ),
-        const SizedBox(height: 12),
         DocumentTrendCard(
           title: 'Purchase Invoice',
           emptyMessage: 'Belum ada Purchase Invoice aktif pada periode ini.',
@@ -211,7 +198,9 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
           selectedYear: appState.buyingPeriodYear,
           selectedMonth: appState.buyingPeriodMonth,
         ),
+
         const SizedBox(height: 12),
+
         TextField(
           onChanged: _searchChanged,
           decoration: InputDecoration(
@@ -233,11 +222,14 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
             ),
           ),
         ),
+
         if (appState.purchaseInvoicesError != null) ...[
           const SizedBox(height: 10),
           ErpErrorBox(message: appState.purchaseInvoicesError!),
         ],
+
         const SizedBox(height: 10),
+
         ErpStatusChipBar<InvoiceStatusKey?>(
           chips: _chips,
           selected: _statusFilter,
@@ -249,7 +241,9 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
             );
           },
         ),
+
         const SizedBox(height: 12),
+
         if (filtered.isEmpty && !appState.isPurchaseInvoicesLoading)
           const ErpEmptyState(title: 'No purchase invoices found')
         else

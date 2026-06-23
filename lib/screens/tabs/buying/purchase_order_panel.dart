@@ -11,7 +11,6 @@ import '../../../widgets/erp/erp_document_card.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
-import '../../../widgets/erp/erp_summary_card.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../purchase/purchase_order/create_purchase_order_screen.dart';
 import 'buying_document_detail_sheet.dart';
@@ -499,26 +498,10 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final filtered = _filter(appState.purchaseOrders);
-    final overdueCount = appState.purchaseOrders
-        .where((o) => o.isOverdue)
-        .length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ErpSummaryCard(
-          title: 'Purchase Orders',
-          valueLabel: 'orders',
-          totalValue: appState.purchaseOrderSummary.totalValue,
-          documentCount: appState.purchaseOrderSummary.documentCount,
-          subtitle:
-              '${appState.summarySyncSubtitle} | ${filtered.length} loaded'
-              '${overdueCount > 0 ? ' | $overdueCount overdue' : ''}',
-          isLoading:
-              appState.isOrderSummaryLoading &&
-              appState.purchaseOrderSummary.documentCount == 0,
-        ),
-        const SizedBox(height: 12),
         DocumentTrendCard(
           title: 'Purchase Order',
           emptyMessage: 'Belum ada Purchase Order aktif pada periode ini.',
@@ -526,7 +509,9 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
           selectedYear: appState.buyingPeriodYear,
           selectedMonth: appState.buyingPeriodMonth,
         ),
+
         const SizedBox(height: 12),
+
         TextField(
           controller: _searchController,
           onChanged: _searchChanged,
@@ -549,11 +534,14 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
             ),
           ),
         ),
+
         if (appState.purchaseOrdersError != null) ...[
           const SizedBox(height: 10),
           ErpErrorBox(message: appState.purchaseOrdersError!),
         ],
+
         const SizedBox(height: 10),
+
         _PurchaseOrderQuickFilters(
           sortOption: _sortOption,
           sortLabel: _sortLabel,
@@ -581,7 +569,9 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
           advancedCount: _advancedFilterCount,
           onAdvancedFilters: _openAdvancedFilters,
         ),
+
         const SizedBox(height: 10),
+
         ErpStatusChipBar<PurchaseOrderStatusKey?>(
           chips: _chips,
           selected: _statusFilter,
@@ -593,7 +583,9 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
             );
           },
         ),
+
         const SizedBox(height: 12),
+
         if (filtered.isEmpty && !appState.isPurchaseOrdersLoading)
           const ErpEmptyState(title: 'No purchase orders found')
         else
@@ -609,6 +601,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
               onDelete: isDocDraft(o.docStatus) ? () => _deletePo(o.id) : null,
             ),
           ),
+
         if (appState.hasMorePurchaseOrders ||
             appState.isMorePurchaseOrdersLoading) ...[
           const SizedBox(height: 8),
