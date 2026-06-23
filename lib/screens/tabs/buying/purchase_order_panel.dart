@@ -602,7 +602,10 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
         const SizedBox(height: 12),
 
         if (filtered.isEmpty && !appState.isPurchaseOrdersLoading)
-          const ErpEmptyState(title: 'No purchase orders found')
+          const ErpEmptyState(
+            title: 'Belum ada Purchase Order',
+            message: 'Gunakan tombol Buat PO untuk membuat dokumen baru.',
+          )
         else
           ...filtered.map(
             (o) => ErpDocumentCard(
@@ -635,8 +638,8 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
                   : const Icon(Icons.expand_more_rounded),
               label: Text(
                 appState.isMorePurchaseOrdersLoading
-                    ? 'Loading orders...'
-                    : 'Load more orders',
+                    ? 'Memuat PO...'
+                    : 'Muat PO lainnya',
               ),
             ),
           ),

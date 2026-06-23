@@ -334,7 +334,10 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty && !appState.isPurchaseReceiptsLoading)
-          const ErpEmptyState(title: 'No purchase receipts found')
+          const ErpEmptyState(
+            title: 'Belum ada Purchase Receipt',
+            message: 'Gunakan tombol Terima Barang untuk mencatat penerimaan.',
+          )
         else
           ...filtered.map(
             (d) => ErpDocumentCard(
@@ -364,8 +367,8 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
                   : const Icon(Icons.expand_more_rounded),
               label: Text(
                 appState.isMorePurchaseReceiptsLoading
-                    ? 'Loading receipts...'
-                    : 'Load more receipts',
+                    ? 'Memuat receipt...'
+                    : 'Muat receipt lainnya',
               ),
             ),
           ),

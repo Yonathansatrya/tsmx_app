@@ -45,9 +45,9 @@ class PurchaseOverviewTab extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
         children: [
           const _SectionHeader(
-            title: 'Dashboard Purchase',
+            title: 'Beranda Purchase',
             subtitle:
-                'Pantau pembelian, penerimaan, invoice, dan request barang',
+                'Pantau PO, penerimaan barang, invoice supplier, dan request',
             icon: Icons.shopping_bag_rounded,
           ),
           const SizedBox(height: 14),
@@ -63,7 +63,7 @@ class PurchaseOverviewTab extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _MetricCard(
-                  label: 'Hutang',
+                  label: 'Outstanding',
                   value: 'Rp ${formatErpCurrency(outstandingDebt)}',
                   icon: Icons.account_balance_wallet_outlined,
                 ),
@@ -72,7 +72,7 @@ class PurchaseOverviewTab extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           _QuickActionCard(
-            title: 'Create Purchase Order',
+            title: 'Buat Purchase Order',
             subtitle: 'Buat PO langsung dari mobile',
             icon: Icons.add_shopping_cart_rounded,
             onTap: () => Navigator.push(
@@ -83,21 +83,20 @@ class PurchaseOverviewTab extends StatelessWidget {
             ),
           ),
           _QuickActionCard(
-            title: 'Purchase Receipt',
-            subtitle: 'Receive barang, foto penerimaan, QC, dan selisih qty',
+            title: 'Terima Barang',
+            subtitle: 'Catat penerimaan, foto bukti, QC, dan selisih qty',
             icon: Icons.move_to_inbox_rounded,
             onTap: () => onMenuSelected(2),
           ),
           _QuickActionCard(
-            title: 'Purchase Invoice',
-            subtitle:
-                'Monitor invoice supplier, hutang, due date, dan approval',
+            title: 'Invoice Supplier',
+            subtitle: 'Pantau invoice, hutang, jatuh tempo, dan approval',
             icon: Icons.receipt_long_rounded,
             onTap: () => onMenuSelected(3),
           ),
           _QuickActionCard(
-            title: 'Material Request',
-            subtitle: 'Request barang antar departemen dan planning pembelian',
+            title: 'Request Barang',
+            subtitle: 'Ajukan kebutuhan barang dan rencana pembelian',
             icon: Icons.assignment_outlined,
             onTap: () => onMenuSelected(4),
           ),
@@ -111,7 +110,7 @@ class PurchaseOverviewTab extends StatelessWidget {
           if (state.purchaseOrders.isEmpty)
             const ErpEmptyState(
               title: 'Belum ada Purchase Order',
-              message: 'Tekan Create Purchase Order untuk mulai.',
+              message: 'Tekan Buat Purchase Order untuk mulai.',
             )
           else
             ...state.purchaseOrders.take(5).map(_recentPoCard),
@@ -197,14 +196,18 @@ class _SectionHeader extends StatelessWidget {
               title,
               style: const TextStyle(
                 color: AppColors.navy,
-                fontSize: 16,
+                fontSize: 17,
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 2),
             Text(
               subtitle,
-              style: const TextStyle(color: AppColors.slate, fontSize: 12),
+              style: const TextStyle(
+                color: AppColors.slate,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
@@ -245,7 +248,7 @@ class _MetricCard extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: AppColors.navy,
-            fontSize: 16,
+            fontSize: 17,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -306,6 +309,7 @@ class _QuickActionCard extends StatelessWidget {
                       title,
                       style: const TextStyle(
                         color: AppColors.navy,
+                        fontSize: 14,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -315,6 +319,7 @@ class _QuickActionCard extends StatelessWidget {
                       style: const TextStyle(
                         color: AppColors.slate,
                         fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],

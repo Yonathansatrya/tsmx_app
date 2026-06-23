@@ -364,7 +364,11 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
         const SizedBox(height: 12),
 
         if (filtered.isEmpty && !appState.isPurchaseInvoicesLoading)
-          const ErpEmptyState(title: 'No purchase invoices found')
+          const ErpEmptyState(
+            title: 'Belum ada Purchase Invoice',
+            message:
+                'Gunakan tombol Buat Invoice untuk membuat invoice supplier.',
+          )
         else
           ...filtered.map(
             (d) => ErpDocumentCard(
@@ -394,8 +398,8 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
                   : const Icon(Icons.expand_more_rounded),
               label: Text(
                 appState.isMorePurchaseInvoicesLoading
-                    ? 'Loading invoices...'
-                    : 'Load more invoices',
+                    ? 'Memuat invoice...'
+                    : 'Muat invoice lainnya',
               ),
             ),
           ),

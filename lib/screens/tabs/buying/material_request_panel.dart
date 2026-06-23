@@ -29,7 +29,7 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
   Timer? _searchDebounce;
 
   static const _chips = <ErpStatusChip<String?>>[
-    ErpStatusChip(label: 'All', value: null),
+    ErpStatusChip(label: 'Semua', value: null),
     ErpStatusChip(label: 'Draft', value: 'Draft'),
     ErpStatusChip(label: 'Pending', value: 'Pending'),
     ErpStatusChip(label: 'Partly Ordered', value: 'Partially Ordered'),
@@ -128,14 +128,14 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
           icon: Icons.inventory_2_outlined,
         ),
         BuyingDetailMetric(
-          label: 'Items',
+          label: 'Item',
           value: '${detail.itemsCount}',
           icon: Icons.list_alt_rounded,
         ),
       ],
       infos: [
         BuyingDetailInfo(
-          label: 'Doc Status',
+          label: 'Status Dokumen',
           value: docStatusLabel(detail.docStatus),
         ),
         BuyingDetailInfo(label: 'Company', value: detail.company),
@@ -157,7 +157,7 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
           .toList(),
       footer: canSubmit
           ? erpActionButton(
-              label: 'Submit Material Request',
+              label: 'Ajukan Material Request',
               icon: Icons.check_circle_outline_rounded,
               filled: true,
               onPressed: () => _submit(detail.id),
@@ -172,7 +172,7 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
   Future<void> _submit(String id) async {
     if (!await confirmErpAction(
       context,
-      title: 'Submit Material Request?',
+      title: 'Ajukan Material Request?',
       message: 'Ajukan $id ke ERPNext?',
     )) {
       return;
@@ -182,7 +182,7 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
       context,
       action: () =>
           context.read<AppState>().submitDocument('Material Request', id),
-      successMessage: 'Material Request submitted',
+      successMessage: 'Material Request berhasil diajukan',
     );
     if (ok && mounted) Navigator.pop(context);
   }
@@ -198,7 +198,7 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
       children: [
         DocumentTrendCard(
           title: 'Material Request',
-          emptyMessage: 'Belum ada Material Request aktif pada periode ini.',
+          emptyMessage: 'Belum ada request aktif pada periode ini.',
           points: appState.materialRequestTrendPoints,
           selectedYear: appState.buyingPeriodYear,
           selectedMonth: appState.buyingPeriodMonth,
@@ -252,7 +252,10 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty && !appState.isMaterialRequestsLoading)
-          const ErpEmptyState(title: 'Belum ada Material Request')
+          const ErpEmptyState(
+            title: 'Belum ada request',
+            message: 'Gunakan tombol Buat Request untuk mengajukan kebutuhan.',
+          )
         else
           ...filtered.map(
             (doc) =>
@@ -276,8 +279,8 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
                   : const Icon(Icons.expand_more_rounded),
               label: Text(
                 appState.isMoreMaterialRequestsLoading
-                    ? 'Loading requests...'
-                    : 'Load more requests',
+                    ? 'Memuat request...'
+                    : 'Muat request lainnya',
               ),
             ),
           ),
@@ -488,8 +491,12 @@ class _PlanningCard extends StatelessWidget {
           Text(
             items.isEmpty
                 ? 'Belum ada item stok kosong dari data inventory saat ini.'
-                : 'Tap item untuk mengisi form Material Request otomatis.',
-            style: const TextStyle(color: AppColors.slate, fontSize: 12),
+                : 'Pilih item untuk membuat request dengan data item terisi otomatis.',
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           if (items.isNotEmpty) ...[
             const SizedBox(height: 10),

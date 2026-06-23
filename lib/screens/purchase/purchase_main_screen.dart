@@ -147,10 +147,10 @@ class _PurchasePane extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
         children: [
           ErpPeriodFilterCard(
-            title: 'Periode Pembelian',
+            title: 'Filter Pembelian',
             subtitle: state.buyingPeriodMonth == 0
-                ? 'Data mengikuti tahun ini'
-                : 'Data mengikuti bulan ini',
+                ? 'Ringkasan dan daftar dokumen mengikuti tahun ini'
+                : 'Ringkasan dan daftar dokumen mengikuti bulan ini',
             icon: Icons.shopping_bag_rounded,
             selectedYear: state.buyingPeriodYear,
             selectedMonth: state.buyingPeriodMonth,
