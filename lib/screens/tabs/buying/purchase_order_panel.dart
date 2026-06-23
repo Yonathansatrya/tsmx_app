@@ -176,10 +176,10 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
 
   String _sortLabel(_PurchaseSortOption option) {
     return switch (option) {
-      _PurchaseSortOption.newestEta => 'Newest ETA',
-      _PurchaseSortOption.oldestEta => 'Oldest ETA',
-      _PurchaseSortOption.valueHigh => 'Value high',
-      _PurchaseSortOption.valueLow => 'Value low',
+      _PurchaseSortOption.newestEta => 'ETA terbaru',
+      _PurchaseSortOption.oldestEta => 'ETA terlama',
+      _PurchaseSortOption.valueHigh => 'Nilai tertinggi',
+      _PurchaseSortOption.valueLow => 'Nilai terendah',
     };
   }
 
@@ -219,9 +219,21 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   }
 
   Future<void> _openDetail(PurchaseOrder order) async {
-    final detail = await context.read<AppState>().loadPurchaseOrderDetail(
-      order.id,
-    );
+    final appState = context.read<AppState>();
+    final detail = await appState.loadPurchaseOrderDetail(order.id);
+    var priceRows = <Map<String, dynamic>>[];
+    var workflowActions = <String>[];
+    try {
+      priceRows = await appState.fetchSupplierPriceComparison(
+        detail.items.map((item) => item.itemCode).toSet(),
+      );
+    } catch (_) {}
+    try {
+      workflowActions = await appState.fetchDocumentWorkflowActions(
+        doctype: 'Purchase Order',
+        name: detail.id,
+      );
+    } catch (_) {}
     if (!mounted) return;
 
     final canReceive =
@@ -532,7 +544,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
           controller: _searchController,
           onChanged: _searchChanged,
           decoration: InputDecoration(
-            hintText: 'Search PO or supplier…',
+            hintText: 'Cari PO atau supplier...',
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
             filled: true,
             fillColor: AppColors.white,
