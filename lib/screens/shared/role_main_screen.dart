@@ -9,6 +9,8 @@ import '../profile/profile_screen.dart';
 
 typedef RoleScreensBuilder =
     List<Widget> Function(ValueChanged<int> onMenuSelected);
+typedef RoleFloatingActionButtonBuilder =
+    Widget? Function(BuildContext context, int currentIndex);
 
 class RoleMainScreen extends StatefulWidget {
   final String title;
@@ -16,6 +18,7 @@ class RoleMainScreen extends StatefulWidget {
   final List<NavigationDestination> destinations;
   final RoleScreensBuilder screensBuilder;
   final FutureOr<void> Function(AppState state)? onInitialize;
+  final RoleFloatingActionButtonBuilder? floatingActionButtonBuilder;
 
   const RoleMainScreen({
     super.key,
@@ -24,6 +27,7 @@ class RoleMainScreen extends StatefulWidget {
     required this.destinations,
     required this.screensBuilder,
     this.onInitialize,
+    this.floatingActionButtonBuilder,
   });
 
   @override
@@ -58,6 +62,10 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
     final state = context.watch<AppState>();
     return Scaffold(
       backgroundColor: AppColors.background,
+      floatingActionButton: widget.floatingActionButtonBuilder?.call(
+        context,
+        _currentIndex,
+      ),
       appBar: AppBar(
         backgroundColor: AppColors.white,
         elevation: 0,

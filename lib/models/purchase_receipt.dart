@@ -35,13 +35,12 @@ class PurchaseReceiptItem {
     this.qualityInspection = '',
   });
 
-  double get effectiveReceivedQty => receivedQty > 0 ? receivedQty : qty;
-  double get varianceQty => effectiveReceivedQty - qty;
-
   factory PurchaseReceiptItem.fromJson(Map<String, dynamic> json) {
     final itemCode = json['item_code']?.toString() ?? '';
     final qty = NumParse.asDouble(json['qty'] ?? json['stock_qty']);
-    final receivedQty = NumParse.asDouble(json['received_qty']);
+    final receivedQty = NumParse.asDouble(
+      json['received_qty'] ?? json['received_stock_qty'],
+    );
     final acceptedQty = NumParse.asDouble(json['accepted_qty']);
     final rejectedQty = NumParse.asDouble(json['rejected_qty']);
     return PurchaseReceiptItem(
@@ -50,14 +49,10 @@ class PurchaseReceiptItem {
           json['item_name']?.toString() ??
           (itemCode.isNotEmpty ? itemCode : null) ??
           'Unknown Item',
-      qty: NumParse.asDouble(json['qty'] ?? json['stock_qty']),
-      receivedQty: NumParse.asDouble(
-        json['received_qty'] ?? json['received_stock_qty'],
-      ),
-      acceptedQty: NumParse.asDouble(
-        json['accepted_qty'] ?? json['sample_size'] ?? json['qty'],
-      ),
-      rejectedQty: NumParse.asDouble(json['rejected_qty']),
+      qty: qty,
+      receivedQty: receivedQty > 0 ? receivedQty : qty,
+      acceptedQty: acceptedQty,
+      rejectedQty: rejectedQty,
       rate: NumParse.asDouble(json['rate'] ?? json['net_rate']),
       amount: NumParse.asDouble(json['amount'] ?? json['net_amount']),
       warehouse:
@@ -76,10 +71,7 @@ class PurchaseReceiptItem {
     return checked > 0 ? checked : qty;
   }
 
-  double get varianceQty {
-    final baseReceivedQty = receivedQty > 0 ? receivedQty : qty;
-    return baseReceivedQty - checkedQty;
-  }
+  double get varianceQty => receivedQty - checkedQty;
 }
 
 class PurchaseReceipt {
@@ -104,13 +96,6 @@ class PurchaseReceipt {
     required this.itemsCount,
     this.items = const [],
   });
-
-  double get orderedQty => items.fold<double>(0, (sum, item) => sum + item.qty);
-  double get receivedQty =>
-      items.fold<double>(0, (sum, item) => sum + item.effectiveReceivedQty);
-  double get rejectedQty =>
-      items.fold<double>(0, (sum, item) => sum + item.rejectedQty);
-  double get varianceQty => receivedQty - orderedQty;
 
   factory PurchaseReceipt.fromJson(Map<String, dynamic> json) {
     final docstatus = NumParse.asInt(json['docstatus']);
@@ -156,7 +141,4 @@ class PurchaseReceipt {
 
   double get totalVarianceQty =>
       items.fold<double>(0, (sum, item) => sum + item.varianceQty);
-
-  bool get hasQualityInspection =>
-      items.any((item) => item.qualityInspection.isNotEmpty);
 }

@@ -10,6 +10,8 @@ class DocumentTrendCard extends StatelessWidget {
   final List<DocumentTrendPoint> points;
   final int selectedYear;
   final int selectedMonth;
+  final String valuePrefix;
+  final String valueSuffix;
 
   const DocumentTrendCard({
     super.key,
@@ -18,6 +20,8 @@ class DocumentTrendCard extends StatelessWidget {
     required this.points,
     required this.selectedYear,
     required this.selectedMonth,
+    this.valuePrefix = 'Rp ',
+    this.valueSuffix = '',
   });
 
   @override
@@ -100,6 +104,8 @@ class DocumentTrendCard extends StatelessWidget {
               periodLabel: selectedMonth == 0
                   ? 'Total tahun $selectedYear'
                   : 'Total bulan ini',
+              valuePrefix: valuePrefix,
+              valueSuffix: valueSuffix,
             ),
         ],
       ),
@@ -112,12 +118,16 @@ class _DocumentTrendLineChart extends StatefulWidget {
   final double maxValue;
   final double total;
   final String periodLabel;
+  final String valuePrefix;
+  final String valueSuffix;
 
   const _DocumentTrendLineChart({
     required this.points,
     required this.maxValue,
     required this.total,
     required this.periodLabel,
+    required this.valuePrefix,
+    required this.valueSuffix,
   });
 
   @override
@@ -218,7 +228,11 @@ class _DocumentTrendLineChartState extends State<_DocumentTrendLineChart> {
                             Positioned(
                               left: bubbleLeft,
                               top: (selectedOffset.dy - 46).clamp(0.0, 104.0),
-                              child: _TrendPointTooltip(point: selected),
+                              child: _TrendPointTooltip(
+                                point: selected,
+                                valuePrefix: widget.valuePrefix,
+                                valueSuffix: widget.valueSuffix,
+                              ),
                             ),
                         ],
                       ),
@@ -252,7 +266,7 @@ class _DocumentTrendLineChartState extends State<_DocumentTrendLineChart> {
                         ),
                       ),
                       Text(
-                        'Rp ${formatErpCurrency(selected.value)}',
+                        '${widget.valuePrefix}${formatErpCurrency(selected.value)}${widget.valueSuffix}',
                         style: const TextStyle(
                           color: AppColors.primary,
                           fontSize: 13,
@@ -302,7 +316,7 @@ class _DocumentTrendLineChartState extends State<_DocumentTrendLineChart> {
                 ),
               ),
               Text(
-                'Rp ${formatErpCurrency(widget.total)}',
+                '${widget.valuePrefix}${formatErpCurrency(widget.total)}${widget.valueSuffix}',
                 style: const TextStyle(
                   color: AppColors.primary,
                   fontSize: 13,
@@ -333,8 +347,14 @@ class _DocumentTrendLineChartState extends State<_DocumentTrendLineChart> {
 
 class _TrendPointTooltip extends StatelessWidget {
   final DocumentTrendPoint point;
+  final String valuePrefix;
+  final String valueSuffix;
 
-  const _TrendPointTooltip({required this.point});
+  const _TrendPointTooltip({
+    required this.point,
+    required this.valuePrefix,
+    required this.valueSuffix,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -364,7 +384,7 @@ class _TrendPointTooltip extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              'Rp ${formatErpCurrency(point.value)}',
+              '$valuePrefix${formatErpCurrency(point.value)}$valueSuffix',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

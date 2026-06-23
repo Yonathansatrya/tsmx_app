@@ -221,19 +221,6 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   Future<void> _openDetail(PurchaseOrder order) async {
     final appState = context.read<AppState>();
     final detail = await appState.loadPurchaseOrderDetail(order.id);
-    var priceRows = <Map<String, dynamic>>[];
-    var workflowActions = <String>[];
-    try {
-      priceRows = await appState.fetchSupplierPriceComparison(
-        detail.items.map((item) => item.itemCode).toSet(),
-      );
-    } catch (_) {}
-    try {
-      workflowActions = await appState.fetchDocumentWorkflowActions(
-        doctype: 'Purchase Order',
-        name: detail.id,
-      );
-    } catch (_) {}
     if (!mounted) return;
 
     final canReceive =

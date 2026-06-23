@@ -95,4 +95,41 @@ class PurchaseInvoice {
       items: items,
     );
   }
+
+  DateTime? get parsedDueDate {
+    final trimmed = dueDate.trim();
+    if (trimmed.isEmpty) return null;
+    final iso = DateTime.tryParse(trimmed);
+    if (iso != null) return DateTime(iso.year, iso.month, iso.day);
+    final parts = trimmed.split('/');
+    if (parts.length == 3) {
+      final day = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final year = int.tryParse(parts[2]);
+      if (day != null && month != null && year != null) {
+        return DateTime(year, month, day);
+      }
+    }
+    return null;
+  }
+
+  bool get isOutstanding => outstandingAmount > 0;
+
+  int? get daysUntilDue {
+    final due = parsedDueDate;
+    if (due == null) return null;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return due.difference(today).inDays;
+  }
+
+  bool get isOverdue {
+    final days = daysUntilDue;
+    return isOutstanding && days != null && days < 0;
+  }
+
+  bool get isDueSoon {
+    final days = daysUntilDue;
+    return isOutstanding && days != null && days >= 0 && days <= 7;
+  }
 }

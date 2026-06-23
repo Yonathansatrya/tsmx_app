@@ -316,6 +316,10 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
 
         const SizedBox(height: 12),
 
+        _InvoiceDashboardCard(invoices: filtered),
+
+        const SizedBox(height: 12),
+
         TextField(
           onChanged: _searchChanged,
           decoration: InputDecoration(
@@ -397,6 +401,220 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _InvoiceDashboardCard extends StatelessWidget {
+  final List<PurchaseInvoice> invoices;
+
+  const _InvoiceDashboardCard({required this.invoices});
+
+  @override
+  Widget build(BuildContext context) {
+    final outstandingAmount = invoices.fold<double>(
+      0,
+      (sum, invoice) => sum + invoice.outstandingAmount,
+    );
+    final overdueInvoices = invoices.where((invoice) => invoice.isOverdue);
+    final overdueAmount = overdueInvoices.fold<double>(
+      0,
+      (sum, invoice) => sum + invoice.outstandingAmount,
+    );
+    final dueSoonCount = invoices.where((invoice) => invoice.isDueSoon).length;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.softGreen,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Outstanding Hutang Supplier',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Ringkasan invoice sesuai filter aktif.',
+                      style: TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _InvoiceSummaryTile(
+                  label: 'Outstanding',
+                  value: 'Rp ${formatErpCurrency(outstandingAmount)}',
+                  icon: Icons.payments_outlined,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _InvoiceSummaryTile(
+                  label: 'Overdue',
+                  value: 'Rp ${formatErpCurrency(overdueAmount)}',
+                  helper: '${overdueInvoices.length} invoice',
+                  icon: Icons.error_outline_rounded,
+                  color: overdueInvoices.isEmpty
+                      ? AppColors.slate
+                      : AppColors.danger,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _DueSoonStrip(count: dueSoonCount),
+        ],
+      ),
+    );
+  }
+}
+
+class _InvoiceSummaryTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final String helper;
+  final IconData icon;
+  final Color color;
+
+  const _InvoiceSummaryTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.helper = '',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          if (helper.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              helper,
+              style: const TextStyle(
+                color: AppColors.slate,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DueSoonStrip extends StatelessWidget {
+  final int count;
+
+  const _DueSoonStrip({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasDueSoon = count > 0;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: hasDueSoon
+            ? AppColors.warning.withValues(alpha: 0.1)
+            : AppColors.softGreen,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            hasDueSoon
+                ? Icons.notification_important_outlined
+                : Icons.check_circle_outline_rounded,
+            color: hasDueSoon ? AppColors.warning : AppColors.primary,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              hasDueSoon
+                  ? '$count invoice jatuh tempo dalam 7 hari.'
+                  : 'Tidak ada invoice jatuh tempo dekat pada data ini.',
+              style: TextStyle(
+                color: hasDueSoon ? AppColors.navy : AppColors.primary,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

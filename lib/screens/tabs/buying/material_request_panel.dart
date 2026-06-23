@@ -7,6 +7,7 @@ import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../utils/erp_doc_utils.dart';
 import '../../../utils/erp_format.dart';
+import '../../../widgets/erp/document_trend_card.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_badge.dart';
@@ -195,10 +196,17 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _MaterialRequestHeader(
-          count: appState.materialRequests.length,
-          onCreate: () => _openCreate(),
+        DocumentTrendCard(
+          title: 'Material Request',
+          emptyMessage: 'Belum ada Material Request aktif pada periode ini.',
+          points: appState.materialRequestTrendPoints,
+          selectedYear: appState.buyingPeriodYear,
+          selectedMonth: appState.buyingPeriodMonth,
+          valuePrefix: '',
+          valueSuffix: ' qty',
         ),
+        const SizedBox(height: 12),
+        _MaterialRequestHeader(count: appState.materialRequests.length),
         const SizedBox(height: 12),
         _PlanningCard(
           items: planningItems,
@@ -382,9 +390,8 @@ class _MaterialRequestCard extends StatelessWidget {
 
 class _MaterialRequestHeader extends StatelessWidget {
   final int count;
-  final VoidCallback onCreate;
 
-  const _MaterialRequestHeader({required this.count, required this.onCreate});
+  const _MaterialRequestHeader({required this.count});
 
   @override
   Widget build(BuildContext context) {
@@ -410,22 +417,42 @@ class _MaterialRequestHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            '$count requests',
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: onCreate,
-              icon: const Icon(Icons.add_task_rounded),
-              label: const Text('Buat Request Barang'),
-            ),
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppColors.softGreen,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.assignment_turned_in_outlined,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$count request aktif',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Pantau kebutuhan barang, approval, dan rencana pembelian.',
+                      style: TextStyle(color: AppColors.slate, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -461,7 +488,7 @@ class _PlanningCard extends StatelessWidget {
           Text(
             items.isEmpty
                 ? 'Belum ada item stok kosong dari data inventory saat ini.'
-                : 'Tap item untuk langsung membuat Material Request.',
+                : 'Tap item untuk mengisi form Material Request otomatis.',
             style: const TextStyle(color: AppColors.slate, fontSize: 12),
           ),
           if (items.isNotEmpty) ...[

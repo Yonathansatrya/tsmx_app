@@ -166,6 +166,7 @@ class AppState with ChangeNotifier {
   List<DocumentTrendPoint> _purchaseOrderTrendPoints = const [];
   List<DocumentTrendPoint> _purchaseReceiptTrendPoints = const [];
   List<DocumentTrendPoint> _purchaseInvoiceTrendPoints = const [];
+  List<DocumentTrendPoint> _materialRequestTrendPoints = const [];
 
   DocumentSummary get salesOrderSummary => _salesOrderSummary;
   DocumentSummary get deliveryNoteSummary => _deliveryNoteSummary;
@@ -185,6 +186,8 @@ class AppState with ChangeNotifier {
       _purchaseReceiptTrendPoints;
   List<DocumentTrendPoint> get purchaseInvoiceTrendPoints =>
       _purchaseInvoiceTrendPoints;
+  List<DocumentTrendPoint> get materialRequestTrendPoints =>
+      _materialRequestTrendPoints;
 
   List<SalesOrder> get salesOrders => _salesOrders;
   List<PurchaseOrder> get purchaseOrders => _purchaseOrders;
@@ -2545,6 +2548,7 @@ class AppState with ChangeNotifier {
       final purchaseTrend = _emptyBuyingTrendPoints();
       final receiptTrend = _emptyBuyingTrendPoints();
       final invoiceTrend = _emptyBuyingTrendPoints();
+      final materialRequestTrend = _emptyBuyingTrendPoints();
       var purchaseTotal = 0.0;
       var purchaseDocumentCount = 0;
       await _forEachResourcePage(
@@ -2637,6 +2641,30 @@ class AppState with ChangeNotifier {
         },
       );
 
+      await _forEachResourcePage(
+        doctype: 'Material Request',
+        fields: const [
+          'name',
+          'total_qty',
+          'status',
+          'docstatus',
+          'transaction_date',
+        ],
+        filters: [
+          ..._buyingPeriodFilters('transaction_date'),
+          ['docstatus', '!=', 2],
+        ],
+        onRow: (row) {
+          if (!_isActiveBuyingTrendRow(row)) return;
+          final qty = NumParse.asDouble(row['total_qty']);
+          _addBuyingTrendPoint(
+            materialRequestTrend,
+            dateRaw: row['transaction_date'],
+            amount: qty <= 0 ? 1 : qty,
+          );
+        },
+      );
+
       _purchaseOrderSummary = DocumentSummary(
         totalValue: purchaseTotal,
         documentCount: purchaseDocumentCount,
@@ -2652,6 +2680,7 @@ class AppState with ChangeNotifier {
       _purchaseOrderTrendPoints = purchaseTrend;
       _purchaseReceiptTrendPoints = receiptTrend;
       _purchaseInvoiceTrendPoints = invoiceTrend;
+      _materialRequestTrendPoints = materialRequestTrend;
       _orderSummaryError = null;
     } catch (err) {
       _orderSummaryError = err.toString();
@@ -5275,7 +5304,7 @@ class AppState with ChangeNotifier {
     return rates;
   }
 
-  Future<List<Map<String, dynamic>>> fetchSupplierPriceComparison(
+  Future<List<Map<String, dynamic>>> fetchSupplierPriceRowsForItems(
     Set<String> itemCodes,
   ) async {
     if (itemCodes.isEmpty) return const [];

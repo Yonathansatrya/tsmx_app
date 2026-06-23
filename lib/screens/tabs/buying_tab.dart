@@ -4,7 +4,6 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/erp/erp_filter_tools.dart';
 import '../sales/sales_ui.dart';
-import '../purchase/material_request/material_request_panel.dart';
 import 'buying/purchase_order_panel.dart';
 import 'buying/purchase_receipt_panel.dart';
 import 'buying/purchase_invoice_panel.dart';
@@ -28,7 +27,6 @@ class BuyingTabState extends State<BuyingTab>
     with SingleTickerProviderStateMixin {
   TabController? _tabController;
 
-  static const _segmentIds = ['po', 'pr', 'pi', 'mr'];
   static const _segmentIds = ['po', 'pr', 'pi', 'mr'];
 
   int get _initialIndex {
@@ -262,7 +260,6 @@ class BuyingTabState extends State<BuyingTab>
                   switch (controller.index) {
                     1 => const PurchaseReceiptPanel(),
                     2 => const PurchaseInvoicePanel(),
-                    3 => const MaterialRequestPanel(),
                     3 => const MaterialRequestPanel(),
                     _ => const PurchaseOrderPanel(),
                   },
