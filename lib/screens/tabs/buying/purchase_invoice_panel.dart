@@ -28,7 +28,7 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
   Timer? _searchDebounce;
 
   static final _chips = <ErpStatusChip<InvoiceStatusKey?>>[
-    const ErpStatusChip(label: 'All', value: null),
+    const ErpStatusChip(label: 'Semua', value: null),
     const ErpStatusChip(label: 'Draft', value: InvoiceStatusKey.draft),
     const ErpStatusChip(label: 'Unpaid', value: InvoiceStatusKey.unpaid),
     const ErpStatusChip(
@@ -121,29 +121,29 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
       icon: Icons.receipt_long_rounded,
       metrics: [
         BuyingDetailMetric(
-          label: 'Grand Total',
+          label: 'Total Invoice',
           value: 'Rp ${formatErpCurrency(detail.value)}',
           icon: Icons.payments_outlined,
         ),
         BuyingDetailMetric(
-          label: 'Outstanding',
+          label: 'Belum Dibayar',
           value: 'Rp ${formatErpCurrency(detail.outstandingAmount)}',
           icon: Icons.account_balance_wallet_outlined,
         ),
         BuyingDetailMetric(
-          label: 'Items',
+          label: 'Item',
           value: '${detail.items.length}',
           icon: Icons.inventory_2_outlined,
         ),
       ],
       infos: [
         BuyingDetailInfo(
-          label: 'Doc Status',
+          label: 'Status Dokumen',
           value: docStatusLabel(detail.docStatus),
         ),
-        BuyingDetailInfo(label: 'Posting Date', value: detail.date),
+        BuyingDetailInfo(label: 'Tanggal Posting', value: detail.date),
         BuyingDetailInfo(
-          label: 'Due Date',
+          label: 'Jatuh Tempo',
           value: detail.dueDate.isEmpty ? '-' : detail.dueDate,
         ),
       ],
@@ -170,9 +170,13 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
             name: detail.id,
             actions: workflowActions,
           ),
+          if (workflowActions.isEmpty && !canSubmit) ...[
+            const _InvoiceApprovalInfoCard(),
+            const SizedBox(height: 10),
+          ],
           if (canSubmit)
             erpActionButton(
-              label: 'Submit Purchase Invoice',
+              label: 'Ajukan Purchase Invoice',
               icon: Icons.check_circle_outline_rounded,
               filled: true,
               onPressed: () => _submit(detail.id),
@@ -185,8 +189,8 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
   Future<void> _submit(String id) async {
     if (!await confirmErpAction(
       context,
-      title: 'Submit Purchase Invoice?',
-      message: 'Submit $id?',
+      title: 'Ajukan Purchase Invoice?',
+      message: 'Ajukan $id ke ERPNext?',
     )) {
       return;
     }
@@ -195,7 +199,7 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
       context,
       action: () =>
           context.read<AppState>().submitDocument('Purchase Invoice', id),
-      successMessage: 'Purchase Invoice submitted',
+      successMessage: 'Purchase Invoice berhasil diajukan',
     );
     if (ok && mounted) Navigator.pop(context);
   }
@@ -308,7 +312,7 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
       children: [
         DocumentTrendCard(
           title: 'Purchase Invoice',
-          emptyMessage: 'Belum ada Purchase Invoice aktif pada periode ini.',
+          emptyMessage: 'Belum ada invoice supplier aktif pada periode ini.',
           points: appState.purchaseInvoiceTrendPoints,
           selectedYear: appState.buyingPeriodYear,
           selectedMonth: appState.buyingPeriodMonth,
@@ -469,7 +473,7 @@ class _InvoiceDashboardCard extends StatelessWidget {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Ringkasan invoice sesuai filter aktif.',
+                      'Total hutang dan jatuh tempo sesuai filter aktif.',
                       style: TextStyle(
                         color: AppColors.slate,
                         fontSize: 11,
@@ -486,7 +490,7 @@ class _InvoiceDashboardCard extends StatelessWidget {
             children: [
               Expanded(
                 child: _InvoiceSummaryTile(
-                  label: 'Outstanding',
+                  label: 'Belum Dibayar',
                   value: 'Rp ${formatErpCurrency(outstandingAmount)}',
                   icon: Icons.payments_outlined,
                   color: AppColors.primary,
@@ -495,7 +499,7 @@ class _InvoiceDashboardCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: _InvoiceSummaryTile(
-                  label: 'Overdue',
+                  label: 'Lewat Tempo',
                   value: 'Rp ${formatErpCurrency(overdueAmount)}',
                   helper: '${overdueInvoices.length} invoice',
                   icon: Icons.error_outline_rounded,
@@ -508,6 +512,43 @@ class _InvoiceDashboardCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _DueSoonStrip(count: dueSoonCount),
+        ],
+      ),
+    );
+  }
+}
+
+class _InvoiceApprovalInfoCard extends StatelessWidget {
+  const _InvoiceApprovalInfoCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.softGreen,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.verified_user_outlined,
+            color: AppColors.primary,
+            size: 19,
+          ),
+          SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              'Action approval akan muncul otomatis jika Workflow ERPNext untuk Purchase Invoice sudah aktif dan role user sesuai.',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -648,9 +689,9 @@ class _InvoiceMonitoringCard extends StatelessWidget {
     final stateText = isPaid
         ? 'Lunas'
         : isOverdue
-        ? 'Overdue ${days?.abs() ?? 0} hari'
+        ? 'Lewat tempo ${days?.abs() ?? 0} hari'
         : days == null
-        ? 'Due date belum tersedia'
+        ? 'Jatuh tempo belum tersedia'
         : days == 0
         ? 'Jatuh tempo hari ini'
         : 'Jatuh tempo $days hari lagi';
@@ -698,7 +739,7 @@ class _InvoiceMonitoringCard extends StatelessWidget {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Ringkasan pembayaran dan due date invoice.',
+                      'Ringkasan pembayaran dan jatuh tempo invoice.',
                       style: TextStyle(color: AppColors.slate, fontSize: 11),
                     ),
                   ],
@@ -716,12 +757,12 @@ class _InvoiceMonitoringCard extends StatelessWidget {
                 value: 'Rp ${formatErpCurrency(invoice.value)}',
               ),
               _InvoiceInfoTile(
-                label: 'Outstanding',
+                label: 'Belum Dibayar',
                 value: 'Rp ${formatErpCurrency(outstanding)}',
                 valueColor: isPaid ? AppColors.success : AppColors.danger,
               ),
               _InvoiceInfoTile(
-                label: 'Due Date',
+                label: 'Jatuh Tempo',
                 value: invoice.dueDate.isEmpty ? '-' : invoice.dueDate,
               ),
               _InvoiceInfoTile(

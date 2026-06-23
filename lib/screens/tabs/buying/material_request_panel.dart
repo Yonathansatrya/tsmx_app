@@ -205,14 +205,16 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
           valuePrefix: '',
           valueSuffix: ' qty',
         ),
+
         const SizedBox(height: 12),
-        _MaterialRequestHeader(count: appState.materialRequests.length),
-        const SizedBox(height: 12),
+
         _PlanningCard(
           items: planningItems,
           onPick: (item) => _openCreate(item: item),
         ),
+
         const SizedBox(height: 12),
+
         TextField(
           onChanged: _searchChanged,
           decoration: InputDecoration(
@@ -234,11 +236,14 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
             ),
           ),
         ),
+
         if (appState.materialRequestsError != null) ...[
           const SizedBox(height: 10),
           ErpErrorBox(message: appState.materialRequestsError!),
         ],
+
         const SizedBox(height: 10),
+
         ErpStatusChipBar<String?>(
           chips: _chips,
           selected: _statusFilter,
@@ -250,7 +255,9 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
             );
           },
         ),
+
         const SizedBox(height: 12),
+
         if (filtered.isEmpty && !appState.isMaterialRequestsLoading)
           const ErpEmptyState(
             title: 'Belum ada request',
@@ -386,78 +393,6 @@ class _MaterialRequestCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _MaterialRequestHeader extends StatelessWidget {
-  final int count;
-
-  const _MaterialRequestHeader({required this.count});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Material Request',
-            style: TextStyle(
-              color: AppColors.slate,
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.assignment_turned_in_outlined,
-                  color: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$count request aktif',
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    const Text(
-                      'Pantau kebutuhan barang, approval, dan rencana pembelian.',
-                      style: TextStyle(color: AppColors.slate, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }

@@ -126,14 +126,14 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
           icon: Icons.payments_outlined,
         ),
         BuyingDetailMetric(
-          label: 'Qty',
+          label: 'Item',
           value: '${detail.itemsCount}',
           icon: Icons.inventory_2_outlined,
         ),
       ],
       infos: [
         BuyingDetailInfo(
-          label: 'Doc Status',
+          label: 'Status Dokumen',
           value: docStatusLabel(detail.docStatus),
         ),
         BuyingDetailInfo(label: 'Posting Date', value: detail.date),
@@ -166,7 +166,7 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
           if (canSubmit) ...[
             const SizedBox(height: 10),
             erpActionButton(
-              label: 'Submit Purchase Receipt',
+              label: 'Ajukan Purchase Receipt',
               icon: Icons.check_circle_outline_rounded,
               filled: true,
               onPressed: () => _submit(detail.id),
@@ -438,7 +438,7 @@ class _ReceiptVarianceCard extends StatelessWidget {
           : const _ReceiptNote(
               icon: Icons.info_outline_rounded,
               message:
-                  'Buka permission item Purchase Receipt jika detail item belum tampil.',
+                  'Detail item belum bisa dibaca. Cek permission Purchase Receipt Item jika data tidak muncul.',
             ),
     );
   }
