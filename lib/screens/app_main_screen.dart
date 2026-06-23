@@ -21,6 +21,7 @@ import 'tabs/stock_tab.dart';
 import 'purchase/purchase_order/create_purchase_order_screen.dart';
 import 'purchase/purchase_invoice/create_purchase_invoice_screen.dart';
 import 'purchase/purchase_receipt/create_purchase_receipt_screen.dart';
+import 'purchase/material_request/create_material_request_screen.dart';
 import 'stock/stock_entry/create_stock_entry_screen.dart';
 import 'sales/sales_order/create_sales_order_screen.dart';
 import 'todo/todo_list.dart';
@@ -322,6 +323,21 @@ class _AppMainScreenState extends State<AppMainScreen> {
         );
 
       case 3:
+        if (_buyingSegment == 'mr') {
+          return FloatingActionButton.extended(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const CreateMaterialRequestScreen(),
+                ),
+              );
+            },
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Material Request'),
+          );
+        }
         if (_buyingSegment == 'pr') {
           return FloatingActionButton.extended(
             onPressed: () {
