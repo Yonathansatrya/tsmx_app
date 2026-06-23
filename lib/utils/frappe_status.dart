@@ -211,40 +211,30 @@ SalesOrderStatusKey parseSalesOrderStatus(String statusText, {int? docstatus}) {
 
 enum PurchaseOrderStatusKey {
   draft,
-  onHold,
   toReceiveAndBill,
   toBill,
   toReceive,
   completed,
-  delivered,
-  closed,
   cancelled,
-  overdue,
+  closed,
   unknown,
 }
 
 PurchaseOrderStatusKey parsePurchaseOrderStatus(
   String statusText, {
   int? docstatus,
-  bool isOverdue = false,
 }) {
-  if (isOverdue) return PurchaseOrderStatusKey.overdue;
-
   final text = normalizeStatusText(statusText, docstatus: docstatus);
   final s = text.toLowerCase();
 
   if (_eq(s, 'draft') || docstatus == 0) return PurchaseOrderStatusKey.draft;
-  if (_contains(s, 'on hold')) return PurchaseOrderStatusKey.onHold;
   if (_contains(s, 'cancel') || docstatus == 2) {
     return PurchaseOrderStatusKey.cancelled;
   }
   if (_contains(s, 'closed')) return PurchaseOrderStatusKey.closed;
   if (_contains(s, 'completed')) return PurchaseOrderStatusKey.completed;
-  if (_contains(s, 'delayed') || _contains(s, 'overdue')) {
-    return PurchaseOrderStatusKey.overdue;
-  }
-  if (_contains(s, 'delivered')) return PurchaseOrderStatusKey.delivered;
-  if (_contains(s, 'to receive and bill')) {
+  if (_contains(s, 'to receive and bill') ||
+      _contains(s, 'to receive and to bill')) {
     return PurchaseOrderStatusKey.toReceiveAndBill;
   }
   if (_contains(s, 'to receive')) return PurchaseOrderStatusKey.toReceive;

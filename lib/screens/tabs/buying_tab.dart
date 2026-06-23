@@ -48,6 +48,7 @@ class BuyingTabState extends State<BuyingTab>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
 
+      appState.loadBuyingFilterOptions();
       appState.refreshBuyingSummaries();
 
       if (appState.purchaseOrders.isEmpty) {
@@ -199,6 +200,25 @@ class BuyingTabState extends State<BuyingTab>
                     selectedYear: appState.buyingPeriodYear,
                     selectedMonth: appState.buyingPeriodMonth,
                     loading: appState.isOrderSummaryLoading,
+                    companyOptions: appState.buyingCompanies,
+                    selectedCompany: appState.buyingCompanyFilter,
+                    onCompanyChanged: (company) {
+                      context.read<AppState>().setBuyingPeriod(
+                        year: appState.buyingPeriodYear,
+                        month: appState.buyingPeriodMonth,
+                        company: company,
+                      );
+                    },
+                    selectedCustomerType: appState.buyingSupplierTypeFilter,
+                    onCustomerTypeChanged: (supplierType) {
+                      context.read<AppState>().setBuyingPeriod(
+                        year: appState.buyingPeriodYear,
+                        month: appState.buyingPeriodMonth,
+                        supplierType: supplierType,
+                      );
+                    },
+                    partnerTypeLabel: 'Supplier',
+                    partnerTypeIcon: Icons.storefront_rounded,
                     onChanged: (year, month) {
                       context.read<AppState>().setBuyingPeriod(
                         year: year,

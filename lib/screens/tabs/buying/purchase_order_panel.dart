@@ -45,33 +45,24 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   static final _chips = <ErpStatusChip<PurchaseOrderStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
     const ErpStatusChip(label: 'Draft', value: PurchaseOrderStatusKey.draft),
-    const ErpStatusChip(label: 'On Hold', value: PurchaseOrderStatusKey.onHold),
     const ErpStatusChip(
-      label: 'Receive & Bill',
+      label: 'To Receive and To Bill',
       value: PurchaseOrderStatusKey.toReceiveAndBill,
-    ),
-    const ErpStatusChip(
-      label: 'To Receive',
-      value: PurchaseOrderStatusKey.toReceive,
     ),
     const ErpStatusChip(label: 'To Bill', value: PurchaseOrderStatusKey.toBill),
     const ErpStatusChip(
-      label: 'Overdue',
-      value: PurchaseOrderStatusKey.overdue,
+      label: 'To Receive',
+      value: PurchaseOrderStatusKey.toReceive,
     ),
     const ErpStatusChip(
       label: 'Completed',
       value: PurchaseOrderStatusKey.completed,
     ),
     const ErpStatusChip(
-      label: 'Delivered',
-      value: PurchaseOrderStatusKey.delivered,
-    ),
-    const ErpStatusChip(label: 'Closed', value: PurchaseOrderStatusKey.closed),
-    const ErpStatusChip(
       label: 'Cancelled',
       value: PurchaseOrderStatusKey.cancelled,
     ),
+    const ErpStatusChip(label: 'Closed', value: PurchaseOrderStatusKey.closed),
   ];
 
   @override
@@ -95,15 +86,12 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   String? get _statusText {
     return switch (_statusFilter) {
       PurchaseOrderStatusKey.draft => 'Draft',
-      PurchaseOrderStatusKey.onHold => 'On Hold',
-      PurchaseOrderStatusKey.toReceiveAndBill => 'To Receive and Bill',
-      PurchaseOrderStatusKey.toReceive => 'To Receive',
+      PurchaseOrderStatusKey.toReceiveAndBill => 'To Receive and To Bill',
       PurchaseOrderStatusKey.toBill => 'To Bill',
-      PurchaseOrderStatusKey.overdue => 'Delayed',
+      PurchaseOrderStatusKey.toReceive => 'To Receive',
       PurchaseOrderStatusKey.completed => 'Completed',
-      PurchaseOrderStatusKey.delivered => 'Delivered',
-      PurchaseOrderStatusKey.closed => 'Closed',
       PurchaseOrderStatusKey.cancelled => 'Cancelled',
+      PurchaseOrderStatusKey.closed => 'Closed',
       _ => null,
     };
   }

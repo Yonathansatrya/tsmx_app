@@ -14,6 +14,8 @@ class ErpPeriodFilterCard extends StatelessWidget {
   final ValueChanged<String>? onCompanyChanged;
   final String selectedCustomerType;
   final ValueChanged<String>? onCustomerTypeChanged;
+  final String partnerTypeLabel;
+  final IconData partnerTypeIcon;
 
   const ErpPeriodFilterCard({
     super.key,
@@ -29,6 +31,8 @@ class ErpPeriodFilterCard extends StatelessWidget {
     this.onCompanyChanged,
     this.selectedCustomerType = 'all',
     this.onCustomerTypeChanged,
+    this.partnerTypeLabel = 'Customer',
+    this.partnerTypeIcon = Icons.groups_2_rounded,
   });
 
   static const monthLabels = [
@@ -200,9 +204,9 @@ class ErpPeriodFilterCard extends StatelessWidget {
                     : DropdownButtonFormField<String>(
                         initialValue: selectedCustomerType,
                         isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Customer',
-                          prefixIcon: Icon(Icons.groups_2_rounded, size: 18),
+                        decoration: InputDecoration(
+                          labelText: partnerTypeLabel,
+                          prefixIcon: Icon(partnerTypeIcon, size: 18),
                         ),
                         items: const [
                           DropdownMenuItem(value: 'all', child: Text('Semua')),

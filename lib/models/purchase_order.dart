@@ -127,7 +127,10 @@ class PurchaseOrder {
     final itemsCount = NumParse.asInt(json['total_qty']);
 
     final totalValue = NumParse.asDouble(
-      json['rounded_total'] ?? json['grand_total'],
+      json['base_net_total'] ??
+          json['net_total'] ??
+          json['rounded_total'] ??
+          json['grand_total'],
     );
 
     final docstatus = NumParse.asInt(json['docstatus']);
@@ -136,11 +139,9 @@ class PurchaseOrder {
       docstatus: docstatus,
     );
 
-    final isOverdue = _isOverdueEta(eta, statusText);
     final statusKey = parsePurchaseOrderStatus(
       statusText,
       docstatus: docstatus,
-      isOverdue: isOverdue,
     );
 
     final rawItems = json['items'];
@@ -159,9 +160,7 @@ class PurchaseOrder {
       supplierId: supplierId,
       vendor: vendor,
       statusKey: statusKey,
-      statusText: statusKey == PurchaseOrderStatusKey.overdue
-          ? 'Overdue'
-          : statusText,
+      statusText: statusText,
       docStatus: NumParse.asInt(json['docstatus']),
       perReceived: NumParse.asDouble(json['per_received']),
       perBilled: NumParse.asDouble(json['per_billed']),
@@ -202,19 +201,5 @@ class PurchaseOrder {
     }
 
     return null;
-  }
-
-  static bool _isOverdueEta(String eta, String statusText) {
-    final etaDate = _parseEta(eta);
-    final today = DateTime.now();
-    final isPast =
-        etaDate != null &&
-        etaDate.isBefore(DateTime(today.year, today.month, today.day));
-    final settled =
-        statusText.toLowerCase().contains('completed') ||
-        statusText.toLowerCase().contains('cancel') ||
-        statusText.toLowerCase().contains('closed') ||
-        statusText.toLowerCase().contains('delivered');
-    return isPast && !settled;
   }
 }

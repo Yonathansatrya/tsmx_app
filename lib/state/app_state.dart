@@ -263,8 +263,16 @@ class AppState with ChangeNotifier {
 
   int _buyingPeriodYear = DateTime.now().year;
   int _buyingPeriodMonth = DateTime.now().month;
+  String _buyingCompanyFilter = '';
+  String _buyingSupplierTypeFilter = 'all';
+  List<String> _buyingCompanies = const [];
+  String? _buyingSupplierTypeIdsCacheKey;
+  List<String>? _buyingSupplierTypeIdsCache;
   int get buyingPeriodYear => _buyingPeriodYear;
   int get buyingPeriodMonth => _buyingPeriodMonth;
+  String get buyingCompanyFilter => _buyingCompanyFilter;
+  String get buyingSupplierTypeFilter => _buyingSupplierTypeFilter;
+  List<String> get buyingCompanies => _buyingCompanies;
   DateTime get buyingPeriodFrom => _buyingPeriodMonth == 0
       ? DateTime(_buyingPeriodYear, 1, 1)
       : DateTime(_buyingPeriodYear, _buyingPeriodMonth, 1);
@@ -2383,6 +2391,7 @@ class AppState with ChangeNotifier {
 
     try {
       await _frappeService.ensureLoggedIn();
+      final buyingSupplierTypeIds = await _buyingSupplierTypeSupplierIds();
       final purchaseTrend = _emptyBuyingTrendPoints();
       final receiptTrend = _emptyBuyingTrendPoints();
       final invoiceTrend = _emptyBuyingTrendPoints();
@@ -2390,10 +2399,24 @@ class AppState with ChangeNotifier {
       var purchaseDocumentCount = 0;
       await _forEachResourcePage(
         doctype: 'Purchase Order',
-        fields: const ['name', 'grand_total', 'transaction_date'],
-        filters: _buyingPeriodFilters('transaction_date'),
+        fields: const [
+          'name',
+          'base_net_total',
+          'net_total',
+          'grand_total',
+          'status',
+          'docstatus',
+          'transaction_date',
+          'supplier',
+        ],
+        filters: [
+          ..._buyingPeriodFilters('transaction_date'),
+          ['docstatus', '!=', 2],
+        ],
         onRow: (row) {
-          final value = NumParse.asDouble(row['grand_total']);
+          if (!_matchesBuyingSupplierType(row, buyingSupplierTypeIds)) return;
+          if (!_isActivePurchaseOrderTrendRow(row)) return;
+          final value = _buyingAnalyticsValue(row);
           purchaseTotal += value;
           purchaseDocumentCount++;
           _addBuyingTrendPoint(
@@ -2408,9 +2431,21 @@ class AppState with ChangeNotifier {
       var receiptCount = 0;
       await _forEachResourcePage(
         doctype: 'Purchase Receipt',
-        fields: const ['name', 'grand_total', 'posting_date'],
-        filters: _buyingPeriodFilters('posting_date'),
+        fields: const [
+          'name',
+          'supplier',
+          'grand_total',
+          'status',
+          'docstatus',
+          'posting_date',
+        ],
+        filters: [
+          ..._buyingPeriodFilters('posting_date'),
+          ['docstatus', '!=', 2],
+        ],
         onRow: (row) {
+          if (!_matchesBuyingSupplierType(row, buyingSupplierTypeIds)) return;
+          if (!_isActiveBuyingTrendRow(row)) return;
           final value = NumParse.asDouble(row['grand_total']);
           receiptTotal += value;
           receiptCount++;
@@ -2426,9 +2461,21 @@ class AppState with ChangeNotifier {
       var invoiceCount = 0;
       await _forEachResourcePage(
         doctype: 'Purchase Invoice',
-        fields: const ['name', 'grand_total', 'posting_date'],
-        filters: _buyingPeriodFilters('posting_date'),
+        fields: const [
+          'name',
+          'supplier',
+          'grand_total',
+          'status',
+          'docstatus',
+          'posting_date',
+        ],
+        filters: [
+          ..._buyingPeriodFilters('posting_date'),
+          ['docstatus', '!=', 2],
+        ],
         onRow: (row) {
+          if (!_matchesBuyingSupplierType(row, buyingSupplierTypeIds)) return;
+          if (!_isActiveBuyingTrendRow(row)) return;
           final value = NumParse.asDouble(row['grand_total']);
           invoiceTotal += value;
           invoiceCount++;
@@ -2464,10 +2511,51 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Future<void> setBuyingPeriod({required int year, required int month}) async {
-    if (_buyingPeriodYear == year && _buyingPeriodMonth == month) return;
+  Future<void> loadBuyingFilterOptions() async {
+    if (_buyingCompanies.isNotEmpty || !_isAuthenticated) return;
+    try {
+      await _frappeService.ensureLoggedIn();
+      final rows = await _fetchAllResourcePages(
+        doctype: 'Company',
+        fields: const ['name'],
+        orderBy: 'name asc',
+        maxRows: 500,
+      );
+      _buyingCompanies =
+          rows
+              .map((row) => row['name']?.toString() ?? '')
+              .where((name) => name.trim().isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+      notifyListeners();
+    } catch (_) {
+      // Filter options are helpful, but should not block buying data.
+    }
+  }
+
+  Future<void> setBuyingPeriod({
+    required int year,
+    required int month,
+    String? company,
+    String? supplierType,
+  }) async {
+    final nextCompany = company ?? _buyingCompanyFilter;
+    final nextSupplierType = supplierType ?? _buyingSupplierTypeFilter;
+    if (_buyingPeriodYear == year &&
+        _buyingPeriodMonth == month &&
+        _buyingCompanyFilter == nextCompany &&
+        _buyingSupplierTypeFilter == nextSupplierType) {
+      return;
+    }
     _buyingPeriodYear = year;
     _buyingPeriodMonth = month;
+    _buyingCompanyFilter = nextCompany;
+    if (_buyingSupplierTypeFilter != nextSupplierType) {
+      _buyingSupplierTypeIdsCacheKey = null;
+      _buyingSupplierTypeIdsCache = null;
+    }
+    _buyingSupplierTypeFilter = nextSupplierType;
     notifyListeners();
     await Future.wait([
       fetchPurchaseOrdersFromFrappe(),
@@ -2628,7 +2716,10 @@ class AppState with ChangeNotifier {
           'transaction_date',
           'schedule_date',
         ],
-        filters: _buyingPeriodFilters('transaction_date'),
+        filters: [
+          ..._buyingPeriodFilters('transaction_date'),
+          ['docstatus', '!=', 2],
+        ],
         onRow: (row) {
           final order = PurchaseOrder.fromJson(row);
           purchaseDocumentCount++;
@@ -2650,7 +2741,10 @@ class AppState with ChangeNotifier {
       await _forEachResourcePage(
         doctype: 'Purchase Receipt',
         fields: const ['name', 'grand_total'],
-        filters: _buyingPeriodFilters('posting_date'),
+        filters: [
+          ..._buyingPeriodFilters('posting_date'),
+          ['docstatus', '!=', 2],
+        ],
         onRow: (row) {
           purchaseReceiptTotal += NumParse.asDouble(row['grand_total']);
           purchaseReceiptCount++;
@@ -2663,7 +2757,10 @@ class AppState with ChangeNotifier {
       await _forEachResourcePage(
         doctype: 'Purchase Invoice',
         fields: const ['name', 'grand_total', 'status', 'docstatus'],
-        filters: _buyingPeriodFilters('posting_date'),
+        filters: [
+          ..._buyingPeriodFilters('posting_date'),
+          ['docstatus', '!=', 2],
+        ],
         onRow: (row) {
           final invoice = PurchaseInvoice.fromJson(row);
           purchaseInvoiceTotal += invoice.value;
@@ -4253,12 +4350,86 @@ class AppState with ChangeNotifier {
     return true;
   }
 
+  bool _isActivePurchaseOrderTrendRow(Map<String, dynamic> row) {
+    final docstatus = NumParse.asInt(row['docstatus']);
+    if (docstatus != 1) return false;
+
+    final status = row['status']?.toString().trim().toLowerCase() ?? '';
+    return status == 'to receive and bill' ||
+        status == 'to receive and to bill' ||
+        status == 'to bill' ||
+        status == 'to receive' ||
+        status == 'completed';
+  }
+
+  bool _isActiveBuyingTrendRow(Map<String, dynamic> row) {
+    final docstatus = NumParse.asInt(row['docstatus']);
+    if (docstatus != 1) return false;
+
+    final status = row['status']?.toString().trim().toLowerCase() ?? '';
+    if (status == 'draft' || status == 'cancelled') return false;
+    if (status.contains('return')) return false;
+
+    return true;
+  }
+
+  double _buyingAnalyticsValue(Map<String, dynamic> row) {
+    final baseNetTotal = NumParse.asDouble(row['base_net_total']);
+    if (baseNetTotal != 0) return baseNetTotal;
+    final netTotal = NumParse.asDouble(row['net_total']);
+    if (netTotal != 0) return netTotal;
+    return NumParse.asDouble(row['grand_total']);
+  }
+
   List<List<dynamic>> _buyingPeriodFilters(String dateField) {
     return [
       [dateField, '>=', DateRangePresets.toFrappeDate(buyingPeriodFrom)],
       [dateField, '<=', DateRangePresets.toFrappeDate(buyingPeriodTo)],
-      ['docstatus', '!=', 2],
+      if (_buyingCompanyFilter.trim().isNotEmpty)
+        ['company', '=', _buyingCompanyFilter.trim()],
     ];
+  }
+
+  bool _matchesBuyingSupplierType(
+    Map<String, dynamic> row,
+    List<String>? supplierIds,
+  ) {
+    if (supplierIds == null) return true;
+    if (supplierIds.isEmpty) return false;
+    return supplierIds.contains(row['supplier']?.toString() ?? '');
+  }
+
+  Future<List<String>?> _buyingSupplierTypeSupplierIds() async {
+    final type = _buyingSupplierTypeFilter.trim().toLowerCase();
+    if (type.isEmpty || type == 'all') return null;
+    if (_buyingSupplierTypeIdsCacheKey == type &&
+        _buyingSupplierTypeIdsCache != null) {
+      return _buyingSupplierTypeIdsCache;
+    }
+
+    final internal = type == 'internal';
+    List<Map<String, dynamic>> rows;
+    try {
+      rows = await _fetchAllResourcePages(
+        doctype: 'Supplier',
+        fields: const ['name', 'is_internal_supplier'],
+        maxRows: null,
+      );
+    } catch (_) {
+      return null;
+    }
+
+    final ids = rows
+        .where(
+          (row) =>
+              NumParse.asInt(row['is_internal_supplier']) == (internal ? 1 : 0),
+        )
+        .map((row) => row['name']?.toString() ?? '')
+        .where((name) => name.trim().isNotEmpty)
+        .toList();
+    _buyingSupplierTypeIdsCacheKey = type;
+    _buyingSupplierTypeIdsCache = ids;
+    return ids;
   }
 
   List<List<dynamic>>? _salesOrderFilters(String? status) {
@@ -4293,6 +4464,7 @@ class AppState with ChangeNotifier {
       ..._buyingPeriodFilters('transaction_date'),
       ...?_purchaseOrderFilters(_purchaseOrderStatus),
     ];
+    final supplierTypeIds = await _buyingSupplierTypeSupplierIds();
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Purchase Order',
       fields: const [
@@ -4304,6 +4476,8 @@ class AppState with ChangeNotifier {
         'transaction_date',
         'schedule_date',
         'total_qty',
+        'base_net_total',
+        'net_total',
         'grand_total',
         'creation',
       ],
@@ -4318,7 +4492,10 @@ class AppState with ChangeNotifier {
       ]),
     );
 
-    var orders = data.map((item) => PurchaseOrder.fromJson(item)).toList();
+    var orders = data
+        .where((item) => _matchesBuyingSupplierType(item, supplierTypeIds))
+        .map((item) => PurchaseOrder.fromJson(item))
+        .toList();
     orders = await _attachPurchaseOrderItems(orders);
     return orders;
   }
@@ -4330,6 +4507,7 @@ class AppState with ChangeNotifier {
       ..._buyingPeriodFilters('posting_date'),
       ...?_statusFilters(_purchaseReceiptStatus),
     ];
+    final supplierTypeIds = await _buyingSupplierTypeSupplierIds();
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Purchase Receipt',
       fields: const [
@@ -4352,7 +4530,10 @@ class AppState with ChangeNotifier {
         'supplier_name',
       ]),
     );
-    return data.map(PurchaseReceipt.fromJson).toList();
+    return data
+        .where((item) => _matchesBuyingSupplierType(item, supplierTypeIds))
+        .map(PurchaseReceipt.fromJson)
+        .toList();
   }
 
   Future<List<PurchaseInvoice>> _fetchPurchaseInvoicePage({
@@ -4362,6 +4543,7 @@ class AppState with ChangeNotifier {
       ..._buyingPeriodFilters('posting_date'),
       ...?_statusFilters(_purchaseInvoiceStatus),
     ];
+    final supplierTypeIds = await _buyingSupplierTypeSupplierIds();
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Purchase Invoice',
       fields: const [
@@ -4385,24 +4567,23 @@ class AppState with ChangeNotifier {
         'supplier_name',
       ]),
     );
-    return data.map(PurchaseInvoice.fromJson).toList();
+    return data
+        .where((item) => _matchesBuyingSupplierType(item, supplierTypeIds))
+        .map(PurchaseInvoice.fromJson)
+        .toList();
   }
 
   List<List<dynamic>>? _purchaseOrderFilters(String? status) {
-    if (status != 'Delayed') return _statusFilters(status);
-    final now = DateTime.now();
-    final today =
-        '${now.year.toString().padLeft(4, '0')}-'
-        '${now.month.toString().padLeft(2, '0')}-'
-        '${now.day.toString().padLeft(2, '0')}';
-    return [
-      ['schedule_date', '<', today],
-      [
-        'status',
-        'not in',
-        ['Draft', 'Completed', 'Closed', 'Cancelled'],
-      ],
-    ];
+    if (status == 'To Receive and To Bill') {
+      return [
+        [
+          'status',
+          'in',
+          ['To Receive and Bill', 'To Receive and To Bill'],
+        ],
+      ];
+    }
+    return _statusFilters(status);
   }
 
   Future<List<SalesOrder>> _attachSalesOrderItems(
