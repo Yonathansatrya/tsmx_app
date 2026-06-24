@@ -4197,6 +4197,36 @@ class AppState with ChangeNotifier {
     return rows.map(QualityInspectionRecord.fromJson).toList();
   }
 
+  Future<List<QualityInspectionRecord>> fetchQualityInspectionsForReceipt(
+    String purchaseReceiptId,
+  ) async {
+    await _frappeService.ensureLoggedIn();
+    final rows = await _fetchAllResourcePages(
+      doctype: 'Quality Inspection',
+      fields: const [
+        'name',
+        'item_code',
+        'item_name',
+        'inspection_type',
+        'reference_type',
+        'reference_name',
+        'inspected_by',
+        'status',
+        'remarks',
+        'report_date',
+        'docstatus',
+      ],
+      filters: [
+        ['inspection_type', '=', 'Incoming'],
+        ['reference_type', '=', 'Purchase Receipt'],
+        ['reference_name', '=', purchaseReceiptId],
+      ],
+      orderBy: 'report_date desc, modified desc',
+      maxRows: 200,
+    );
+    return rows.map(QualityInspectionRecord.fromJson).toList();
+  }
+
   Future<QualityInspectionRecord> createIncomingQualityInspection({
     required String purchaseReceiptId,
     required String itemCode,

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../../models/purchase_receipt.dart';
+import '../../../models/quality_inspection_record.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../utils/erp_doc_utils.dart';
@@ -696,51 +697,72 @@ class _ReceiptQcCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final qcItems = receipt.items
-        .where((item) => item.qualityInspection.isNotEmpty)
-        .toList();
+    return FutureBuilder<List<QualityInspectionRecord>>(
+      future: context.read<AppState>().fetchQualityInspectionsForReceipt(
+        receipt.id,
+      ),
+      builder: (context, snapshot) {
+        final records = snapshot.data ?? const <QualityInspectionRecord>[];
+        final fallbackRefs = receipt.items
+            .where((item) => item.qualityInspection.isNotEmpty)
+            .toList();
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final hasError = snapshot.hasError;
 
-    return _ReceiptInfoCard(
-      icon: Icons.fact_check_outlined,
-      title: 'QC Penerimaan',
-      subtitle: qcItems.isEmpty
-          ? 'QC belum terhubung, penerimaan tetap bisa dipantau.'
-          : '${qcItems.length} item memiliki Quality Inspection.',
-      child: qcItems.isEmpty
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+        return _ReceiptInfoCard(
+          icon: Icons.fact_check_outlined,
+          title: 'QC Penerimaan',
+          subtitle: loading
+              ? 'Memuat Quality Inspection...'
+              : records.isNotEmpty
+              ? '${records.length} Quality Inspection terhubung.'
+              : fallbackRefs.isNotEmpty
+              ? '${fallbackRefs.length} referensi QC pada item receipt.'
+              : 'QC belum terhubung, penerimaan tetap bisa dipantau.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (loading) const LinearProgressIndicator(),
+              if (hasError)
                 const _ReceiptNote(
                   icon: Icons.info_outline_rounded,
                   message:
-                      'Belum ada Quality Inspection terhubung untuk receipt ini.',
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: () => onCreate(receipt),
-                  icon: const Icon(Icons.fact_check_outlined),
-                  label: const Text('Buat QC Penerimaan'),
-                ),
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                ...qcItems.map(
+                      'QC belum bisa dibaca. Cek permission Quality Inspection di ERPNext.',
+                )
+              else if (records.isNotEmpty)
+                ...records.map(_QualityInspectionTile.new)
+              else if (fallbackRefs.isNotEmpty)
+                ...fallbackRefs.map(
                   (item) => _ReceiptReferenceRow(
                     title: item.qualityInspection,
                     subtitle: item.itemName,
                     icon: Icons.verified_outlined,
                   ),
+                )
+              else
+                const _ReceiptNote(
+                  icon: Icons.info_outline_rounded,
+                  message:
+                      'Belum ada Quality Inspection terhubung untuk receipt ini.',
                 ),
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: () => onCreate(receipt),
-                  icon: const Icon(Icons.add_task_outlined),
-                  label: const Text('Tambah QC'),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => onCreate(receipt),
+                icon: Icon(
+                  records.isEmpty && fallbackRefs.isEmpty
+                      ? Icons.fact_check_outlined
+                      : Icons.add_task_outlined,
                 ),
-              ],
-            ),
+                label: Text(
+                  records.isEmpty && fallbackRefs.isEmpty
+                      ? 'Buat QC Penerimaan'
+                      : 'Tambah QC',
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -810,6 +832,130 @@ class _ReceiptInfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           child,
+        ],
+      ),
+    );
+  }
+}
+
+class _QualityInspectionTile extends StatelessWidget {
+  final QualityInspectionRecord record;
+
+  const _QualityInspectionTile(this.record);
+
+  bool get _accepted => record.status.toLowerCase().contains('accept');
+
+  String get _dateText {
+    final date = record.reportDate;
+    if (date == null) return '-';
+    return '${date.day.toString().padLeft(2, '0')}/'
+        '${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _accepted ? AppColors.success : AppColors.danger;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(
+              _accepted ? Icons.verified_outlined : Icons.report_outlined,
+              color: color,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        record.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        record.status.isEmpty ? '-' : record.status,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  record.itemName.isEmpty ? record.itemCode : record.itemName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  [
+                    _dateText,
+                    if (record.inspectedBy.isNotEmpty) record.inspectedBy,
+                  ].join(' | '),
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (record.remarks.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    record.remarks,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1075,6 +1221,30 @@ class _ReceiptAttachmentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = _url;
+    final preview = ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: 56,
+        height: 56,
+        child: _isImage && url.isNotEmpty
+            ? Image.network(
+                url,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const Icon(
+                  Icons.broken_image_outlined,
+                  color: AppColors.slate,
+                ),
+              )
+            : const ColoredBox(
+                color: AppColors.white,
+                child: Icon(
+                  Icons.insert_drive_file_outlined,
+                  color: AppColors.slate,
+                ),
+              ),
+      ),
+    );
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
@@ -1084,29 +1254,20 @@ class _ReceiptAttachmentTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              width: 56,
-              height: 56,
-              child: _isImage && url.isNotEmpty
-                  ? Image.network(
-                      url,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const Icon(
-                        Icons.broken_image_outlined,
-                        color: AppColors.slate,
-                      ),
-                    )
-                  : const ColoredBox(
-                      color: AppColors.white,
-                      child: Icon(
-                        Icons.insert_drive_file_outlined,
-                        color: AppColors.slate,
+          _isImage && url.isNotEmpty
+              ? InkWell(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => _ReceiptAttachmentPreviewPage(
+                        title: _fileName,
+                        imageUrl: url,
                       ),
                     ),
-            ),
-          ),
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  child: preview,
+                )
+              : preview,
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1137,6 +1298,52 @@ class _ReceiptAttachmentTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ReceiptAttachmentPreviewPage extends StatelessWidget {
+  final String title;
+  final String imageUrl;
+
+  const _ReceiptAttachmentPreviewPage({
+    required this.title,
+    required this.imageUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+        ),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          minScale: 0.75,
+          maxScale: 4,
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => const Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Foto tidak bisa ditampilkan.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
