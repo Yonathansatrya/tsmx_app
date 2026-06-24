@@ -16,8 +16,17 @@ import '../../widgets/erp/erp_workflow_helper.dart';
 
 class SalesOrderApprovalScreen extends StatefulWidget {
   final bool embedded;
+  final String title;
+  final Set<String>? doctypeFilter;
+  final bool showHistoryTab;
 
-  const SalesOrderApprovalScreen({super.key, this.embedded = false});
+  const SalesOrderApprovalScreen({
+    super.key,
+    this.embedded = false,
+    this.title = 'Approval Dokumen',
+    this.doctypeFilter,
+    this.showHistoryTab = true,
+  });
 
   @override
   State<SalesOrderApprovalScreen> createState() =>
@@ -38,7 +47,10 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: widget.showHistoryTab ? 2 : 1,
+      vsync: this,
+    );
     _search.addListener(() => setState(() {}));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _load();
@@ -68,17 +80,24 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     final appState = context.read<AppState>();
     try {
       final rows = await appState.fetchApprovalTodos();
+      final filtered = widget.doctypeFilter == null
+          ? rows
+          : rows
+                .where((row) => widget.doctypeFilter!.contains(row.doctype))
+                .toList();
       if (!mounted) return;
-      setState(() => _rows = rows);
+      setState(() => _rows = filtered);
     } catch (error) {
       if (!silent && mounted) setState(() => _error = _friendlyError(error));
     }
-    try {
-      final history = await appState.fetchSalesOrderApprovalHistory();
-      if (mounted) setState(() => _history = history);
-    } catch (error) {
-      if (!silent && mounted) {
-        setState(() => _historyError = _friendlyError(error));
+    if (widget.showHistoryTab) {
+      try {
+        final history = await appState.fetchSalesOrderApprovalHistory();
+        if (mounted) setState(() => _history = history);
+      } catch (error) {
+        if (!silent && mounted) {
+          setState(() => _historyError = _friendlyError(error));
+        }
       }
     }
     if (!silent && mounted) setState(() => _loading = false);
@@ -100,7 +119,10 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   Widget build(BuildContext context) {
     final content = TabBarView(
       controller: _tabController,
-      children: [_todoTab(), _historyTab()],
+      children: [
+        _todoTab(),
+        if (widget.showHistoryTab) _historyTab(),
+      ],
     );
     if (widget.embedded) {
       return ColoredBox(
@@ -113,7 +135,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                 controller: _tabController,
                 tabs: [
                   Tab(text: 'Todo (${_rows.length})'),
-                  const Tab(text: 'Riwayat'),
+                  if (widget.showHistoryTab) const Tab(text: 'Riwayat'),
                 ],
               ),
             ),
@@ -127,9 +149,9 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
       appBar: AppBar(
         backgroundColor: AppColors.white,
         surfaceTintColor: Colors.transparent,
-        title: const Text(
-          'Approval Sales Order',
-          style: TextStyle(
+        title: Text(
+          widget.title,
+          style: const TextStyle(
             color: AppColors.primary,
             fontWeight: FontWeight.w900,
           ),
@@ -145,7 +167,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
           controller: _tabController,
           tabs: [
             Tab(text: 'Todo (${_rows.length})'),
-            const Tab(text: 'Riwayat'),
+            if (widget.showHistoryTab) const Tab(text: 'Riwayat'),
           ],
         ),
       ),

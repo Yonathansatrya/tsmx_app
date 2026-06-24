@@ -69,7 +69,16 @@ class AppState with ChangeNotifier {
   bool get isSalesUserRole => _userRole == 'Sales';
   bool get isSalesManagerRole => _userRole == 'Sales Manager';
   bool get isSalesAreaRole => isSalesUserRole || isSalesManagerRole;
+  bool get isPurchaseUserRole => _userRole == 'Purchase';
+  bool get isPurchaseManagerRole => _userRole == 'Purchase Manager';
+  bool get isPurchaseAreaRole => isPurchaseUserRole || isPurchaseManagerRole;
   bool get _shouldScopeSalesData => _userRole == 'Sales';
+
+  static const purchaseApprovalDoctypes = {
+    'Purchase Order',
+    'Purchase Invoice',
+    'Material Request',
+  };
 
   static const String _prefsUserRoleKey = 'user_role';
 
@@ -115,6 +124,7 @@ class AppState with ChangeNotifier {
     if (lower == 'sales manager') return 'Sales Manager';
     if (lower == 'warehouse') return 'Warehouse';
     if (lower == 'logistics') return 'Logistics';
+    if (lower == 'purchase manager') return 'Purchase Manager';
     if (lower == 'purchase' || lower == 'purchase user') return 'Purchase';
     if (lower == 'null' || lower == 'none' || lower == 'undefined') {
       return 'Unassigned';
@@ -214,6 +224,10 @@ class AppState with ChangeNotifier {
 
   int _salesOrderApprovalTodoCount = 0;
   int get salesOrderApprovalTodoCount => _salesOrderApprovalTodoCount;
+  int get approvalTodoCount => _salesOrderApprovalTodoCount;
+
+  int get purchaseApprovalTodoCount => _purchaseApprovalTodoCount;
+  int _purchaseApprovalTodoCount = 0;
 
   bool _isNotificationsLoading = false;
   bool get isNotificationsLoading => _isNotificationsLoading;
@@ -635,6 +649,7 @@ class AppState with ChangeNotifier {
     _latestVisitLocation = null;
     _notifications = [];
     _salesOrderApprovalTodoCount = 0;
+    _purchaseApprovalTodoCount = 0;
     _isAuthenticated = false;
     _currentUser = null;
     _userRole = 'Unassigned';
@@ -4389,11 +4404,25 @@ class AppState with ChangeNotifier {
     }
 
     todos.sort((a, b) => b.date.compareTo(a.date));
-    if (_salesOrderApprovalTodoCount != todos.length) {
+    final purchaseCount = todos
+        .where((todo) => purchaseApprovalDoctypes.contains(todo.doctype))
+        .length;
+    final changed =
+        _salesOrderApprovalTodoCount != todos.length ||
+        _purchaseApprovalTodoCount != purchaseCount;
+    if (changed) {
       _salesOrderApprovalTodoCount = todos.length;
+      _purchaseApprovalTodoCount = purchaseCount;
       notifyListeners();
     }
     return todos;
+  }
+
+  Future<List<ErpApprovalTodo>> fetchPurchaseApprovalTodos() async {
+    final todos = await fetchApprovalTodos();
+    return todos
+        .where((todo) => purchaseApprovalDoctypes.contains(todo.doctype))
+        .toList();
   }
 
   Future<List<SalesOrderApprovalHistory>>

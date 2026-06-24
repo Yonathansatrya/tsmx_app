@@ -221,6 +221,13 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   Future<void> _openDetail(PurchaseOrder order) async {
     final appState = context.read<AppState>();
     final detail = await appState.loadPurchaseOrderDetail(order.id);
+    var workflowActions = <String>[];
+    try {
+      workflowActions = await appState.fetchDocumentWorkflowActions(
+        doctype: 'Purchase Order',
+        name: detail.id,
+      );
+    } catch (_) {}
     if (!mounted) return;
 
     final canReceive =
@@ -291,6 +298,15 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          ..._workflowButtons(
+            doctype: 'Purchase Order',
+            name: detail.id,
+            actions: workflowActions,
+          ),
+          if (workflowActions.isEmpty && !canSubmit) ...[
+            const _PoApprovalInfoCard(),
+            const SizedBox(height: 10),
+          ],
           if (detail.items.isNotEmpty)
             erpActionButton(
               label: 'Bandingkan Harga Supplier',
@@ -500,6 +516,104 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
     }
   }
 
+  List<Widget> _workflowButtons({
+    required String doctype,
+    required String name,
+    required List<String> actions,
+  }) {
+    return actions.map((action) {
+      final lower = action.toLowerCase();
+      final needsReason =
+          lower.contains('reject') ||
+          lower.contains('tolak') ||
+          lower.contains('decline') ||
+          lower.contains('return');
+      final isApprove =
+          lower.contains('approve') ||
+          lower.contains('submit') ||
+          lower.contains('confirm');
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: erpActionButton(
+          label: action,
+          icon: needsReason
+              ? Icons.cancel_outlined
+              : isApprove
+              ? Icons.verified_outlined
+              : Icons.route_outlined,
+          filled: isApprove && !needsReason,
+          onPressed: () => _applyWorkflowAction(
+            doctype: doctype,
+            name: name,
+            action: action,
+            needsReason: needsReason,
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  Future<void> _applyWorkflowAction({
+    required String doctype,
+    required String name,
+    required String action,
+    required bool needsReason,
+  }) async {
+    var reason = '';
+    if (needsReason) {
+      reason = await _askReason(action) ?? '';
+      if (reason.trim().isEmpty) return;
+      if (!mounted) return;
+    } else {
+      final ok = await confirmErpAction(
+        context,
+        title: '$action $name?',
+        message: 'Lanjutkan action "$action" untuk $name?',
+      );
+      if (!ok || !mounted) return;
+    }
+
+    final ok = await runErpWorkflowAction(
+      context,
+      action: () => context.read<AppState>().applyDocumentWorkflow(
+        doctype: doctype,
+        name: name,
+        action: action,
+        reason: reason,
+      ),
+      successMessage: '$action berhasil',
+    );
+    if (ok && mounted) Navigator.pop(context);
+  }
+
+  Future<String?> _askReason(String action) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$action - alasan wajib'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Alasan',
+            hintText: 'Tulis alasan agar tercatat di ERPNext',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
+  }
+
   Future<void> _openSupplierComparison(List<PurchaseOrderItem> items) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -517,6 +631,10 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _OutstandingPoDashboardCard(orders: appState.purchaseOrders),
+
+        const SizedBox(height: 12),
+
         DocumentTrendCard(
           title: 'Purchase Order',
           emptyMessage: 'Belum ada Purchase Order aktif pada periode ini.',
@@ -1123,6 +1241,240 @@ class _SupplierPriceOptionCard extends StatelessWidget {
               if (option.date.isNotEmpty) option.date,
             ].join(' | '),
             style: const TextStyle(color: AppColors.slate, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PoApprovalInfoCard extends StatelessWidget {
+  const _PoApprovalInfoCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.softGreen,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.verified_user_outlined,
+            color: AppColors.primary,
+            size: 19,
+          ),
+          SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              'Action approval akan muncul otomatis jika Workflow ERPNext untuk Purchase Order sudah aktif dan role user sesuai.',
+              style: TextStyle(
+                color: AppColors.primary,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OutstandingPoDashboardCard extends StatelessWidget {
+  final List<PurchaseOrder> orders;
+
+  const _OutstandingPoDashboardCard({required this.orders});
+
+  bool _isOutstanding(PurchaseOrder order) =>
+      order.statusKey != PurchaseOrderStatusKey.completed &&
+      order.statusKey != PurchaseOrderStatusKey.cancelled &&
+      order.statusKey != PurchaseOrderStatusKey.closed;
+
+  @override
+  Widget build(BuildContext context) {
+    final outstanding = orders.where(_isOutstanding).toList();
+    final toReceive = outstanding
+        .where(
+          (order) =>
+              order.statusKey == PurchaseOrderStatusKey.toReceive ||
+              order.statusKey == PurchaseOrderStatusKey.toReceiveAndBill,
+        )
+        .length;
+    final toBill = outstanding
+        .where(
+          (order) =>
+              order.statusKey == PurchaseOrderStatusKey.toBill ||
+              order.statusKey == PurchaseOrderStatusKey.toReceiveAndBill,
+        )
+        .length;
+    final overdue = outstanding.where((order) => order.isOverdue).length;
+    final totalValue = outstanding.fold<double>(
+      0,
+      (sum, order) => sum + order.totalValue,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.softGreen,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.pending_actions_rounded,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Monitoring Outstanding PO',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'PO aktif yang belum selesai diterima atau ditagih.',
+                      style: TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _OutstandingPoTile(
+                  label: 'Open PO',
+                  value: '${outstanding.length}',
+                  icon: Icons.shopping_bag_outlined,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _OutstandingPoTile(
+                  label: 'Perlu Terima',
+                  value: '$toReceive',
+                  icon: Icons.move_to_inbox_outlined,
+                  color: toReceive > 0 ? AppColors.warning : AppColors.slate,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _OutstandingPoTile(
+                  label: 'Perlu Bill',
+                  value: '$toBill',
+                  icon: Icons.receipt_long_outlined,
+                  color: toBill > 0 ? AppColors.warning : AppColors.slate,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _OutstandingPoTile(
+                  label: 'Nilai Open PO',
+                  value: 'Rp ${formatErpCurrency(totalValue)}',
+                  icon: Icons.payments_outlined,
+                  color: AppColors.navy,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _OutstandingPoTile(
+                  label: 'ETA Overdue',
+                  value: '$overdue PO',
+                  icon: Icons.schedule_rounded,
+                  color: overdue > 0 ? AppColors.danger : AppColors.success,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OutstandingPoTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _OutstandingPoTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 7),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ],
       ),

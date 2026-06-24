@@ -53,7 +53,10 @@ class _AppMainScreenState extends State<AppMainScreen> {
       selectedSegment: _salesSegment,
       onSegmentChanged: (segment) => setState(() => _salesSegment = segment),
     ),
-    const SalesOrderApprovalScreen(embedded: true),
+    const SalesOrderApprovalScreen(
+      embedded: true,
+      title: 'Approval Dokumen',
+    ),
     BuyingTab(
       selectedSegment: _buyingSegment,
       onSegmentChanged: (segment) => setState(() => _buyingSegment = segment),

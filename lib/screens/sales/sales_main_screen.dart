@@ -52,7 +52,10 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
         SalesOrderTab(selectedTabIndex: _orderTabIndex),
         const SalesCollectionTab(),
         const SalesVisitTab(),
-        if (showTodo) const SalesOrderApprovalScreen(embedded: true),
+        if (showTodo) const SalesOrderApprovalScreen(
+          embedded: true,
+          title: 'Approval Sales Order',
+        ),
       ],
       destinations: [
         const NavigationDestination(

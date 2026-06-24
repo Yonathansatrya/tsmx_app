@@ -92,8 +92,23 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
   }
 
   List<InventoryItem> _planningItems(AppState appState) {
-    final rows = appState.inventory.where((item) => item.quantity <= 0).toList()
-      ..sort((a, b) => a.quantity.compareTo(b.quantity));
+    final rows = appState.inventory
+        .where(
+          (item) =>
+              item.quantity <= 0 ||
+              (item.minStockThreshold > 0 &&
+                  item.quantity <= item.minStockThreshold),
+        )
+        .toList()
+      ..sort((a, b) {
+        final aScore = a.minStockThreshold > 0
+            ? a.quantity / a.minStockThreshold
+            : a.quantity;
+        final bScore = b.minStockThreshold > 0
+            ? b.quantity / b.minStockThreshold
+            : b.quantity;
+        return aScore.compareTo(bScore);
+      });
     return rows.take(5).toList();
   }
 
@@ -109,9 +124,15 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
   }
 
   Future<void> _openDetail(MaterialRequest doc) async {
-    final detail = await context.read<AppState>().loadMaterialRequestDetail(
-      doc.id,
-    );
+    final appState = context.read<AppState>();
+    final detail = await appState.loadMaterialRequestDetail(doc.id);
+    var workflowActions = <String>[];
+    try {
+      workflowActions = await appState.fetchDocumentWorkflowActions(
+        doctype: 'Material Request',
+        name: detail.id,
+      );
+    } catch (_) {}
     if (!mounted) return;
 
     final canSubmit = isDocDraft(detail.docStatus);
@@ -155,15 +176,126 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
             ),
           )
           .toList(),
-      footer: canSubmit
-          ? erpActionButton(
+      footer: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ..._workflowButtons(
+            doctype: 'Material Request',
+            name: detail.id,
+            actions: workflowActions,
+          ),
+          if (workflowActions.isEmpty && !canSubmit)
+            const _MaterialRequestApprovalInfoCard(),
+          if (canSubmit) ...[
+            if (workflowActions.isNotEmpty) const SizedBox(height: 10),
+            erpActionButton(
               label: 'Ajukan Material Request',
               icon: Icons.check_circle_outline_rounded,
               filled: true,
               onPressed: () => _submit(detail.id),
-            )
-          : const _MaterialRequestApprovalInfoCard(),
+            ),
+          ],
+        ],
+      ),
     );
+  }
+
+  List<Widget> _workflowButtons({
+    required String doctype,
+    required String name,
+    required List<String> actions,
+  }) {
+    return actions.map((action) {
+      final lower = action.toLowerCase();
+      final needsReason =
+          lower.contains('reject') ||
+          lower.contains('tolak') ||
+          lower.contains('decline') ||
+          lower.contains('return');
+      final isApprove =
+          lower.contains('approve') ||
+          lower.contains('submit') ||
+          lower.contains('confirm');
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: erpActionButton(
+          label: action,
+          icon: needsReason
+              ? Icons.cancel_outlined
+              : isApprove
+              ? Icons.verified_outlined
+              : Icons.route_outlined,
+          filled: isApprove && !needsReason,
+          onPressed: () => _applyWorkflowAction(
+            doctype: doctype,
+            name: name,
+            action: action,
+            needsReason: needsReason,
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  Future<void> _applyWorkflowAction({
+    required String doctype,
+    required String name,
+    required String action,
+    required bool needsReason,
+  }) async {
+    var reason = '';
+    if (needsReason) {
+      reason = await _askReason(action) ?? '';
+      if (reason.trim().isEmpty) return;
+      if (!mounted) return;
+    } else {
+      final ok = await confirmErpAction(
+        context,
+        title: '$action $name?',
+        message: 'Lanjutkan action "$action" untuk $name?',
+      );
+      if (!ok || !mounted) return;
+    }
+
+    final ok = await runErpWorkflowAction(
+      context,
+      action: () => context.read<AppState>().applyDocumentWorkflow(
+        doctype: doctype,
+        name: name,
+        action: action,
+        reason: reason,
+      ),
+      successMessage: '$action berhasil',
+    );
+    if (ok && mounted) Navigator.pop(context);
+  }
+
+  Future<String?> _askReason(String action) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$action - alasan wajib'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Alasan',
+            hintText: 'Tulis alasan agar tercatat di ERPNext',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
   }
 
   Future<void> _submit(String id) async {
@@ -669,8 +801,8 @@ class _PlanningCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             items.isEmpty
-                ? 'Belum ada item stok kosong dari data inventory saat ini.'
-                : 'Item stok kosong bisa langsung dibuatkan request barang.',
+                ? 'Belum ada item di bawah reorder level dari data inventory saat ini.'
+                : 'Item stok kosong atau di bawah reorder level bisa langsung dibuatkan request.',
             style: const TextStyle(
               color: AppColors.slate,
               fontSize: 12,
@@ -688,7 +820,10 @@ class _PlanningCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-                subtitle: Text('${item.sku} | Stok saat ini ${item.quantity}'),
+                subtitle: Text(
+                  '${item.sku} | Stok ${item.quantity}'
+                  '${item.minStockThreshold > 0 ? ' / Reorder ${item.minStockThreshold}' : ''}',
+                ),
                 trailing: const Icon(
                   Icons.add_circle_outline_rounded,
                   color: AppColors.primary,

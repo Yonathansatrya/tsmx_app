@@ -102,6 +102,17 @@ class PurchaseOverviewTab extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           const _SectionHeader(
+            title: 'Outstanding Purchase Order',
+            subtitle: 'PO aktif yang perlu dipantau penerimaan atau penagihan',
+            icon: Icons.pending_actions_rounded,
+          ),
+          const SizedBox(height: 10),
+          _OutstandingPoSection(
+            orders: state.purchaseOrders,
+            onViewAll: () => onMenuSelected(1),
+          ),
+          const SizedBox(height: 18),
+          const _SectionHeader(
             title: 'Purchase Order Terbaru',
             subtitle: 'Dokumen terakhir yang perlu dipantau',
             icon: Icons.history_rounded,
@@ -164,6 +175,107 @@ class PurchaseOverviewTab extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _OutstandingPoSection extends StatelessWidget {
+  final List<PurchaseOrder> orders;
+  final VoidCallback onViewAll;
+
+  const _OutstandingPoSection({
+    required this.orders,
+    required this.onViewAll,
+  });
+
+  bool _isOutstanding(PurchaseOrder order) =>
+      order.statusKey != PurchaseOrderStatusKey.completed &&
+      order.statusKey != PurchaseOrderStatusKey.cancelled &&
+      order.statusKey != PurchaseOrderStatusKey.closed;
+
+  @override
+  Widget build(BuildContext context) {
+    final outstanding = orders.where(_isOutstanding).take(5).toList();
+    if (outstanding.isEmpty) {
+      return const ErpEmptyState(
+        title: 'Tidak ada outstanding PO',
+        message: 'Semua PO pada periode ini sudah selesai atau ditutup.',
+      );
+    }
+
+    return Column(
+      children: [
+        ...outstanding.map(
+          (po) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: po.isOverdue
+                      ? AppColors.danger.withValues(alpha: 0.25)
+                      : AppColors.border,
+                ),
+                boxShadow: AppColors.cardShadow,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          po.id,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.navy,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${po.vendor} • ${po.statusText}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (po.isOverdue) ...[
+                          const SizedBox(height: 4),
+                          const Text(
+                            'ETA overdue',
+                            style: TextStyle(
+                              color: AppColors.danger,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ErpStatusBadge(statusText: po.statusText),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: onViewAll,
+            icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+            label: const Text('Lihat semua PO'),
+          ),
+        ),
+      ],
     );
   }
 }

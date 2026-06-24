@@ -8,6 +8,7 @@ import '../shared/role_main_screen.dart';
 import '../tabs/buying/purchase_invoice_panel.dart';
 import '../tabs/buying/purchase_order_panel.dart';
 import '../tabs/buying/purchase_receipt_panel.dart';
+import '../todo/todo_list.dart';
 import 'material_request/create_material_request_screen.dart';
 import 'material_request/material_request_panel.dart';
 import 'purchase_invoice/create_purchase_invoice_screen.dart';
@@ -19,60 +20,87 @@ class PurchaseMainScreen extends StatelessWidget {
   const PurchaseMainScreen({super.key});
 
   @override
-  Widget build(BuildContext context) => RoleMainScreen(
-    title: 'TMSX PURCHASE',
-    fallbackUsername: 'Purchase',
-    onInitialize: (state) async {
-      await state.loadBuyingFilterOptions();
-      await Future.wait([
-        state.refreshBuyingSummaries(),
-        state.refreshPurchaseOrders(),
-        state.refreshPurchaseReceipts(),
-        state.refreshPurchaseInvoices(),
-        state.refreshMaterialRequests(),
-        state.refreshInventory(),
-      ]);
-    },
-    screensBuilder: (onMenuSelected) => [
-      PurchaseOverviewTab(onMenuSelected: onMenuSelected),
-      const _PurchasePane(child: PurchaseOrderPanel()),
-      const _PurchasePane(child: PurchaseReceiptPanel()),
-      const _PurchasePane(child: PurchaseInvoicePanel()),
-      const _PurchasePane(child: MaterialRequestPanel()),
-    ],
-    floatingActionButtonBuilder: _buildPurchaseFab,
-    destinations: const [
-      NavigationDestination(
-        icon: Icon(Icons.home_outlined),
-        selectedIcon: Icon(Icons.home_rounded),
-        label: 'Beranda',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.shopping_bag_outlined),
-        selectedIcon: Icon(Icons.shopping_bag_rounded),
-        label: 'PO',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.move_to_inbox_outlined),
-        selectedIcon: Icon(Icons.move_to_inbox_rounded),
-        label: 'Receipt',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.receipt_long_outlined),
-        selectedIcon: Icon(Icons.receipt_long_rounded),
-        label: 'Invoice',
-      ),
-      NavigationDestination(
-        icon: Icon(Icons.assignment_turned_in_outlined),
-        selectedIcon: Icon(Icons.assignment_turned_in_rounded),
-        label: 'Request',
-      ),
-    ],
+  Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final todoCount = appState.purchaseApprovalTodoCount;
+
+    return RoleMainScreen(
+      title: 'TMSX PURCHASE',
+      fallbackUsername: 'Purchase',
+      onInitialize: (state) async {
+        await state.loadBuyingFilterOptions();
+        await Future.wait([
+          state.refreshBuyingSummaries(),
+          state.refreshPurchaseOrders(),
+          state.refreshPurchaseReceipts(),
+          state.refreshPurchaseInvoices(),
+          state.refreshMaterialRequests(),
+          state.refreshInventory(),
+          state.fetchApprovalTodos(),
+        ]);
+      },
+      screensBuilder: (onMenuSelected) => [
+        PurchaseOverviewTab(onMenuSelected: onMenuSelected),
+        const _PurchasePane(child: PurchaseOrderPanel()),
+        const _PurchasePane(child: PurchaseReceiptPanel()),
+        const _PurchasePane(child: PurchaseInvoicePanel()),
+        const _PurchasePane(child: MaterialRequestPanel()),
+        const SalesOrderApprovalScreen(
+          embedded: true,
+          title: 'Approval Pembelian',
+          doctypeFilter: AppState.purchaseApprovalDoctypes,
+          showHistoryTab: false,
+        ),
+      ],
+      floatingActionButtonBuilder: _buildPurchaseFab,
+      destinations: [
+        const NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home_rounded),
+          label: 'Beranda',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.shopping_bag_outlined),
+          selectedIcon: Icon(Icons.shopping_bag_rounded),
+          label: 'PO',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.move_to_inbox_outlined),
+          selectedIcon: Icon(Icons.move_to_inbox_rounded),
+          label: 'Receipt',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.receipt_long_outlined),
+          selectedIcon: Icon(Icons.receipt_long_rounded),
+          label: 'Invoice',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.assignment_turned_in_outlined),
+          selectedIcon: Icon(Icons.assignment_turned_in_rounded),
+          label: 'Request',
+        ),
+        NavigationDestination(
+          icon: _todoIcon(Icons.fact_check_outlined, todoCount),
+          selectedIcon: _todoIcon(Icons.fact_check_rounded, todoCount),
+          label: 'Approval',
+        ),
+      ],
+    );
+  }
+}
+
+Widget _todoIcon(IconData icon, int count) {
+  if (count <= 0) return Icon(icon);
+  return Badge.count(
+    count: count,
+    backgroundColor: Colors.redAccent,
+    textColor: Colors.white,
+    child: Icon(icon),
   );
 }
 
 Widget? _buildPurchaseFab(BuildContext context, int currentIndex) {
-  if (currentIndex == 0) return null;
+  if (currentIndex == 0 || currentIndex >= 5) return null;
   return FloatingActionButton.extended(
     backgroundColor: AppColors.primary,
     foregroundColor: AppColors.white,
