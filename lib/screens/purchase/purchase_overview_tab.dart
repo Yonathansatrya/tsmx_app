@@ -7,7 +7,6 @@ import '../../theme/app_colors.dart';
 import '../../utils/erp_format.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_status_badge.dart';
-import '../todo/todo_list.dart';
 import 'purchase_order/create_purchase_order_screen.dart';
 
 class PurchaseOverviewTab extends StatelessWidget {
@@ -30,6 +29,16 @@ class PurchaseOverviewTab extends StatelessWidget {
       0,
       (sum, invoice) => sum + invoice.outstandingAmount,
     );
+    final overdueInvoices = state.purchaseInvoices
+        .where((invoice) => invoice.isOverdue)
+        .length;
+    final receiptIssues = state.purchaseReceipts
+        .where(
+          (receipt) =>
+              receipt.totalRejectedQty > 0 ||
+              receipt.totalVarianceQty.abs() > 0.0001,
+        )
+        .length;
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -71,10 +80,48 @@ class PurchaseOverviewTab extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _MetricCard(
+                  label: 'Approval',
+                  value: '${state.purchaseApprovalTodoCount}',
+                  icon: Icons.fact_check_outlined,
+                  color: state.purchaseApprovalTodoCount > 0
+                      ? AppColors.warning
+                      : AppColors.primary,
+                  onTap: () => onMenuSelected(5),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MetricCard(
+                  label: 'Overdue PI',
+                  value: '$overdueInvoices',
+                  icon: Icons.notification_important_outlined,
+                  color: overdueInvoices > 0
+                      ? AppColors.danger
+                      : AppColors.primary,
+                  onTap: () => onMenuSelected(3),
+                ),
+              ),
+            ],
+          ),
+          if (receiptIssues > 0) ...[
+            const SizedBox(height: 8),
+            _AlertStrip(
+              icon: Icons.rule_folder_outlined,
+              message:
+                  '$receiptIssues receipt memiliki rejected qty atau selisih quantity.',
+              onTap: () => onMenuSelected(2),
+            ),
+          ],
           const SizedBox(height: 16),
           _QuickActionCard(
             title: 'Buat Purchase Order',
-            subtitle: 'Buat PO langsung dari mobile',
+            subtitle:
+                'Buat PO mobile dan bandingkan harga supplier dari detail',
             icon: Icons.add_shopping_cart_rounded,
             onTap: () => Navigator.push(
               context,
@@ -86,7 +133,9 @@ class PurchaseOverviewTab extends StatelessWidget {
 
           _QuickActionCard(
             title: 'Terima Barang',
-            subtitle: 'Catat penerimaan, foto bukti, QC, dan selisih qty',
+            subtitle: receiptIssues > 0
+                ? '$receiptIssues receipt perlu cek QC/foto/selisih qty'
+                : 'Catat penerimaan, foto bukti, QC, dan selisih qty',
             icon: Icons.move_to_inbox_rounded,
             onTap: () => onMenuSelected(2),
           ),
@@ -111,16 +160,8 @@ class PurchaseOverviewTab extends StatelessWidget {
                 ? '${state.purchaseApprovalTodoCount} item menunggu approval'
                 : 'Lihat todo approval pembelian',
             icon: Icons.task_alt_rounded,
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const SalesOrderApprovalScreen(
-                  title: 'Todo Approval Pembelian',
-                  doctypeFilter: AppState.purchaseApprovalDoctypes,
-                  showHistoryTab: false,
-                ),
-              ),
-            ),
+            badgeCount: state.purchaseApprovalTodoCount,
+            onTap: () => onMenuSelected(5),
           ),
 
           const SizedBox(height: 18),
@@ -359,49 +400,110 @@ class _MetricCard extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
+  final Color color;
+  final VoidCallback? onTap;
 
   const _MetricCard({
     required this.label,
     required this.value,
     required this.icon,
+    this.color = AppColors.primary,
+    this.onTap,
   });
 
   @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(minHeight: 86),
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: AppColors.white,
+  Widget build(BuildContext context) {
+    final child = Container(
+      constraints: const BoxConstraints(minHeight: 86),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (onTap == null) return child;
+    return Material(
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppColors.border),
-      boxShadow: AppColors.cardShadow,
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: AppColors.primary, size: 20),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: AppColors.navy,
-            fontSize: 17,
-            fontWeight: FontWeight.w900,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: child,
+      ),
+    );
+  }
+}
+
+class _AlertStrip extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  final VoidCallback onTap;
+
+  const _AlertStrip({
+    required this.icon,
+    required this.message,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.warning.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(icon, color: AppColors.warning, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.warning),
+            ],
           ),
         ),
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.slate,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 }
 
 class _QuickActionCard extends StatelessWidget {
@@ -409,12 +511,14 @@ class _QuickActionCard extends StatelessWidget {
   final String subtitle;
   final IconData icon;
   final VoidCallback onTap;
+  final int badgeCount;
 
   const _QuickActionCard({
     required this.title,
     required this.subtitle,
     required this.icon,
     required this.onTap,
+    this.badgeCount = 0,
   });
 
   @override
@@ -437,7 +541,12 @@ class _QuickActionCard extends StatelessWidget {
               CircleAvatar(
                 backgroundColor: AppColors.softGreen,
                 foregroundColor: AppColors.primary,
-                child: Icon(icon),
+                child: Badge(
+                  isLabelVisible: badgeCount > 0,
+                  label: Text('$badgeCount'),
+                  backgroundColor: AppColors.danger,
+                  child: Icon(icon),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(

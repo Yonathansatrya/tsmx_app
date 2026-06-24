@@ -17,6 +17,8 @@ import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import 'buying_document_detail_sheet.dart';
 
+enum _ReceiptIssueFilter { all, withIssue, rejected, variance }
+
 class PurchaseReceiptPanel extends StatefulWidget {
   const PurchaseReceiptPanel({super.key});
 
@@ -28,6 +30,7 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
   final ImagePicker _picker = ImagePicker();
   String _search = '';
   DeliveryNoteStatusKey? _statusFilter;
+  _ReceiptIssueFilter _issueFilter = _ReceiptIssueFilter.all;
   Timer? _searchDebounce;
   int _attachmentRefreshKey = 0;
 
@@ -102,8 +105,32 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
           d.id.toLowerCase().contains(q) ||
           d.supplier.toLowerCase().contains(q);
       final matchStatus = _statusFilter == null || d.statusKey == _statusFilter;
-      return matchSearch && matchStatus;
+      return matchSearch && matchStatus && _matchesIssueFilter(d);
     }).toList();
+  }
+
+  bool _matchesIssueFilter(PurchaseReceipt receipt) {
+    final hasRejected = receipt.totalRejectedQty > 0;
+    final hasVariance = receipt.totalVarianceQty.abs() > 0.0001;
+    return switch (_issueFilter) {
+      _ReceiptIssueFilter.all => true,
+      _ReceiptIssueFilter.withIssue => hasRejected || hasVariance,
+      _ReceiptIssueFilter.rejected => hasRejected,
+      _ReceiptIssueFilter.variance => hasVariance,
+    };
+  }
+
+  String _emptyMessage() {
+    return switch (_issueFilter) {
+      _ReceiptIssueFilter.all =>
+        'Gunakan tombol Terima Barang untuk mencatat penerimaan.',
+      _ReceiptIssueFilter.withIssue =>
+        'Tidak ada receipt dengan rejected qty atau selisih quantity.',
+      _ReceiptIssueFilter.rejected =>
+        'Tidak ada receipt dengan rejected qty pada filter ini.',
+      _ReceiptIssueFilter.variance =>
+        'Tidak ada receipt dengan selisih quantity pada filter ini.',
+    };
   }
 
   Future<void> _openDetail(PurchaseReceipt doc) async {
@@ -315,6 +342,7 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final filtered = _filter(appState.purchaseReceipts);
+    final issueSummary = _ReceiptIssueSummary.from(appState.purchaseReceipts);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,6 +353,12 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
           points: appState.purchaseReceiptTrendPoints,
           selectedYear: appState.buyingPeriodYear,
           selectedMonth: appState.buyingPeriodMonth,
+        ),
+        const SizedBox(height: 12),
+        _ReceiptIssueSummaryCard(
+          summary: issueSummary,
+          selected: _issueFilter,
+          onSelected: (filter) => setState(() => _issueFilter = filter),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -366,9 +400,11 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
         ),
         const SizedBox(height: 12),
         if (filtered.isEmpty && !appState.isPurchaseReceiptsLoading)
-          const ErpEmptyState(
-            title: 'Belum ada Purchase Receipt',
-            message: 'Gunakan tombol Terima Barang untuk mencatat penerimaan.',
+          ErpEmptyState(
+            title: _issueFilter == _ReceiptIssueFilter.all
+                ? 'Belum ada Purchase Receipt'
+                : 'Receipt tidak ditemukan',
+            message: _emptyMessage(),
           )
         else
           ...filtered.map(
@@ -472,6 +508,182 @@ class _ReceiptVarianceCard extends StatelessWidget {
               message:
                   'Detail item belum bisa dibaca. Cek permission Purchase Receipt Item jika data tidak muncul.',
             ),
+    );
+  }
+}
+
+class _ReceiptIssueSummary {
+  final int total;
+  final int withIssue;
+  final int rejected;
+  final int variance;
+
+  const _ReceiptIssueSummary({
+    required this.total,
+    required this.withIssue,
+    required this.rejected,
+    required this.variance,
+  });
+
+  factory _ReceiptIssueSummary.from(List<PurchaseReceipt> receipts) {
+    var withIssue = 0;
+    var rejected = 0;
+    var variance = 0;
+    for (final receipt in receipts) {
+      final hasRejected = receipt.totalRejectedQty > 0;
+      final hasVariance = receipt.totalVarianceQty.abs() > 0.0001;
+      if (hasRejected || hasVariance) withIssue++;
+      if (hasRejected) rejected++;
+      if (hasVariance) variance++;
+    }
+    return _ReceiptIssueSummary(
+      total: receipts.length,
+      withIssue: withIssue,
+      rejected: rejected,
+      variance: variance,
+    );
+  }
+
+  int countFor(_ReceiptIssueFilter filter) {
+    return switch (filter) {
+      _ReceiptIssueFilter.all => total,
+      _ReceiptIssueFilter.withIssue => withIssue,
+      _ReceiptIssueFilter.rejected => rejected,
+      _ReceiptIssueFilter.variance => variance,
+    };
+  }
+}
+
+class _ReceiptIssueSummaryCard extends StatelessWidget {
+  final _ReceiptIssueSummary summary;
+  final _ReceiptIssueFilter selected;
+  final ValueChanged<_ReceiptIssueFilter> onSelected;
+
+  const _ReceiptIssueSummaryCard({
+    required this.summary,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  String _label(_ReceiptIssueFilter filter) {
+    return switch (filter) {
+      _ReceiptIssueFilter.all => 'Semua',
+      _ReceiptIssueFilter.withIssue => 'Ada Issue',
+      _ReceiptIssueFilter.rejected => 'Rejected',
+      _ReceiptIssueFilter.variance => 'Selisih',
+    };
+  }
+
+  IconData _icon(_ReceiptIssueFilter filter) {
+    return switch (filter) {
+      _ReceiptIssueFilter.all => Icons.list_alt_rounded,
+      _ReceiptIssueFilter.withIssue => Icons.rule_folder_outlined,
+      _ReceiptIssueFilter.rejected => Icons.report_problem_outlined,
+      _ReceiptIssueFilter.variance => Icons.compare_arrows_rounded,
+    };
+  }
+
+  Color _color(_ReceiptIssueFilter filter) {
+    if (filter == _ReceiptIssueFilter.all) return AppColors.primary;
+    final count = summary.countFor(filter);
+    if (count <= 0) return AppColors.slate;
+    return filter == _ReceiptIssueFilter.rejected
+        ? AppColors.danger
+        : AppColors.warning;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasIssue = summary.withIssue > 0;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: hasIssue
+                      ? AppColors.warning.withValues(alpha: 0.12)
+                      : AppColors.softGreen,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  hasIssue
+                      ? Icons.notification_important_outlined
+                      : Icons.check_circle_outline_rounded,
+                  color: hasIssue ? AppColors.warning : AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Kontrol Penerimaan',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasIssue
+                          ? '${summary.withIssue} receipt perlu dicek QC/selisih.'
+                          : 'Tidak ada issue qty pada data receipt aktif.',
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _ReceiptIssueFilter.values.map((filter) {
+              final active = selected == filter;
+              final color = _color(filter);
+              return ChoiceChip(
+                selected: active,
+                onSelected: (_) => onSelected(filter),
+                avatar: Icon(
+                  _icon(filter),
+                  size: 16,
+                  color: active ? AppColors.white : color,
+                ),
+                label: Text('${_label(filter)} ${summary.countFor(filter)}'),
+                labelStyle: TextStyle(
+                  color: active ? AppColors.white : color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+                selectedColor: color,
+                backgroundColor: color.withValues(alpha: 0.08),
+                side: BorderSide(color: color.withValues(alpha: 0.18)),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
     );
   }
 }

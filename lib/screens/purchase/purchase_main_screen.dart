@@ -79,9 +79,24 @@ class PurchaseMainScreen extends StatelessWidget {
           selectedIcon: Icon(Icons.assignment_turned_in_rounded),
           label: 'Request',
         ),
+        NavigationDestination(
+          icon: _todoIcon(Icons.fact_check_outlined, todoCount),
+          selectedIcon: _todoIcon(Icons.fact_check_rounded, todoCount),
+          label: 'Approval',
+        ),
       ],
     );
   }
+}
+
+Widget _todoIcon(IconData icon, int count) {
+  if (count <= 0) return Icon(icon);
+  return Badge.count(
+    count: count,
+    backgroundColor: Colors.redAccent,
+    textColor: Colors.white,
+    child: Icon(icon),
+  );
 }
 
 Widget? _buildPurchaseFab(BuildContext context, int currentIndex) {
