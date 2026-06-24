@@ -411,30 +411,25 @@ class _CreatePurchaseReceiptScreenState
         .toList();
   }
 
-  List<DropdownMenuItem<String>> _supplierItems() {
-    return _suppliers
-        .map(
-          (supplier) => DropdownMenuItem(
-            value: supplier.id,
-            child: Text(supplier.label, overflow: TextOverflow.ellipsis),
-          ),
-        )
-        .toList();
-  }
-
   List<ErpItemOption> _itemSearchOptions() {
     return _items
         .map((item) => ErpItemOption(id: item.id, label: item.label))
         .toList();
   }
 
-  List<DropdownMenuItem<String>> _warehouseItems() {
+  List<ErpItemOption> _supplierSearchOptions() {
+    return _suppliers
+        .map(
+          (supplier) => ErpItemOption(id: supplier.id, label: supplier.label),
+        )
+        .toList();
+  }
+
+  List<ErpItemOption> _warehouseSearchOptions() {
     return _warehouses
         .map(
-          (warehouse) => DropdownMenuItem(
-            value: warehouse.name,
-            child: Text(warehouse.name, overflow: TextOverflow.ellipsis),
-          ),
+          (warehouse) =>
+              ErpItemOption(id: warehouse.name, label: warehouse.name),
         )
         .toList();
   }
@@ -508,13 +503,16 @@ class _CreatePurchaseReceiptScreenState
                               value == null ? 'Series wajib dipilih' : null,
                         ),
                         const SizedBox(height: 12),
-                        _dropdownField(
+                        ErpItemAutocompleteField(
                           label: 'Supplier',
-                          value: _selectedSupplier,
-                          items: _supplierItems(),
-                          onChanged: (value) =>
+                          selectedId: _selectedSupplier,
+                          options: _supplierSearchOptions(),
+                          decoration: _decoration(
+                            'Supplier',
+                            prefixIcon: Icons.storefront_outlined,
+                          ),
+                          onSelected: (value) =>
                               setState(() => _selectedSupplier = value),
-                          icon: Icons.storefront_outlined,
                           validator: (value) =>
                               value == null ? 'Supplier wajib dipilih' : null,
                         ),
@@ -547,13 +545,16 @@ class _CreatePurchaseReceiptScreenState
                               value == null ? 'Item wajib dipilih' : null,
                         ),
                         const SizedBox(height: 12),
-                        _dropdownField(
+                        ErpItemAutocompleteField(
                           label: 'Accepted Warehouse',
-                          value: _selectedWarehouse,
-                          items: _warehouseItems(),
-                          onChanged: (value) =>
+                          selectedId: _selectedWarehouse,
+                          options: _warehouseSearchOptions(),
+                          decoration: _decoration(
+                            'Accepted Warehouse',
+                            prefixIcon: Icons.warehouse_outlined,
+                          ),
+                          onSelected: (value) =>
                               setState(() => _selectedWarehouse = value),
-                          icon: Icons.warehouse_outlined,
                           validator: (value) =>
                               value == null ? 'Warehouse wajib dipilih' : null,
                         ),
@@ -630,7 +631,7 @@ class _CreatePurchaseReceiptScreenState
                             index: index,
                             row: row,
                             itemItems: _itemSearchOptions(),
-                            warehouseItems: _warehouseItems(),
+                            warehouseItems: _warehouseSearchOptions(),
                             decoration: _decoration,
                             onChanged: () => setState(() {}),
                             onRemove: () => _removeItemRow(index),
@@ -760,7 +761,7 @@ class _AdditionalReceiptItemCard extends StatelessWidget {
   final int index;
   final _AdditionalReceiptItemRow row;
   final List<ErpItemOption> itemItems;
-  final List<DropdownMenuItem<String>> warehouseItems;
+  final List<ErpItemOption> warehouseItems;
   final InputDecoration Function(
     String label, {
     String? hintText,
@@ -823,12 +824,12 @@ class _AdditionalReceiptItemCard extends StatelessWidget {
             validator: (value) => value == null ? 'Item wajib dipilih' : null,
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: row.warehouse,
-            isExpanded: true,
+          ErpItemAutocompleteField(
+            label: 'Accepted Warehouse',
+            selectedId: row.warehouse,
             decoration: decoration('Accepted Warehouse'),
-            items: warehouseItems,
-            onChanged: (value) {
+            options: warehouseItems,
+            onSelected: (value) {
               row.warehouse = value;
               onChanged();
             },

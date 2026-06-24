@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../theme/app_colors.dart';
 import '../../../state/app_state.dart';
 import '../../../models/warehouse_info.dart';
+import '../../../widgets/erp/erp_item_autocomplete_field.dart';
 
 class CreateStockEntryScreen extends StatefulWidget {
   const CreateStockEntryScreen({super.key});
@@ -13,11 +14,13 @@ class CreateStockEntryScreen extends StatefulWidget {
 
 class _CreateStockEntryScreenState extends State<CreateStockEntryScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _itemCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
   final DateTime _postingDate = DateTime.now();
 
   List<WarehouseInfo> _warehouses = [];
+  List<ErpItemOption> _items = [];
+  String? _selectedItem;
+  String? _selectedWarehouse;
   bool _loading = true;
   bool _saving = false;
 
@@ -30,9 +33,28 @@ class _CreateStockEntryScreenState extends State<CreateStockEntryScreen> {
   Future<void> _load() async {
     final appState = context.read<AppState>();
     if (appState.warehouses.isEmpty) await appState.refreshWarehouses();
+    final rows = await appState.frappeService.fetchResource(
+      'Item',
+      fields: const ['name', 'item_name'],
+      orderBy: 'item_name asc',
+    );
     setState(() {
       _warehouses = appState.warehouses.toList()
         ..sort((a, b) => a.name.compareTo(b.name));
+      _items = rows
+          .map((row) {
+            final id = row['name']?.toString() ?? '';
+            if (id.isEmpty) return null;
+            return ErpItemOption(
+              id: id,
+              label: row['item_name']?.toString() ?? id,
+            );
+          })
+          .whereType<ErpItemOption>()
+          .toList();
+      _selectedWarehouse = _warehouses.isNotEmpty
+          ? _warehouses.first.name
+          : null;
       _loading = false;
     });
   }
@@ -43,11 +65,13 @@ class _CreateStockEntryScreenState extends State<CreateStockEntryScreen> {
     try {
       final appState = context.read<AppState>();
       final qty = double.parse(_qtyCtrl.text.trim());
-      final itemCode = _itemCtrl.text.trim();
-      final warehouse = _warehouses.isNotEmpty ? _warehouses.first.name : null;
 
       final items = [
-        {'item_code': itemCode, 'warehouse': warehouse, 'qty': qty},
+        {
+          'item_code': _selectedItem,
+          'warehouse': _selectedWarehouse,
+          'qty': qty,
+        },
       ];
 
       await appState.createStockEntry(
@@ -79,9 +103,18 @@ class _CreateStockEntryScreenState extends State<CreateStockEntryScreen> {
 
   @override
   void dispose() {
-    _itemCtrl.dispose();
     _qtyCtrl.dispose();
     super.dispose();
+  }
+
+  InputDecoration _decoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: AppColors.background,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    );
   }
 
   @override
@@ -114,12 +147,15 @@ class _CreateStockEntryScreenState extends State<CreateStockEntryScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextFormField(
-                      controller: _itemCtrl,
-                      decoration: const InputDecoration(labelText: 'Item Code'),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Item wajib diisi'
-                          : null,
+                    ErpItemAutocompleteField(
+                      label: 'Item',
+                      selectedId: _selectedItem,
+                      options: _items,
+                      decoration: _decoration('Item'),
+                      onSelected: (value) =>
+                          setState(() => _selectedItem = value),
+                      validator: (value) =>
+                          value == null ? 'Item wajib diisi' : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -127,7 +163,7 @@ class _CreateStockEntryScreenState extends State<CreateStockEntryScreen> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      decoration: const InputDecoration(labelText: 'Quantity'),
+                      decoration: _decoration('Quantity'),
                       validator: (v) {
                         final q = double.tryParse(v?.trim() ?? '');
                         if (q == null || q <= 0) return 'Qty harus > 0';
@@ -135,24 +171,22 @@ class _CreateStockEntryScreenState extends State<CreateStockEntryScreen> {
                       },
                     ),
                     const SizedBox(height: 12),
-                    InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Warehouse'),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String?>(
-                          value: _warehouses.isNotEmpty
-                              ? _warehouses.first.name
-                              : null,
-                          items: _warehouses
-                              .map(
-                                (w) => DropdownMenuItem(
-                                  value: w.name,
-                                  child: Text(w.displayName),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (_) {},
-                        ),
-                      ),
+                    ErpItemAutocompleteField(
+                      label: 'Warehouse',
+                      selectedId: _selectedWarehouse,
+                      options: _warehouses
+                          .map(
+                            (warehouse) => ErpItemOption(
+                              id: warehouse.name,
+                              label: warehouse.displayName,
+                            ),
+                          )
+                          .toList(),
+                      decoration: _decoration('Warehouse'),
+                      onSelected: (value) =>
+                          setState(() => _selectedWarehouse = value),
+                      validator: (value) =>
+                          value == null ? 'Warehouse wajib dipilih' : null,
                     ),
                     const SizedBox(height: 18),
                     ElevatedButton(

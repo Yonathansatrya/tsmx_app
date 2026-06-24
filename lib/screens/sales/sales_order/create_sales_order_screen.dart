@@ -10,6 +10,7 @@ import '../../../models/sales_workspace.dart';
 import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
+import '../../../widgets/erp/erp_item_autocomplete_field.dart';
 
 class CreateSalesOrderScreen extends StatefulWidget {
   final String? editOrderId;
@@ -2019,8 +2020,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
                     const SizedBox(height: 12),
 
-                    DropdownButtonFormField<String>(
-                      initialValue: costCenterOptions.isNotEmpty
+                    ErpItemAutocompleteField(
+                      label: 'Cost Center',
+                      selectedId: costCenterOptions.isNotEmpty
                           ? (costCenterOptions.any(
                                   (center) => center.name == _selectedCenter,
                                 )
@@ -2042,20 +2044,15 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                           vertical: 12,
                         ),
                       ),
-                      items: costCenterOptions
+                      options: costCenterOptions
                           .map(
-                            (center) => DropdownMenuItem(
-                              value: center.name,
-                              child: Text(center.name),
+                            (center) => ErpItemOption(
+                              id: center.name,
+                              label: center.name,
                             ),
                           )
                           .toList(),
-                      onChanged: costCenterOptions.isEmpty
-                          ? null
-                          : (v) => setState(() => _selectedCenter = v),
-                      hint: _isLoadingSelectors
-                          ? const Text('Loading cost centers...')
-                          : const Text('Pilih cost center'),
+                      onSelected: (v) => setState(() => _selectedCenter = v),
                     ),
 
                     const SizedBox(height: 12),
@@ -2081,8 +2078,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                         ),
                       )
                     else
-                      DropdownButtonFormField<String>(
-                        initialValue:
+                      ErpItemAutocompleteField(
+                        label: 'Sales Person',
+                        selectedId:
                             _salesPersonOptions.contains(_selectedSalesPerson)
                             ? _selectedSalesPerson
                             : null,
@@ -2097,25 +2095,20 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             ),
                           ),
                         ),
-                        items: _salesPersonOptions
+                        options: _salesPersonOptions
                             .map(
-                              (salesPerson) => DropdownMenuItem(
-                                value: salesPerson,
-                                child: Text(salesPerson),
+                              (salesPerson) => ErpItemOption(
+                                id: salesPerson,
+                                label: salesPerson,
                               ),
                             )
                             .toList(),
-                        onChanged: _salesPersonOptions.isEmpty
-                            ? null
-                            : (value) =>
-                                  setState(() => _selectedSalesPerson = value),
+                        onSelected: (value) =>
+                            setState(() => _selectedSalesPerson = value),
                         validator: (value) =>
                             value == null || value.trim().isEmpty
                             ? 'Sales Person wajib dipilih'
                             : null,
-                        hint: _isLoadingSelectors
-                            ? const Text('Loading sales persons...')
-                            : const Text('Pilih sales person'),
                       ),
 
                     const SizedBox(height: 12),
@@ -2298,14 +2291,15 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                     const SizedBox(height: 12),
 
                     if (warehouseOptions.isNotEmpty)
-                      DropdownButtonFormField<String>(
+                      ErpItemAutocompleteField(
                         key: ValueKey('warehouse:${_selectedWarehouse ?? ''}'),
-                        initialValue:
+                        label: 'Pilih Warehouse',
+                        selectedId:
                             warehouseOptions.any(
                               (w) => w.name == _selectedWarehouse,
                             )
                             ? _selectedWarehouse
-                            : '',
+                            : null,
                         decoration: InputDecoration(
                           labelText: 'Pilih Warehouse',
                           filled: true,
@@ -2321,24 +2315,14 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             vertical: 12,
                           ),
                         ),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: '',
-                            child: Text('- None -'),
-                          ),
-                          ...warehouseOptions.map(
-                            (w) => DropdownMenuItem<String>(
-                              value: w.name,
-                              child: Text(
-                                w.name,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        ],
-                        onChanged: (v) {
+                        options: warehouseOptions
+                            .map(
+                              (w) => ErpItemOption(id: w.name, label: w.name),
+                            )
+                            .toList(),
+                        onSelected: (v) {
                           setState(() {
-                            _selectedWarehouse = v == '' ? null : v;
+                            _selectedWarehouse = v;
                             final nextCostCenters = _costCentersForWarehouse(
                               warehouseOptions,
                             );

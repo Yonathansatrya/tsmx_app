@@ -1023,8 +1023,9 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                     ),
                     const SizedBox(height: 12),
                     if (_warehouseOptions.isNotEmpty)
-                      DropdownButtonFormField<String>(
-                        initialValue:
+                      ErpItemAutocompleteField(
+                        label: 'Pilih Warehouse',
+                        selectedId:
                             _warehouseOptions.any(
                               (w) => w.name == _selectedWarehouse,
                             )
@@ -1045,18 +1046,15 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                             vertical: 12,
                           ),
                         ),
-                        items: _warehouseOptions
+                        options: _warehouseOptions
                             .map(
-                              (warehouse) => DropdownMenuItem(
-                                value: warehouse.name,
-                                child: Text(
-                                  warehouse.name,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                              (warehouse) => ErpItemOption(
+                                id: warehouse.name,
+                                label: warehouse.name,
                               ),
                             )
                             .toList(),
-                        onChanged: (value) => setState(() {
+                        onSelected: (value) => setState(() {
                           _selectedWarehouse = value;
                         }),
                       )
@@ -1224,22 +1222,17 @@ class _AdditionalPurchaseItemCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: row.warehouse ?? defaultWarehouse,
-            isExpanded: true,
+          ErpItemAutocompleteField(
+            label: 'Warehouse',
+            selectedId: row.warehouse ?? defaultWarehouse,
             decoration: _decoration('Warehouse'),
-            items: warehouseOptions
+            options: warehouseOptions
                 .map(
-                  (warehouse) => DropdownMenuItem(
-                    value: warehouse.name,
-                    child: Text(
-                      warehouse.name,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+                  (warehouse) =>
+                      ErpItemOption(id: warehouse.name, label: warehouse.name),
                 )
                 .toList(),
-            onChanged: (value) {
+            onSelected: (value) {
               row.warehouse = value;
               onChanged();
             },

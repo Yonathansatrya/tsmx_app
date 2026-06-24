@@ -344,23 +344,12 @@ class _CreatePurchaseInvoiceScreenState
           ),
           if (_updateStock) ...[
             const SizedBox(height: 8),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedWarehouse,
+            ErpItemAutocompleteField(
+              label: 'Warehouse',
+              selectedId: _selectedWarehouse,
               decoration: _decoration('Warehouse'),
-              isExpanded: true,
-              items: _warehouses
-                  .map(
-                    (warehouse) => DropdownMenuItem(
-                      value: warehouse.name,
-                      child: Text(
-                        warehouse.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) => setState(() => _selectedWarehouse = value),
+              options: _warehouseSearchOptions(),
+              onSelected: (value) => setState(() => _selectedWarehouse = value),
               validator: (value) => _updateStock && value == null
                   ? 'Warehouse wajib dipilih'
                   : null,
@@ -374,6 +363,23 @@ class _CreatePurchaseInvoiceScreenState
   List<ErpItemOption> _itemSearchOptions() {
     return _items
         .map((item) => ErpItemOption(id: item.id, label: item.label))
+        .toList();
+  }
+
+  List<ErpItemOption> _supplierSearchOptions() {
+    return _suppliers
+        .map(
+          (supplier) => ErpItemOption(id: supplier.id, label: supplier.label),
+        )
+        .toList();
+  }
+
+  List<ErpItemOption> _warehouseSearchOptions() {
+    return _warehouses
+        .map(
+          (warehouse) =>
+              ErpItemOption(id: warehouse.name, label: warehouse.name),
+        )
         .toList();
   }
 
@@ -482,23 +488,12 @@ class _CreatePurchaseInvoiceScreenState
                               value == null ? 'Series wajib dipilih' : null,
                         ),
                         const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedSupplier,
+                        ErpItemAutocompleteField(
+                          label: 'Supplier',
+                          selectedId: _selectedSupplier,
                           decoration: _decoration('Supplier'),
-                          isExpanded: true,
-                          items: _suppliers
-                              .map(
-                                (option) => DropdownMenuItem(
-                                  value: option.id,
-                                  child: Text(
-                                    option.label,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) =>
+                          options: _supplierSearchOptions(),
+                          onSelected: (value) =>
                               setState(() => _selectedSupplier = value),
                           validator: (value) =>
                               value == null ? 'Supplier wajib dipilih' : null,
@@ -614,17 +609,7 @@ class _CreatePurchaseInvoiceScreenState
                             index: index,
                             row: row,
                             itemItems: _itemSearchOptions(),
-                            warehouseItems: _warehouses
-                                .map(
-                                  (warehouse) => DropdownMenuItem(
-                                    value: warehouse.name,
-                                    child: Text(
-                                      warehouse.name,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                )
-                                .toList(),
+                            warehouseItems: _warehouseSearchOptions(),
                             updateStock: _updateStock,
                             defaultWarehouse: _selectedWarehouse,
                             decoration: _decoration,
@@ -715,7 +700,7 @@ class _AdditionalInvoiceItemCard extends StatelessWidget {
   final int index;
   final _AdditionalInvoiceItemRow row;
   final List<ErpItemOption> itemItems;
-  final List<DropdownMenuItem<String>> warehouseItems;
+  final List<ErpItemOption> warehouseItems;
   final bool updateStock;
   final String? defaultWarehouse;
   final InputDecoration Function(String label) decoration;
@@ -811,12 +796,12 @@ class _AdditionalInvoiceItemCard extends StatelessWidget {
           ),
           if (updateStock) ...[
             const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: row.warehouse ?? defaultWarehouse,
-              isExpanded: true,
+            ErpItemAutocompleteField(
+              label: 'Warehouse',
+              selectedId: row.warehouse ?? defaultWarehouse,
               decoration: decoration('Warehouse'),
-              items: warehouseItems,
-              onChanged: (value) {
+              options: warehouseItems,
+              onSelected: (value) {
                 row.warehouse = value;
                 onChanged();
               },

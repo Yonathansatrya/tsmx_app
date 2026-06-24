@@ -340,30 +340,23 @@ class _CreateMaterialRequestScreenState
     );
   }
 
-  List<DropdownMenuItem<String>> _warehouseItems() {
-    return _warehouses
-        .map(
-          (warehouse) => DropdownMenuItem(
-            value: warehouse.name,
-            child: Text(warehouse.name, overflow: TextOverflow.ellipsis),
-          ),
-        )
-        .toList();
-  }
-
   List<ErpItemOption> _itemSearchOptions() {
     return _items
         .map((item) => ErpItemOption(id: item.id, label: item.label))
         .toList();
   }
 
-  List<DropdownMenuItem<String>> _companyItems() {
+  List<ErpItemOption> _companySearchOptions() {
     return _companies
+        .map((company) => ErpItemOption(id: company, label: company))
+        .toList();
+  }
+
+  List<ErpItemOption> _warehouseSearchOptions() {
+    return _warehouses
         .map(
-          (company) => DropdownMenuItem(
-            value: company,
-            child: Text(company, overflow: TextOverflow.ellipsis),
-          ),
+          (warehouse) =>
+              ErpItemOption(id: warehouse.name, label: warehouse.name),
         )
         .toList();
   }
@@ -475,13 +468,16 @@ class _CreateMaterialRequestScreenState
                           _pickDate,
                         ),
                         const SizedBox(height: 12),
-                        _dropdownField(
+                        ErpItemAutocompleteField(
                           label: 'Company',
-                          value: _selectedCompany,
-                          items: _companyItems(),
-                          onChanged: (value) =>
+                          selectedId: _selectedCompany,
+                          options: _companySearchOptions(),
+                          decoration: _decoration(
+                            'Company',
+                            prefixIcon: Icons.business_outlined,
+                          ),
+                          onSelected: (value) =>
                               setState(() => _selectedCompany = value),
-                          icon: Icons.business_outlined,
                           validator: (value) =>
                               value == null ? 'Company wajib dipilih' : null,
                         ),
@@ -524,13 +520,16 @@ class _CreateMaterialRequestScreenState
                           },
                         ),
                         const SizedBox(height: 12),
-                        _dropdownField(
+                        ErpItemAutocompleteField(
                           label: 'Target Warehouse',
-                          value: _selectedWarehouse,
-                          items: _warehouseItems(),
-                          onChanged: (value) =>
+                          selectedId: _selectedWarehouse,
+                          options: _warehouseSearchOptions(),
+                          decoration: _decoration(
+                            'Target Warehouse',
+                            prefixIcon: Icons.warehouse_outlined,
+                          ),
+                          onSelected: (value) =>
                               setState(() => _selectedWarehouse = value),
-                          icon: Icons.warehouse_outlined,
                         ),
                         const SizedBox(height: 12),
                         ..._additionalItems.asMap().entries.map((entry) {
@@ -540,7 +539,7 @@ class _CreateMaterialRequestScreenState
                             index: index,
                             row: row,
                             itemItems: _itemSearchOptions(),
-                            warehouseItems: _warehouseItems(),
+                            warehouseItems: _warehouseSearchOptions(),
                             defaultWarehouse: _selectedWarehouse,
                             decoration: _decoration,
                             onChanged: () => setState(() {}),
@@ -706,7 +705,7 @@ class _AdditionalItemCard extends StatelessWidget {
   final int index;
   final _AdditionalItemRow row;
   final List<ErpItemOption> itemItems;
-  final List<DropdownMenuItem<String>> warehouseItems;
+  final List<ErpItemOption> warehouseItems;
   final String? defaultWarehouse;
   final InputDecoration Function(
     String label, {
@@ -781,12 +780,12 @@ class _AdditionalItemCard extends StatelessWidget {
             },
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: row.warehouse ?? defaultWarehouse,
-            isExpanded: true,
+          ErpItemAutocompleteField(
+            label: 'Target Warehouse',
+            selectedId: row.warehouse ?? defaultWarehouse,
             decoration: decoration('Target Warehouse'),
-            items: warehouseItems,
-            onChanged: (value) {
+            options: warehouseItems,
+            onSelected: (value) {
               row.warehouse = value;
               onChanged();
             },
