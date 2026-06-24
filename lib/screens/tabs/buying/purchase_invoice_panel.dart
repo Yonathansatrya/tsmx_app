@@ -15,6 +15,8 @@ import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import 'buying_document_detail_sheet.dart';
 
+enum _InvoiceFocusFilter { all, outstanding, dueSoon, overdue }
+
 class PurchaseInvoicePanel extends StatefulWidget {
   const PurchaseInvoicePanel({super.key});
 
@@ -25,6 +27,7 @@ class PurchaseInvoicePanel extends StatefulWidget {
 class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
   String _search = '';
   InvoiceStatusKey? _statusFilter;
+  _InvoiceFocusFilter _focusFilter = _InvoiceFocusFilter.all;
   Timer? _searchDebounce;
 
   static final _chips = <ErpStatusChip<InvoiceStatusKey?>>[
@@ -95,8 +98,30 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
           d.id.toLowerCase().contains(q) ||
           d.supplier.toLowerCase().contains(q);
       final matchStatus = _statusFilter == null || d.statusKey == _statusFilter;
-      return matchSearch && matchStatus;
+      return matchSearch && matchStatus && _matchesFocusFilter(d);
     }).toList();
+  }
+
+  bool _matchesFocusFilter(PurchaseInvoice invoice) {
+    return switch (_focusFilter) {
+      _InvoiceFocusFilter.all => true,
+      _InvoiceFocusFilter.outstanding => invoice.isOutstanding,
+      _InvoiceFocusFilter.dueSoon => invoice.isDueSoon,
+      _InvoiceFocusFilter.overdue => invoice.isOverdue,
+    };
+  }
+
+  String _emptyMessage() {
+    return switch (_focusFilter) {
+      _InvoiceFocusFilter.all =>
+        'Gunakan tombol Buat Invoice untuk membuat invoice supplier.',
+      _InvoiceFocusFilter.outstanding =>
+        'Tidak ada invoice supplier outstanding pada filter ini.',
+      _InvoiceFocusFilter.dueSoon =>
+        'Tidak ada invoice supplier jatuh tempo dalam 7 hari.',
+      _InvoiceFocusFilter.overdue =>
+        'Tidak ada invoice supplier yang lewat tempo.',
+    };
   }
 
   Future<void> _openDetail(PurchaseInvoice doc) async {
@@ -320,7 +345,11 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
 
         const SizedBox(height: 12),
 
-        _InvoiceDashboardCard(invoices: filtered),
+        _InvoiceDashboardCard(
+          invoices: appState.purchaseInvoices,
+          selected: _focusFilter,
+          onSelected: (filter) => setState(() => _focusFilter = filter),
+        ),
 
         const SizedBox(height: 12),
 
@@ -368,10 +397,11 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
         const SizedBox(height: 12),
 
         if (filtered.isEmpty && !appState.isPurchaseInvoicesLoading)
-          const ErpEmptyState(
-            title: 'Belum ada Purchase Invoice',
-            message:
-                'Gunakan tombol Buat Invoice untuk membuat invoice supplier.',
+          ErpEmptyState(
+            title: _focusFilter == _InvoiceFocusFilter.all
+                ? 'Belum ada Purchase Invoice'
+                : 'Invoice tidak ditemukan',
+            message: _emptyMessage(),
           )
         else
           ...filtered.map(
@@ -415,8 +445,53 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
 
 class _InvoiceDashboardCard extends StatelessWidget {
   final List<PurchaseInvoice> invoices;
+  final _InvoiceFocusFilter selected;
+  final ValueChanged<_InvoiceFocusFilter> onSelected;
 
-  const _InvoiceDashboardCard({required this.invoices});
+  const _InvoiceDashboardCard({
+    required this.invoices,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  String _label(_InvoiceFocusFilter filter) {
+    return switch (filter) {
+      _InvoiceFocusFilter.all => 'Semua',
+      _InvoiceFocusFilter.outstanding => 'Outstanding',
+      _InvoiceFocusFilter.dueSoon => 'Due Soon',
+      _InvoiceFocusFilter.overdue => 'Overdue',
+    };
+  }
+
+  IconData _icon(_InvoiceFocusFilter filter) {
+    return switch (filter) {
+      _InvoiceFocusFilter.all => Icons.list_alt_rounded,
+      _InvoiceFocusFilter.outstanding => Icons.account_balance_wallet_outlined,
+      _InvoiceFocusFilter.dueSoon => Icons.event_available_outlined,
+      _InvoiceFocusFilter.overdue => Icons.error_outline_rounded,
+    };
+  }
+
+  Color _color(_InvoiceFocusFilter filter) {
+    return switch (filter) {
+      _InvoiceFocusFilter.all => AppColors.primary,
+      _InvoiceFocusFilter.outstanding => AppColors.primary,
+      _InvoiceFocusFilter.dueSoon => AppColors.warning,
+      _InvoiceFocusFilter.overdue => AppColors.danger,
+    };
+  }
+
+  int _countFor(_InvoiceFocusFilter filter) {
+    return switch (filter) {
+      _InvoiceFocusFilter.all => invoices.length,
+      _InvoiceFocusFilter.outstanding =>
+        invoices.where((invoice) => invoice.isOutstanding).length,
+      _InvoiceFocusFilter.dueSoon =>
+        invoices.where((invoice) => invoice.isDueSoon).length,
+      _InvoiceFocusFilter.overdue =>
+        invoices.where((invoice) => invoice.isOverdue).length,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -512,6 +587,33 @@ class _InvoiceDashboardCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _DueSoonStrip(count: dueSoonCount),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _InvoiceFocusFilter.values.map((filter) {
+              final active = selected == filter;
+              final color = _color(filter);
+              return ChoiceChip(
+                selected: active,
+                onSelected: (_) => onSelected(filter),
+                avatar: Icon(
+                  _icon(filter),
+                  size: 16,
+                  color: active ? AppColors.white : color,
+                ),
+                label: Text('${_label(filter)} ${_countFor(filter)}'),
+                labelStyle: TextStyle(
+                  color: active ? AppColors.white : color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+                selectedColor: color,
+                backgroundColor: color.withValues(alpha: 0.08),
+                side: BorderSide(color: color.withValues(alpha: 0.18)),
+              );
+            }).toList(),
+          ),
         ],
       ),
     );

@@ -43,6 +43,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   bool _loading = true;
   String? _error;
   String? _historyError;
+  String? _doctypeQuickFilter;
 
   @override
   void initState() {
@@ -119,10 +120,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   Widget build(BuildContext context) {
     final content = TabBarView(
       controller: _tabController,
-      children: [
-        _todoTab(),
-        if (widget.showHistoryTab) _historyTab(),
-      ],
+      children: [_todoTab(), if (widget.showHistoryTab) _historyTab()],
     );
     if (widget.embedded) {
       return ColoredBox(
@@ -178,24 +176,32 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   Widget _todoTab() {
     final query = _search.text.trim().toLowerCase();
     final rows = _rows.where((row) {
-      return query.isEmpty ||
+      final matchType =
+          _doctypeQuickFilter == null || row.doctype == _doctypeQuickFilter;
+      final matchSearch =
+          query.isEmpty ||
           row.name.toLowerCase().contains(query) ||
           row.doctype.toLowerCase().contains(query) ||
           row.party.toLowerCase().contains(query) ||
           row.partyName.toLowerCase().contains(query) ||
           row.workflowState.toLowerCase().contains(query);
+      return matchType && matchSearch;
     }).toList();
+    final summary = _ApprovalTodoSummary.from(_rows);
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
         children: [
-          _summaryCard(
-            icon: Icons.checklist_rounded,
-            title: '${_rows.length} Todo Approval',
-            message:
-                'Pilih dokumen untuk melihat detail sebelum memberi keputusan.',
+          _ApprovalTodoSummaryCard(
+            summary: summary,
+            selectedDoctype: _doctypeQuickFilter,
+            onSelected: (doctype) => setState(() {
+              _doctypeQuickFilter = _doctypeQuickFilter == doctype
+                  ? null
+                  : doctype;
+            }),
           ),
           const SizedBox(height: 14),
           TextField(
@@ -577,6 +583,154 @@ class _ApprovalHistoryGroup {
     if (latest.salesOrder.isNotEmpty) return latest.salesOrder;
     final parts = key.split('::');
     return parts.length == 2 ? parts.last : key;
+  }
+}
+
+class _ApprovalTodoSummary {
+  final Map<String, int> counts;
+
+  const _ApprovalTodoSummary(this.counts);
+
+  factory _ApprovalTodoSummary.from(List<ErpApprovalTodo> rows) {
+    final counts = <String, int>{};
+    for (final row in rows) {
+      counts[row.doctype] = (counts[row.doctype] ?? 0) + 1;
+    }
+    return _ApprovalTodoSummary(counts);
+  }
+
+  int get total => counts.values.fold<int>(0, (sum, count) => sum + count);
+
+  int countFor(String doctype) => counts[doctype] ?? 0;
+
+  List<String> get visibleDoctypes {
+    const preferred = [
+      'Purchase Order',
+      'Purchase Invoice',
+      'Material Request',
+      'Sales Order',
+    ];
+    final ordered = [
+      ...preferred.where(counts.containsKey),
+      ...counts.keys.where((doctype) => !preferred.contains(doctype)),
+    ];
+    return ordered;
+  }
+}
+
+class _ApprovalTodoSummaryCard extends StatelessWidget {
+  final _ApprovalTodoSummary summary;
+  final String? selectedDoctype;
+  final ValueChanged<String> onSelected;
+
+  const _ApprovalTodoSummaryCard({
+    required this.summary,
+    required this.selectedDoctype,
+    required this.onSelected,
+  });
+
+  IconData _icon(String doctype) => switch (doctype) {
+    'Purchase Order' => Icons.shopping_bag_rounded,
+    'Purchase Invoice' => Icons.receipt_long_rounded,
+    'Material Request' => Icons.assignment_turned_in_rounded,
+    'Sales Order' => Icons.point_of_sale_rounded,
+    _ => Icons.approval_outlined,
+  };
+
+  Color _color(String doctype) => switch (doctype) {
+    'Purchase Order' => AppColors.primary,
+    'Purchase Invoice' => AppColors.warning,
+    'Material Request' => AppColors.success,
+    'Sales Order' => AppColors.navy,
+    _ => AppColors.slate,
+  };
+
+  String _shortLabel(String doctype) => switch (doctype) {
+    'Purchase Order' => 'PO',
+    'Purchase Invoice' => 'PI',
+    'Material Request' => 'MR',
+    'Sales Order' => 'SO',
+    _ => doctype,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final doctypes = summary.visibleDoctypes;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: AppColors.softGreen,
+                foregroundColor: AppColors.primary,
+                child: const Icon(Icons.checklist_rounded),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${summary.total} Todo Approval',
+                      style: const TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Pilih dokumen untuk melihat detail sebelum memberi keputusan.',
+                      style: TextStyle(color: AppColors.slate, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (doctypes.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: doctypes.map((doctype) {
+                final active = selectedDoctype == doctype;
+                final color = _color(doctype);
+                return ChoiceChip(
+                  selected: active,
+                  onSelected: (_) => onSelected(doctype),
+                  avatar: Icon(
+                    _icon(doctype),
+                    size: 16,
+                    color: active ? AppColors.white : color,
+                  ),
+                  label: Text(
+                    '${_shortLabel(doctype)} ${summary.countFor(doctype)}',
+                  ),
+                  labelStyle: TextStyle(
+                    color: active ? AppColors.white : color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  selectedColor: color,
+                  backgroundColor: color.withValues(alpha: 0.08),
+                  side: BorderSide(color: color.withValues(alpha: 0.18)),
+                );
+              }).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
