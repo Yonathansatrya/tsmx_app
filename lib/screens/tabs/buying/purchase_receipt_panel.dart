@@ -29,6 +29,7 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
   String _search = '';
   DeliveryNoteStatusKey? _statusFilter;
   Timer? _searchDebounce;
+  int _attachmentRefreshKey = 0;
 
   static final _chips = <ErpStatusChip<DeliveryNoteStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
@@ -156,12 +157,17 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
         children: [
           _ReceiptVarianceCard(receipt: detail),
           const SizedBox(height: 10),
-          _ReceiptQcCard(receipt: detail),
+          _ReceiptQcCard(receipt: detail, onCreate: _openQcForm),
           const SizedBox(height: 12),
           erpActionButton(
             label: 'Upload Foto Penerimaan',
             icon: Icons.add_a_photo_outlined,
             onPressed: () => _pickAndUploadEvidence(detail.id),
+          ),
+          const SizedBox(height: 10),
+          _ReceiptAttachmentPreviewCard(
+            key: ValueKey('${detail.id}-$_attachmentRefreshKey'),
+            receiptId: detail.id,
           ),
           if (canSubmit) ...[
             const SizedBox(height: 10),
@@ -242,6 +248,7 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
           backgroundColor: AppColors.success,
         ),
       );
+      setState(() => _attachmentRefreshKey++);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -250,6 +257,31 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
           backgroundColor: AppColors.danger,
         ),
       );
+    }
+  }
+
+  Future<void> _openQcForm(PurchaseReceipt receipt) async {
+    if (receipt.items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Item receipt belum tersedia untuk dibuatkan QC.'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _CreateReceiptQcSheet(receipt: receipt),
+    );
+    if (created == true && mounted) {
+      await context.read<AppState>().refreshPurchaseReceipts();
     }
   }
 
@@ -446,8 +478,9 @@ class _ReceiptVarianceCard extends StatelessWidget {
 
 class _ReceiptQcCard extends StatelessWidget {
   final PurchaseReceipt receipt;
+  final ValueChanged<PurchaseReceipt> onCreate;
 
-  const _ReceiptQcCard({required this.receipt});
+  const _ReceiptQcCard({required this.receipt, required this.onCreate});
 
   @override
   Widget build(BuildContext context) {
@@ -462,21 +495,39 @@ class _ReceiptQcCard extends StatelessWidget {
           ? 'QC belum terhubung, penerimaan tetap bisa dipantau.'
           : '${qcItems.length} item memiliki Quality Inspection.',
       child: qcItems.isEmpty
-          ? const _ReceiptNote(
-              icon: Icons.info_outline_rounded,
-              message:
-                  'Jika Quality Inspection nanti diaktifkan, nomor QC akan tampil otomatis di sini.',
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _ReceiptNote(
+                  icon: Icons.info_outline_rounded,
+                  message:
+                      'Belum ada Quality Inspection terhubung untuk receipt ini.',
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () => onCreate(receipt),
+                  icon: const Icon(Icons.fact_check_outlined),
+                  label: const Text('Buat QC Penerimaan'),
+                ),
+              ],
             )
           : Column(
-              children: qcItems
-                  .map(
-                    (item) => _ReceiptReferenceRow(
-                      title: item.qualityInspection,
-                      subtitle: item.itemName,
-                      icon: Icons.verified_outlined,
-                    ),
-                  )
-                  .toList(),
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ...qcItems.map(
+                  (item) => _ReceiptReferenceRow(
+                    title: item.qualityInspection,
+                    subtitle: item.itemName,
+                    icon: Icons.verified_outlined,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () => onCreate(receipt),
+                  icon: const Icon(Icons.add_task_outlined),
+                  label: const Text('Tambah QC'),
+                ),
+              ],
             ),
     );
   }
@@ -547,6 +598,332 @@ class _ReceiptInfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           child,
+        ],
+      ),
+    );
+  }
+}
+
+class _CreateReceiptQcSheet extends StatefulWidget {
+  final PurchaseReceipt receipt;
+
+  const _CreateReceiptQcSheet({required this.receipt});
+
+  @override
+  State<_CreateReceiptQcSheet> createState() => _CreateReceiptQcSheetState();
+}
+
+class _CreateReceiptQcSheetState extends State<_CreateReceiptQcSheet> {
+  final _remarksCtrl = TextEditingController();
+  final _inspectedByCtrl = TextEditingController();
+  late PurchaseReceiptItem _selectedItem;
+  String _status = 'Accepted';
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedItem = widget.receipt.items.first;
+  }
+
+  @override
+  void dispose() {
+    _remarksCtrl.dispose();
+    _inspectedByCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      final record = await context
+          .read<AppState>()
+          .createIncomingQualityInspection(
+            purchaseReceiptId: widget.receipt.id,
+            itemCode: _selectedItem.itemCode,
+            status: _status,
+            inspectedBy: _inspectedByCtrl.text,
+            remarks: _remarksCtrl.text,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('QC ${record.name} berhasil dibuat.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_friendlyQcError(error)),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  String _friendlyQcError(Object error) {
+    final message = error.toString();
+    if (message.contains('Quality Inspection Template')) {
+      return 'QC gagal. Item ini perlu Quality Inspection Template di ERPNext.';
+    }
+    if (message.contains('permission') || message.contains('Permission')) {
+      return 'QC gagal. Cek permission Quality Inspection di ERPNext.';
+    }
+    return 'QC gagal dibuat. $message';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 18,
+          right: 18,
+          top: 18,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 18,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Buat QC Penerimaan',
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<PurchaseReceiptItem>(
+                initialValue: _selectedItem,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Item',
+                  prefixIcon: Icon(Icons.inventory_2_outlined),
+                ),
+                items: widget.receipt.items
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item,
+                        child: Text(
+                          '${item.itemName} (${item.itemCode})',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (item) {
+                  if (item != null) setState(() => _selectedItem = item);
+                },
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _status,
+                decoration: const InputDecoration(
+                  labelText: 'Status QC',
+                  prefixIcon: Icon(Icons.verified_outlined),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Accepted', child: Text('Accepted')),
+                  DropdownMenuItem(value: 'Rejected', child: Text('Rejected')),
+                ],
+                onChanged: (value) {
+                  if (value != null) setState(() => _status = value);
+                },
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _inspectedByCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Inspected By',
+                  hintText: 'Opsional',
+                  prefixIcon: Icon(Icons.person_outline_rounded),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _remarksCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Catatan QC',
+                  hintText: 'Opsional',
+                  prefixIcon: Icon(Icons.notes_outlined),
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: _saving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                label: Text(_saving ? 'Menyimpan...' : 'Simpan QC'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ReceiptAttachmentPreviewCard extends StatelessWidget {
+  final String receiptId;
+
+  const _ReceiptAttachmentPreviewCard({super.key, required this.receiptId});
+
+  @override
+  Widget build(BuildContext context) {
+    final appState = context.read<AppState>();
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: appState.fetchDocumentAttachments(
+        doctype: 'Purchase Receipt',
+        documentName: receiptId,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LinearProgressIndicator();
+        }
+        if (snapshot.hasError) {
+          return _ReceiptInfoCard(
+            icon: Icons.attach_file_outlined,
+            title: 'Foto Penerimaan',
+            subtitle: 'Preview attachment belum bisa dibaca.',
+            child: _ReceiptNote(
+              icon: Icons.info_outline_rounded,
+              message: 'Cek permission File di ERPNext jika foto tidak muncul.',
+            ),
+          );
+        }
+
+        final files = snapshot.data ?? const <Map<String, dynamic>>[];
+        return _ReceiptInfoCard(
+          icon: Icons.photo_library_outlined,
+          title: 'Foto Penerimaan',
+          subtitle: files.isEmpty
+              ? 'Belum ada attachment pada receipt ini.'
+              : '${files.length} attachment terpasang.',
+          child: files.isEmpty
+              ? const _ReceiptNote(
+                  icon: Icons.info_outline_rounded,
+                  message: 'Upload foto penerimaan untuk dokumentasi receipt.',
+                )
+              : Column(
+                  children: files
+                      .map(
+                        (file) => _ReceiptAttachmentTile(
+                          file: file,
+                          baseUrl: appState.frappeService.baseUrl,
+                        ),
+                      )
+                      .toList(),
+                ),
+        );
+      },
+    );
+  }
+}
+
+class _ReceiptAttachmentTile extends StatelessWidget {
+  final Map<String, dynamic> file;
+  final String baseUrl;
+
+  const _ReceiptAttachmentTile({required this.file, required this.baseUrl});
+
+  bool get _isImage {
+    final name = (file['file_name'] ?? file['file_url'] ?? '')
+        .toString()
+        .toLowerCase();
+    return name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png') ||
+        name.endsWith('.webp');
+  }
+
+  String get _fileName =>
+      file['file_name']?.toString() ?? file['name']?.toString() ?? 'Attachment';
+
+  String get _url {
+    final raw = file['file_url']?.toString() ?? '';
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('/')) return '$baseUrl$raw';
+    return raw.isEmpty ? '' : '$baseUrl/$raw';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final url = _url;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: _isImage && url.isNotEmpty
+                  ? Image.network(
+                      url,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const Icon(
+                        Icons.broken_image_outlined,
+                        color: AppColors.slate,
+                      ),
+                    )
+                  : const ColoredBox(
+                      color: AppColors.white,
+                      child: Icon(
+                        Icons.insert_drive_file_outlined,
+                        color: AppColors.slate,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  file['creation']?.toString() ?? url,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

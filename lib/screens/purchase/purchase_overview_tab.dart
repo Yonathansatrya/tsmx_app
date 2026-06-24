@@ -7,6 +7,7 @@ import '../../theme/app_colors.dart';
 import '../../utils/erp_format.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_status_badge.dart';
+import '../todo/todo_list.dart';
 import 'purchase_order/create_purchase_order_screen.dart';
 
 class PurchaseOverviewTab extends StatelessWidget {
@@ -82,42 +83,71 @@ class PurchaseOverviewTab extends StatelessWidget {
               ),
             ),
           ),
+
           _QuickActionCard(
             title: 'Terima Barang',
             subtitle: 'Catat penerimaan, foto bukti, QC, dan selisih qty',
             icon: Icons.move_to_inbox_rounded,
             onTap: () => onMenuSelected(2),
           ),
+
           _QuickActionCard(
             title: 'Invoice Supplier',
             subtitle: 'Pantau invoice, hutang, jatuh tempo, dan approval',
             icon: Icons.receipt_long_rounded,
             onTap: () => onMenuSelected(3),
           ),
+
           _QuickActionCard(
             title: 'Request Barang',
             subtitle: 'Ajukan kebutuhan barang dan rencana pembelian',
             icon: Icons.assignment_outlined,
             onTap: () => onMenuSelected(4),
           ),
+
+          _QuickActionCard(
+            title: 'Todo Approval Pembelian',
+            subtitle: state.purchaseApprovalTodoCount > 0
+                ? '${state.purchaseApprovalTodoCount} item menunggu approval'
+                : 'Lihat todo approval pembelian',
+            icon: Icons.task_alt_rounded,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const SalesOrderApprovalScreen(
+                  title: 'Todo Approval Pembelian',
+                  doctypeFilter: AppState.purchaseApprovalDoctypes,
+                  showHistoryTab: false,
+                ),
+              ),
+            ),
+          ),
+
           const SizedBox(height: 18),
+
           const _SectionHeader(
             title: 'Outstanding Purchase Order',
             subtitle: 'PO aktif yang perlu dipantau penerimaan atau penagihan',
             icon: Icons.pending_actions_rounded,
           ),
+
           const SizedBox(height: 10),
+
           _OutstandingPoSection(
             orders: state.purchaseOrders,
             onViewAll: () => onMenuSelected(1),
           ),
+
           const SizedBox(height: 18),
+
           const _SectionHeader(
             title: 'Purchase Order Terbaru',
             subtitle: 'Dokumen terakhir yang perlu dipantau',
             icon: Icons.history_rounded,
           ),
+
           const SizedBox(height: 10),
+
           if (state.purchaseOrders.isEmpty)
             const ErpEmptyState(
               title: 'Belum ada Purchase Order',
@@ -183,10 +213,7 @@ class _OutstandingPoSection extends StatelessWidget {
   final List<PurchaseOrder> orders;
   final VoidCallback onViewAll;
 
-  const _OutstandingPoSection({
-    required this.orders,
-    required this.onViewAll,
-  });
+  const _OutstandingPoSection({required this.orders, required this.onViewAll});
 
   bool _isOutstanding(PurchaseOrder order) =>
       order.statusKey != PurchaseOrderStatusKey.completed &&

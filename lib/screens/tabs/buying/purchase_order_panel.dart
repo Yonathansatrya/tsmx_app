@@ -1143,6 +1143,15 @@ class _CheapestSupplierCard extends StatelessWidget {
                     fontWeight: FontWeight.w900,
                   ),
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  option.sourceLabel,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1220,9 +1229,24 @@ class _SupplierPriceOptionCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                option.source,
-                style: const TextStyle(color: AppColors.slate, fontSize: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: option.source == 'Item Price'
+                      ? AppColors.softGreen
+                      : AppColors.warning.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  option.sourceLabel,
+                  style: TextStyle(
+                    color: option.source == 'Item Price'
+                        ? AppColors.primary
+                        : AppColors.warning,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
               Text(
                 'Rp ${formatErpCurrency(option.rate)}',
@@ -1235,11 +1259,7 @@ class _SupplierPriceOptionCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            [
-              if (option.priceList.isNotEmpty) option.priceList,
-              if (option.reference.isNotEmpty) option.reference,
-              if (option.date.isNotEmpty) option.date,
-            ].join(' | '),
+            option.sourceDescription,
             style: const TextStyle(color: AppColors.slate, fontSize: 11),
           ),
         ],

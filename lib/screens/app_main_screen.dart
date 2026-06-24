@@ -53,10 +53,7 @@ class _AppMainScreenState extends State<AppMainScreen> {
       selectedSegment: _salesSegment,
       onSegmentChanged: (segment) => setState(() => _salesSegment = segment),
     ),
-    const SalesOrderApprovalScreen(
-      embedded: true,
-      title: 'Approval Dokumen',
-    ),
+    const SalesOrderApprovalScreen(embedded: true, title: 'Approval Dokumen'),
     BuyingTab(
       selectedSegment: _buyingSegment,
       onSegmentChanged: (segment) => setState(() => _buyingSegment = segment),
@@ -105,6 +102,9 @@ class _AppMainScreenState extends State<AppMainScreen> {
     }
     if (appState.userRole == 'Purchase') {
       return const PurchaseMainScreen();
+    }
+    if (appState.userRole == 'Sales') {
+      return const SalesMainScreen();
     }
 
     return Scaffold(

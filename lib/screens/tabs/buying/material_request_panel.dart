@@ -14,6 +14,7 @@ import '../../../widgets/erp/erp_status_badge.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../purchase/material_request/create_material_request_screen.dart';
+import '../../purchase/purchase_order/create_purchase_order_screen.dart';
 import 'buying_document_detail_sheet.dart';
 
 class MaterialRequestPanel extends StatefulWidget {
@@ -92,23 +93,24 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
   }
 
   List<InventoryItem> _planningItems(AppState appState) {
-    final rows = appState.inventory
-        .where(
-          (item) =>
-              item.quantity <= 0 ||
-              (item.minStockThreshold > 0 &&
-                  item.quantity <= item.minStockThreshold),
-        )
-        .toList()
-      ..sort((a, b) {
-        final aScore = a.minStockThreshold > 0
-            ? a.quantity / a.minStockThreshold
-            : a.quantity;
-        final bScore = b.minStockThreshold > 0
-            ? b.quantity / b.minStockThreshold
-            : b.quantity;
-        return aScore.compareTo(bScore);
-      });
+    final rows =
+        appState.inventory
+            .where(
+              (item) =>
+                  item.quantity <= 0 ||
+                  (item.minStockThreshold > 0 &&
+                      item.quantity <= item.minStockThreshold),
+            )
+            .toList()
+          ..sort((a, b) {
+            final aScore = a.minStockThreshold > 0
+                ? a.quantity / a.minStockThreshold
+                : a.quantity;
+            final bScore = b.minStockThreshold > 0
+                ? b.quantity / b.minStockThreshold
+                : b.quantity;
+            return aScore.compareTo(bScore);
+          });
     return rows.take(5).toList();
   }
 
@@ -120,6 +122,55 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
     );
     if (mounted) {
       await context.read<AppState>().refreshMaterialRequests();
+    }
+  }
+
+  int _recommendedQty(InventoryItem item) {
+    if (item.minStockThreshold <= 0) {
+      return item.quantity <= 0 ? 1 : item.quantity;
+    }
+    final deficit = item.minStockThreshold - item.quantity;
+    return deficit <= 0 ? 1 : deficit;
+  }
+
+  Future<void> _createDraftMrFor(InventoryItem item) async {
+    final qty = _recommendedQty(item).toDouble();
+    final appState = context.read<AppState>();
+    try {
+      await appState.createMaterialRequest(
+        materialRequestType: 'Purchase',
+        itemCode: item.sku,
+        qty: qty,
+        transactionDate: DateTime.now(),
+        scheduleDate: DateTime.now(),
+        warehouse: item.warehouseId,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Draft Material Request untuk ${item.name} dibuat.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal membuat draft MR. $error'),
+          backgroundColor: AppColors.danger,
+        ),
+      );
+    }
+  }
+
+  Future<void> _openDraftPoFor(InventoryItem item) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CreatePurchaseOrderScreen(initialItem: item),
+      ),
+    );
+    if (mounted) {
+      await context.read<AppState>().refreshPurchaseOrders();
     }
   }
 
@@ -344,6 +395,8 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
         _PlanningCard(
           items: planningItems,
           onPick: (item) => _openCreate(item: item),
+          onCreateMaterialRequest: _createDraftMrFor,
+          onCreatePurchaseOrder: _openDraftPoFor,
         ),
 
         const SizedBox(height: 12),
@@ -734,8 +787,23 @@ class _MaterialRequestApprovalInfoCard extends StatelessWidget {
 class _PlanningCard extends StatelessWidget {
   final List<InventoryItem> items;
   final ValueChanged<InventoryItem> onPick;
+  final ValueChanged<InventoryItem> onCreateMaterialRequest;
+  final ValueChanged<InventoryItem> onCreatePurchaseOrder;
 
-  const _PlanningCard({required this.items, required this.onPick});
+  const _PlanningCard({
+    required this.items,
+    required this.onPick,
+    required this.onCreateMaterialRequest,
+    required this.onCreatePurchaseOrder,
+  });
+
+  int _recommendedQty(InventoryItem item) {
+    if (item.minStockThreshold <= 0) {
+      return item.quantity <= 0 ? 1 : item.quantity;
+    }
+    final deficit = item.minStockThreshold - item.quantity;
+    return deficit <= 0 ? 1 : deficit;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -812,23 +880,94 @@ class _PlanningCard extends StatelessWidget {
           if (items.isNotEmpty) ...[
             const SizedBox(height: 10),
             ...items.map(
-              (item) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(
-                  item.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+              (item) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                subtitle: Text(
-                  '${item.sku} | Stok ${item.quantity}'
-                  '${item.minStockThreshold > 0 ? ' / Reorder ${item.minStockThreshold}' : ''}',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.navy,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${item.sku} | Stok ${item.quantity}'
+                                '${item.minStockThreshold > 0 ? ' / Reorder ${item.minStockThreshold}' : ''}',
+                                style: const TextStyle(
+                                  color: AppColors.slate,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            'Saran ${_recommendedQty(item)}',
+                            style: const TextStyle(
+                              color: AppColors.warning,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => onPick(item),
+                            icon: const Icon(Icons.edit_note_rounded, size: 18),
+                            label: const Text('Form MR'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () => onCreateMaterialRequest(item),
+                            icon: const Icon(Icons.assignment_add, size: 18),
+                            label: const Text('Draft MR'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () => onCreatePurchaseOrder(item),
+                            icon: const Icon(Icons.add_shopping_cart, size: 18),
+                            label: const Text('Draft PO'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                trailing: const Icon(
-                  Icons.add_circle_outline_rounded,
-                  color: AppColors.primary,
-                ),
-                onTap: () => onPick(item),
               ),
             ),
           ],

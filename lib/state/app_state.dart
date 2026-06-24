@@ -4197,6 +4197,36 @@ class AppState with ChangeNotifier {
     return rows.map(QualityInspectionRecord.fromJson).toList();
   }
 
+  Future<QualityInspectionRecord> createIncomingQualityInspection({
+    required String purchaseReceiptId,
+    required String itemCode,
+    required String status,
+    String remarks = '',
+    String? inspectedBy,
+    DateTime? reportDate,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final payload = <String, dynamic>{
+      'inspection_type': 'Incoming',
+      'reference_type': 'Purchase Receipt',
+      'reference_name': purchaseReceiptId,
+      'item_code': itemCode,
+      'status': status,
+      'report_date': DateRangePresets.toFrappeDate(
+        reportDate ?? DateTime.now(),
+      ),
+      if (inspectedBy?.trim().isNotEmpty == true)
+        'inspected_by': inspectedBy!.trim(),
+      if (remarks.trim().isNotEmpty) 'remarks': remarks.trim(),
+    };
+
+    final created = await _frappeService.createDocument(
+      'Quality Inspection',
+      payload,
+    );
+    return QualityInspectionRecord.fromJson(created);
+  }
+
   Future<List<QualityInspectionRecord>> fetchQualityInspections({
     int periodDays = 30,
   }) async {

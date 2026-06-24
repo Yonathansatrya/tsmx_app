@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../../models/inventory_item.dart';
 import '../../../models/purchase_order.dart';
 import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
@@ -9,8 +10,13 @@ import '../../../widgets/erp/erp_item_autocomplete_field.dart';
 
 class CreatePurchaseOrderScreen extends StatefulWidget {
   final String? editOrderId;
+  final InventoryItem? initialItem;
 
-  const CreatePurchaseOrderScreen({super.key, this.editOrderId});
+  const CreatePurchaseOrderScreen({
+    super.key,
+    this.editOrderId,
+    this.initialItem,
+  });
 
   bool get isEditMode => editOrderId != null;
 
@@ -188,6 +194,18 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         _itemOptions = items;
         _seriesOptions = series;
         _selectedSeries = series.isNotEmpty ? series.first : null;
+        if (!widget.isEditMode && widget.initialItem != null) {
+          final item = widget.initialItem!;
+          _selectedItemCode = item.sku;
+          _selectedWarehouse = item.warehouseId.trim().isNotEmpty
+              ? item.warehouseId
+              : _selectedWarehouse;
+          _qtyCtrl.text = _recommendedPurchaseQty(item).toString();
+          _initialItemText = item.name.trim().isNotEmpty
+              ? '${item.name} (${item.sku})'
+              : item.sku;
+          _itemTextController?.text = _initialItemText!;
+        }
       });
       if (widget.isEditMode) {
         final editingOrder = await appState.loadPurchaseOrderDetail(
@@ -203,6 +221,14 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         });
       }
     }
+  }
+
+  int _recommendedPurchaseQty(InventoryItem item) {
+    if (item.minStockThreshold <= 0) {
+      return item.quantity <= 0 ? 1 : item.quantity;
+    }
+    final deficit = item.minStockThreshold - item.quantity;
+    return deficit <= 0 ? 1 : deficit;
   }
 
   void _applyEditingOrder(PurchaseOrder order) {

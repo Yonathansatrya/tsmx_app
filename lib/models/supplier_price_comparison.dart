@@ -45,6 +45,35 @@ class SupplierPriceOption {
     return priceList.trim().isNotEmpty ? priceList : 'Unknown Supplier';
   }
 
+  String get sourceLabel {
+    if (source == 'Item Price') return 'Master Item Price';
+    if (source == 'Last PO') return 'Histori Purchase Order';
+    return source;
+  }
+
+  String get sourceDescription {
+    if (source == 'Item Price') {
+      final parts = <String>[
+        'Harga buying aktif',
+        if (priceList.trim().isNotEmpty) priceList,
+        if (date.trim().isNotEmpty) 'valid $date',
+      ];
+      return parts.join(' | ');
+    }
+    if (source == 'Last PO') {
+      final parts = <String>[
+        'Harga transaksi PO submitted',
+        if (reference.trim().isNotEmpty) reference,
+        if (date.trim().isNotEmpty) date,
+      ];
+      return parts.join(' | ');
+    }
+    return [
+      if (reference.trim().isNotEmpty) reference,
+      if (date.trim().isNotEmpty) date,
+    ].join(' | ');
+  }
+
   factory SupplierPriceOption.fromItemPrice(Map<String, dynamic> json) {
     return SupplierPriceOption(
       supplier: json['supplier']?.toString() ?? '',
