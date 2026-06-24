@@ -17,6 +17,15 @@ import '../../purchase/material_request/create_material_request_screen.dart';
 import '../../purchase/purchase_order/create_purchase_order_screen.dart';
 import 'buying_document_detail_sheet.dart';
 
+enum _MaterialRequestFocusFilter {
+  all,
+  purchase,
+  transfer,
+  active,
+  draft,
+  ordered,
+}
+
 class MaterialRequestPanel extends StatefulWidget {
   const MaterialRequestPanel({super.key});
 
@@ -27,6 +36,7 @@ class MaterialRequestPanel extends StatefulWidget {
 class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
   String _search = '';
   String? _statusFilter;
+  _MaterialRequestFocusFilter _focusFilter = _MaterialRequestFocusFilter.all;
   Timer? _searchDebounce;
 
   static const _chips = <ErpStatusChip<String?>>[
@@ -88,8 +98,42 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
       final matchStatus =
           _statusFilter == null ||
           doc.statusText.toLowerCase() == _statusFilter!.toLowerCase();
-      return matchSearch && matchStatus;
+      return matchSearch && matchStatus && _matchesFocusFilter(doc);
     }).toList();
+  }
+
+  bool _matchesFocusFilter(MaterialRequest doc) {
+    final type = doc.type.toLowerCase();
+    final status = doc.statusText.toLowerCase();
+    return switch (_focusFilter) {
+      _MaterialRequestFocusFilter.all => true,
+      _MaterialRequestFocusFilter.purchase => type.contains('purchase'),
+      _MaterialRequestFocusFilter.transfer =>
+        type.contains('transfer') || type.contains('material transfer'),
+      _MaterialRequestFocusFilter.active =>
+        !status.contains('cancel') &&
+            !status.contains('stopped') &&
+            !status.contains('ordered'),
+      _MaterialRequestFocusFilter.draft => isDocDraft(doc.docStatus),
+      _MaterialRequestFocusFilter.ordered => status.contains('ordered'),
+    };
+  }
+
+  String _emptyMessage() {
+    return switch (_focusFilter) {
+      _MaterialRequestFocusFilter.all =>
+        'Gunakan tombol Buat Request untuk mengajukan kebutuhan.',
+      _MaterialRequestFocusFilter.purchase =>
+        'Tidak ada Material Request pembelian pada filter ini.',
+      _MaterialRequestFocusFilter.transfer =>
+        'Tidak ada Material Request antar departemen pada filter ini.',
+      _MaterialRequestFocusFilter.active =>
+        'Tidak ada kebutuhan barang aktif pada filter ini.',
+      _MaterialRequestFocusFilter.draft =>
+        'Tidak ada draft Material Request pada filter ini.',
+      _MaterialRequestFocusFilter.ordered =>
+        'Tidak ada Material Request yang sudah ordered pada filter ini.',
+    };
   }
 
   List<InventoryItem> _planningItems(AppState appState) {
@@ -372,6 +416,9 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
     final appState = context.watch<AppState>();
     final filtered = _filter(appState.materialRequests);
     final planningItems = _planningItems(appState);
+    final focusSummary = _MaterialRequestFocusSummary.from(
+      appState.materialRequests,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,6 +436,14 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
         const SizedBox(height: 12),
 
         _MaterialRequestSummaryCard(requests: filtered),
+
+        const SizedBox(height: 12),
+
+        _MaterialRequestFocusCard(
+          summary: focusSummary,
+          selected: _focusFilter,
+          onSelected: (filter) => setState(() => _focusFilter = filter),
+        ),
 
         const SizedBox(height: 12),
 
@@ -445,9 +500,11 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
         const SizedBox(height: 12),
 
         if (filtered.isEmpty && !appState.isMaterialRequestsLoading)
-          const ErpEmptyState(
-            title: 'Belum ada request',
-            message: 'Gunakan tombol Buat Request untuk mengajukan kebutuhan.',
+          ErpEmptyState(
+            title: _focusFilter == _MaterialRequestFocusFilter.all
+                ? 'Belum ada request'
+                : 'Request tidak ditemukan',
+            message: _emptyMessage(),
           )
         else
           ...filtered.map(
@@ -740,6 +797,174 @@ class _MaterialRequestSummaryTile extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w900,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MaterialRequestFocusSummary {
+  final int total;
+  final int purchase;
+  final int transfer;
+  final int active;
+  final int draft;
+  final int ordered;
+
+  const _MaterialRequestFocusSummary({
+    required this.total,
+    required this.purchase,
+    required this.transfer,
+    required this.active,
+    required this.draft,
+    required this.ordered,
+  });
+
+  factory _MaterialRequestFocusSummary.from(List<MaterialRequest> requests) {
+    var purchase = 0;
+    var transfer = 0;
+    var active = 0;
+    var draft = 0;
+    var ordered = 0;
+    for (final doc in requests) {
+      final type = doc.type.toLowerCase();
+      final status = doc.statusText.toLowerCase();
+      if (type.contains('purchase')) purchase++;
+      if (type.contains('transfer') || type.contains('material transfer')) {
+        transfer++;
+      }
+      if (!status.contains('cancel') &&
+          !status.contains('stopped') &&
+          !status.contains('ordered')) {
+        active++;
+      }
+      if (isDocDraft(doc.docStatus)) draft++;
+      if (status.contains('ordered')) ordered++;
+    }
+    return _MaterialRequestFocusSummary(
+      total: requests.length,
+      purchase: purchase,
+      transfer: transfer,
+      active: active,
+      draft: draft,
+      ordered: ordered,
+    );
+  }
+
+  int countFor(_MaterialRequestFocusFilter filter) {
+    return switch (filter) {
+      _MaterialRequestFocusFilter.all => total,
+      _MaterialRequestFocusFilter.purchase => purchase,
+      _MaterialRequestFocusFilter.transfer => transfer,
+      _MaterialRequestFocusFilter.active => active,
+      _MaterialRequestFocusFilter.draft => draft,
+      _MaterialRequestFocusFilter.ordered => ordered,
+    };
+  }
+}
+
+class _MaterialRequestFocusCard extends StatelessWidget {
+  final _MaterialRequestFocusSummary summary;
+  final _MaterialRequestFocusFilter selected;
+  final ValueChanged<_MaterialRequestFocusFilter> onSelected;
+
+  const _MaterialRequestFocusCard({
+    required this.summary,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  String _label(_MaterialRequestFocusFilter filter) {
+    return switch (filter) {
+      _MaterialRequestFocusFilter.all => 'Semua',
+      _MaterialRequestFocusFilter.purchase => 'Purchase',
+      _MaterialRequestFocusFilter.transfer => 'Transfer',
+      _MaterialRequestFocusFilter.active => 'Aktif',
+      _MaterialRequestFocusFilter.draft => 'Draft',
+      _MaterialRequestFocusFilter.ordered => 'Ordered',
+    };
+  }
+
+  IconData _icon(_MaterialRequestFocusFilter filter) {
+    return switch (filter) {
+      _MaterialRequestFocusFilter.all => Icons.list_alt_rounded,
+      _MaterialRequestFocusFilter.purchase => Icons.shopping_cart_outlined,
+      _MaterialRequestFocusFilter.transfer => Icons.swap_horiz_rounded,
+      _MaterialRequestFocusFilter.active => Icons.pending_actions_rounded,
+      _MaterialRequestFocusFilter.draft => Icons.edit_note_rounded,
+      _MaterialRequestFocusFilter.ordered => Icons.task_alt_rounded,
+    };
+  }
+
+  Color _color(_MaterialRequestFocusFilter filter) {
+    return switch (filter) {
+      _MaterialRequestFocusFilter.all => AppColors.primary,
+      _MaterialRequestFocusFilter.purchase => AppColors.primary,
+      _MaterialRequestFocusFilter.transfer => AppColors.navy,
+      _MaterialRequestFocusFilter.active => AppColors.warning,
+      _MaterialRequestFocusFilter.draft => AppColors.slate,
+      _MaterialRequestFocusFilter.ordered => AppColors.success,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Filter Kebutuhan Barang',
+            style: TextStyle(
+              color: AppColors.navy,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 3),
+          const Text(
+            'Pisahkan request pembelian, transfer antar departemen, dan status kebutuhan.',
+            style: TextStyle(
+              color: AppColors.slate,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _MaterialRequestFocusFilter.values.map((filter) {
+              final active = selected == filter;
+              final color = _color(filter);
+              return ChoiceChip(
+                selected: active,
+                onSelected: (_) => onSelected(filter),
+                avatar: Icon(
+                  _icon(filter),
+                  size: 16,
+                  color: active ? AppColors.white : color,
+                ),
+                label: Text('${_label(filter)} ${summary.countFor(filter)}'),
+                labelStyle: TextStyle(
+                  color: active ? AppColors.white : color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+                selectedColor: color,
+                backgroundColor: color.withValues(alpha: 0.08),
+                side: BorderSide(color: color.withValues(alpha: 0.18)),
+              );
+            }).toList(),
           ),
         ],
       ),
