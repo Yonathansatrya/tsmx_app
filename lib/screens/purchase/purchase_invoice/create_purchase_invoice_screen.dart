@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
+import '../../../widgets/erp/erp_item_autocomplete_field.dart';
 
 class CreatePurchaseInvoiceScreen extends StatefulWidget {
   const CreatePurchaseInvoiceScreen({super.key});
@@ -19,6 +20,7 @@ class _CreatePurchaseInvoiceScreenState
   final _formKey = GlobalKey<FormState>();
   final _qtyCtrl = TextEditingController(text: '1');
   final _rateCtrl = TextEditingController();
+  final List<_AdditionalInvoiceItemRow> _additionalItems = [];
 
   List<String> _series = [];
   List<_Option> _suppliers = [];
@@ -38,14 +40,36 @@ class _CreatePurchaseInvoiceScreenState
   @override
   void initState() {
     super.initState();
+    _qtyCtrl.addListener(_refreshTotal);
+    _rateCtrl.addListener(_refreshTotal);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadOptions());
   }
 
   @override
   void dispose() {
+    _qtyCtrl.removeListener(_refreshTotal);
+    _rateCtrl.removeListener(_refreshTotal);
     _qtyCtrl.dispose();
     _rateCtrl.dispose();
+    for (final row in _additionalItems) {
+      row.dispose();
+    }
     super.dispose();
+  }
+
+  void _refreshTotal() => setState(() {});
+
+  void _addItemRow() {
+    final row = _AdditionalInvoiceItemRow(warehouse: _selectedWarehouse);
+    row.qtyController.addListener(_refreshTotal);
+    row.rateController.addListener(_refreshTotal);
+    setState(() => _additionalItems.add(row));
+  }
+
+  void _removeItemRow(int index) {
+    final row = _additionalItems.removeAt(index);
+    row.dispose();
+    _refreshTotal();
   }
 
   Future<List<_Option>> _fetchOptions(
@@ -135,6 +159,50 @@ class _CreatePurchaseInvoiceScreenState
     return null;
   }
 
+  double get _qty => double.tryParse(_qtyCtrl.text.trim()) ?? 0;
+  double get _rate => double.tryParse(_rateCtrl.text.trim()) ?? 0;
+  double get _total =>
+      (_qty * _rate) +
+      _additionalItems.fold<double>(0, (total, row) {
+        final qty = double.tryParse(row.qtyController.text.trim()) ?? 0;
+        final rate = double.tryParse(row.rateController.text.trim()) ?? 0;
+        return total + (qty * rate);
+      });
+
+  List<Map<String, dynamic>> _buildItemsPayload() {
+    Map<String, dynamic> itemPayload({
+      required String itemCode,
+      required double qty,
+      double? rate,
+      String? warehouse,
+    }) {
+      return {
+        'item_code': itemCode.trim(),
+        'qty': qty,
+        if (rate != null && rate >= 0) 'rate': rate,
+        if (_updateStock && warehouse?.trim().isNotEmpty == true)
+          'warehouse': warehouse!.trim(),
+      };
+    }
+
+    return [
+      itemPayload(
+        itemCode: _selectedItem!,
+        qty: double.parse(_qtyCtrl.text.trim()),
+        rate: double.tryParse(_rateCtrl.text.trim()),
+        warehouse: _selectedWarehouse,
+      ),
+      ..._additionalItems.map(
+        (row) => itemPayload(
+          itemCode: row.itemCode!,
+          qty: double.parse(row.qtyController.text.trim()),
+          rate: double.tryParse(row.rateController.text.trim()),
+          warehouse: row.warehouse ?? _selectedWarehouse,
+        ),
+      ),
+    ];
+  }
+
   Future<void> _pickDate({required bool dueDate}) async {
     final initial = dueDate ? _dueDate : _postingDate;
     final picked = await showDatePicker(
@@ -162,13 +230,31 @@ class _CreatePurchaseInvoiceScreenState
       );
       return;
     }
+    final invalidAdditional = _additionalItems.any((row) {
+      final qty = double.tryParse(row.qtyController.text.trim());
+      final rateText = row.rateController.text.trim();
+      final rate = rateText.isEmpty ? 0 : double.tryParse(rateText);
+      return row.itemCode == null ||
+          qty == null ||
+          qty <= 0 ||
+          rate == null ||
+          rate < 0 ||
+          (_updateStock && (row.warehouse ?? _selectedWarehouse) == null);
+    });
+    if (invalidAdditional) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lengkapi semua tambahan item.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       await context.read<AppState>().createPurchaseInvoice(
         supplier: _selectedSupplier!,
-        itemCode: _selectedItem!,
-        qty: double.parse(_qtyCtrl.text.trim()),
-        rate: double.tryParse(_rateCtrl.text.trim()),
+        items: _buildItemsPayload(),
         namingSeries: _selectedSeries!,
         postingDate: _postingDate,
         dueDate: _dueDate,
@@ -219,6 +305,85 @@ class _CreatePurchaseInvoiceScreenState
         ),
       ),
     );
+  }
+
+  Widget _stockSettingsCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Stock Settings',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.slate,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Update Stock'),
+            subtitle: const Text(
+              'Aktifkan jika invoice langsung menambah stok',
+            ),
+            value: _updateStock,
+            onChanged: (value) => setState(() => _updateStock = value),
+          ),
+          if (_updateStock) ...[
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedWarehouse,
+              decoration: _decoration('Warehouse'),
+              isExpanded: true,
+              items: _warehouses
+                  .map(
+                    (warehouse) => DropdownMenuItem(
+                      value: warehouse.name,
+                      child: Text(
+                        warehouse.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) => setState(() => _selectedWarehouse = value),
+              validator: (value) => _updateStock && value == null
+                  ? 'Warehouse wajib dipilih'
+                  : null,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<ErpItemOption> _itemSearchOptions() {
+    return _items
+        .map((item) => ErpItemOption(id: item.id, label: item.label))
+        .toList();
+  }
+
+  static String _formatCurrency(double value) {
+    final formatter = NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: 'Rp ',
+      decimalDigits: 2,
+    );
+    return formatter.format(value);
   }
 
   @override
@@ -362,6 +527,8 @@ class _CreatePurchaseInvoiceScreenState
                     ),
                   ),
                   const SizedBox(height: 16),
+                  _stockSettingsCard(),
+                  const SizedBox(height: 16),
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -387,23 +554,12 @@ class _CreatePurchaseInvoiceScreenState
                           ),
                         ),
                         const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedItem,
+                        ErpItemAutocompleteField(
+                          label: 'Item',
+                          selectedId: _selectedItem,
+                          options: _itemSearchOptions(),
                           decoration: _decoration('Item'),
-                          isExpanded: true,
-                          items: _items
-                              .map(
-                                (option) => DropdownMenuItem(
-                                  value: option.id,
-                                  child: Text(
-                                    option.label,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) =>
+                          onSelected: (value) =>
                               setState(() => _selectedItem = value),
                           validator: (value) =>
                               value == null ? 'Item wajib dipilih' : null,
@@ -451,41 +607,71 @@ class _CreatePurchaseInvoiceScreenState
                           ],
                         ),
                         const SizedBox(height: 12),
-                        SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Update Stock'),
-                          subtitle: const Text(
-                            'Saat aktif, warehouse wajib dipilih',
-                          ),
-                          value: _updateStock,
-                          onChanged: (value) =>
-                              setState(() => _updateStock = value),
-                        ),
-                        if (_updateStock) ...[
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedWarehouse,
-                            decoration: _decoration('Warehouse'),
-                            isExpanded: true,
-                            items: _warehouses
+                        ..._additionalItems.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final row = entry.value;
+                          return _AdditionalInvoiceItemCard(
+                            index: index,
+                            row: row,
+                            itemItems: _itemSearchOptions(),
+                            warehouseItems: _warehouses
                                 .map(
                                   (warehouse) => DropdownMenuItem(
                                     value: warehouse.name,
                                     child: Text(
                                       warehouse.name,
-                                      maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 )
                                 .toList(),
-                            onChanged: (value) =>
-                                setState(() => _selectedWarehouse = value),
-                            validator: (value) => _updateStock && value == null
-                                ? 'Warehouse wajib dipilih'
-                                : null,
+                            updateStock: _updateStock,
+                            defaultWarehouse: _selectedWarehouse,
+                            decoration: _decoration,
+                            onChanged: () => setState(() {}),
+                            onRemove: () => _removeItemRow(index),
+                          );
+                        }),
+                        OutlinedButton.icon(
+                          onPressed: _addItemRow,
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('Tambah Item'),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
                           ),
-                        ],
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 14,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Total',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.slate,
+                                ),
+                              ),
+                              Text(
+                                _formatCurrency(_total),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -522,6 +708,144 @@ class _CreatePurchaseInvoiceScreenState
         ),
       ),
     );
+  }
+}
+
+class _AdditionalInvoiceItemCard extends StatelessWidget {
+  final int index;
+  final _AdditionalInvoiceItemRow row;
+  final List<ErpItemOption> itemItems;
+  final List<DropdownMenuItem<String>> warehouseItems;
+  final bool updateStock;
+  final String? defaultWarehouse;
+  final InputDecoration Function(String label) decoration;
+  final VoidCallback onChanged;
+  final VoidCallback onRemove;
+
+  const _AdditionalInvoiceItemCard({
+    required this.index,
+    required this.row,
+    required this.itemItems,
+    required this.warehouseItems,
+    required this.updateStock,
+    required this.defaultWarehouse,
+    required this.decoration,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Item Tambahan ${index + 2}',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Hapus item',
+                onPressed: onRemove,
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Colors.redAccent,
+                ),
+              ),
+            ],
+          ),
+          ErpItemAutocompleteField(
+            label: 'Item',
+            selectedId: row.itemCode,
+            options: itemItems,
+            decoration: decoration('Item'),
+            onSelected: (value) {
+              row.itemCode = value;
+              onChanged();
+            },
+            validator: (value) => value == null ? 'Item wajib dipilih' : null,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: row.qtyController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: decoration('Accepted Qty'),
+                  validator: (value) {
+                    final qty = double.tryParse(value?.trim() ?? '');
+                    return qty == null || qty <= 0 ? 'Qty > 0' : null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
+                  controller: row.rateController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: decoration('Rate'),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) return null;
+                    final rate = double.tryParse(value.trim());
+                    return rate == null || rate < 0 ? 'Rate >= 0' : null;
+                  },
+                ),
+              ),
+            ],
+          ),
+          if (updateStock) ...[
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: row.warehouse ?? defaultWarehouse,
+              isExpanded: true,
+              decoration: decoration('Warehouse'),
+              items: warehouseItems,
+              onChanged: (value) {
+                row.warehouse = value;
+                onChanged();
+              },
+              validator: (value) =>
+                  value == null ? 'Warehouse wajib dipilih' : null,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AdditionalInvoiceItemRow {
+  String? itemCode;
+  String? warehouse;
+  final TextEditingController qtyController;
+  final TextEditingController rateController;
+
+  _AdditionalInvoiceItemRow({
+    this.warehouse,
+    String qty = '1',
+    String rate = '',
+  }) : qtyController = TextEditingController(text: qty),
+       rateController = TextEditingController(text: rate);
+
+  void dispose() {
+    qtyController.dispose();
+    rateController.dispose();
   }
 }
 

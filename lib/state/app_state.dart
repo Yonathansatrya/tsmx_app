@@ -1918,8 +1918,9 @@ class AppState with ChangeNotifier {
 
   Future<MaterialRequest> createMaterialRequest({
     required String materialRequestType,
-    required String itemCode,
-    required double qty,
+    String? itemCode,
+    double? qty,
+    List<Map<String, dynamic>>? items,
     required DateTime transactionDate,
     required DateTime scheduleDate,
     String? company,
@@ -1928,20 +1929,27 @@ class AppState with ChangeNotifier {
     await _frappeService.ensureLoggedIn();
     final date = DateRangePresets.toFrappeDate(transactionDate);
     final requiredBy = DateRangePresets.toFrappeDate(scheduleDate);
+    final requestItems =
+        items ??
+        [
+          {
+            'item_code': itemCode?.trim(),
+            'qty': qty,
+            'schedule_date': requiredBy,
+            if (warehouse?.trim().isNotEmpty == true)
+              'warehouse': warehouse!.trim(),
+          },
+        ];
+    if (requestItems.isEmpty) {
+      throw Exception('Minimal satu item wajib diisi.');
+    }
+
     final payload = <String, dynamic>{
       'material_request_type': materialRequestType,
       'transaction_date': date,
       'schedule_date': requiredBy,
       if (company?.trim().isNotEmpty == true) 'company': company!.trim(),
-      'items': [
-        {
-          'item_code': itemCode.trim(),
-          'qty': qty,
-          'schedule_date': requiredBy,
-          if (warehouse?.trim().isNotEmpty == true)
-            'warehouse': warehouse!.trim(),
-        },
-      ],
+      'items': requestItems,
     };
 
     final created = await _frappeService.createDocument(
@@ -1955,8 +1963,9 @@ class AppState with ChangeNotifier {
 
   Future<PurchaseInvoice> createPurchaseInvoice({
     required String supplier,
-    required String itemCode,
-    required double qty,
+    String? itemCode,
+    double? qty,
+    List<Map<String, dynamic>>? items,
     required String namingSeries,
     required DateTime postingDate,
     required DateTime dueDate,
@@ -1971,6 +1980,20 @@ class AppState with ChangeNotifier {
       throw Exception('Warehouse wajib dipilih saat Update Stock aktif.');
     }
 
+    final invoiceItems =
+        items ??
+        [
+          {
+            'item_code': itemCode?.trim(),
+            'qty': qty,
+            if (rate != null && rate >= 0) 'rate': rate,
+            if (updateStock) 'warehouse': warehouseName,
+          },
+        ];
+    if (invoiceItems.isEmpty) {
+      throw Exception('Minimal satu item wajib diisi.');
+    }
+
     final payload = <String, dynamic>{
       'supplier': supplier.trim(),
       'naming_series': namingSeries.trim(),
@@ -1980,14 +2003,7 @@ class AppState with ChangeNotifier {
       if (company != null && company.trim().isNotEmpty)
         'company': company.trim(),
       if (updateStock) 'set_warehouse': warehouseName,
-      'items': [
-        {
-          'item_code': itemCode.trim(),
-          'qty': qty,
-          if (rate != null && rate >= 0) 'rate': rate,
-          if (updateStock) 'warehouse': warehouseName,
-        },
-      ],
+      'items': invoiceItems,
     };
 
     final invoice = await _purchaseInvoiceService.create(payload);
@@ -1998,8 +2014,9 @@ class AppState with ChangeNotifier {
 
   Future<PurchaseOrder> createPurchaseOrder({
     required String supplier,
-    required String itemCode,
-    required double qty,
+    String? itemCode,
+    double? qty,
+    List<Map<String, dynamic>>? items,
     required String namingSeries,
     required DateTime requiredBy,
     String? warehouse,
@@ -2008,6 +2025,23 @@ class AppState with ChangeNotifier {
   }) async {
     await _frappeService.ensureLoggedIn();
 
+    final scheduleDate = requiredBy.toIso8601String().split('T').first;
+    final orderItems =
+        items ??
+        [
+          {
+            'item_code': itemCode,
+            'qty': qty,
+            'schedule_date': scheduleDate,
+            if (rate != null && rate > 0) 'rate': rate,
+            if (warehouse != null && warehouse.trim().isNotEmpty)
+              'warehouse': warehouse.trim(),
+          },
+        ];
+    if (orderItems.isEmpty) {
+      throw Exception('Minimal satu item wajib diisi.');
+    }
+
     final payload = <String, dynamic>{
       'supplier': supplier,
       'naming_series': namingSeries.trim(),
@@ -2015,17 +2049,8 @@ class AppState with ChangeNotifier {
           .toIso8601String()
           .split('T')
           .first,
-      'schedule_date': requiredBy.toIso8601String().split('T').first,
-      'items': [
-        {
-          'item_code': itemCode,
-          'qty': qty,
-          'schedule_date': requiredBy.toIso8601String().split('T').first,
-          if (rate != null && rate > 0) 'rate': rate,
-          if (warehouse != null && warehouse.trim().isNotEmpty)
-            'warehouse': warehouse.trim(),
-        },
-      ],
+      'schedule_date': scheduleDate,
+      'items': orderItems,
     };
 
     final order = await _purchaseOrderService.create(payload);
@@ -2043,6 +2068,7 @@ class AppState with ChangeNotifier {
     double? qty,
     String? warehouse,
     double? rate,
+    List<Map<String, dynamic>>? items,
     DateTime? transactionDate,
     DateTime? requiredBy,
   }) async {
@@ -2055,7 +2081,9 @@ class AppState with ChangeNotifier {
         'transaction_date': transactionDate.toIso8601String().split('T').first,
       if (requiredBy != null)
         'schedule_date': requiredBy.toIso8601String().split('T').first,
-      if (itemCode != null && itemCode.trim().isNotEmpty && qty != null)
+      if (items != null)
+        'items': items
+      else if (itemCode != null && itemCode.trim().isNotEmpty && qty != null)
         'items': [
           {
             'item_code': itemCode.trim(),
@@ -2085,29 +2113,38 @@ class AppState with ChangeNotifier {
 
   Future<void> createPurchaseReceipt({
     required String supplier,
-    required String itemCode,
-    required double qty,
+    String? itemCode,
+    double? qty,
+    List<Map<String, dynamic>>? items,
     required String namingSeries,
     required String warehouse,
     required DateTime postingDate,
     double? rate,
     String? company,
   }) async {
+    final warehouseName = warehouse.trim();
+    final receiptItems =
+        items ??
+        [
+          {
+            'item_code': itemCode?.trim(),
+            'qty': qty,
+            'warehouse': warehouseName,
+            if (rate != null && rate >= 0) 'rate': rate,
+          },
+        ];
+    if (receiptItems.isEmpty) {
+      throw Exception('Minimal satu item wajib diisi.');
+    }
+
     final payload = <String, dynamic>{
       'supplier': supplier.trim(),
       'naming_series': namingSeries.trim(),
       'posting_date': postingDate.toIso8601String().split('T').first,
-      'set_warehouse': warehouse.trim(),
+      'set_warehouse': warehouseName,
       if (company != null && company.trim().isNotEmpty)
         'company': company.trim(),
-      'items': [
-        {
-          'item_code': itemCode.trim(),
-          'qty': qty,
-          'warehouse': warehouse.trim(),
-          if (rate != null && rate >= 0) 'rate': rate,
-        },
-      ],
+      'items': receiptItems,
     };
     await _frappeService.createDocument('Purchase Receipt', payload);
     await refreshPurchaseReceipts();

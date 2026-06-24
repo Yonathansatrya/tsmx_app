@@ -5,6 +5,7 @@ import '../../../models/purchase_order.dart';
 import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
+import '../../../widgets/erp/erp_item_autocomplete_field.dart';
 
 class CreatePurchaseOrderScreen extends StatefulWidget {
   final String? editOrderId;
@@ -23,6 +24,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   final _supplierCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
   final _rateCtrl = TextEditingController();
+  final List<_AdditionalPurchaseItemRow> _additionalItems = [];
 
   TextEditingController? _itemTextController;
   String? _initialItemText;
@@ -47,6 +49,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   void initState() {
     super.initState();
     _qtyCtrl.addListener(_calculateTotal);
+    _rateCtrl.addListener(_calculateTotal);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSelectors();
     });
@@ -56,13 +59,30 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   void dispose() {
     _supplierCtrl.dispose();
     _qtyCtrl.dispose();
+    _rateCtrl.removeListener(_calculateTotal);
     _rateCtrl.dispose();
+    for (final row in _additionalItems) {
+      row.dispose();
+    }
     _itemTextController = null;
     super.dispose();
   }
 
   void _calculateTotal() {
     setState(() {});
+  }
+
+  void _addItemRow() {
+    final row = _AdditionalPurchaseItemRow(warehouse: _selectedWarehouse);
+    row.qtyController.addListener(_calculateTotal);
+    row.rateController.addListener(_calculateTotal);
+    setState(() => _additionalItems.add(row));
+  }
+
+  void _removeItemRow(int index) {
+    final row = _additionalItems.removeAt(index);
+    row.dispose();
+    _calculateTotal();
   }
 
   Future<List<_SupplierOption>> _fetchSupplierOptions(AppState appState) async {
@@ -393,8 +413,50 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
   String get _formattedTotal {
     final qty = double.tryParse(_qtyCtrl.text.trim()) ?? 0;
     final rate = double.tryParse(_rateCtrl.text.trim()) ?? 0;
-    final total = qty * rate;
+    final total =
+        (qty * rate) +
+        _additionalItems.fold<double>(0, (sum, row) {
+          final rowQty = double.tryParse(row.qtyController.text.trim()) ?? 0;
+          final rowRate = double.tryParse(row.rateController.text.trim()) ?? 0;
+          return sum + (rowQty * rowRate);
+        });
     return 'Rp ${total.toStringAsFixed(0).replaceAllMapped(RegExp(r"\B(?=(\d{3})+(?!\d))"), (m) => '.')}';
+  }
+
+  List<Map<String, dynamic>> _buildItemsPayload(String firstItemCode) {
+    final scheduleDate = _requiredByDate.toIso8601String().split('T').first;
+    Map<String, dynamic> itemPayload({
+      required String itemCode,
+      required double qty,
+      double? rate,
+      String? warehouse,
+    }) {
+      return {
+        'item_code': itemCode.trim(),
+        'qty': qty,
+        'schedule_date': scheduleDate,
+        if (rate != null && rate > 0) 'rate': rate,
+        if (warehouse != null && warehouse.trim().isNotEmpty)
+          'warehouse': warehouse.trim(),
+      };
+    }
+
+    return [
+      itemPayload(
+        itemCode: firstItemCode,
+        qty: double.parse(_qtyCtrl.text.trim()),
+        rate: double.tryParse(_rateCtrl.text.trim()),
+        warehouse: _selectedWarehouse,
+      ),
+      ..._additionalItems.map(
+        (row) => itemPayload(
+          itemCode: row.itemCode!,
+          qty: double.parse(row.qtyController.text.trim()),
+          rate: double.tryParse(row.rateController.text.trim()),
+          warehouse: row.warehouse ?? _selectedWarehouse,
+        ),
+      ),
+    ];
   }
 
   Future<void> _save() async {
@@ -409,6 +471,25 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       );
       return;
     }
+    final invalidAdditional = _additionalItems.any((row) {
+      final qty = double.tryParse(row.qtyController.text.trim());
+      final rateText = row.rateController.text.trim();
+      final rate = rateText.isEmpty ? 0 : double.tryParse(rateText);
+      return row.itemCode == null ||
+          qty == null ||
+          qty <= 0 ||
+          rate == null ||
+          rate < 0;
+    });
+    if (invalidAdditional) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lengkapi semua tambahan item.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
 
     try {
       setState(() {
@@ -416,33 +497,27 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       });
 
       final appState = context.read<AppState>();
-      final qty = double.parse(_qtyCtrl.text.trim());
-      final rate = double.tryParse(_rateCtrl.text.trim());
       final itemCode =
           _selectedItemCode ?? _itemTextController?.text.trim() ?? '';
       if (itemCode.isEmpty) {
         throw Exception('Item code tidak boleh kosong');
       }
+      final items = _buildItemsPayload(itemCode);
 
       if (widget.isEditMode) {
         await appState.updatePurchaseOrder(
           orderId: widget.editOrderId!,
           supplier: _supplierCtrl.text.trim(),
-          itemCode: itemCode,
-          qty: qty,
-          warehouse: _selectedWarehouse,
-          rate: rate,
+          items: items,
           transactionDate: _selectedDate,
           requiredBy: _requiredByDate,
         );
       } else {
         await appState.createPurchaseOrder(
           supplier: _supplierCtrl.text.trim(),
-          itemCode: itemCode,
-          qty: qty,
+          items: items,
           namingSeries: _selectedSeries!,
           warehouse: _selectedWarehouse,
-          rate: rate,
           transactionDate: _selectedDate,
           requiredBy: _requiredByDate,
         );
@@ -865,6 +940,25 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
+                    ..._additionalItems.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final row = entry.value;
+                      return _AdditionalPurchaseItemCard(
+                        index: index,
+                        row: row,
+                        itemOptions: _itemOptions,
+                        warehouseOptions: _warehouseOptions,
+                        defaultWarehouse: _selectedWarehouse,
+                        onChanged: () => setState(() {}),
+                        onRemove: () => _removeItemRow(index),
+                      );
+                    }),
+                    OutlinedButton.icon(
+                      onPressed: _addItemRow,
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Tambah Item'),
+                    ),
+                    const SizedBox(height: 12),
                     Container(
                       decoration: BoxDecoration(
                         color: AppColors.background,
@@ -1020,6 +1114,158 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         ),
       ),
     );
+  }
+}
+
+class _AdditionalPurchaseItemCard extends StatelessWidget {
+  final int index;
+  final _AdditionalPurchaseItemRow row;
+  final List<_ItemOption> itemOptions;
+  final List<WarehouseInfo> warehouseOptions;
+  final String? defaultWarehouse;
+  final VoidCallback onChanged;
+  final VoidCallback onRemove;
+
+  const _AdditionalPurchaseItemCard({
+    required this.index,
+    required this.row,
+    required this.itemOptions,
+    required this.warehouseOptions,
+    required this.defaultWarehouse,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  InputDecoration _decoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      filled: true,
+      fillColor: AppColors.white,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Item Tambahan ${index + 2}',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Hapus item',
+                onPressed: onRemove,
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Colors.redAccent,
+                ),
+              ),
+            ],
+          ),
+          ErpItemAutocompleteField(
+            label: 'Item Code / Nama',
+            selectedId: row.itemCode,
+            decoration: _decoration('Item Code / Nama'),
+            options: itemOptions
+                .map((item) => ErpItemOption(id: item.code, label: item.label))
+                .toList(),
+            onSelected: (value) {
+              row.itemCode = value;
+              onChanged();
+            },
+            validator: (value) => value == null ? 'Item wajib dipilih' : null,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: row.qtyController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: _decoration('Quantity'),
+                  validator: (value) {
+                    final qty = double.tryParse(value?.trim() ?? '');
+                    return qty == null || qty <= 0 ? 'Qty harus > 0' : null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextFormField(
+                  controller: row.rateController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: _decoration('Rate'),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) return null;
+                    final rate = double.tryParse(value.trim());
+                    return rate == null || rate < 0 ? 'Rate harus >= 0' : null;
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: row.warehouse ?? defaultWarehouse,
+            isExpanded: true,
+            decoration: _decoration('Warehouse'),
+            items: warehouseOptions
+                .map(
+                  (warehouse) => DropdownMenuItem(
+                    value: warehouse.name,
+                    child: Text(
+                      warehouse.name,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              row.warehouse = value;
+              onChanged();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdditionalPurchaseItemRow {
+  String? itemCode;
+  String? warehouse;
+  final TextEditingController qtyController;
+  final TextEditingController rateController;
+
+  _AdditionalPurchaseItemRow({
+    this.warehouse,
+    String qty = '1',
+    String rate = '',
+  }) : qtyController = TextEditingController(text: qty),
+       rateController = TextEditingController(text: rate);
+
+  void dispose() {
+    qtyController.dispose();
+    rateController.dispose();
   }
 }
 
