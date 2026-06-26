@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import 'config/app_config.dart';
 import 'state/app_state.dart';
 import 'services/erp_services.dart';
 import 'screens/auth/loading_screen.dart';
@@ -26,7 +27,7 @@ class TMSXLogisticsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TMSX Hub',
+      title: AppConfig.defaultAppName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

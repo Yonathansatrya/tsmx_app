@@ -89,15 +89,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }).toList();
   }
 
-  String? _defaultWarehouse(List<WarehouseInfo> warehouses) {
-    for (final warehouse in warehouses) {
-      if (warehouse.name.trim().toLowerCase().contains('store')) {
-        return warehouse.name;
-      }
-    }
-    return warehouses.isNotEmpty ? warehouses.first.name : null;
-  }
-
   Future<void> _ensureWarehouseEnabled(AppState appState) async {
     final warehouse = _selectedWarehouse?.trim() ?? '';
     if (warehouse.isEmpty) return;
@@ -335,7 +326,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final appState = context.read<AppState>();
-      final defaultWarehouse = _defaultWarehouse(_warehouseOptions(appState));
+      final defaultWarehouse = appState.preferredWarehouse(
+        _warehouseOptions(appState),
+      );
       if (defaultWarehouse != null && _selectedWarehouse == null) {
         setState(() => _selectedWarehouse = defaultWarehouse);
       }
@@ -1542,6 +1535,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
             return await appState.frappeService.fetchResource(
               'Item',
               fields: const ['name', 'item_name'],
+              filters: const [
+                ['disabled', '=', 0],
+              ],
               orderBy: 'item_name asc',
             );
           } catch (_) {
@@ -1580,7 +1576,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       );
       final selectedWarehouse = selectedWarehouseValid
           ? _selectedWarehouse
-          : _defaultWarehouse(warehouseOptions);
+          : appState.preferredWarehouse(warehouseOptions);
       String selectedWarehouseCompany = '';
       for (final warehouse in warehouseOptions) {
         if (warehouse.name == selectedWarehouse) {

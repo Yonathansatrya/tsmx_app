@@ -317,7 +317,8 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
         _summaryCard(
           icon: Icons.history_rounded,
           title: 'Riwayat Keputusan',
-          message: 'Log approve dan reject yang dilakukan melalui TMSX Hub.',
+          message:
+              'Log approve dan reject yang dilakukan melalui ${context.watch<AppState>().appDisplayName}.',
         ),
         if (_loading) ...[
           const SizedBox(height: 12),

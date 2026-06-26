@@ -26,19 +26,35 @@ class _DashboardTabState extends State<DashboardTab> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
 
-      if (appState.salesOrders.isEmpty) appState.refreshSalesOrders();
-      if (appState.purchaseOrders.isEmpty) appState.refreshPurchaseOrders();
-      if (appState.warehouses.isEmpty) appState.refreshWarehouses();
-      if (appState.inventory.isEmpty) appState.refreshInventory();
-      if (appState.salesInvoices.isEmpty) appState.refreshSalesInvoices();
-      if (appState.purchaseInvoices.isEmpty) {
+      if (appState.canUseSales && appState.salesOrders.isEmpty) {
+        appState.refreshSalesOrders();
+      }
+      if (appState.canUsePurchase && appState.purchaseOrders.isEmpty) {
+        appState.refreshPurchaseOrders();
+      }
+      if ((appState.canUseStock || appState.canUseWarehouse) &&
+          appState.warehouses.isEmpty) {
+        appState.refreshWarehouses();
+      }
+      if ((appState.canUseStock || appState.canUseWarehouse) &&
+          appState.inventory.isEmpty) {
+        appState.refreshInventory();
+      }
+      if (appState.canUseSales && appState.salesInvoices.isEmpty) {
+        appState.refreshSalesInvoices();
+      }
+      if (appState.canUsePurchase && appState.purchaseInvoices.isEmpty) {
         appState.refreshPurchaseInvoices();
       }
       if (!appState.hasFullOrderSummary) {
-        appState.refreshOrderSummaries();
+        appState.refreshDashboardSummaryForCurrentAccess(silent: true);
       }
-      appState.fetchSalesOrderApprovals();
-      _loadSalesTracking();
+      if (appState.canUseApprovals) {
+        appState.fetchSalesOrderApprovals();
+      }
+      if (appState.canUseSales || appState.canUseLogistics) {
+        _loadSalesTracking();
+      }
     });
   }
 
@@ -71,19 +87,24 @@ class _DashboardTabState extends State<DashboardTab> {
     final openSalesCount = summary.salesOpenCount;
     final lowStockCount = summary.stockAlerts;
     final unpaidSiCount = summary.unpaidSalesInvoices;
+    final showSalesKpi = appState.canUseSales;
+    final showPurchaseKpi = appState.canUsePurchase;
+    final showStockKpi = appState.canUseStock || appState.canUseWarehouse;
+    final showTrackingWidget = appState.canUseSales || appState.canUseLogistics;
+    final summaryError = _visibleSummaryError(appState.orderSummaryError);
 
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: () async {
         await Future.wait([
-          appState.refreshSalesOrders(),
-          appState.refreshPurchaseOrders(),
-          appState.refreshSalesInvoices(),
-          appState.refreshPurchaseInvoices(),
-          appState.refreshInventory(),
-          appState.refreshAllSummaries(),
-          appState.fetchSalesOrderApprovals(),
-          _loadSalesTracking(),
+          if (appState.canUseSales) appState.refreshSalesOrders(),
+          if (appState.canUsePurchase) appState.refreshPurchaseOrders(),
+          if (appState.canUseSales) appState.refreshSalesInvoices(),
+          if (appState.canUsePurchase) appState.refreshPurchaseInvoices(),
+          if (showStockKpi) appState.refreshInventory(),
+          appState.refreshDashboardSummaryForCurrentAccess(),
+          if (appState.canUseApprovals) appState.fetchSalesOrderApprovals(),
+          if (showTrackingWidget) _loadSalesTracking(),
         ]);
       },
       child: SingleChildScrollView(
@@ -97,15 +118,18 @@ class _DashboardTabState extends State<DashboardTab> {
               unpaidInvoices: unpaidSiCount,
               pendingPurchases: pendingPurchasesCount,
               stockAlerts: lowStockCount,
+              showSales: showSalesKpi,
+              showPurchase: showPurchaseKpi,
+              showStock: showStockKpi,
             ),
             if (appState.isOrderSummaryLoading) ...[
               const SizedBox(height: 10),
               const LinearProgressIndicator(),
             ],
-            if (appState.orderSummaryError != null) ...[
+            if (summaryError != null) ...[
               const SizedBox(height: 10),
               Text(
-                'Summary sync failed: ${appState.orderSummaryError}',
+                'Summary sync failed: $summaryError',
                 style: const TextStyle(
                   color: Colors.redAccent,
                   fontSize: 11,
@@ -118,38 +142,55 @@ class _DashboardTabState extends State<DashboardTab> {
 
             const DashboardModuleLauncher(),
 
-            const SizedBox(height: 18),
-
-            LiveOperationsTrackingCard(
-              points: _trackingPoints(appState),
-              loading: _isTrackingLoading,
-              error: _trackingError,
-              onRefresh: _loadSalesTracking,
-            ),
+            if (showTrackingWidget) ...[
+              const SizedBox(height: 18),
+              LiveOperationsTrackingCard(
+                points: _trackingPoints(appState),
+                loading: _isTrackingLoading,
+                error: _trackingError,
+                onRefresh: _loadSalesTracking,
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
+  String? _visibleSummaryError(String? error) {
+    if (error == null) return null;
+    final lower = error.toLowerCase();
+    if (lower.contains('permissionerror') ||
+        lower.contains('not permitted') ||
+        lower.contains('permission')) {
+      return null;
+    }
+    return error;
+  }
+
   List<LiveTrackingPoint> _trackingPoints(AppState appState) {
-    final salesPoints = _salesTrackingPoints.map(
-      (point) => LiveTrackingPoint(
-        type: LiveTrackingType.sales,
-        title: point.salesPerson.isEmpty
-            ? 'Salesman belum dipetakan'
-            : point.salesPerson,
-        subtitle: point.customer.isEmpty
-            ? 'Customer belum tersedia'
-            : point.customer,
-        capturedAt: point.capturedAt,
-        latitude: point.latitude,
-        longitude: point.longitude,
-      ),
-    );
+    final salesPoints = appState.canUseSales
+        ? _salesTrackingPoints.map(
+            (point) => LiveTrackingPoint(
+              type: LiveTrackingType.sales,
+              title: point.salesPerson.isEmpty
+                  ? 'Salesman belum dipetakan'
+                  : point.salesPerson,
+              subtitle: point.customer.isEmpty
+                  ? 'Customer belum tersedia'
+                  : point.customer,
+              capturedAt: point.capturedAt,
+              latitude: point.latitude,
+              longitude: point.longitude,
+            ),
+          )
+        : const Iterable<LiveTrackingPoint>.empty();
     final driverPoint = appState.latestDeliveryDriverLocation;
     final activeDeliveryNote = appState.activeDeliveryTrackingNote;
-    final fleetPoints = driverPoint == null || activeDeliveryNote == null
+    final fleetPoints =
+        !appState.canUseLogistics ||
+            driverPoint == null ||
+            activeDeliveryNote == null
         ? const <LiveTrackingPoint>[]
         : [
             LiveTrackingPoint(
@@ -170,16 +211,50 @@ class _OperationsSnapshot extends StatelessWidget {
   final int unpaidInvoices;
   final int pendingPurchases;
   final int stockAlerts;
+  final bool showSales;
+  final bool showPurchase;
+  final bool showStock;
 
   const _OperationsSnapshot({
     required this.openSales,
     required this.unpaidInvoices,
     required this.pendingPurchases,
     required this.stockAlerts,
+    required this.showSales,
+    required this.showPurchase,
+    required this.showStock,
   });
 
   @override
   Widget build(BuildContext context) {
+    final metrics = <_SnapshotMetricData>[
+      if (showSales)
+        _SnapshotMetricData(
+          icon: Icons.point_of_sale_rounded,
+          label: 'Open SO',
+          value: openSales,
+        ),
+      if (showSales)
+        _SnapshotMetricData(
+          icon: Icons.receipt_long_rounded,
+          label: 'Unpaid',
+          value: unpaidInvoices,
+        ),
+      if (showPurchase)
+        _SnapshotMetricData(
+          icon: Icons.shopping_bag_rounded,
+          label: 'Pending PO',
+          value: pendingPurchases,
+        ),
+      if (showStock)
+        _SnapshotMetricData(
+          icon: Icons.warning_amber_rounded,
+          label: 'Stock',
+          value: stockAlerts,
+        ),
+    ];
+    if (metrics.isEmpty) return const SizedBox.shrink();
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -211,34 +286,14 @@ class _OperationsSnapshot extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(
-                child: _SnapshotMetric(
-                  icon: Icons.point_of_sale_rounded,
-                  label: 'Open SO',
-                  value: openSales,
+              for (final metric in metrics)
+                Expanded(
+                  child: _SnapshotMetric(
+                    icon: metric.icon,
+                    label: metric.label,
+                    value: metric.value,
+                  ),
                 ),
-              ),
-              Expanded(
-                child: _SnapshotMetric(
-                  icon: Icons.receipt_long_rounded,
-                  label: 'Unpaid',
-                  value: unpaidInvoices,
-                ),
-              ),
-              Expanded(
-                child: _SnapshotMetric(
-                  icon: Icons.shopping_bag_rounded,
-                  label: 'Pending PO',
-                  value: pendingPurchases,
-                ),
-              ),
-              Expanded(
-                child: _SnapshotMetric(
-                  icon: Icons.warning_amber_rounded,
-                  label: 'Stock',
-                  value: stockAlerts,
-                ),
-              ),
             ],
           ),
         ],
@@ -247,17 +302,29 @@ class _OperationsSnapshot extends StatelessWidget {
   }
 
   String get _priorityMessage {
-    if (stockAlerts > 0) {
+    if (showStock && stockAlerts > 0) {
       return 'Cek stok kritis sebelum membuat transaksi baru.';
     }
-    if (unpaidInvoices > 0) {
+    if (showSales && unpaidInvoices > 0) {
       return 'Ada invoice sales yang perlu ditindaklanjuti.';
     }
-    if (pendingPurchases > 0) {
+    if (showPurchase && pendingPurchases > 0) {
       return 'Pantau PO yang belum selesai dan jadwal penerimaan.';
     }
     return 'Operasional terlihat aman. Tarik layar untuk sinkronisasi.';
   }
+}
+
+class _SnapshotMetricData {
+  final IconData icon;
+  final String label;
+  final int value;
+
+  const _SnapshotMetricData({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
 }
 
 class _SnapshotMetric extends StatelessWidget {

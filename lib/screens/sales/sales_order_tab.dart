@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-
+import 'sales_order/create_sales_order_screen.dart';
 import '../../theme/app_colors.dart';
 import 'sales_history_tab.dart';
 import 'sales_ui.dart';
@@ -22,27 +22,27 @@ class SalesOrderTab extends StatelessWidget {
         child: Stack(
           children: [
             _SalesOrderTabBody(selectedTabIndex: selectedTabIndex),
-            // disable for now, untuk testing team sales 
-            // Positioned(
-            //   right: 16,
-            //   bottom: 24,
-            //   child: FloatingActionButton.extended(
-            //     backgroundColor: AppColors.primary,
-            //     foregroundColor: AppColors.white,
-            //     elevation: 3,
-            //     shape: RoundedRectangleBorder(
-            //       borderRadius: BorderRadius.circular(16),
-            //     ),
-            //     onPressed: () => Navigator.push(
-            //       context,
-            //       MaterialPageRoute(
-            //         builder: (_) => const CreateSalesOrderScreen(),
-            //       ),
-            //     ),
-            //     icon: const Icon(Icons.add_rounded),
-            //     label: const Text('Buat Sales Order'),
-            //   ),
-            // ),
+            // disable for now, untuk testing team sales
+            Positioned(
+              right: 16,
+              bottom: 24,
+              child: FloatingActionButton.extended(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.white,
+                elevation: 3,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CreateSalesOrderScreen(),
+                  ),
+                ),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Buat Sales Order'),
+              ),
+            ),
           ],
         ),
       ),

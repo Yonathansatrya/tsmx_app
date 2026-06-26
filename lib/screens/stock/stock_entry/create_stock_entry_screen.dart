@@ -33,11 +33,23 @@ class _CreateStockEntryScreenState extends State<CreateStockEntryScreen> {
   Future<void> _load() async {
     final appState = context.read<AppState>();
     if (appState.warehouses.isEmpty) await appState.refreshWarehouses();
-    final rows = await appState.frappeService.fetchResource(
-      'Item',
-      fields: const ['name', 'item_name'],
-      orderBy: 'item_name asc',
-    );
+    List<Map<String, dynamic>> rows;
+    try {
+      rows = await appState.frappeService.fetchResource(
+        'Item',
+        fields: const ['name', 'item_name'],
+        filters: const [
+          ['disabled', '=', 0],
+        ],
+        orderBy: 'item_name asc',
+      );
+    } catch (_) {
+      rows = await appState.frappeService.fetchResource(
+        'Item',
+        fields: const ['name', 'item_name'],
+        orderBy: 'item_name asc',
+      );
+    }
     setState(() {
       _warehouses = appState.warehouses.toList()
         ..sort((a, b) => a.name.compareTo(b.name));

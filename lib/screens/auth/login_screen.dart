@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/app_config.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../app_main_screen.dart';
@@ -94,7 +95,6 @@ class _LoginScreenState extends State<LoginScreen> {
         baseUrl: appState.selectedSiteBaseUrl,
         siteName: appState.selectedSiteName,
       );
-      await appState.prefetchInitialData();
 
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -218,9 +218,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       : Form(key: _siteFormKey, child: _siteOnboardingForm()),
                 ),
                 const SizedBox(height: 26),
-                const Text(
-                  'Powered by TMSX Hub',
-                  style: TextStyle(
+                Text(
+                  'Powered by ${AppConfig.defaultAppName}',
+                  style: const TextStyle(
                     color: AppColors.primary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,

@@ -7,6 +7,9 @@
   "engine": "InnoDB",
   "field_order": [
     "enabled",
+    "app_section",
+    "app_name",
+    "app_tagline",
     "default_modules_section",
     "default_modules",
     "role_modules_section",
@@ -23,6 +26,23 @@
       "fieldname": "enabled",
       "fieldtype": "Check",
       "label": "Enabled"
+    },
+    {
+      "fieldname": "app_section",
+      "fieldtype": "Section Break",
+      "label": "App"
+    },
+    {
+      "default": "TMSX Hub",
+      "fieldname": "app_name",
+      "fieldtype": "Data",
+      "label": "App Name"
+    },
+    {
+      "default": "Mobile ERP",
+      "fieldname": "app_tagline",
+      "fieldtype": "Data",
+      "label": "App Tagline"
     },
     {
       "fieldname": "default_modules_section",

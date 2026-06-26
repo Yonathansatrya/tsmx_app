@@ -36,7 +36,7 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
     final todoCount = appState.salesOrderApprovalTodoCount;
 
     return RoleMainScreen(
-      title: 'TMSX Hub Sales',
+      title: 'Sales',
       fallbackUsername: 'Salesman',
       onInitialize: (state) async {
         await state.refreshDataForCurrentRole();

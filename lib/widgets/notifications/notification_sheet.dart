@@ -237,9 +237,9 @@ class _NotificationHeaderCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Inbox TMSX Hub',
-                      style: TextStyle(
+                    Text(
+                      'Inbox ${context.watch<AppState>().appDisplayName}',
+                      style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w900,
                         color: AppColors.navy,

@@ -22,7 +22,7 @@ class PurchaseMainScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RoleMainScreen(
-      title: 'TMSX Hub Purchase',
+      title: 'Purchase',
       fallbackUsername: 'Purchase',
       onInitialize: (state) async {
         await state.loadBuyingFilterOptions();
@@ -33,7 +33,7 @@ class PurchaseMainScreen extends StatelessWidget {
           state.refreshPurchaseInvoices(),
           state.refreshMaterialRequests(),
           state.refreshInventory(),
-          state.fetchApprovalTodos(),
+          if (state.canUseApprovals) state.fetchApprovalTodos(),
         ]);
       },
       screensBuilder: (onMenuSelected) => [

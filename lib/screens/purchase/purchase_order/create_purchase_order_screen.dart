@@ -96,6 +96,9 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       final supplierData = await appState.frappeService.fetchResource(
         'Supplier',
         fields: const ['name', 'supplier_name'],
+        filters: const [
+          ['disabled', '=', 0],
+        ],
         orderBy: 'supplier_name asc',
       );
       return supplierData
@@ -133,6 +136,9 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       final itemData = await appState.frappeService.fetchResource(
         'Item',
         fields: const ['name', 'item_name'],
+        filters: const [
+          ['disabled', '=', 0],
+        ],
         orderBy: 'item_name asc',
       );
       return itemData

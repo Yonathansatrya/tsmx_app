@@ -33,6 +33,10 @@ class MobileBoot {
     final permissions = _asMap(json['permissions']);
     final app = _asMap(json['app']);
     final rawModules = json['modules'] ?? json['enabled_modules'];
+    final parsedMenus = _asMenuList(json['menus'] ?? json['menu_items']);
+    final parsedModules = _asStringList(
+      rawModules,
+    ).map((module) => module.toLowerCase()).toSet();
     final rawCompanies =
         json['companies'] ??
         json['allowed_companies'] ??
@@ -67,10 +71,10 @@ class MobileBoot {
       ),
       companies: _asStringList(rawCompanies),
       warehouses: _asStringList(rawWarehouses),
-      modules: _asStringList(
-        rawModules,
-      ).map((module) => module.toLowerCase()).toSet(),
-      menus: _asMenuList(json['menus'] ?? json['menu_items']),
+      modules: parsedModules.isNotEmpty
+          ? parsedModules
+          : parsedMenus.map((menu) => menu.module).toSet(),
+      menus: parsedMenus,
       raw: Map<String, dynamic>.from(json),
     );
   }

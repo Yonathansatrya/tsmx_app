@@ -151,6 +151,7 @@ class _CreateMaterialRequestScreenState
       rows = await appState.frappeService.fetchResource(
         doctype,
         fields: ['name', labelField],
+        filters: _activeMasterFilters(doctype),
         orderBy: '$labelField asc',
       );
     } catch (_) {
@@ -169,6 +170,15 @@ class _CreateMaterialRequestScreenState
         })
         .whereType<_Option>()
         .toList();
+  }
+
+  List<List<dynamic>>? _activeMasterFilters(String doctype) {
+    if (doctype == 'Item') {
+      return const [
+        ['disabled', '=', 0],
+      ];
+    }
+    return null;
   }
 
   Future<List<String>> _names(AppState appState, String doctype) async {

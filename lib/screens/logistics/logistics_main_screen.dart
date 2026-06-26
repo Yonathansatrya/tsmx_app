@@ -9,13 +9,10 @@ class LogisticsMainScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => RoleMainScreen(
-    title: 'TMSX Hub Logistics',
+    title: 'Logistics',
     fallbackUsername: 'Logistics',
     onInitialize: (state) async {
-      await Future.wait([
-        state.refreshDeliveryNotes(),
-        state.refreshSalesOrders(),
-      ]);
+      await state.refreshDeliveryNotes();
     },
     screensBuilder: (onMenuSelected) => [
       LogisticsOverviewTab(onMenuSelected: onMenuSelected),

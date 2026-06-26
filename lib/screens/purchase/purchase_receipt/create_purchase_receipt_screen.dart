@@ -86,6 +86,7 @@ class _CreatePurchaseReceiptScreenState
       rows = await appState.frappeService.fetchResource(
         doctype,
         fields: ['name', labelField],
+        filters: _activeMasterFilters(doctype),
         orderBy: '$labelField asc',
       );
     } catch (_) {
@@ -104,6 +105,15 @@ class _CreatePurchaseReceiptScreenState
         })
         .whereType<_Option>()
         .toList();
+  }
+
+  List<List<dynamic>>? _activeMasterFilters(String doctype) {
+    if (doctype == 'Item' || doctype == 'Supplier') {
+      return const [
+        ['disabled', '=', 0],
+      ];
+    }
+    return null;
   }
 
   Future<void> _load() async {

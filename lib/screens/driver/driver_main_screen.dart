@@ -9,20 +9,16 @@ class DriverMainScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RoleMainScreen(
-      title: 'TMSX Hub Driver',
+      title: 'Driver',
       fallbackUsername: 'Driver',
       onInitialize: (state) async {
-        await Future.wait([
-          state.refreshDeliveryNotes(),
-          state.refreshSalesOrders(),
-        ]);
+        await state.refreshDeliveryNotes();
       },
       screensBuilder: (_) => [const LogisticsDeliveryTab()],
       destinations: const [
         NavigationDestination(
           icon: Icon(Icons.local_shipping_outlined),
-          selectedIcon: Icon(Icons.local_shipping_rounded,
-          ),
+          selectedIcon: Icon(Icons.local_shipping_rounded),
           label: 'Delivery',
         ),
       ],

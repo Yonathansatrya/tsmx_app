@@ -118,9 +118,10 @@ class _AppMainScreenState extends State<AppMainScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (_) => false,
+      );
     });
   }
 
@@ -503,8 +504,8 @@ class _AppMainScreenState extends State<AppMainScreen> {
     required bool Function(SalesOrder order) canUse,
   }) async {
     final appState = context.read<AppState>();
-    if (!appState.hasFullOrderSummary) {
-      await appState.refreshOrderSummaries();
+    if (appState.dashboardSalesOrders.isEmpty) {
+      await appState.refreshSalesOrders();
       if (!context.mounted) return null;
     }
 
@@ -912,7 +913,7 @@ class _TmsxHeaderTitle extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                appState.mobileBoot?.appName ?? 'TMSX Hub',
+                appState.appDisplayName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(

@@ -178,12 +178,14 @@ def get_mobile_boot():
         fallback=lambda: _allowed_warehouses(default_company),
     )
     modules = _configured_modules(settings, role_rule, roles)
+    app_name = _setting_value(settings, "app_name", "TMSX Hub")
+    app_tagline = _setting_value(settings, "app_tagline", "Mobile ERP")
 
     return {
         "boot_version": 1,
         "app": {
-            "name": "TMSX Hub",
-            "tagline": "Mobile ERP",
+            "name": app_name,
+            "tagline": app_tagline,
         },
         "user": user,
         "full_name": user_doc.full_name,
@@ -229,6 +231,13 @@ def _mobile_settings():
     except Exception:
         return None
     return None
+
+
+def _setting_value(settings, fieldname, fallback):
+    if not settings:
+        return fallback
+    value = (getattr(settings, fieldname, None) or "").strip()
+    return value or fallback
 
 
 def _allowed_companies(user, user_doc, settings):

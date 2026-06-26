@@ -12,7 +12,7 @@ class CollectionMainScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RoleMainScreen(
-      title: 'TMSX Hub Collection',
+      title: 'Collection',
       fallbackUsername: 'Collection',
       onInitialize: (state) async {
         await Future.wait([
@@ -20,7 +20,10 @@ class CollectionMainScreen extends StatelessWidget {
           state.refreshSalesOrders(),
         ]);
       },
-      screensBuilder: (_) => [const _CollectionHomeTab(), const SalesCollectionTab()],
+      screensBuilder: (_) => [
+        const _CollectionHomeTab(),
+        const SalesCollectionTab(),
+      ],
       destinations: const [
         NavigationDestination(
           icon: Icon(Icons.home_outlined),
@@ -49,7 +52,7 @@ class _CollectionHomeTab extends StatelessWidget {
       onRefresh: () async {
         await Future.wait([
           state.refreshSalesInvoices(),
-          state.refreshAllSummaries(),
+          state.refreshSellingSummaries(),
         ]);
       },
       child: ListView(

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import '../auth/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final bool showBackButton;
@@ -756,7 +757,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
     if (confirmed != true || !mounted) return;
     await appState.logout();
-    if (mounted) Navigator.pop(context);
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
   }
 
   String? _absoluteImageUrl(AppState appState) {

@@ -35,28 +35,33 @@ class DashboardModuleLauncher extends StatelessWidget {
     if (launchEntries.isEmpty) return const [];
 
     final bootMenus = _bootMenuItems(appState.mobileBoot);
+    final bootMenuOrder = _bootMenuOrder(appState.mobileBoot);
     final grouped = <String, List<_ModuleEntry>>{};
 
     for (final entry in launchEntries) {
-      grouped.putIfAbsent(entry.meta.groupKey, () => []).add(
-        _ModuleEntry(
-          entry: entry,
-          title: MobileRoleRegistry.moduleLabel(
-            entry.moduleKey,
-            bootMenus: bootMenus,
-            fallback: entry.title,
-          ),
-          subtitle: entry.subtitle,
-          badgeLabel: _badgeForEntry(appState, entry),
-          badgeColor: _badgeColorForEntry(appState, entry),
-        ),
-      );
+      grouped
+          .putIfAbsent(entry.meta.groupKey, () => [])
+          .add(
+            _ModuleEntry(
+              entry: entry,
+              order: bootMenuOrder[entry.moduleKey] ?? entry.meta.menuOrder,
+              title: MobileRoleRegistry.moduleLabel(
+                entry.moduleKey,
+                bootMenus: bootMenus,
+                fallback: entry.title,
+              ),
+              subtitle: entry.subtitle,
+              badgeLabel: _badgeForEntry(appState, entry),
+              badgeColor: _badgeColorForEntry(appState, entry),
+            ),
+          );
     }
 
     final groups = <_ModuleGroup>[];
     for (final groupMeta in MobileRoleRegistry.sortedGroups()) {
       final entries = grouped[groupMeta.key];
       if (entries == null || entries.isEmpty) continue;
+      entries.sort((a, b) => a.order.compareTo(b.order));
       groups.add(_ModuleGroup(title: groupMeta.title, entries: entries));
     }
 
@@ -69,12 +74,24 @@ class DashboardModuleLauncher extends StatelessWidget {
         .toList();
   }
 
+  Map<String, int> _bootMenuOrder(MobileBoot? boot) {
+    final order = <String, int>{};
+    for (final menu in boot?.menus ?? const <MobileBootMenuItem>[]) {
+      if (menu.module.trim().isEmpty || menu.order <= 0) continue;
+      order[menu.module] = menu.order;
+    }
+    return order;
+  }
+
   String _badgeForEntry(AppState appState, ModuleLaunchEntry entry) {
     switch (entry.routeKey) {
       case MobileModule.sales:
         return _countLabel(appState.dashboardSummary.salesOpenCount, 'open');
       case MobileModule.collection:
-        return _countLabel(appState.dashboardSummary.unpaidSalesInvoices, 'unpaid');
+        return _countLabel(
+          appState.dashboardSummary.unpaidSalesInvoices,
+          'unpaid',
+        );
       case MobileModule.purchase:
         if (appState.purchaseApprovalTodoCount > 0) {
           return '${appState.purchaseApprovalTodoCount} approval';
@@ -134,6 +151,7 @@ class _ModuleGroup {
 
 class _ModuleEntry {
   final ModuleLaunchEntry entry;
+  final int order;
   final String title;
   final String subtitle;
   final String badgeLabel;
@@ -141,6 +159,7 @@ class _ModuleEntry {
 
   const _ModuleEntry({
     required this.entry,
+    required this.order,
     required this.title,
     required this.subtitle,
     this.badgeLabel = '',
@@ -199,9 +218,9 @@ class _ModuleEntryTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => entry.entry.screen),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => entry.entry.screen));
         },
         borderRadius: BorderRadius.circular(16),
         child: Ink(

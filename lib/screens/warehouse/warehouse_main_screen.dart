@@ -13,7 +13,7 @@ class WarehouseMainScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => RoleMainScreen(
-    title: 'TMSX Hub Warehouse',
+    title: 'Warehouse',
     fallbackUsername: 'Warehouse',
     initialTabIndex: initialTabIndex,
     onInitialize: (state) async {

@@ -93,7 +93,7 @@ class SalesVisitLocationService {
     Future<void> Function(VisitLocationPoint point) onPoint, {
     String notificationTitle = 'Perjalanan customer aktif',
     String notificationText =
-        'TMSX mencatat lokasi tiap 5 menit sampai check-in.',
+        'Aplikasi mencatat lokasi tiap 5 menit sampai check-in.',
     bool queueFailedPoints = true,
   }) async {
     await stopTracking();

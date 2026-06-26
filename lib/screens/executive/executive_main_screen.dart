@@ -11,7 +11,7 @@ class ExecutiveMainScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RoleMainScreen(
-      title: 'TMSX Hub Executive',
+      title: 'Executive',
       fallbackUsername: 'Director',
       onInitialize: (state) async {
         await state.refreshAllSummaries();
@@ -73,12 +73,32 @@ class _ExecutiveOverviewTab extends StatelessWidget {
           const SizedBox(height: 16),
           _KpiGrid(
             items: [
-              _KpiItem('Open Sales', '${summary.salesOpenCount}', Icons.point_of_sale_rounded),
-              _KpiItem('Unpaid SI', '${summary.unpaidSalesInvoices}', Icons.receipt_long_rounded),
-              _KpiItem('Pending PO', '${summary.purchasePendingCount}', Icons.shopping_bag_rounded),
-              _KpiItem('Stock Alert', '${summary.stockAlerts}', Icons.warning_amber_rounded),
+              _KpiItem(
+                'Open Sales',
+                '${summary.salesOpenCount}',
+                Icons.point_of_sale_rounded,
+              ),
+              _KpiItem(
+                'Unpaid SI',
+                '${summary.unpaidSalesInvoices}',
+                Icons.receipt_long_rounded,
+              ),
+              _KpiItem(
+                'Pending PO',
+                '${summary.purchasePendingCount}',
+                Icons.shopping_bag_rounded,
+              ),
+              _KpiItem(
+                'Stock Alert',
+                '${summary.stockAlerts}',
+                Icons.warning_amber_rounded,
+              ),
               _KpiItem('Approval', '$todoCount', Icons.checklist_rounded),
-              _KpiItem('Warehouse', '${state.warehouses.length}', Icons.warehouse_rounded),
+              _KpiItem(
+                'Warehouse',
+                '${state.warehouses.length}',
+                Icons.warehouse_rounded,
+              ),
             ],
           ),
         ],

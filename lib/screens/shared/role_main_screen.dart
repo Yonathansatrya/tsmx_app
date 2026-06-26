@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/notifications/notification_sheet.dart';
+import '../auth/login_screen.dart';
 import '../profile/profile_screen.dart';
 
 typedef RoleScreensBuilder =
@@ -61,9 +62,29 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
     setState(() => _currentIndex = index);
   }
 
+  void _redirectToLogin() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (_) => false,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    if (!state.isAuthenticated) {
+      _redirectToLogin();
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
+      );
+    }
+
     final subtitle = state.selectedSiteName.trim().isNotEmpty
         ? state.selectedSiteName
         : state.currentUser ?? widget.fallbackUsername;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../config/app_config.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../app_main_screen.dart';
@@ -61,10 +62,10 @@ class _LoadingScreenState extends State<LoadingScreen> {
 
               const SizedBox(height: 22),
 
-              const Text(
-                'TMSX Hub',
+              Text(
+                AppConfig.defaultAppName,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   color: AppColors.primary,
                   fontSize: 26,
                   fontWeight: FontWeight.w900,

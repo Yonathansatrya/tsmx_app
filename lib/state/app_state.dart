@@ -91,6 +91,9 @@ class AppState with ChangeNotifier {
   String? get mobileCompatibilityWarning => _mobileCompatibilityWarning;
   MobileBoot? _mobileBoot;
   MobileBoot? get mobileBoot => _mobileBoot;
+  String get appDisplayName => _mobileBoot?.appName.trim().isNotEmpty == true
+      ? _mobileBoot!.appName.trim()
+      : MobileRoleRegistry.defaultAppName;
   String _selectedSiteName = '';
   String get selectedSiteName => _selectedSiteName;
   String get selectedSiteBaseUrl => _frappeService.baseUrl;
@@ -419,11 +422,6 @@ class AppState with ChangeNotifier {
       }
     }
 
-    for (final warehouse in warehouses) {
-      if (warehouse.name.toLowerCase().contains('store')) {
-        return warehouse.name;
-      }
-    }
     return warehouses.first.name;
   }
 
@@ -894,28 +892,22 @@ class AppState with ChangeNotifier {
 
   Future<void> prefetchInitialData() async {
     try {
-      await fetchWarehousesFromFrappe();
-      await fetchInventoryFromFrappe(
-        filters: _inventoryScopeFiltersForCurrentRole(),
-      );
-      if (_shouldScopeSalesData) {
-        await Future.wait([
-          fetchSalesOrdersFromFrappe(),
-          fetchSalesInvoicesFromFrappe(),
-        ]);
-        await refreshNotifications(silent: true);
-        return;
-      }
       await Future.wait([
-        fetchSalesOrdersFromFrappe(),
-        fetchPurchaseOrdersFromFrappe(),
-        fetchSalesInvoicesFromFrappe(),
-        fetchPurchaseInvoicesFromFrappe(),
+        if (canUseStock || canUseWarehouse || canUsePurchase || canUseSales)
+          fetchWarehousesFromFrappe(),
+        if (canUseStock || canUseWarehouse || canUsePurchase || canUseSales)
+          fetchInventoryFromFrappe(
+            filters: _inventoryScopeFiltersForCurrentRole(),
+          ),
+        if (canUseSales) fetchSalesOrdersFromFrappe(),
+        if (canUseSales) fetchSalesInvoicesFromFrappe(),
+        if (canUsePurchase) fetchPurchaseOrdersFromFrappe(),
+        if (canUsePurchase) fetchPurchaseInvoicesFromFrappe(),
+        if (canUseLogistics) fetchDeliveryNotesFromFrappe(),
+        if (canUsePurchase) fetchPurchaseReceiptsFromFrappe(),
       ]);
-      await fetchDeliveryNotesFromFrappe();
-      await fetchPurchaseReceiptsFromFrappe();
       await refreshNotifications(silent: true);
-      unawaited(refreshAllSummaries(silent: true));
+      unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     } catch (_) {
       // Prefetch failures should not block login.
     }
@@ -1127,7 +1119,7 @@ class AppState with ChangeNotifier {
       _isAuthenticated = true;
       _currentUser = username;
       await syncCurrentUserRoleFromFrappe();
-      await refreshNotifications();
+      await prefetchInitialData();
       _startNotificationPolling();
       notifyListeners();
       return true;
@@ -1709,18 +1701,23 @@ class AppState with ChangeNotifier {
       await cancelSalesVisitJourney(visit.id);
       return;
     }
-    await _visitLocationService.startTracking((next) async {
-      final journeyStart = DateTime.tryParse(visit.journeyStartTime);
-      if (journeyStart != null &&
-          DateTime.now().difference(journeyStart) >= const Duration(hours: 4)) {
-        await cancelSalesVisitJourney(visit.id);
-        return;
-      }
-      _latestVisitLocation = next;
-      notifyListeners();
-      await _saveTrackingPoint(visit, next);
-      await _flushTrackingQueue(visit);
-    });
+    await _visitLocationService.startTracking(
+      (next) async {
+        final journeyStart = DateTime.tryParse(visit.journeyStartTime);
+        if (journeyStart != null &&
+            DateTime.now().difference(journeyStart) >=
+                const Duration(hours: 4)) {
+          await cancelSalesVisitJourney(visit.id);
+          return;
+        }
+        _latestVisitLocation = next;
+        notifyListeners();
+        await _saveTrackingPoint(visit, next);
+        await _flushTrackingQueue(visit);
+      },
+      notificationText:
+          '$appDisplayName mencatat lokasi tiap 5 menit sampai check-in.',
+    );
   }
 
   Future<SalesVisit> checkInSalesVisit({
@@ -2123,7 +2120,7 @@ class AppState with ChangeNotifier {
         await _saveDeliveryTrackingPoint(deliveryNote, point);
       },
       notificationTitle: 'Tracking driver aktif',
-      notificationText: 'TMSX mencatat lokasi driver tiap 5 menit.',
+      notificationText: '$appDisplayName mencatat lokasi driver tiap 5 menit.',
       queueFailedPoints: false,
     );
     return firstPoint;
@@ -2304,7 +2301,7 @@ class AppState with ChangeNotifier {
     _salesOrders = [order, ..._salesOrders];
     notifyListeners();
     await refreshSalesOrders();
-    unawaited(refreshOrderSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return order;
   }
 
@@ -2425,7 +2422,7 @@ class AppState with ChangeNotifier {
         .toList();
     notifyListeners();
     await refreshSalesOrders();
-    unawaited(refreshOrderSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return updatedOrder;
   }
 
@@ -2435,7 +2432,7 @@ class AppState with ChangeNotifier {
     _salesOrders.removeWhere((o) => o.id == orderId);
     notifyListeners();
     await refreshSalesOrders();
-    unawaited(refreshOrderSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
   }
 
   Future<PurchaseOrder> loadPurchaseOrderDetail(String orderId) async {
@@ -2560,7 +2557,7 @@ class AppState with ChangeNotifier {
 
     final invoice = await _purchaseInvoiceService.create(payload);
     await refreshPurchaseInvoices();
-    unawaited(refreshAllSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return invoice;
   }
 
@@ -2609,7 +2606,7 @@ class AppState with ChangeNotifier {
     _purchaseOrders = [order, ..._purchaseOrders];
     notifyListeners();
     await refreshPurchaseOrders();
-    unawaited(refreshAllSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return order;
   }
 
@@ -2659,7 +2656,7 @@ class AppState with ChangeNotifier {
         .toList();
     notifyListeners();
     await refreshPurchaseOrders();
-    unawaited(refreshAllSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return updatedOrder;
   }
 
@@ -2700,7 +2697,7 @@ class AppState with ChangeNotifier {
     };
     await _frappeService.createDocument('Purchase Receipt', payload);
     await refreshPurchaseReceipts();
-    unawaited(refreshAllSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
   }
 
   Future<void> deletePurchaseOrder(String orderId) async {
@@ -2709,7 +2706,7 @@ class AppState with ChangeNotifier {
     _purchaseOrders.removeWhere((o) => o.id == orderId);
     notifyListeners();
     await refreshPurchaseOrders();
-    unawaited(refreshAllSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
   }
 
   Future<StockEntry> createStockEntry({
@@ -2909,6 +2906,124 @@ class AppState with ChangeNotifier {
 
   Future<void> refreshOrderSummaries({bool silent = false}) {
     return refreshAllSummaries(silent: silent);
+  }
+
+  Future<void> refreshDashboardSummaryForCurrentAccess({
+    bool silent = false,
+  }) async {
+    if (canUseExecutive || MobileRoleRegistry.isFullAccessRole(_userRole)) {
+      await refreshAllSummaries(silent: silent);
+      return;
+    }
+
+    _isOrderSummaryLoading = true;
+    _summarySyncStatus = SummarySyncStatus.syncing;
+    _orderSummaryError = null;
+    if (!silent) notifyListeners();
+
+    try {
+      await Future.wait([
+        if (canUseSales) refreshSalesOrders(),
+        if (canUseSales) refreshSalesInvoices(),
+        if (canUsePurchase) refreshPurchaseOrders(),
+        if (canUsePurchase) refreshPurchaseInvoices(),
+        if (canUseStock || canUseWarehouse) refreshInventory(),
+      ]);
+
+      var salesTotal = 0.0;
+      var salesOpen = 0.0;
+      var salesCompleted = 0.0;
+      var salesDraftCount = 0;
+      var salesOpenCount = 0;
+      var salesCompletedCount = 0;
+      var unpaidSalesInvoices = 0;
+
+      if (canUseSales) {
+        for (final order in _salesOrders) {
+          salesTotal += order.value;
+          if (order.docStatus == 0) salesDraftCount++;
+          if (order.statusKey == SalesOrderStatusKey.completed) {
+            salesCompleted += order.value;
+            salesCompletedCount++;
+          } else if (order.statusKey != SalesOrderStatusKey.cancelled &&
+              order.statusKey != SalesOrderStatusKey.closed) {
+            salesOpen += order.value;
+            salesOpenCount++;
+          }
+        }
+        for (final invoice in _salesInvoices) {
+          if (invoice.statusKey == InvoiceStatusKey.unpaid ||
+              invoice.statusKey == InvoiceStatusKey.overdue ||
+              invoice.statusKey == InvoiceStatusKey.partlyPaid) {
+            unpaidSalesInvoices++;
+          }
+        }
+      }
+
+      var purchaseTotal = 0.0;
+      var purchasePending = 0.0;
+      var purchaseDelayed = 0.0;
+      var purchaseDraftCount = 0;
+      var purchasePendingCount = 0;
+      var purchaseCompletedCount = 0;
+      var overduePurchaseInvoices = 0;
+
+      if (canUsePurchase) {
+        for (final order in _purchaseOrders) {
+          purchaseTotal += order.totalValue;
+          if (order.docStatus == 0) purchaseDraftCount++;
+          if (order.statusKey == PurchaseOrderStatusKey.completed) {
+            purchaseCompletedCount++;
+          } else if (order.statusKey != PurchaseOrderStatusKey.cancelled &&
+              order.statusKey != PurchaseOrderStatusKey.closed) {
+            purchasePending += order.totalValue;
+            purchasePendingCount++;
+          }
+          if (order.isDelayed) purchaseDelayed += order.totalValue;
+        }
+        for (final invoice in _purchaseInvoices) {
+          if (invoice.statusKey == InvoiceStatusKey.overdue) {
+            overduePurchaseInvoices++;
+          }
+        }
+      }
+
+      final stockAlerts = canUseStock || canUseWarehouse
+          ? _inventory
+                .where(
+                  (item) =>
+                      item.status == StockStatus.lowStock ||
+                      item.status == StockStatus.urgent,
+                )
+                .length
+          : 0;
+
+      _dashboardSummary = DashboardSummary(
+        salesTotal: salesTotal,
+        salesOpen: salesOpen,
+        salesCompleted: salesCompleted,
+        salesDraftCount: salesDraftCount,
+        salesOpenCount: salesOpenCount,
+        salesCompletedCount: salesCompletedCount,
+        purchaseTotal: purchaseTotal,
+        purchasePending: purchasePending,
+        purchaseDelayed: purchaseDelayed,
+        purchaseDraftCount: purchaseDraftCount,
+        purchasePendingCount: purchasePendingCount,
+        purchaseCompletedCount: purchaseCompletedCount,
+        unpaidSalesInvoices: unpaidSalesInvoices,
+        overduePurchaseInvoices: overduePurchaseInvoices,
+        stockAlerts: stockAlerts,
+      );
+      _summarySyncStatus = SummarySyncStatus.completed;
+      _orderSummaryError = null;
+    } catch (err) {
+      _summarySyncStatus = SummarySyncStatus.error;
+      _orderSummaryError = err.toString();
+    } finally {
+      _isOrderSummaryLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> refreshSellingSummaries() async {
@@ -4430,7 +4545,6 @@ class AppState with ChangeNotifier {
 
   int _warehouseDisplayPriority(String warehouseName) {
     final name = warehouseName.toLowerCase();
-    if (name.contains('stores') || name.contains('store')) return 0;
     if (name.contains('inbound') || name.contains('receiving')) return 1;
     return 2;
   }
@@ -4690,7 +4804,7 @@ class AppState with ChangeNotifier {
       case 'Purchase Invoice':
         await refreshPurchaseInvoices();
     }
-    unawaited(refreshAllSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     notifyListeners();
   }
 
@@ -4718,7 +4832,7 @@ class AppState with ChangeNotifier {
     );
     await refreshDeliveryNotes();
     await refreshSalesOrders();
-    unawaited(refreshOrderSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return DeliveryNote.fromJson(created);
   }
 
@@ -4746,7 +4860,7 @@ class AppState with ChangeNotifier {
     );
     await refreshSalesInvoices();
     await refreshSalesOrders();
-    unawaited(refreshOrderSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return SalesInvoice.fromJson(created);
   }
 
@@ -4772,7 +4886,7 @@ class AppState with ChangeNotifier {
     );
     await refreshPurchaseReceipts();
     await refreshPurchaseOrders();
-    unawaited(refreshAllSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return PurchaseReceipt.fromJson(created);
   }
 
@@ -4798,7 +4912,7 @@ class AppState with ChangeNotifier {
     );
     await refreshPurchaseInvoices();
     await refreshPurchaseOrders();
-    unawaited(refreshAllSummaries(silent: true));
+    unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return PurchaseInvoice.fromJson(created);
   }
 
@@ -5530,7 +5644,7 @@ class AppState with ChangeNotifier {
     );
     final decision = isReject ? 'REJECT' : 'APPROVE';
     final content = [
-      '$decision via TMSX Hub',
+      '$decision via $appDisplayName',
       'Action: $normalizedAction',
       if (reason.trim().isNotEmpty) 'Alasan: ${reason.trim()}',
     ].join('\n');
@@ -5594,7 +5708,7 @@ class AppState with ChangeNotifier {
     );
     final decision = isReject ? 'REJECT' : 'APPROVE';
     final content = [
-      '$decision via TMSX Hub',
+      '$decision via $appDisplayName',
       'Action: $normalizedAction',
       if (reason.trim().isNotEmpty) 'Alasan: ${reason.trim()}',
     ].join('\n');
