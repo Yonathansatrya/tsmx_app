@@ -1,0 +1,93 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "creation": "2026-06-25 00:00:00.000000",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "enabled",
+    "default_modules_section",
+    "default_modules",
+    "role_modules_section",
+    "role_modules",
+    "scope_section",
+    "use_employee_company_scope",
+    "allow_all_companies_for_system_manager",
+    "modified_by",
+    "owner"
+  ],
+  "fields": [
+    {
+      "default": "1",
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "label": "Enabled"
+    },
+    {
+      "fieldname": "default_modules_section",
+      "fieldtype": "Section Break",
+      "label": "Default Modules"
+    },
+    {
+      "default": "[\"dashboard\"]",
+      "description": "JSON list. Valid modules: dashboard, executive, sales, collection, purchase, stock, warehouse, quality_control, logistics, approvals, finance, accounting, plantation",
+      "fieldname": "default_modules",
+      "fieldtype": "Code",
+      "label": "Default Modules",
+      "options": "JSON"
+    },
+    {
+      "fieldname": "role_modules_section",
+      "fieldtype": "Section Break",
+      "label": "Role Modules"
+    },
+    {
+      "fieldname": "role_modules",
+      "fieldtype": "Table",
+      "label": "Role Modules",
+      "options": "TMSX Mobile Role Module"
+    },
+    {
+      "fieldname": "scope_section",
+      "fieldtype": "Section Break",
+      "label": "Scope"
+    },
+    {
+      "default": "1",
+      "fieldname": "use_employee_company_scope",
+      "fieldtype": "Check",
+      "label": "Use Employee Company Scope"
+    },
+    {
+      "default": "1",
+      "fieldname": "allow_all_companies_for_system_manager",
+      "fieldtype": "Check",
+      "label": "Allow All Companies for System Manager"
+    }
+  ],
+  "issingle": 1,
+  "links": [],
+  "modified": "2026-06-25 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "TMSX Mobile",
+  "name": "TMSX Mobile Settings",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

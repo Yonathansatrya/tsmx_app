@@ -180,9 +180,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       _warehouseOptions = warehouses
           .where((warehouse) => warehouse.name.trim().isNotEmpty)
           .toList();
-      _selectedWarehouse = _warehouseOptions.isNotEmpty
-          ? _warehouseOptions.first.name
-          : null;
+      _selectedWarehouse = appState.preferredWarehouse(_warehouseOptions);
 
       final suppliers = await _fetchSupplierOptions(appState);
       final items = await _fetchItemOptions(appState);
@@ -293,146 +291,6 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       if (mounted) {
         setState(() => _isValidatingItem = false);
       }
-    }
-  }
-
-  List<_SupplierOption> _filteredSuppliers(String query) {
-    final normalized = query.trim().toLowerCase();
-    if (normalized.isEmpty) return _supplierOptions.take(30).toList();
-    return _supplierOptions.where((supplier) {
-      return supplier.id.toLowerCase().contains(normalized) ||
-          supplier.label.toLowerCase().contains(normalized);
-    }).toList();
-  }
-
-  Future<void> _showSupplierSelectSheet() async {
-    final searchCtrl = TextEditingController();
-    try {
-      final result = await showModalBottomSheet<String>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: AppColors.white,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-        ),
-        builder: (sheetContext) {
-          var query = '';
-          return StatefulBuilder(
-            builder: (context, setSheetState) {
-              final suppliers = _filteredSuppliers(query);
-              return Padding(
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 20,
-                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Pilih Supplier',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.navy,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.pop(sheetContext),
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: searchCtrl,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        labelText: 'Search nama supplier',
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                      ),
-                      onChanged: (value) => setSheetState(() => query = value),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: MediaQuery.of(sheetContext).size.height * 0.42,
-                      child: suppliers.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'Supplier tidak ditemukan',
-                                style: TextStyle(color: AppColors.slate),
-                              ),
-                            )
-                          : ListView.separated(
-                              itemCount: suppliers.length,
-                              separatorBuilder: (context, index) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final supplier = suppliers[index];
-                                final selected =
-                                    supplier.id == _supplierCtrl.text.trim();
-                                return ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(
-                                    supplier.label,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  subtitle: supplier.label == supplier.id
-                                      ? null
-                                      : Text(supplier.id),
-                                  trailing: selected
-                                      ? const Icon(
-                                          Icons.check_circle,
-                                          color: Colors.green,
-                                        )
-                                      : null,
-                                  onTap: () {
-                                    Navigator.pop(sheetContext, supplier.id);
-                                  },
-                                );
-                              },
-                            ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
-      );
-
-      if (result != null && mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          setState(() {
-            _supplierCtrl.text = result;
-            _supplierError = null;
-          });
-        });
-      }
-    } finally {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        searchCtrl.dispose();
-      });
     }
   }
 
@@ -692,15 +550,23 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                           : 'Series wajib dipilih',
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _supplierCtrl,
-                      readOnly: true,
-                      onTap: _showSupplierSelectSheet,
+                    ErpItemAutocompleteField(
+                      label: 'Supplier',
+                      selectedId: _supplierCtrl.text.trim().isEmpty
+                          ? null
+                          : _supplierCtrl.text.trim(),
+                      options: _supplierOptions
+                          .map(
+                            (supplier) => ErpItemOption(
+                              id: supplier.id,
+                              label: supplier.label,
+                            ),
+                          )
+                          .toList(),
                       decoration: InputDecoration(
-                        labelText: 'Supplier',
                         hintText: _isLoadingSelectors
                             ? 'Loading supplier...'
-                            : 'Pilih supplier atau ketik langsung',
+                            : 'Pilih supplier',
                         filled: true,
                         fillColor: AppColors.background,
                         border: OutlineInputBorder(
@@ -713,17 +579,16 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                           horizontal: 12,
                           vertical: 12,
                         ),
-                        suffixIcon: _supplierCtrl.text.isNotEmpty
-                            ? const Icon(
-                                Icons.check_circle,
-                                color: Colors.green,
-                              )
-                            : const Icon(Icons.arrow_drop_down_rounded),
                         errorText: _supplierError,
                       ),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Supplier wajib diisi'
-                          : null,
+                      onSelected: (value) {
+                        setState(() {
+                          _supplierCtrl.text = value ?? '';
+                          _supplierError = null;
+                        });
+                      },
+                      validator: (value) =>
+                          value == null ? 'Supplier wajib diisi' : null,
                     ),
                     const SizedBox(height: 12),
                     GestureDetector(
@@ -1056,7 +921,9 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                               (w) => w.name == _selectedWarehouse,
                             )
                             ? _selectedWarehouse
-                            : _warehouseOptions.first.name,
+                            : context.read<AppState>().preferredWarehouse(
+                                _warehouseOptions,
+                              ),
                         decoration: InputDecoration(
                           labelText: 'Pilih Warehouse',
                           filled: true,

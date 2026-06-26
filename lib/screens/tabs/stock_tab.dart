@@ -61,7 +61,10 @@ class _StockTabState extends State<StockTab> {
     final companies = appState.stockCompanies;
     if (companies.isEmpty) return;
 
-    final company = _selectedCompany ?? companies.first.key;
+    final company =
+        _selectedCompany ??
+        appState.preferredCompany(companies.map((entry) => entry.key)) ??
+        companies.first.key;
     final areas = appState.stockWarehousesForCompany(company);
     final warehouseType =
         _selectedWarehouseType ?? _defaultWarehouseType(areas);
@@ -993,7 +996,12 @@ class _StockTabState extends State<StockTab> {
                   )
                 : DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
-                      value: companyValid ? company : companies.first.key,
+                      value: companyValid
+                          ? company
+                          : (context.read<AppState>().preferredCompany(
+                                  companies.map((entry) => entry.key),
+                                ) ??
+                                companies.first.key),
                       isDense: true,
                       isExpanded: true,
                       dropdownColor: AppColors.white,

@@ -6,7 +6,9 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final bool showBackButton;
+
+  const ProfileScreen({super.key, this.showBackButton = true});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -184,35 +186,47 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        toolbarHeight: 64,
+        backgroundColor: AppColors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-          onPressed: () => Navigator.pop(context),
-        ),
+        surfaceTintColor: Colors.transparent,
+        automaticallyImplyLeading: widget.showBackButton,
+        leading: widget.showBackButton
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+                onPressed: () => Navigator.pop(context),
+              )
+            : null,
         title: const Text(
           'Profil Saya',
-          style: TextStyle(fontWeight: FontWeight.w900),
+          style: TextStyle(color: AppColors.navy, fontWeight: FontWeight.w900),
         ),
-        centerTitle: true,
+        centerTitle: false,
       ),
       body: Column(
         children: [
           Container(
-            margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 10),
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: AppColors.surfaceMuted,
-              borderRadius: BorderRadius.circular(14),
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryDark.withValues(alpha: 0.04),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: TabBar(
               controller: _tabController,
               dividerColor: Colors.transparent,
               indicatorSize: TabBarIndicatorSize.tab,
               indicator: BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.circular(11),
-                boxShadow: AppColors.cardShadow,
+                color: AppColors.softGreen,
+                borderRadius: BorderRadius.circular(12),
               ),
               labelColor: AppColors.primary,
               unselectedLabelColor: AppColors.slate,
@@ -313,19 +327,21 @@ class _ProfileScreenState extends State<ProfileScreen>
             const SizedBox(height: 14),
             _buildEmployeeCard(appState),
           ],
-          if (appState.userRole == 'Sales') ...[
+          if (appState.mobileAccess.isSalesUser) ...[
             const SizedBox(height: 14),
             _buildSalesMappingCard(appState),
           ],
           const SizedBox(height: 20),
-          OutlinedButton.icon(
+          FilledButton.icon(
             onPressed: () => _confirmLogout(appState),
-            style: OutlinedButton.styleFrom(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFFEF2F2),
               foregroundColor: AppColors.danger,
-              side: const BorderSide(color: AppColors.danger),
+              elevation: 0,
               minimumSize: const Size.fromHeight(50),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
+                side: const BorderSide(color: Color(0xFFFECACA)),
               ),
             ),
             icon: const Icon(Icons.logout_rounded),
@@ -347,17 +363,21 @@ class _ProfileScreenState extends State<ProfileScreen>
     final email = _profileValue('email', fallback: appState.currentUser);
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.primary, AppColors.primaryLight],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: AppColors.cardShadow,
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Stack(
             clipBehavior: Clip.none,
@@ -401,8 +421,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: AppColors.white,
-                    fontSize: 19,
+                    color: AppColors.navy,
+                    fontSize: 18,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -411,9 +431,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                   email,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.white.withValues(alpha: 0.82),
+                  style: const TextStyle(
+                    color: AppColors.slate,
                     fontSize: 12,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -422,6 +443,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                   runSpacing: 6,
                   children: [
                     _IdentityBadge(label: appState.userRole),
+                    if (appState.selectedSiteName.trim().isNotEmpty)
+                      _IdentityBadge(
+                        label: appState.selectedSiteName,
+                        icon: Icons.business_rounded,
+                      ),
                     _IdentityBadge(
                       label: appState.isAuthenticated ? 'Aktif' : 'Tidak Aktif',
                       icon: Icons.verified_rounded,
@@ -516,15 +542,18 @@ class _ProfileScreenState extends State<ProfileScreen>
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
       children: [
         Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppColors.primary, AppColors.primaryLight],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: AppColors.cardShadow,
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryDark.withValues(alpha: 0.04),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: const Row(
             children: [
@@ -537,15 +566,19 @@ class _ProfileScreenState extends State<ProfileScreen>
                     Text(
                       'Keamanan Akun',
                       style: TextStyle(
-                        color: AppColors.white,
-                        fontSize: 19,
+                        color: AppColors.navy,
+                        fontSize: 18,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
                     SizedBox(height: 3),
                     Text(
                       'Kelola password dan sesi login akun ERPNext Anda.',
-                      style: TextStyle(color: AppColors.white, fontSize: 12),
+                      style: TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -814,22 +847,23 @@ class _IdentityBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.white.withValues(alpha: 0.16),
+        color: AppColors.softGreen,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 13, color: AppColors.white),
+            Icon(icon, size: 13, color: AppColors.primary),
             const SizedBox(width: 4),
           ],
           Text(
             label,
             style: const TextStyle(
-              color: AppColors.white,
+              color: AppColors.primary,
               fontSize: 11,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ],
@@ -1080,12 +1114,12 @@ class _SecurityIcon extends StatelessWidget {
       width: 48,
       height: 48,
       decoration: BoxDecoration(
-        color: AppColors.white.withValues(alpha: 0.12),
+        color: AppColors.softGreen,
         borderRadius: BorderRadius.circular(15),
       ),
       child: const Icon(
         Icons.security_rounded,
-        color: AppColors.white,
+        color: AppColors.primary,
         size: 26,
       ),
     );

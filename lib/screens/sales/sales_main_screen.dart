@@ -36,7 +36,7 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
     final todoCount = appState.salesOrderApprovalTodoCount;
 
     return RoleMainScreen(
-      title: 'TMSX SALES TEAM',
+      title: 'TMSX Hub Sales',
       fallbackUsername: 'Salesman',
       onInitialize: (state) async {
         await state.refreshDataForCurrentRole();
@@ -52,10 +52,11 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
         SalesOrderTab(selectedTabIndex: _orderTabIndex),
         const SalesCollectionTab(),
         const SalesVisitTab(),
-        if (showTodo) const SalesOrderApprovalScreen(
-          embedded: true,
-          title: 'Approval Sales Order',
-        ),
+        if (showTodo)
+          const SalesOrderApprovalScreen(
+            embedded: true,
+            title: 'Approval Sales Order',
+          ),
       ],
       destinations: [
         const NavigationDestination(

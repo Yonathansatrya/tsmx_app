@@ -203,13 +203,10 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                   : doctype;
             }),
           ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _search,
-            decoration: const InputDecoration(
-              labelText: 'Cari dokumen, customer, supplier, atau status',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
+          const SizedBox(height: 12),
+          _approvalSearchBox(
+            visibleCount: rows.length,
+            totalCount: _rows.length,
           ),
           if (_loading) ...[
             const SizedBox(height: 12),
@@ -233,6 +230,84 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     );
   }
 
+  Widget _approvalSearchBox({
+    required int visibleCount,
+    required int totalCount,
+  }) => Container(
+    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+    decoration: BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _search,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: 'Cari nomor, customer, supplier, atau status',
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: _search.text.trim().isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Bersihkan pencarian',
+                    onPressed: _search.clear,
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+            filled: true,
+            fillColor: AppColors.softGreen.withValues(alpha: 0.35),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: AppColors.primary),
+            ),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            const Icon(
+              Icons.filter_list_rounded,
+              size: 16,
+              color: AppColors.slate,
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                '$visibleCount dari $totalCount dokumen ditampilkan',
+                style: const TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            if (_doctypeQuickFilter != null)
+              TextButton.icon(
+                onPressed: () => setState(() => _doctypeQuickFilter = null),
+                icon: const Icon(Icons.close_rounded, size: 16),
+                label: const Text('Filter'),
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: AppColors.primary,
+                ),
+              ),
+          ],
+        ),
+      ],
+    ),
+  );
+
   Widget _historyTab() => RefreshIndicator(
     onRefresh: _load,
     child: ListView(
@@ -242,8 +317,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
         _summaryCard(
           icon: Icons.history_rounded,
           title: 'Riwayat Keputusan',
-          message:
-              'Log approve dan reject yang dilakukan melalui aplikasi TMSX.',
+          message: 'Log approve dan reject yang dilakukan melalui TMSX Hub.',
         ),
         if (_loading) ...[
           const SizedBox(height: 12),
@@ -314,73 +388,134 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: _cardDecoration(),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              backgroundColor: AppColors.softGreen,
-              foregroundColor: AppColors.primary,
-              child: Icon(_approvalIcon(row.doctype)),
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: AppColors.softGreen,
+                  foregroundColor: AppColors.primary,
+                  child: Icon(_approvalIcon(row.doctype)),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          row.name,
-                          style: const TextStyle(
-                            color: AppColors.navy,
-                            fontWeight: FontWeight.w900,
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.softGreen,
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                row.moduleLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
                           ),
+                          const SizedBox(width: 8),
+                          ErpStatusBadge(
+                            statusText: row.workflowState.isEmpty
+                                ? row.status
+                                : row.workflowState,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        row.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                      ErpStatusBadge(
-                        statusText: row.workflowState.isEmpty
-                            ? row.status
-                            : row.workflowState,
+                      const SizedBox(height: 4),
+                      Text(
+                        row.partyLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    row.partyLabel,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.slate,
-                      fontSize: 11,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    row.moduleLabel,
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _approvalAmount(row),
-                    style: const TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right_rounded, color: AppColors.slate),
+              ],
             ),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.slate),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _approvalMetaPill(
+                  icon: Icons.payments_outlined,
+                  label: _approvalAmount(row),
+                ),
+                if (row.date.isNotEmpty)
+                  _approvalMetaPill(
+                    icon: Icons.event_available_rounded,
+                    label: row.date,
+                  ),
+                _approvalMetaPill(
+                  icon: Icons.task_alt_rounded,
+                  label: '${row.actions.length} action',
+                ),
+              ],
+            ),
           ],
         ),
       ),
     ),
   );
+
+  Widget _approvalMetaPill({required IconData icon, required String label}) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: AppColors.primary),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.navy,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      );
 
   IconData _approvalIcon(String doctype) => switch (doctype) {
     'Sales Order' => Icons.point_of_sale_rounded,
@@ -391,10 +526,10 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   };
 
   String _approvalAmount(ErpApprovalTodo row) {
-    final value = row.doctype == 'Material Request'
-        ? '${formatErpCurrency(row.amount)} qty'
-        : 'Rp ${formatErpCurrency(row.amount)}';
-    return '$value${row.date.isEmpty ? '' : ' | ${row.date}'}';
+    if (row.doctype == 'Material Request') {
+      return '${formatErpCurrency(row.amount)} qty';
+    }
+    return 'Rp ${formatErpCurrency(row.amount)}';
   }
 
   Widget _historyGroupCard(_ApprovalHistoryGroup group) {
@@ -925,39 +1060,77 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                widget.approval.name,
-                style: const TextStyle(
-                  color: AppColors.navy,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: AppColors.softGreen,
+              foregroundColor: AppColors.primary,
+              child: Icon(_detailIcon(widget.approval.doctype)),
             ),
-            ErpStatusBadge(
-              statusText: widget.approval.workflowState.isEmpty
-                  ? widget.approval.status
-                  : widget.approval.workflowState,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.softGreen,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          widget.approval.moduleLabel,
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      ErpStatusBadge(
+                        statusText: widget.approval.workflowState.isEmpty
+                            ? widget.approval.status
+                            : widget.approval.workflowState,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.approval.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        Text(
-          widget.approval.moduleLabel,
-          style: const TextStyle(
-            color: AppColors.primary,
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 5),
+        const SizedBox(height: 12),
         Text(
           widget.approval.partyLabel,
-          style: const TextStyle(color: AppColors.slate),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.slate,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Text(
           widget.approval.doctype == 'Material Request'
               ? '${formatErpCurrency(widget.approval.amount)} qty'
@@ -968,9 +1141,62 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
             fontWeight: FontWeight.w900,
           ),
         ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            if (widget.approval.date.isNotEmpty)
+              _detailMetaPill(
+                icon: Icons.event_available_rounded,
+                label: widget.approval.date,
+              ),
+            _detailMetaPill(
+              icon: Icons.task_alt_rounded,
+              label: '${widget.approval.actions.length} action tersedia',
+            ),
+            _detailMetaPill(
+              icon: Icons.description_outlined,
+              label: docStatusLabel(widget.approval.docStatus),
+            ),
+          ],
+        ),
       ],
     ),
   );
+
+  IconData _detailIcon(String doctype) => switch (doctype) {
+    'Sales Order' => Icons.point_of_sale_rounded,
+    'Purchase Order' => Icons.shopping_bag_rounded,
+    'Purchase Invoice' => Icons.receipt_long_rounded,
+    'Material Request' => Icons.assignment_turned_in_rounded,
+    _ => Icons.approval_outlined,
+  };
+
+  Widget _detailMetaPill({required IconData icon, required String label}) =>
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: AppColors.primary),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.navy,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      );
 
   List<Widget> _documentInfoRows(Map<String, dynamic> detail) {
     final partnerLabel = widget.approval.doctype == 'Sales Order'

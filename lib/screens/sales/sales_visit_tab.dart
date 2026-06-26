@@ -59,7 +59,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
       customers = result[0] as List<SalesCustomerOption>;
       visits = result[1] as List<SalesVisit>;
       final active = state.activeSalesVisit;
-      if (state.userRole == 'Sales' && active != null) {
+      if (state.mobileAccess.isSalesUser && active != null) {
         try {
           target = await state.fetchCustomerVisitLocation(active.customer);
         } catch (_) {
@@ -71,7 +71,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
           );
         }
       }
-      if (state.userRole != 'Sales') {
+      if (!state.mobileAccess.isSalesUser) {
         trackingPoints = await state.fetchLatestSalesTrackingPoints();
       }
     } catch (e) {
@@ -183,7 +183,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
 
   Widget _journeyTab() {
     final state = context.watch<AppState>();
-    if (state.userRole != 'Sales') return _managerJourneyTab();
+    if (!state.mobileAccess.isSalesUser) return _managerJourneyTab();
     final active = state.activeSalesVisit;
     final point = state.latestVisitLocation;
     final distance = active == null || point == null
@@ -316,7 +316,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
 
   Widget _activityTab() {
     final state = context.watch<AppState>();
-    if (state.userRole != 'Sales') return _managerActivityTab();
+    if (!state.mobileAccess.isSalesUser) return _managerActivityTab();
     final active = state.activeSalesVisit;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
@@ -851,10 +851,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     final selected = await showModalBottomSheet<SalesCustomerOption>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         var query = '';
         return StatefulBuilder(
@@ -866,82 +863,153 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
                     return row.id.toLowerCase().contains(normalized) ||
                         row.name.toLowerCase().contains(normalized);
                   }).toList();
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Pilih Customer Tujuan',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(sheetContext),
-                        icon: const Icon(Icons.close_rounded),
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: 12,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 12,
+                ),
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.82,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryDark.withValues(alpha: 0.16),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Cari nama atau ID customer',
-                      prefixIcon: Icon(Icons.search_rounded),
-                    ),
-                    onChanged: (value) => setSheetState(() => query = value),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    height: MediaQuery.of(sheetContext).size.height * 0.48,
-                    child: filtered.isEmpty
-                        ? const Center(child: Text('Customer tidak ditemukan'))
-                        : ListView.separated(
-                            itemCount: filtered.length,
-                            separatorBuilder: (context, index) =>
-                                const Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              final row = filtered[index];
-                              return ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: const CircleAvatar(
-                                  backgroundColor: AppColors.softGreen,
-                                  foregroundColor: AppColors.primary,
-                                  child: Icon(Icons.storefront_outlined),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.border,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 10, 10),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Pilih Customer Tujuan',
+                                style: TextStyle(
+                                  color: AppColors.navy,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
                                 ),
-                                title: Text(
-                                  row.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Tutup',
+                              onPressed: () => Navigator.pop(sheetContext),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: TextField(
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: 'Cari nama atau ID customer',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          onChanged: (value) =>
+                              setSheetState(() => query = value),
+                        ),
+                      ),
+                      Flexible(
+                        child: filtered.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(28),
+                                  child: Text(
+                                    'Customer tidak ditemukan',
+                                    style: TextStyle(
+                                      color: AppColors.slate,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
-                                subtitle: row.id == row.name
-                                    ? null
-                                    : Text(row.id),
-                                trailing: customer?.id == row.id
-                                    ? const Icon(
-                                        Icons.check_circle_rounded,
-                                        color: AppColors.success,
-                                      )
-                                    : null,
-                                onTap: () => Navigator.pop(sheetContext, row),
-                              );
-                            },
-                          ),
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  0,
+                                  12,
+                                  14,
+                                ),
+                                itemCount: filtered.length,
+                                separatorBuilder: (context, index) =>
+                                    const Divider(
+                                      height: 1,
+                                      color: AppColors.border,
+                                    ),
+                                itemBuilder: (context, index) {
+                                  final row = filtered[index];
+                                  return ListTile(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    leading: const CircleAvatar(
+                                      backgroundColor: AppColors.softGreen,
+                                      foregroundColor: AppColors.primary,
+                                      child: Icon(Icons.storefront_outlined),
+                                    ),
+                                    title: Text(
+                                      row.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    subtitle: row.id == row.name
+                                        ? null
+                                        : Text(
+                                            row.id,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                    trailing: customer?.id == row.id
+                                        ? const Icon(
+                                            Icons.check_circle_rounded,
+                                            color: AppColors.success,
+                                          )
+                                        : null,
+                                    onTap: () =>
+                                        Navigator.pop(sheetContext, row),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             );
           },

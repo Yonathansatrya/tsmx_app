@@ -9,7 +9,7 @@ class LogisticsMainScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => RoleMainScreen(
-    title: 'TMSX LOGISTICS',
+    title: 'TMSX Hub Logistics',
     fallbackUsername: 'Logistics',
     onInitialize: (state) async {
       await Future.wait([

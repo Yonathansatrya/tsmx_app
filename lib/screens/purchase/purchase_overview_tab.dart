@@ -54,11 +54,12 @@ class PurchaseOverviewTab extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
         children: [
-          const _SectionHeader(
-            title: 'Beranda Purchase',
-            subtitle:
-                'Pantau PO, penerimaan barang, invoice supplier, dan request',
-            icon: Icons.shopping_bag_rounded,
+          _PurchaseHeroCard(
+            outstandingPo: outstandingPo,
+            approvalCount: state.purchaseApprovalTodoCount,
+            overdueInvoices: overdueInvoices,
+            outstandingDebt: outstandingDebt,
+            onApprovalTap: () => onMenuSelected(5),
           ),
           const SizedBox(height: 14),
           Row(
@@ -250,6 +251,166 @@ class PurchaseOverviewTab extends StatelessWidget {
   }
 }
 
+class _PurchaseHeroCard extends StatelessWidget {
+  final int outstandingPo;
+  final int approvalCount;
+  final int overdueInvoices;
+  final double outstandingDebt;
+  final VoidCallback onApprovalTap;
+
+  const _PurchaseHeroCard({
+    required this.outstandingPo,
+    required this.approvalCount,
+    required this.overdueInvoices,
+    required this.outstandingDebt,
+    required this.onApprovalTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+      boxShadow: [
+        BoxShadow(
+          color: AppColors.primaryDark.withValues(alpha: 0.04),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.softGreen,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.shopping_bag_rounded,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Purchase Workspace',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'PO, receipt, invoice supplier, dan request barang',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            TextButton.icon(
+              onPressed: onApprovalTap,
+              icon: const Icon(Icons.fact_check_outlined, size: 16),
+              label: Text('$approvalCount'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                backgroundColor: AppColors.softGreen,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _HeroMetric(label: 'Open PO', value: '$outstandingPo'),
+            ),
+            Expanded(
+              child: _HeroMetric(
+                label: 'Overdue PI',
+                value: '$overdueInvoices',
+              ),
+            ),
+            Expanded(
+              child: _HeroMetric(
+                label: 'Outstanding',
+                value: 'Rp ${formatErpCurrency(outstandingDebt)}',
+                compact: true,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _HeroMetric extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool compact;
+
+  const _HeroMetric({
+    required this.label,
+    required this.value,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: AppColors.navy,
+          fontSize: compact ? 12 : 20,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      const SizedBox(height: 2),
+      Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.slate,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ],
+  );
+}
+
 class _OutstandingPoSection extends StatelessWidget {
   final List<PurchaseOrder> orders;
   final VoidCallback onViewAll;
@@ -305,7 +466,7 @@ class _OutstandingPoSection extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${po.vendor} • ${po.statusText}',
+                          '${po.vendor} - ${po.statusText}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(

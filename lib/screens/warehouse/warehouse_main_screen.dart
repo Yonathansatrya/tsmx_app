@@ -7,12 +7,15 @@ import 'warehouse_overview_tab.dart';
 import 'warehouse_quality_tab.dart';
 
 class WarehouseMainScreen extends StatelessWidget {
-  const WarehouseMainScreen({super.key});
+  final int initialTabIndex;
+
+  const WarehouseMainScreen({super.key, this.initialTabIndex = 0});
 
   @override
   Widget build(BuildContext context) => RoleMainScreen(
-    title: 'TMSX WAREHOUSE',
+    title: 'TMSX Hub Warehouse',
     fallbackUsername: 'Warehouse',
+    initialTabIndex: initialTabIndex,
     onInitialize: (state) async {
       await Future.wait([
         state.refreshWarehouses(),

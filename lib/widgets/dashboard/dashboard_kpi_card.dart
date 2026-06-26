@@ -23,13 +23,19 @@ class DashboardKpiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 100,
-      padding: const EdgeInsets.all(10),
+      height: 116,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
-        boxShadow: AppColors.cardShadow,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,6 +45,7 @@ class DashboardKpiCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _IconBox(icon: icon, iconColor: iconColor),
+              const SizedBox(width: 6),
               _TrendBadge(label: trend, color: trendColor),
             ],
           ),
@@ -51,7 +58,7 @@ class DashboardKpiCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 22,
+                  fontSize: 24,
                   fontWeight: FontWeight.w900,
                   color: AppColors.navy,
                   height: 1,
@@ -62,11 +69,10 @@ class DashboardKpiCard extends StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 8,
+                style: const TextStyle(
+                  fontSize: 10,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.slate.withValues(alpha: 0.85),
-                  letterSpacing: 0.5,
+                  color: AppColors.slate,
                 ),
               ),
             ],
@@ -90,7 +96,7 @@ class _IconBox extends StatelessWidget {
       height: 30,
       decoration: BoxDecoration(
         color: iconColor.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(11),
       ),
       child: Icon(icon, color: iconColor, size: 18),
     );
@@ -113,9 +119,11 @@ class _TrendBadge extends StatelessWidget {
       ),
       child: Text(
         label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          fontSize: 8,
-          fontWeight: FontWeight.w800,
+          fontSize: 9,
+          fontWeight: FontWeight.w900,
           color: color,
         ),
       ),

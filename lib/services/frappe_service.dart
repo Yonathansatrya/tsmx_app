@@ -14,7 +14,7 @@ class FrappeService {
   final Map<String, String> _cookies = {};
 
   FrappeService({String? baseUrl})
-    : baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
+    : baseUrl = baseUrl ?? AppConfig.optionalFrappeBaseUrl;
 
   bool get hasCredentials => username != null && password != null;
 
@@ -50,6 +50,9 @@ class FrappeService {
   }
 
   Future<void> ensureLoggedIn() async {
+    if (baseUrl.trim().isEmpty) {
+      throw Exception('Frappe site belum dipilih.');
+    }
     if (!hasCredentials) {
       throw Exception('Missing Frappe username or password.');
     }

@@ -1,0 +1,3 @@
+recursive-include tmsx_mobile *.json
+recursive-include tmsx_mobile *.py
+recursive-include tmsx_mobile *.txt

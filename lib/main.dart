@@ -26,7 +26,7 @@ class TMSXLogisticsApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TMSX',
+      title: 'TMSX Hub',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -39,10 +39,12 @@ class TMSXLogisticsApp extends StatelessWidget {
           surfaceContainerLowest: AppColors.white,
           surfaceContainer: AppColors.surfaceMuted,
         ),
+
         scaffoldBackgroundColor: AppColors.background,
         textTheme: GoogleFonts.hankenGroteskTextTheme(
           Theme.of(context).textTheme,
         ),
+
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColors.white,
           foregroundColor: AppColors.primary,
@@ -55,14 +57,17 @@ class TMSXLogisticsApp extends StatelessWidget {
             fontWeight: FontWeight.w900,
           ),
         ),
+
         dividerTheme: const DividerThemeData(
           color: AppColors.border,
           thickness: 1,
         ),
+
         progressIndicatorTheme: const ProgressIndicatorThemeData(
           color: AppColors.primary,
           linearTrackColor: AppColors.softGreen,
         ),
+
         cardTheme: CardThemeData(
           color: AppColors.white,
           elevation: 0,
@@ -72,6 +77,7 @@ class TMSXLogisticsApp extends StatelessWidget {
             side: const BorderSide(color: AppColors.border),
           ),
         ),
+
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: AppColors.surfaceMuted,
@@ -84,11 +90,13 @@ class TMSXLogisticsApp extends StatelessWidget {
             borderSide: BorderSide.none,
           ),
         ),
+
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.white,
           elevation: 3,
         ),
+
         switchTheme: SwitchThemeData(
           thumbColor: WidgetStateProperty.resolveWith<Color?>((states) {
             if (states.contains(WidgetState.selected)) {

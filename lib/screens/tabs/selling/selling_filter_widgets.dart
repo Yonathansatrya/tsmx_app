@@ -57,43 +57,73 @@ class SellingQuickFilters extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: DropdownButtonFormField<SellingSortOption>(
-              initialValue: sortOption,
-              decoration: const InputDecoration(
-                labelText: 'Urutkan',
-                prefixIcon: Icon(Icons.sort_rounded, size: 18),
-              ),
-              items: SellingSortOption.values.map((option) {
-                return DropdownMenuItem<SellingSortOption>(
-                  value: option,
-                  child: Text(sortLabel(option)),
-                );
-              }).toList(),
-              onChanged: (option) {
-                if (option != null) onSortChanged(option);
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          _SellingFilterButton(
-            icon: Icons.tune_rounded,
-            label: advancedCount > 0 ? 'Filter $advancedCount' : 'Filter',
-            onTap: onAdvancedFilters,
-          ),
-          const SizedBox(width: 8),
-          _SellingFilterButton(
-            icon: Icons.restart_alt_rounded,
-            label: 'Reset',
-            onTap: onReset,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 390;
+          final sortField = DropdownButtonFormField<SellingSortOption>(
+            initialValue: sortOption,
+            decoration: const InputDecoration(
+              labelText: 'Urutkan',
+              prefixIcon: Icon(Icons.sort_rounded, size: 18),
+            ),
+            items: SellingSortOption.values.map((option) {
+              return DropdownMenuItem<SellingSortOption>(
+                value: option,
+                child: Text(
+                  sortLabel(option),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (option) {
+              if (option != null) onSortChanged(option);
+            },
+          );
+          final actions = Row(
+            children: [
+              Expanded(
+                child: _SellingFilterButton(
+                  icon: Icons.tune_rounded,
+                  label: advancedCount > 0 ? 'Filter $advancedCount' : 'Filter',
+                  onTap: onAdvancedFilters,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _SellingFilterButton(
+                  icon: Icons.restart_alt_rounded,
+                  label: 'Reset',
+                  onTap: onReset,
+                ),
+              ),
+            ],
+          );
+
+          if (compact) {
+            return Column(
+              children: [sortField, const SizedBox(height: 10), actions],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: sortField),
+              const SizedBox(width: 10),
+              SizedBox(width: 150, child: actions),
+            ],
+          );
+        },
       ),
     );
   }
@@ -114,24 +144,27 @@ class _SellingFilterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppColors.softGreen,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(13),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(13),
         child: SizedBox(
-          width: 64,
-          height: 56,
-          child: Column(
+          height: 46,
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, color: AppColors.primary, size: 18),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
             ],

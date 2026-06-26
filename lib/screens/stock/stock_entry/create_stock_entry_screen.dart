@@ -52,9 +52,7 @@ class _CreateStockEntryScreenState extends State<CreateStockEntryScreen> {
           })
           .whereType<ErpItemOption>()
           .toList();
-      _selectedWarehouse = _warehouses.isNotEmpty
-          ? _warehouses.first.name
-          : null;
+      _selectedWarehouse = appState.preferredWarehouse(_warehouses);
       _loading = false;
     });
   }

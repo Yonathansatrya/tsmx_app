@@ -29,10 +29,9 @@ class WarehouseOverviewTab extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: warehousePagePadding,
         children: [
-          const WarehouseSectionHeader(
-            title: 'Dashboard Warehouse',
-            subtitle: 'Ringkasan stok dan akses aktivitas gudang',
-            icon: Icons.dashboard_rounded,
+          _WarehouseHeroCard(
+            warehouses: state.warehouses.length,
+            lowStock: lowStock,
           ),
           warehouseSectionGap,
           Row(
@@ -137,4 +136,109 @@ class _MetricCard extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _WarehouseHeroCard extends StatelessWidget {
+  final int warehouses;
+  final int lowStock;
+
+  const _WarehouseHeroCard({required this.warehouses, required this.lowStock});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppColors.softGreen,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: const Icon(
+              Icons.warehouse_rounded,
+              color: AppColors.primary,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Warehouse Workspace',
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  lowStock > 0
+                      ? '$lowStock item perlu perhatian stok'
+                      : 'Stok dan aktivitas gudang siap dipantau',
+                  style: TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: AppColors.softGreen,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.1),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '$warehouses',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+                const Text(
+                  'Gudang',
+                  style: TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

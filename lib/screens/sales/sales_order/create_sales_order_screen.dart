@@ -24,10 +24,6 @@ class CreateSalesOrderScreen extends StatefulWidget {
 }
 
 class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
-  static const _defaultWarehouseName = 'Stores - Jakarta';
-  static const _defaultCompanyName = 'Distribusi Jakarta';
-  static const _defaultCostCenterName = 'Sales - Jakarta';
-
   final _formKey = GlobalKey<FormState>();
   final _customerCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
@@ -95,14 +91,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
   String? _defaultWarehouse(List<WarehouseInfo> warehouses) {
     for (final warehouse in warehouses) {
-      if (warehouse.name.trim().toLowerCase() ==
-          _defaultWarehouseName.toLowerCase()) {
-        return warehouse.name;
-      }
-    }
-    for (final warehouse in warehouses) {
-      if (warehouse.company.trim().toLowerCase() ==
-          _defaultCompanyName.toLowerCase()) {
+      if (warehouse.name.trim().toLowerCase().contains('store')) {
         return warehouse.name;
       }
     }
@@ -777,117 +766,172 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     final result = await showModalBottomSheet<Object>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         var query = '';
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final customers = _filteredCustomers(query);
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Pilih Customer',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.navy,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(sheetContext),
-                        icon: const Icon(Icons.close_rounded),
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: 12,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 12,
+                ),
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.82,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryDark.withValues(alpha: 0.16),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      labelText: 'Search nama customer',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                          color: AppColors.primary.withValues(alpha: 0.2),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.border,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
                         ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                    ),
-                    onChanged: (value) => setSheetState(() => query = value),
-                  ),
-                  const SizedBox(height: 10),
-                  if (context.read<AppState>().userRole != 'Sales') ...[
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(sheetContext, true);
-                      },
-                      icon: const Icon(Icons.person_add_alt_1_rounded),
-                      label: const Text('Add Customer Baru'),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                  SizedBox(
-                    height: MediaQuery.of(sheetContext).size.height * 0.42,
-                    child: customers.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'Customer tidak ditemukan',
-                              style: TextStyle(color: AppColors.slate),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 10, 10),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Pilih Customer',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.navy,
+                                ),
+                              ),
                             ),
-                          )
-                        : ListView.separated(
-                            itemCount: customers.length,
-                            separatorBuilder: (context, index) =>
-                                const Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              final customer = customers[index];
-                              final selected =
-                                  customer.id == _customerCtrl.text.trim();
-                              return ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  customer.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
+                            IconButton(
+                              tooltip: 'Tutup',
+                              onPressed: () => Navigator.pop(sheetContext),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: TextField(
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: 'Cari nama atau ID customer',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          onChanged: (value) =>
+                              setSheetState(() => query = value),
+                        ),
+                      ),
+                      if (!context
+                          .read<AppState>()
+                          .mobileAccess
+                          .isSalesUser) ...[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(sheetContext, true);
+                            },
+                            icon: const Icon(Icons.person_add_alt_1_rounded),
+                            label: const Text('Add Customer Baru'),
+                          ),
+                        ),
+                      ],
+                      Flexible(
+                        child: customers.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(28),
+                                  child: Text(
+                                    'Customer tidak ditemukan',
+                                    style: TextStyle(
+                                      color: AppColors.slate,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
-                                subtitle: customer.name == customer.id
-                                    ? null
-                                    : Text(customer.id),
-                                trailing: selected
-                                    ? const Icon(
-                                        Icons.check_circle,
-                                        color: Colors.green,
-                                      )
-                                    : null,
-                                onTap: () {
-                                  Navigator.pop(sheetContext, customer.id);
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  0,
+                                  12,
+                                  14,
+                                ),
+                                itemCount: customers.length,
+                                separatorBuilder: (context, index) =>
+                                    const Divider(
+                                      height: 1,
+                                      color: AppColors.border,
+                                    ),
+                                itemBuilder: (context, index) {
+                                  final customer = customers[index];
+                                  final selected =
+                                      customer.id == _customerCtrl.text.trim();
+                                  return ListTile(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    title: Text(
+                                      customer.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    subtitle: customer.name == customer.id
+                                        ? null
+                                        : Text(
+                                            customer.id,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                    trailing: selected
+                                        ? const Icon(
+                                            Icons.check_circle_rounded,
+                                            color: AppColors.success,
+                                          )
+                                        : null,
+                                    onTap: () {
+                                      Navigator.pop(sheetContext, customer.id);
+                                    },
+                                  );
                                 },
-                              );
-                            },
-                          ),
+                              ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             );
           },
@@ -1202,7 +1246,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }
     final appState = context.read<AppState>();
     final customerSalesTeam = _selectedCustomerOption()?.salesTeam ?? const [];
-    if (appState.userRole == 'Sales' && customerSalesTeam.isEmpty) {
+    final isSalesUser = appState.mobileAccess.isSalesUser;
+    if (isSalesUser && customerSalesTeam.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1214,7 +1259,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       );
       return;
     }
-    if (appState.userRole != 'Sales' &&
+    if (!isSalesUser &&
         (_selectedSalesPerson == null ||
             _selectedSalesPerson!.trim().isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1285,10 +1330,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           sellingPriceList: _selectedPriceList,
           priceListCurrency: _priceListCurrency,
           ignorePricingRule: false,
-          salesPerson: appState.userRole == 'Sales'
-              ? null
-              : _selectedSalesPerson,
-          salesTeam: appState.userRole == 'Sales' ? customerSalesTeam : null,
+          salesPerson: isSalesUser ? null : _selectedSalesPerson,
+          salesTeam: isSalesUser ? customerSalesTeam : null,
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
         );
@@ -1303,10 +1346,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           currency: _selectedCurrency,
           sellingPriceList: _selectedPriceList,
           priceListCurrency: _priceListCurrency,
-          salesPerson: appState.userRole == 'Sales'
-              ? null
-              : _selectedSalesPerson,
-          salesTeam: appState.userRole == 'Sales' ? customerSalesTeam : null,
+          salesPerson: isSalesUser ? null : _selectedSalesPerson,
+          salesTeam: isSalesUser ? customerSalesTeam : null,
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
         );
@@ -1568,14 +1609,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       final costCenterChoices = availableCostCenters.isNotEmpty
           ? availableCostCenters
           : costCenters;
-      String? defaultCostCenter;
-      for (final center in costCenterChoices) {
-        if (center.name.trim().toLowerCase() ==
-            _defaultCostCenterName.toLowerCase()) {
-          defaultCostCenter = center.name;
-          break;
-        }
-      }
+      final defaultCostCenter = costCenterChoices.isNotEmpty
+          ? costCenterChoices.first.name
+          : null;
 
       if (!mounted) return;
       setState(() {
@@ -1606,7 +1642,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                   (costCenterChoices.isNotEmpty
                       ? costCenterChoices.first.name
                       : null));
-        _selectedSalesPerson = appState.userRole == 'Sales'
+        _selectedSalesPerson = appState.mobileAccess.isSalesUser
             ? appState.currentSalesPerson
             : (_salesPersonOptions.contains(_selectedSalesPerson)
                   ? _selectedSalesPerson
@@ -2057,7 +2093,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
                     const SizedBox(height: 12),
 
-                    if (appState.userRole == 'Sales')
+                    if (appState.mobileAccess.isSalesUser)
                       InputDecorator(
                         decoration: InputDecoration(
                           labelText: 'Sales',

@@ -14,32 +14,36 @@ class StockCheckTab extends StatefulWidget {
 }
 
 class _StockCheckTabState extends State<StockCheckTab> {
-  static const warehouse = 'Stores - Jakarta';
   String query = '';
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final scopedWarehouses = state.currentInventoryScopeWarehouses;
+    final warehouseSet = scopedWarehouses.toSet();
     final items = state.inventory.where((item) {
       final q = query.toLowerCase();
-      return item.warehouseId == warehouse &&
-          (q.isEmpty ||
-              item.sku.toLowerCase().contains(q) ||
-              item.name.toLowerCase().contains(q));
+      final inScope =
+          warehouseSet.isEmpty || warehouseSet.contains(item.warehouseId);
+      final matchesQuery =
+          q.isEmpty ||
+          item.sku.toLowerCase().contains(q) ||
+          item.name.toLowerCase().contains(q);
+      return inScope && matchesQuery;
     }).toList();
     return RefreshIndicator(
-      onRefresh: () => state.fetchInventoryFromFrappe(
-        filters: const [
-          ['warehouse', '=', warehouse],
-        ],
-      ),
+      onRefresh: state.refreshInventoryForCurrentRoleScope,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: SalesUi.compactScreenPadding,
         children: [
           SalesSectionTitle(
             title: 'Stok Realtime',
-            subtitle: 'Gudang Stores - Jakarta',
+            subtitle: scopedWarehouses.isEmpty
+                ? 'Gudang dari ERPNext'
+                : scopedWarehouses.length == 1
+                ? 'Gudang ${scopedWarehouses.first}'
+                : '${scopedWarehouses.length} gudang dari ERPNext',
             trailing: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
@@ -76,11 +80,7 @@ class _StockCheckTabState extends State<StockCheckTab> {
           if (state.inventoryError != null) ...[
             ErpErrorBox(message: state.inventoryError!),
             OutlinedButton.icon(
-              onPressed: () => state.fetchInventoryFromFrappe(
-                filters: const [
-                  ['warehouse', '=', warehouse],
-                ],
-              ),
+              onPressed: state.refreshInventoryForCurrentRoleScope,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Coba lagi'),
             ),

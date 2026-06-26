@@ -16,7 +16,6 @@ class CreatePurchaseReceiptScreen extends StatefulWidget {
 
 class _CreatePurchaseReceiptScreenState
     extends State<CreatePurchaseReceiptScreen> {
-  static const _defaultWarehouse = 'Stores - Jakarta';
   static const String _doctype = 'Purchase Receipt';
 
   final _formKey = GlobalKey<FormState>();
@@ -126,14 +125,6 @@ class _CreatePurchaseReceiptScreenState
               .toList()
             ..sort((a, b) => a.name.compareTo(b.name));
 
-      String? defaultWarehouse;
-      for (final warehouse in warehouses) {
-        if (warehouse.name.toLowerCase() == _defaultWarehouse.toLowerCase()) {
-          defaultWarehouse = warehouse.name;
-          break;
-        }
-      }
-
       if (!mounted) return;
       setState(() {
         _series = series;
@@ -141,9 +132,7 @@ class _CreatePurchaseReceiptScreenState
         _suppliers = suppliers;
         _warehouses = warehouses;
         _selectedSeries = series.isNotEmpty ? series.first : null;
-        _selectedWarehouse =
-            defaultWarehouse ??
-            (warehouses.isNotEmpty ? warehouses.first.name : null);
+        _selectedWarehouse = appState.preferredWarehouse(warehouses);
       });
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
@@ -521,7 +510,7 @@ class _CreatePurchaseReceiptScreenState
                         const SizedBox(height: 12),
                         _readOnlyField(
                           'Company',
-                          _warehouse?.company ?? 'Distribusi Jakarta',
+                          _warehouse?.company ?? '-',
                           icon: Icons.business_outlined,
                         ),
                       ],

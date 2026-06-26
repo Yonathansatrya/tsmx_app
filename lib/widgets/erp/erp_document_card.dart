@@ -34,87 +34,126 @@ class ErpDocumentCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.border),
-            boxShadow: AppColors.cardShadow,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryDark.withValues(alpha: 0.04),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.softGreen,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.description_outlined,
+                      color: AppColors.primary,
+                      size: 21,
+                    ),
+                  ),
+                  const SizedBox(width: 11),
                   Expanded(
-                    child: Text(
-                      id,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'HankenGrotesk',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.navy,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          id,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'HankenGrotesk',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          party.trim().isEmpty ? '-' : party,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.slate,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  ErpStatusBadge(statusText: statusText),
-                  if (onEdit != null || onDelete != null) ...[
-                    const SizedBox(width: 2),
-                    PopupMenuButton<String>(
-                      tooltip: 'Actions',
-                      icon: const Icon(
-                        Icons.more_vert_rounded,
-                        color: AppColors.slate,
-                        size: 19,
-                      ),
-                      onSelected: (value) {
-                        if (value == 'edit') onEdit?.call();
-                        if (value == 'delete') onDelete?.call();
-                      },
-                      itemBuilder: (context) => [
-                        if (onEdit != null)
-                          const PopupMenuItem(
-                            value: 'edit',
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit_outlined, size: 18),
-                                SizedBox(width: 8),
-                                Text('Edit'),
-                              ],
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      ErpStatusBadge(statusText: statusText),
+                      if (onEdit != null || onDelete != null) ...[
+                        const SizedBox(height: 4),
+                        SizedBox(
+                          width: 34,
+                          height: 34,
+                          child: PopupMenuButton<String>(
+                            tooltip: 'Actions',
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(
+                              Icons.more_horiz_rounded,
+                              color: AppColors.slate,
+                              size: 20,
                             ),
+                            onSelected: (value) {
+                              if (value == 'edit') onEdit?.call();
+                              if (value == 'delete') onDelete?.call();
+                            },
+                            itemBuilder: (context) => [
+                              if (onEdit != null)
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit_outlined, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Edit'),
+                                    ],
+                                  ),
+                                ),
+                              if (onDelete != null)
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 18,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text('Delete'),
+                                    ],
+                                  ),
+                                ),
+                            ],
                           ),
-                        if (onDelete != null)
-                          const PopupMenuItem(
-                            value: 'delete',
-                            child: Row(
-                              children: [
-                                Icon(Icons.delete_outline_rounded, size: 18),
-                                SizedBox(width: 8),
-                                Text('Delete'),
-                              ],
-                            ),
-                          ),
+                        ),
                       ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                party,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.slate,
-                ),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -134,10 +173,25 @@ class ErpDocumentCard extends StatelessWidget {
                 ],
               ),
               if (trailing != null) ...[
-                const SizedBox(height: 6),
-                Text(
-                  trailing!,
-                  style: const TextStyle(fontSize: 9, color: AppColors.slate),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    trailing!,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.slate,
+                    ),
+                  ),
                 ),
               ],
             ],
@@ -165,7 +219,12 @@ class _InfoPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
         color: strong ? AppColors.softGreen : AppColors.background,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: strong
+              ? AppColors.primary.withValues(alpha: 0.12)
+              : AppColors.border,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

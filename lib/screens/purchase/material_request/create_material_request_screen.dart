@@ -131,10 +131,8 @@ class _CreateMaterialRequestScreenState
         _warehouses = warehouses;
         _selectedSeries = series.isNotEmpty ? series.first : null;
         _selectedItem ??= items.isNotEmpty ? items.first.id : null;
-        _selectedCompany ??= companies.isNotEmpty ? companies.first : null;
-        _selectedWarehouse ??= warehouses.isNotEmpty
-            ? warehouses.first.name
-            : null;
+        _selectedCompany ??= appState.preferredCompany(companies);
+        _selectedWarehouse ??= appState.preferredWarehouse(warehouses);
       });
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());

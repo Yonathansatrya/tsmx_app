@@ -22,6 +22,7 @@ class AuthService {
     try {
       final user = await _frappe.fetchDocument('User', currentUser);
       roleProfile = _cleanValue(user['role_profile_name']);
+      roles = _extractRoles(user['roles']);
     } catch (error) {
       directLookupError = error;
     }
@@ -64,20 +65,14 @@ class AuthService {
       } catch (_) {}
     }
 
-    if (roleProfile.isEmpty) {
-      final roleNames = roles.map((role) => role.toLowerCase()).toSet();
-      if (roleNames.contains('sales manager')) {
-        roleProfile = 'Sales Manager';
-      } else if (roleNames.contains('sales')) {
-        roleProfile = 'Sales';
-      } else if (roleNames.contains('logistics')) {
-        roleProfile = 'Logistics';
-      }
-    }
+    roleProfile = roleProfile.isEmpty
+        ? _roleProfileFromFrappeRoles(roles)
+        : roleProfile;
     if (roleProfile.isEmpty) {
       throw Exception(
-        'Role Profile akun tidak dapat dibaca. Admin Frappe perlu membuat '
-        'Server Script API "tmsx_current_user_access".'
+        'Role akun tidak dapat dibaca. Pastikan User punya Role Profile '
+        'atau role standar seperti Sales User, Purchase User, Stock User, '
+        'Purchase Manager, Sales Manager, atau Logistics.'
         '${directLookupError == null ? '' : ' Detail: $directLookupError'}',
       );
     }
@@ -139,6 +134,56 @@ class AuthService {
       return '';
     }
     return cleaned;
+  }
+
+  List<String> _extractRoles(Object? rawRoles) {
+    if (rawRoles is! List) return const [];
+    return rawRoles
+        .map((row) {
+          if (row is Map) return _cleanValue(row['role']);
+          return _cleanValue(row);
+        })
+        .where((role) => role.isNotEmpty)
+        .toSet()
+        .toList();
+  }
+
+  String _roleProfileFromFrappeRoles(List<String> roles) {
+    final roleNames = roles.map((role) => role.toLowerCase()).toSet();
+    if (roleNames.contains('administrator') ||
+        roleNames.contains('system manager') ||
+        roleNames.contains('developer')) {
+      return 'Administrator';
+    }
+    if (roleNames.contains('purchase manager') ||
+        roleNames.contains('buying manager')) {
+      return 'Purchase Manager';
+    }
+    if (roleNames.contains('purchase user') ||
+        roleNames.contains('buying user') ||
+        roleNames.contains('purchase')) {
+      return 'Purchase';
+    }
+    if (roleNames.contains('sales manager')) return 'Sales Manager';
+    if (roleNames.contains('sales user') ||
+        roleNames.contains('selling user') ||
+        roleNames.contains('sales')) {
+      return 'Sales';
+    }
+    if (roleNames.contains('logistics') ||
+        roleNames.contains('delivery user') ||
+        roleNames.contains('delivery manager') ||
+        roleNames.contains('driver')) {
+      return 'Logistics';
+    }
+    if (roleNames.contains('stock manager') ||
+        roleNames.contains('stock user') ||
+        roleNames.contains('warehouse') ||
+        roleNames.contains('warehouse user') ||
+        roleNames.contains('warehouse manager')) {
+      return 'Warehouse';
+    }
+    return '';
   }
 
   Future<SalesIdentity> resolveSalesIdentity(String currentUser) async {

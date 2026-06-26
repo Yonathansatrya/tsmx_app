@@ -391,10 +391,7 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
     return showModalBottomSheet<WarehouseInfo>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         var query = '';
         return StatefulBuilder(
@@ -411,71 +408,150 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
                         );
                   }).toList();
             return SafeArea(
+              top: false,
               child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  20,
-                  20,
-                  MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: 12,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 12,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: AppColors.navy,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.82,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryDark.withValues(alpha: 0.16),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      autofocus: true,
-                      onChanged: (value) => setSheetState(() => query = value),
-                      decoration: const InputDecoration(
-                        labelText: 'Cari nama, lokasi, atau company',
-                        prefixIcon: Icon(Icons.search_rounded),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.border,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: MediaQuery.of(sheetContext).size.height * 0.5,
-                      child: filtered.isEmpty
-                          ? const Center(child: Text('Gudang tidak ditemukan'))
-                          : ListView.separated(
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, _) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final row = filtered[index];
-                                return ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: const CircleAvatar(
-                                    backgroundColor: AppColors.softGreen,
-                                    foregroundColor: AppColors.primary,
-                                    child: Icon(Icons.warehouse_outlined),
-                                  ),
-                                  title: Text(
-                                    row.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w900,
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 10, 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.navy,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Tutup',
+                              onPressed: () => Navigator.pop(sheetContext),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: TextField(
+                          autofocus: true,
+                          onChanged: (value) =>
+                              setSheetState(() => query = value),
+                          decoration: InputDecoration(
+                            hintText: 'Cari nama, lokasi, atau company',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Flexible(
+                        child: filtered.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(28),
+                                  child: Text(
+                                    'Gudang tidak ditemukan',
+                                    style: TextStyle(
+                                      color: AppColors.slate,
+                                      fontWeight: FontWeight.w800,
                                     ),
                                   ),
-                                  subtitle: Text(_warehouseSubtitle(row)),
-                                  trailing: row.name == selectedName
-                                      ? const Icon(
-                                          Icons.check_circle_rounded,
-                                          color: AppColors.success,
-                                        )
-                                      : null,
-                                  onTap: () => Navigator.pop(sheetContext, row),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+                                ),
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  0,
+                                  12,
+                                  14,
+                                ),
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, _) => const Divider(
+                                  height: 1,
+                                  color: AppColors.border,
+                                ),
+                                itemBuilder: (context, index) {
+                                  final row = filtered[index];
+                                  return ListTile(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    leading: const CircleAvatar(
+                                      backgroundColor: AppColors.softGreen,
+                                      foregroundColor: AppColors.primary,
+                                      child: Icon(Icons.warehouse_outlined),
+                                    ),
+                                    title: Text(
+                                      row.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      _warehouseSubtitle(row),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    trailing: row.name == selectedName
+                                        ? const Icon(
+                                            Icons.check_circle_rounded,
+                                            color: AppColors.success,
+                                          )
+                                        : null,
+                                    onTap: () =>
+                                        Navigator.pop(sheetContext, row),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -515,10 +591,7 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
     final selected = await showModalBottomSheet<InventoryItem>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         var query = '';
         return StatefulBuilder(
@@ -531,50 +604,133 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
                         item.name.toLowerCase().contains(normalized);
                   }).toList();
             return SafeArea(
+              top: false,
               child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  20,
-                  20,
-                  MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: 12,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 12,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      autofocus: true,
-                      onChanged: (value) => setSheetState(() => query = value),
-                      decoration: const InputDecoration(
-                        labelText: 'Cari item atau kode',
-                        prefixIcon: Icon(Icons.search_rounded),
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.82,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryDark.withValues(alpha: 0.16),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: MediaQuery.of(sheetContext).size.height * 0.5,
-                      child: filtered.isEmpty
-                          ? const Center(child: Text('Item tidak ditemukan'))
-                          : ListView.separated(
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, _) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final item = filtered[index];
-                                return ListTile(
-                                  title: Text(
-                                    item.name,
-                                    style: const TextStyle(
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.border,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 10, 10),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Pilih Item',
+                                style: TextStyle(
+                                  color: AppColors.navy,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Tutup',
+                              onPressed: () => Navigator.pop(sheetContext),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: TextField(
+                          autofocus: true,
+                          onChanged: (value) =>
+                              setSheetState(() => query = value),
+                          decoration: InputDecoration(
+                            hintText: 'Cari item atau kode',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Flexible(
+                        child: filtered.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(28),
+                                  child: Text(
+                                    'Item tidak ditemukan',
+                                    style: TextStyle(
+                                      color: AppColors.slate,
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
-                                  subtitle: Text(item.sku),
-                                  onTap: () =>
-                                      Navigator.pop(sheetContext, item),
-                                );
-                              },
-                            ),
-                    ),
-                  ],
+                                ),
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  0,
+                                  12,
+                                  14,
+                                ),
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, _) => const Divider(
+                                  height: 1,
+                                  color: AppColors.border,
+                                ),
+                                itemBuilder: (context, index) {
+                                  final item = filtered[index];
+                                  return ListTile(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    title: Text(
+                                      item.name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    subtitle: Text(item.sku),
+                                    onTap: () =>
+                                        Navigator.pop(sheetContext, item),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );

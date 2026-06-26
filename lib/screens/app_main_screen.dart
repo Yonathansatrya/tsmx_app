@@ -7,17 +7,11 @@ import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/erp_format.dart';
+import '../config/mobile_role_registry.dart';
 import 'auth/login_screen.dart';
-import 'logistics/logistics_main_screen.dart';
 import 'profile/profile_screen.dart';
-import 'purchase/purchase_main_screen.dart';
-import 'sales/sales_main_screen.dart';
-import 'warehouse/warehouse_main_screen.dart';
 
 import 'tabs/dashboard_tab.dart';
-import 'tabs/buying_tab.dart';
-import 'tabs/selling_tab.dart';
-import 'tabs/stock_tab.dart';
 import 'purchase/purchase_order/create_purchase_order_screen.dart';
 import 'purchase/purchase_invoice/create_purchase_invoice_screen.dart';
 import 'purchase/purchase_receipt/create_purchase_receipt_screen.dart';
@@ -34,9 +28,9 @@ class AppMainScreen extends StatefulWidget {
 }
 
 class _AppMainScreenState extends State<AppMainScreen> {
+  static const _profileTabKey = 'profile';
+
   int _currentIndex = 0;
-  String _salesSegment = 'so';
-  String _buyingSegment = 'po';
 
   @override
   void initState() {
@@ -47,19 +41,72 @@ class _AppMainScreenState extends State<AppMainScreen> {
     });
   }
 
-  List<Widget> get _tabs => [
-    const DashboardTab(),
-    SellingTab(
-      selectedSegment: _salesSegment,
-      onSegmentChanged: (segment) => setState(() => _salesSegment = segment),
-    ),
-    const SalesOrderApprovalScreen(embedded: true, title: 'Approval Dokumen'),
-    BuyingTab(
-      selectedSegment: _buyingSegment,
-      onSegmentChanged: (segment) => setState(() => _buyingSegment = segment),
-    ),
-    const StockTab(),
-  ];
+  int _totalTodoCount(AppState appState) =>
+      appState.salesOrderApprovalTodoCount + appState.purchaseApprovalTodoCount;
+
+  List<_MainTabItem> _tabs(AppState appState) {
+    final tabs = <_MainTabItem>[
+      _MainTabItem(
+        keyName: MobileModule.dashboard,
+        child: const DashboardTab(),
+        destination: NavigationDestination(
+          icon: const Icon(Icons.home_outlined),
+          selectedIcon: const Icon(Icons.home_rounded),
+          label: _moduleLabel(appState, MobileModule.dashboard, 'Beranda'),
+        ),
+        navIcon: Icons.home_outlined,
+        selectedNavIcon: Icons.home_rounded,
+      ),
+    ];
+
+    if (appState.canUseApprovals) {
+      final todoCount = _totalTodoCount(appState);
+      tabs.add(
+        _MainTabItem(
+          keyName: MobileModule.approvals,
+          child: const SalesOrderApprovalScreen(
+            embedded: true,
+            title: 'Approval Dokumen',
+          ),
+          destination: NavigationDestination(
+            icon: _todoIcon(Icons.checklist_outlined, todoCount),
+            selectedIcon: _todoIcon(Icons.checklist_rounded, todoCount),
+            label: _moduleLabel(appState, MobileModule.approvals, 'Todo'),
+          ),
+          navIcon: Icons.checklist_outlined,
+          selectedNavIcon: Icons.checklist_rounded,
+          badgeCount: todoCount,
+        ),
+      );
+    }
+
+    tabs.add(
+      _MainTabItem(
+        keyName: _profileTabKey,
+        child: const ProfileScreen(showBackButton: false),
+        destination: const NavigationDestination(
+          icon: Icon(Icons.person_outline_rounded),
+          selectedIcon: Icon(Icons.person_rounded),
+          label: 'Profil',
+        ),
+        navIcon: Icons.person_outline_rounded,
+        selectedNavIcon: Icons.person_rounded,
+      ),
+    );
+
+    return tabs;
+  }
+
+  String _moduleLabel(AppState appState, String module, String fallback) {
+    final bootMenus = (appState.mobileBoot?.menus ?? const [])
+        .map((menu) => (module: menu.module, label: menu.label))
+        .toList();
+    return MobileRoleRegistry.moduleLabel(
+      module,
+      bootMenus: bootMenus,
+      fallback: fallback,
+    );
+  }
 
   void _changeTab(int index) {
     setState(() {
@@ -91,188 +138,106 @@ class _AppMainScreenState extends State<AppMainScreen> {
       );
     }
 
-    if (appState.isSalesAreaRole) {
-      return const SalesMainScreen();
+    final tabs = _tabs(appState);
+    final selectedIndex = _currentIndex.clamp(0, tabs.length - 1);
+    if (selectedIndex != _currentIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _currentIndex = selectedIndex);
+      });
     }
-    if (appState.userRole == 'Warehouse') {
-      return const WarehouseMainScreen();
-    }
-    if (appState.userRole == 'Logistics') {
-      return const LogisticsMainScreen();
-    }
-    if (appState.userRole == 'Purchase') {
-      return const PurchaseMainScreen();
-    }
-    if (appState.userRole == 'Sales') {
-      return const SalesMainScreen();
-    }
+    final selectedTab = tabs[selectedIndex];
+    final showShellAppBar = selectedTab.keyName != _profileTabKey;
+    final showCreateFab = selectedTab.keyName == MobileModule.dashboard;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      floatingActionButton: _buildFloatingActionButton(context, appState),
-      appBar: AppBar(
-        backgroundColor: AppColors.white,
-        elevation: 0,
-        surfaceTintColor: Colors.transparent,
-        centerTitle: false,
-        titleSpacing: 14,
-        title: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              padding: const EdgeInsets.all(5),
-              child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
-            ),
-
-            const SizedBox(width: 10),
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'TMSX ERP',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.4,
-                    ),
-                  ),
-                  Text(
-                    appState.currentUser ?? 'Operator',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.slate,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: appState.salesOrderApprovalTodoCount > 0
-                ? '${appState.salesOrderApprovalTodoCount} approval menunggu'
-                : 'Tidak ada approval menunggu',
-            onPressed: () => _changeTab(2),
-            icon: _todoIcon(
-              Icons.assignment_turned_in_outlined,
-              appState.salesOrderApprovalTodoCount,
-            ),
-          ),
-          IconButton(
-            tooltip: 'Notifications',
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(
-                  Icons.notifications_none_rounded,
-                  color: AppColors.primary,
-                ),
-                if (appState.hasUnreadNotifications)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: Container(
-                      width: 9,
-                      height: 9,
-                      decoration: const BoxDecoration(
-                        color: Colors.redAccent,
-                        shape: BoxShape.circle,
+    return PopScope(
+      canPop: selectedIndex == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && selectedIndex != 0) {
+          _changeTab(0);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: showShellAppBar
+            ? AppBar(
+                toolbarHeight: 68,
+                backgroundColor: AppColors.white,
+                elevation: 0,
+                surfaceTintColor: Colors.transparent,
+                centerTitle: false,
+                titleSpacing: 16,
+                title: _TmsxHeaderTitle(appState: appState),
+                actions: [
+                  if (appState.canUseApprovals)
+                    IconButton(
+                      tooltip: _totalTodoCount(appState) > 0
+                          ? '${_totalTodoCount(appState)} approval menunggu'
+                          : 'Tidak ada approval menunggu',
+                      onPressed: () {
+                        final todoIndex = tabs.indexWhere(
+                          (tab) => tab.keyName == MobileModule.approvals,
+                        );
+                        if (todoIndex >= 0) _changeTab(todoIndex);
+                      },
+                      icon: _todoIcon(
+                        Icons.assignment_turned_in_outlined,
+                        _totalTodoCount(appState),
                       ),
                     ),
+                  IconButton(
+                    tooltip: 'Notifications',
+                    icon: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        const Icon(
+                          Icons.notifications_none_rounded,
+                          color: AppColors.primary,
+                        ),
+                        if (appState.hasUnreadNotifications)
+                          Positioned(
+                            right: -2,
+                            top: -2,
+                            child: Container(
+                              width: 9,
+                              height: 9,
+                              decoration: const BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationPage(),
+                        ),
+                      );
+                    },
                   ),
-              ],
-            ),
-            onPressed: () {
-              NotificationSheet.show(
-                context,
-                notifications: appState.notifications,
-                onMarkAllRead: () async {
-                  await appState.markAllNotificationsRead();
-                },
-                onNotificationTap: (notification) {
-                  appState.markNotificationRead(notification.id);
-                },
-              );
-            },
-          ),
-          IconButton(
-            tooltip: 'Profile',
-            icon: const Icon(
-              Icons.person_rounded,
-              color: AppColors.primary,
-              size: 22,
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ProfileScreen()),
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: IndexedStack(index: _currentIndex, children: _tabs),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          border: Border(
-            top: BorderSide(color: AppColors.primary.withValues(alpha: 0.06)),
-          ),
-          boxShadow: AppColors.cardShadow,
+                  const SizedBox(width: 8),
+                ],
+              )
+            : null,
+        body: IndexedStack(
+          index: selectedIndex,
+          children: tabs.map((tab) => tab.child).toList(),
         ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: _changeTab,
-          height: 64,
-          elevation: 0,
-          backgroundColor: AppColors.white,
-          indicatorColor: AppColors.softGreen,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: [
-            const NavigationDestination(
-              icon: Icon(Icons.dashboard_outlined),
-              selectedIcon: Icon(Icons.dashboard_rounded),
-              label: 'Dashboard',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.point_of_sale_outlined),
-              selectedIcon: Icon(Icons.point_of_sale_rounded),
-              label: 'Sales',
-            ),
-            NavigationDestination(
-              icon: _todoIcon(
-                Icons.checklist_outlined,
-                appState.salesOrderApprovalTodoCount,
-              ),
-              selectedIcon: _todoIcon(
-                Icons.checklist_rounded,
-                appState.salesOrderApprovalTodoCount,
-              ),
-              label: 'Todo',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.shopping_bag_outlined),
-              selectedIcon: Icon(Icons.shopping_bag_rounded),
-              label: 'Buying',
-            ),
-            const NavigationDestination(
-              icon: Icon(Icons.inventory_2_outlined),
-              selectedIcon: Icon(Icons.inventory_2_rounded),
-              label: 'Stock',
-            ),
-          ],
+        floatingActionButton: showCreateFab
+            ? Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: _CreateButton(
+                  onTap: () => _showQuickCreateSheet(context, appState),
+                ),
+              )
+            : null,
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        bottomNavigationBar: _TmsxBottomNav(
+          tabs: tabs,
+          selectedIndex: selectedIndex,
+          onSelected: _changeTab,
         ),
       ),
     );
@@ -288,122 +253,200 @@ class _AppMainScreenState extends State<AppMainScreen> {
     );
   }
 
-  Widget? _buildFloatingActionButton(BuildContext context, AppState appState) {
-    switch (_currentIndex) {
-      case 1:
-        final segment = _salesSegment;
-        if (segment == 'dn') {
-          return FloatingActionButton.extended(
-            onPressed: () => _createDeliveryNoteFromSalesOrder(context),
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.local_shipping_outlined),
-            label: const Text('Delivery Note'),
-          );
-        }
-        if (segment == 'si') {
-          return FloatingActionButton.extended(
-            onPressed: () => _createSalesInvoiceFromSalesOrder(context),
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.receipt_long_outlined),
-            label: const Text('Sales Invoice'),
-          );
-        }
-        if (segment != 'so') {
-          return null;
-        }
-        return FloatingActionButton.extended(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const CreateSalesOrderScreen()),
-            );
-          },
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('Sales Order'),
-        );
-
-      case 3:
-        if (_buyingSegment == 'mr') {
-          return FloatingActionButton.extended(
-            onPressed: () {
-              Navigator.of(context).push(
+  Future<void> _showQuickCreateSheet(
+    BuildContext context,
+    AppState appState,
+  ) async {
+    final groups = <_QuickCreateGroup>[
+      if (appState.canUseSales)
+        _QuickCreateGroup(
+          title: 'Sales',
+          icon: Icons.point_of_sale_rounded,
+          actions: [
+            _QuickCreateAction(
+              title: 'Sales Order',
+              subtitle: 'Order customer baru',
+              icon: Icons.point_of_sale_rounded,
+              onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => const CreateMaterialRequestScreen(),
+                  builder: (_) => const CreateSalesOrderScreen(),
                 ),
-              );
-            },
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Material Request'),
-          );
-        }
-        if (_buyingSegment == 'pr') {
-          return FloatingActionButton.extended(
-            onPressed: () {
-              Navigator.of(context).push(
+              ),
+            ),
+            _QuickCreateAction(
+              title: 'Delivery Note',
+              subtitle: 'Dari Sales Order submitted',
+              icon: Icons.local_shipping_outlined,
+              onTap: () => _createDeliveryNoteFromSalesOrder(context),
+            ),
+            _QuickCreateAction(
+              title: 'Sales Invoice',
+              subtitle: 'Tagihan dari Sales Order',
+              icon: Icons.receipt_long_outlined,
+              onTap: () => _createSalesInvoiceFromSalesOrder(context),
+            ),
+          ],
+        ),
+      if (appState.canUsePurchase)
+        _QuickCreateGroup(
+          title: 'Purchase',
+          icon: Icons.shopping_bag_rounded,
+          actions: [
+            _QuickCreateAction(
+              title: 'Purchase Order',
+              subtitle: 'PO supplier',
+              icon: Icons.add_shopping_cart_rounded,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const CreatePurchaseOrderScreen(),
+                ),
+              ),
+            ),
+            _QuickCreateAction(
+              title: 'Purchase Receipt',
+              subtitle: 'Terima barang',
+              icon: Icons.move_to_inbox_rounded,
+              onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const CreatePurchaseReceiptScreen(),
                 ),
-              );
-            },
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.inventory_outlined),
-            label: const Text('Purchase Receipt'),
-          );
-        }
-        if (_buyingSegment == 'pi') {
-          return FloatingActionButton.extended(
-            onPressed: () {
-              Navigator.of(context).push(
+              ),
+            ),
+            _QuickCreateAction(
+              title: 'Purchase Invoice',
+              subtitle: 'Invoice supplier',
+              icon: Icons.receipt_long_rounded,
+              onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => const CreatePurchaseInvoiceScreen(),
                 ),
-              );
-            },
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.receipt_long_outlined),
-            label: const Text('Purchase Invoice'),
-          );
-        }
-        if (_buyingSegment != 'po') {
-          return null;
-        }
-        return FloatingActionButton.extended(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const CreatePurchaseOrderScreen(),
               ),
-            );
-          },
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('Purchase Order'),
-        );
+            ),
+            _QuickCreateAction(
+              title: 'Material Request',
+              subtitle: 'Kebutuhan barang',
+              icon: Icons.assignment_add,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const CreateMaterialRequestScreen(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      if (appState.canUseStock)
+        _QuickCreateGroup(
+          title: 'Stock',
+          icon: Icons.inventory_2_rounded,
+          actions: [
+            _QuickCreateAction(
+              title: 'Stock Entry',
+              subtitle: 'Transfer, receipt, issue',
+              icon: Icons.inventory_2_outlined,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const CreateStockEntryScreen(),
+                ),
+              ),
+            ),
+          ],
+        ),
+    ];
+    final actionsCount = groups.fold<int>(
+      0,
+      (total, group) => total + group.actions.length,
+    );
 
-      case 4:
-        return FloatingActionButton.extended(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const CreateStockEntryScreen()),
-            );
-          },
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('Stock Entry'),
-        );
-
-      default:
-        return null;
+    if (actionsCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak ada aksi create untuk role ini.')),
+      );
+      return;
     }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(26),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryDark.withValues(alpha: 0.18),
+                  blurRadius: 28,
+                  offset: const Offset(0, 14),
+                ),
+              ],
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Create Document',
+                          style: TextStyle(
+                            color: AppColors.navy,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Tutup',
+                        onPressed: () => Navigator.pop(sheetContext),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      padding: EdgeInsets.zero,
+                      children: [
+                        for (final group in groups)
+                          _QuickCreateSection(
+                            group: group,
+                            onActionTap: (action) async {
+                              Navigator.pop(sheetContext);
+                              await Future<void>.delayed(
+                                const Duration(milliseconds: 120),
+                              );
+                              if (!context.mounted) return;
+                              await action.onTap();
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _createDeliveryNoteFromSalesOrder(BuildContext context) async {
@@ -679,4 +722,420 @@ class _SalesOrderDraftSelection {
     required this.order,
     required this.namingSeries,
   });
+}
+
+class _QuickCreateAction {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Future<void> Function() onTap;
+
+  const _QuickCreateAction({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
+}
+
+class _QuickCreateGroup {
+  final String title;
+  final IconData icon;
+  final List<_QuickCreateAction> actions;
+
+  const _QuickCreateGroup({
+    required this.title,
+    required this.icon,
+    required this.actions,
+  });
+}
+
+class _QuickCreateSection extends StatelessWidget {
+  final _QuickCreateGroup group;
+  final ValueChanged<_QuickCreateAction> onActionTap;
+
+  const _QuickCreateSection({required this.group, required this.onActionTap});
+
+  @override
+  Widget build(BuildContext context) {
+    if (group.actions.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
+            child: Row(
+              children: [
+                Icon(group.icon, color: AppColors.primary, size: 18),
+                const SizedBox(width: 7),
+                Text(
+                  group.title,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.surfaceMuted,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              children: [
+                for (var index = 0; index < group.actions.length; index++) ...[
+                  _QuickCreateTile(
+                    action: group.actions[index],
+                    onTap: () => onActionTap(group.actions[index]),
+                  ),
+                  if (index < group.actions.length - 1)
+                    const Divider(height: 1, color: AppColors.border),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickCreateTile extends StatelessWidget {
+  final _QuickCreateAction action;
+  final VoidCallback onTap;
+
+  const _QuickCreateTile({required this.action, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(17),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: AppColors.softGreen,
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Icon(action.icon, color: AppColors.primary, size: 20),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    action.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    action.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.slate),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _MainTabItem {
+  final String keyName;
+  final Widget child;
+  final NavigationDestination destination;
+  final IconData navIcon;
+  final IconData selectedNavIcon;
+  final int badgeCount;
+
+  const _MainTabItem({
+    required this.keyName,
+    required this.child,
+    required this.destination,
+    required this.navIcon,
+    required this.selectedNavIcon,
+    this.badgeCount = 0,
+  });
+}
+
+class _TmsxHeaderTitle extends StatelessWidget {
+  final AppState appState;
+
+  const _TmsxHeaderTitle({required this.appState});
+
+  @override
+  Widget build(BuildContext context) {
+    final tenant = appState.selectedSiteName.trim();
+    final user = appState.currentUser ?? 'Operator';
+    final subtitle = tenant.isNotEmpty ? tenant : user;
+
+    return Row(
+      children: [
+        Container(
+          width: 50,
+          height: 50,
+          padding: const EdgeInsets.all(6),
+          child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                appState.mobileBoot?.appName ?? 'TMSX Hub',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TmsxBottomNav extends StatelessWidget {
+  final List<_MainTabItem> tabs;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  const _TmsxBottomNav({
+    required this.tabs,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.viewPaddingOf(context).bottom;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.background.withValues(alpha: 0),
+            AppColors.background,
+          ],
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        minimum: EdgeInsets.fromLTRB(14, 3, 14, bottomPadding > 0 ? 6 : 10),
+        child: SizedBox(
+          height: 58,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryDark.withValues(alpha: 0.07),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                for (var index = 0; index < tabs.length; index++)
+                  Expanded(
+                    child: _TmsxBottomNavItem(
+                      tab: tabs[index],
+                      selected: index == selectedIndex,
+                      compact: tabs.length >= 4,
+                      onTap: () => onSelected(index),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _CreateButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.white,
+      shape: const CircleBorder(),
+      elevation: 0,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Container(
+          width: 50,
+          height: 50,
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.16),
+                blurRadius: 11,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.add_rounded,
+              color: AppColors.white,
+              size: 26,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TmsxBottomNavItem extends StatelessWidget {
+  final _MainTabItem tab;
+  final bool selected;
+  final bool compact;
+  final VoidCallback onTap;
+
+  const _TmsxBottomNavItem({
+    required this.tab,
+    required this.selected,
+    required this.compact,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = tab.destination.label;
+    final color = selected ? AppColors.primary : AppColors.slate;
+    final icon = selected ? tab.selectedNavIcon : tab.navIcon;
+    return Tooltip(
+      message: label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          height: double.infinity,
+          margin: EdgeInsets.symmetric(horizontal: compact ? 1 : 2),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 3 : 7,
+            vertical: 4,
+          ),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.softGreen.withValues(alpha: 0.78)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _BottomNavIcon(icon: icon, color: color, count: tab.badgeCount),
+              const SizedBox(height: 2),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: compact ? 9.5 : 10.5,
+                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomNavIcon extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final int count;
+
+  const _BottomNavIcon({
+    required this.icon,
+    required this.color,
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final iconWidget = Icon(icon, color: color, size: 22);
+    if (count <= 0) return iconWidget;
+    return Badge.count(
+      count: count,
+      backgroundColor: AppColors.danger,
+      textColor: AppColors.white,
+      smallSize: 7,
+      textStyle: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900),
+      child: iconWidget,
+    );
+  }
 }

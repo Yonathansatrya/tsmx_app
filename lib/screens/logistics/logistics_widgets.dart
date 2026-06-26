@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 
-const logisticsPagePadding = EdgeInsets.fromLTRB(16, 16, 16, 96);
-const logisticsSectionGap = SizedBox(height: 20);
+const logisticsPagePadding = EdgeInsets.fromLTRB(16, 14, 16, 88);
+const logisticsSectionGap = SizedBox(height: 18);
 
 class LogisticsSectionHeader extends StatelessWidget {
   final String title;
@@ -23,8 +23,8 @@ class LogisticsSectionHeader extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       Container(
-        width: 42,
-        height: 42,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           color: AppColors.softGreen,
           borderRadius: BorderRadius.circular(13),
@@ -40,7 +40,7 @@ class LogisticsSectionHeader extends StatelessWidget {
               title,
               style: const TextStyle(
                 color: AppColors.navy,
-                fontSize: 17,
+                fontSize: 16,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -85,7 +85,7 @@ class LogisticsActionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: AppColors.border),
@@ -94,8 +94,8 @@ class LogisticsActionCard extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(13),
@@ -109,6 +109,8 @@ class LogisticsActionCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppColors.navy,
                         fontSize: 14,
@@ -118,6 +120,8 @@ class LogisticsActionCard extends StatelessWidget {
                     const SizedBox(height: 3),
                     Text(
                       subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppColors.slate,
                         fontSize: 11,

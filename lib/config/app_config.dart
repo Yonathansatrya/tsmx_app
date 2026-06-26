@@ -1,6 +1,9 @@
 class AppConfig {
   const AppConfig._();
 
+  static const String defaultAppName = 'TMSX Hub';
+  static const String defaultAppTagline = 'Mobile ERP';
+
   static const String frappeBaseUrl = String.fromEnvironment(
     'FRAPPE_BASE_URL',
     defaultValue: '',
@@ -16,4 +19,7 @@ class AppConfig {
     }
     return value;
   }
+
+  static String get optionalFrappeBaseUrl =>
+      frappeBaseUrl.trim().replaceFirst(RegExp(r'/+$'), '');
 }

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/notifications/notification_sheet.dart';
 import '../profile/profile_screen.dart';
 
 typedef RoleScreensBuilder =
@@ -19,6 +20,7 @@ class RoleMainScreen extends StatefulWidget {
   final RoleScreensBuilder screensBuilder;
   final FutureOr<void> Function(AppState state)? onInitialize;
   final RoleFloatingActionButtonBuilder? floatingActionButtonBuilder;
+  final int initialTabIndex;
 
   const RoleMainScreen({
     super.key,
@@ -28,6 +30,7 @@ class RoleMainScreen extends StatefulWidget {
     required this.screensBuilder,
     this.onInitialize,
     this.floatingActionButtonBuilder,
+    this.initialTabIndex = 0,
   });
 
   @override
@@ -35,16 +38,17 @@ class RoleMainScreen extends StatefulWidget {
 }
 
 class _RoleMainScreenState extends State<RoleMainScreen> {
-  int _currentIndex = 0;
+  late int _currentIndex;
   late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
     _screens = widget.screensBuilder(_changeTab);
+    _currentIndex = widget.initialTabIndex.clamp(0, _screens.length - 1);
     assert(
-      _screens.length == widget.destinations.length,
-      'Jumlah screen dan navigation destination harus sama.',
+      _screens.length >= widget.destinations.length,
+      'Jumlah screen harus sama atau lebih banyak dari navigation destination.',
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -60,6 +64,9 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final subtitle = state.selectedSiteName.trim().isNotEmpty
+        ? state.selectedSiteName
+        : state.currentUser ?? widget.fallbackUsername;
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: widget.floatingActionButtonBuilder?.call(
@@ -67,22 +74,25 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
         _currentIndex,
       ),
       appBar: AppBar(
+        toolbarHeight: 64,
         backgroundColor: AppColors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        titleSpacing: 14,
+        automaticallyImplyLeading: Navigator.canPop(context),
+        titleSpacing: 16,
         title: Row(
           children: [
             Container(
-              width: 38,
-              height: 38,
-              padding: const EdgeInsets.all(5),
+              width: 44,
+              height: 44,
+              padding: const EdgeInsets.all(6),
               child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -91,13 +101,13 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: AppColors.primary,
-                      fontSize: 13,
+                      fontSize: 15,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 0.4,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
-                    state.currentUser ?? widget.fallbackUsername,
+                    subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -112,6 +122,40 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: state.hasUnreadNotifications
+                ? 'Ada notifikasi baru'
+                : 'Notifications',
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(
+                  Icons.notifications_none_rounded,
+                  color: AppColors.primary,
+                  size: 22,
+                ),
+                if (state.hasUnreadNotifications)
+                  Positioned(
+                    right: -1,
+                    top: -1,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.danger,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const NotificationPage()),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Profile',
             icon: const Icon(
@@ -128,24 +172,139 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
         ],
       ),
       body: IndexedStack(index: _currentIndex, children: _screens),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          border: Border(
-            top: BorderSide(color: AppColors.primary.withValues(alpha: 0.06)),
-          ),
-          boxShadow: AppColors.cardShadow,
+      bottomNavigationBar: _RoleBottomNav(
+        destinations: widget.destinations,
+        selectedIndex: _currentIndex,
+        onSelected: _changeTab,
+      ),
+    );
+  }
+}
+
+class _RoleBottomNav extends StatelessWidget {
+  final List<NavigationDestination> destinations;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  const _RoleBottomNav({
+    required this.destinations,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.viewPaddingOf(context).bottom;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AppColors.background.withValues(alpha: 0),
+            AppColors.background,
+          ],
         ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: _changeTab,
-          height: 64,
-          elevation: 0,
-          backgroundColor: AppColors.white,
-          indicatorColor: AppColors.softGreen,
-          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          destinations: widget.destinations,
+      ),
+      child: SafeArea(
+        top: false,
+        minimum: EdgeInsets.fromLTRB(14, 3, 14, bottomPadding > 0 ? 6 : 10),
+        child: Container(
+          height: 58,
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryDark.withValues(alpha: 0.07),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              for (var index = 0; index < destinations.length; index++)
+                Expanded(
+                  child: _RoleBottomNavItem(
+                    destination: destinations[index],
+                    selected: index == selectedIndex,
+                    compact: destinations.length >= 5,
+                    onTap: () => onSelected(index),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoleBottomNavItem extends StatelessWidget {
+  final NavigationDestination destination;
+  final bool selected;
+  final bool compact;
+  final VoidCallback onTap;
+
+  const _RoleBottomNavItem({
+    required this.destination,
+    required this.selected,
+    required this.compact,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.primary : AppColors.slate;
+    return Tooltip(
+      message: destination.label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          height: double.infinity,
+          margin: EdgeInsets.symmetric(horizontal: compact ? 1 : 2),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 3 : 7,
+            vertical: 4,
+          ),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.softGreen.withValues(alpha: 0.78)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconTheme(
+                data: IconThemeData(color: color, size: compact ? 20 : 21),
+                child: selected
+                    ? destination.selectedIcon ?? destination.icon
+                    : destination.icon,
+              ),
+              const SizedBox(height: 2),
+              Flexible(
+                child: Text(
+                  destination.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: compact ? 9.5 : 10.5,
+                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

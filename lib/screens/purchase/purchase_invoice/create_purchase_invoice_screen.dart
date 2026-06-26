@@ -16,7 +16,6 @@ class CreatePurchaseInvoiceScreen extends StatefulWidget {
 
 class _CreatePurchaseInvoiceScreenState
     extends State<CreatePurchaseInvoiceScreen> {
-  static const _defaultWarehouse = 'Stores - Jakarta';
   final _formKey = GlobalKey<FormState>();
   final _qtyCtrl = TextEditingController(text: '1');
   final _rateCtrl = TextEditingController();
@@ -127,13 +126,6 @@ class _CreatePurchaseInvoiceScreenState
               )
               .toList()
             ..sort((a, b) => a.name.compareTo(b.name));
-      String? defaultWarehouse;
-      for (final warehouse in warehouses) {
-        if (warehouse.name.toLowerCase() == _defaultWarehouse.toLowerCase()) {
-          defaultWarehouse = warehouse.name;
-          break;
-        }
-      }
       if (!mounted) return;
       setState(() {
         _series = series;
@@ -141,9 +133,7 @@ class _CreatePurchaseInvoiceScreenState
         _items = items;
         _warehouses = warehouses;
         _selectedSeries = series.isNotEmpty ? series.first : null;
-        _selectedWarehouse =
-            defaultWarehouse ??
-            (warehouses.isNotEmpty ? warehouses.first.name : null);
+        _selectedWarehouse = appState.preferredWarehouse(warehouses);
       });
     } catch (error) {
       if (mounted) setState(() => _loadError = error.toString());

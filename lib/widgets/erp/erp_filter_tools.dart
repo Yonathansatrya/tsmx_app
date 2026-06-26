@@ -67,9 +67,15 @@ class ErpPeriodFilterCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
-        boxShadow: AppColors.cardShadow,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -84,13 +90,15 @@ class ErpPeriodFilterCard extends StatelessWidget {
                 ),
                 child: Icon(icon, color: AppColors.primary),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 11),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppColors.navy,
                         fontWeight: FontWeight.w900,
@@ -99,6 +107,8 @@ class ErpPeriodFilterCard extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppColors.slate,
                         fontSize: 11,
@@ -117,54 +127,69 @@ class ErpPeriodFilterCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: DropdownButtonFormField<int>(
-                  initialValue: selectedMonth,
-                  decoration: const InputDecoration(
-                    labelText: 'Bulan',
-                    prefixIcon: Icon(Icons.calendar_today_rounded, size: 18),
-                  ),
-                  items: [
-                    const DropdownMenuItem(
-                      value: 0,
-                      child: Text('Semua Bulan'),
-                    ),
-                    for (var i = 0; i < monthLabels.length; i++)
-                      DropdownMenuItem(
-                        value: i + 1,
-                        child: Text(monthLabels[i]),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 360;
+              final monthDropdown = DropdownButtonFormField<int>(
+                initialValue: selectedMonth,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Bulan',
+                  prefixIcon: Icon(Icons.calendar_today_rounded, size: 18),
+                ),
+                items: [
+                  const DropdownMenuItem(value: 0, child: Text('Semua Bulan')),
+                  for (var i = 0; i < monthLabels.length; i++)
+                    DropdownMenuItem(
+                      value: i + 1,
+                      child: Text(
+                        monthLabels[i],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
+                    ),
+                ],
+                onChanged: loading
+                    ? null
+                    : (value) {
+                        if (value == null) return;
+                        onChanged(selectedYear, value);
+                      },
+              );
+              final yearDropdown = DropdownButtonFormField<int>(
+                initialValue: selectedYear,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Tahun'),
+                items: [
+                  for (final year in years)
+                    DropdownMenuItem(value: year, child: Text('$year')),
+                ],
+                onChanged: loading
+                    ? null
+                    : (value) {
+                        if (value == null) return;
+                        onChanged(value, selectedMonth);
+                      },
+              );
+
+              if (compact) {
+                return Column(
+                  children: [
+                    monthDropdown,
+                    const SizedBox(height: 10),
+                    yearDropdown,
                   ],
-                  onChanged: loading
-                      ? null
-                      : (value) {
-                          if (value == null) return;
-                          onChanged(selectedYear, value);
-                        },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: DropdownButtonFormField<int>(
-                  initialValue: selectedYear,
-                  decoration: const InputDecoration(labelText: 'Tahun'),
-                  items: [
-                    for (final year in years)
-                      DropdownMenuItem(value: year, child: Text('$year')),
-                  ],
-                  onChanged: loading
-                      ? null
-                      : (value) {
-                          if (value == null) return;
-                          onChanged(value, selectedMonth);
-                        },
-                ),
-              ),
-            ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(flex: 3, child: monthDropdown),
+                  const SizedBox(width: 10),
+                  Expanded(flex: 2, child: yearDropdown),
+                ],
+              );
+            },
           ),
           if (onCompanyChanged != null || onCustomerTypeChanged != null) ...[
             const SizedBox(height: 10),

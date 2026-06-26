@@ -422,10 +422,7 @@ class _WarehouseStockOpnameScreenState
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         var query = '';
         return StatefulBuilder(
@@ -435,52 +432,124 @@ class _WarehouseStockOpnameScreenState
                 ? rows.take(50).toList()
                 : rows.where((row) => matches(row, normalized)).toList();
             return SafeArea(
+              top: false,
               child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  20,
-                  20,
-                  MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: 12,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 12,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.82,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryDark.withValues(alpha: 0.16),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      autofocus: true,
-                      onChanged: (value) => setSheetState(() => query = value),
-                      decoration: InputDecoration(
-                        labelText: searchHint,
-                        prefixIcon: const Icon(Icons.search_rounded),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.border,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: MediaQuery.of(sheetContext).size.height * 0.5,
-                      child: filtered.isEmpty
-                          ? const Center(child: Text('Data tidak ditemukan'))
-                          : ListView.separated(
-                              itemCount: filtered.length,
-                              separatorBuilder: (_, _) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) => InkWell(
-                                onTap: () => Navigator.pop(
-                                  sheetContext,
-                                  filtered[index],
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 10, 10),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppColors.navy,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
                                 ),
-                                child: tile(filtered[index]),
                               ),
                             ),
-                    ),
-                  ],
+                            IconButton(
+                              tooltip: 'Tutup',
+                              onPressed: () => Navigator.pop(sheetContext),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: TextField(
+                          autofocus: true,
+                          onChanged: (value) =>
+                              setSheetState(() => query = value),
+                          decoration: InputDecoration(
+                            hintText: searchHint,
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Flexible(
+                        child: filtered.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(28),
+                                  child: Text(
+                                    'Data tidak ditemukan',
+                                    style: TextStyle(
+                                      color: AppColors.slate,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  0,
+                                  12,
+                                  14,
+                                ),
+                                itemCount: filtered.length,
+                                separatorBuilder: (_, _) => const Divider(
+                                  height: 1,
+                                  color: AppColors.border,
+                                ),
+                                itemBuilder: (context, index) => InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () => Navigator.pop(
+                                    sheetContext,
+                                    filtered[index],
+                                  ),
+                                  child: tile(filtered[index]),
+                                ),
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );

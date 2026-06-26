@@ -31,6 +31,13 @@ class SalesOverviewTab extends StatelessWidget {
       child: ListView(
         padding: SalesUi.screenPadding,
         children: [
+          SalesHeroCard(
+            title: 'Sales Workspace',
+            subtitle: 'Pantau order, stok, customer, collection, dan visit',
+            icon: Icons.point_of_sale_rounded,
+            trailing: _HeroCount(value: orders.length, label: 'Order'),
+          ),
+          SalesUi.gap(14),
           Row(
             children: [
               Expanded(
@@ -298,4 +305,46 @@ class _Menu extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _HeroCount extends StatelessWidget {
+  final int value;
+  final String label;
+
+  const _HeroCount({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: AppColors.softGreen,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$value',
+            style: const TextStyle(
+              color: AppColors.primary,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -61,12 +61,13 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: logisticsPagePadding,
         children: [
-          const LogisticsSectionHeader(
-            title: 'Tracking Armada',
-            subtitle: 'Pantau proses pengiriman dan detail barang',
-            icon: Icons.route_rounded,
+          _TrackingHeroCard(
+            outstanding: docs.where(_isOutstanding).length,
+            completed: completed,
+            toBill: toBill,
+            returns: returns,
           ),
-          logisticsSectionGap,
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -122,7 +123,7 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
               color: AppColors.danger,
             ),
           ],
-          logisticsSectionGap,
+          const SizedBox(height: 16),
           LogisticsSectionHeader(
             title: 'Monitoring Perjalanan',
             subtitle: '${visibleDocs.length} dari ${docs.length} Delivery Note',
@@ -194,8 +195,14 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
 
   static Widget _trackingCard(BuildContext context, DeliveryNote doc) {
     final color = _statusColor(doc);
+    final statusIcon = doc.statusKey == DeliveryNoteStatusKey.completed
+        ? Icons.task_alt_rounded
+        : doc.statusKey == DeliveryNoteStatusKey.cancelled ||
+              doc.statusKey == DeliveryNoteStatusKey.closed
+        ? Icons.block_rounded
+        : Icons.local_shipping_outlined;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 9),
       child: Material(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(16),
@@ -207,16 +214,19 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppColors.border),
-              boxShadow: AppColors.cardShadow,
             ),
             child: Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: color.withValues(alpha: 0.1),
-                  foregroundColor: color,
-                  child: const Icon(Icons.local_shipping_outlined),
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(statusIcon, color: color, size: 22),
                 ),
-                const SizedBox(width: 11),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,15 +239,17 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         doc.customer,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: AppColors.slate,
                           fontSize: 11,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 7),
+                      const SizedBox(height: 8),
                       Wrap(
                         spacing: 6,
                         runSpacing: 6,
@@ -267,10 +279,19 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    const Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppColors.slate,
+                    const SizedBox(height: 8),
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceMuted,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.slate,
+                        size: 20,
+                      ),
                     ),
                   ],
                 ),
@@ -416,6 +437,134 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _TrackingHeroCard extends StatelessWidget {
+  final int outstanding;
+  final int completed;
+  final int toBill;
+  final int returns;
+
+  const _TrackingHeroCard({
+    required this.outstanding,
+    required this.completed,
+    required this.toBill,
+    required this.returns,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppColors.primary,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [
+        BoxShadow(
+          color: AppColors.primary.withValues(alpha: 0.14),
+          blurRadius: 18,
+          offset: const Offset(0, 10),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: AppColors.white.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(Icons.route_rounded, color: AppColors.white),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Tracking Armada',
+                    style: TextStyle(
+                      color: AppColors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Pantau status delivery dan bukti pengiriman',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Color(0xFFE3F2EA),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _HeroStat(label: 'Outstanding', value: '$outstanding'),
+            ),
+            Expanded(
+              child: _HeroStat(label: 'To Bill', value: '$toBill'),
+            ),
+            Expanded(
+              child: _HeroStat(label: 'Completed', value: '$completed'),
+            ),
+            Expanded(
+              child: _HeroStat(label: 'Return', value: '$returns'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _HeroStat extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _HeroStat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: AppColors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      const SizedBox(height: 2),
+      Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFFE3F2EA),
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ],
+  );
 }
 
 class _LogisticsTrackingDetailScreen extends StatelessWidget {

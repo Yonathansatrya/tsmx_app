@@ -42,36 +42,37 @@ class _LoadingScreenState extends State<LoadingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.white,
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
           child: Column(
             children: [
               const Spacer(),
-              Container(
-                width: 118,
-                height: 118,
-                padding: const EdgeInsets.all(18),
+              SizedBox(
+                width: 104,
+                height: 104,
                 child: Image.asset(
-                  'assets/images/splash_logo.png',
+                  'assets/images/logo.png',
                   fit: BoxFit.contain,
                   cacheWidth: 512,
                 ),
               ),
+
               const SizedBox(height: 22),
+
               const Text(
-                'TMSX ERP Mobile',
+                'TMSX Hub',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: AppColors.primary,
-                  fontSize: 23,
+                  fontSize: 26,
                   fontWeight: FontWeight.w900,
                 ),
               ),
               const SizedBox(height: 6),
               const Text(
-                'Sinkronisasi sales, buying, dan stock',
+                'Mobile ERP untuk operasional multi-company',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: AppColors.slate,
@@ -80,11 +81,13 @@ class _LoadingScreenState extends State<LoadingScreen> {
                 ),
               ),
               const SizedBox(height: 28),
-              const SizedBox(
-                width: 180,
+              SizedBox(
+                width: 190,
                 child: LinearProgressIndicator(
                   minHeight: 5,
-                  borderRadius: BorderRadius.all(Radius.circular(20)),
+                  borderRadius: const BorderRadius.all(Radius.circular(20)),
+                  backgroundColor: AppColors.softGreen,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
                 ),
               ),
               const SizedBox(height: 12),
@@ -99,11 +102,18 @@ class _LoadingScreenState extends State<LoadingScreen> {
               const Spacer(),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(16),
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: AppColors.border),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryDark.withValues(alpha: 0.05),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: const Row(
                   children: [

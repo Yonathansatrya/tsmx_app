@@ -15,6 +15,7 @@ import '../models/sales_invoice.dart';
 import '../models/purchase_receipt.dart';
 import '../models/purchase_invoice.dart';
 import '../models/material_request.dart';
+import '../models/mobile_boot.dart';
 import '../models/quality_inspection_record.dart';
 import '../models/supplier_price_comparison.dart';
 import '../models/stock_entry.dart';
@@ -39,7 +40,30 @@ import '../services/sales_visit_location_service.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/num_parse.dart';
 import '../utils/frappe_page_walker.dart';
+import '../config/mobile_role_registry.dart';
+import '../utils/mobile_access.dart';
 import '../widgets/notifications/notification_model.dart';
+
+class _LocalFrappeSite {
+  final String name;
+  final String baseUrl;
+
+  const _LocalFrappeSite({required this.name, required this.baseUrl});
+}
+
+class _ResolvedFrappeSite {
+  final String code;
+  final String name;
+  final String baseUrl;
+  final bool directUrl;
+
+  const _ResolvedFrappeSite({
+    required this.code,
+    required this.name,
+    required this.baseUrl,
+    this.directUrl = false,
+  });
+}
 
 class AppState with ChangeNotifier {
   bool _isAuthenticated = false;
@@ -63,16 +87,44 @@ class AppState with ChangeNotifier {
   bool get isInitializing => _isInitializing;
   String? _lastAuthError;
   String? get lastAuthError => _lastAuthError;
+  String? _mobileCompatibilityWarning;
+  String? get mobileCompatibilityWarning => _mobileCompatibilityWarning;
+  MobileBoot? _mobileBoot;
+  MobileBoot? get mobileBoot => _mobileBoot;
+  String _selectedSiteName = '';
+  String get selectedSiteName => _selectedSiteName;
+  String get selectedSiteBaseUrl => _frappeService.baseUrl;
+  bool get hasSelectedSite => _frappeService.baseUrl.trim().isNotEmpty;
 
   String _userRole = 'Unassigned';
   String get userRole => _userRole;
-  bool get isSalesUserRole => _userRole == 'Sales';
-  bool get isSalesManagerRole => _userRole == 'Sales Manager';
-  bool get isSalesAreaRole => isSalesUserRole || isSalesManagerRole;
-  bool get isPurchaseUserRole => _userRole == 'Purchase';
-  bool get isPurchaseManagerRole => _userRole == 'Purchase Manager';
-  bool get isPurchaseAreaRole => isPurchaseUserRole || isPurchaseManagerRole;
-  bool get _shouldScopeSalesData => _userRole == 'Sales';
+  MobileAccess get mobileAccess =>
+      MobileAccess(role: _userRole, boot: _mobileBoot);
+  bool get isSalesUserRole => mobileAccess.isSalesUser;
+  bool get isSalesManagerRole => mobileAccess.isSalesManager;
+  bool get isSalesAreaRole => mobileAccess.isSalesArea;
+  bool get isPurchaseUserRole => mobileAccess.isPurchaseUser;
+  bool get isPurchaseManagerRole => mobileAccess.isPurchaseManager;
+  bool get isPurchaseAreaRole => mobileAccess.isPurchaseArea;
+  bool get _shouldScopeSalesData => mobileAccess.shouldScopeSalesData;
+  bool get hasMobileBoot => _mobileBoot != null;
+  bool hasMobileModule(String module) =>
+      mobileAccess.enabledModules.contains(module.trim().toLowerCase());
+  bool canUseMobileModule(String module) => mobileAccess.canUse(module);
+  bool get canUseDashboard => mobileAccess.canUse(MobileModule.dashboard);
+  bool get canUseSales => mobileAccess.canUse(MobileModule.sales);
+  bool get canUsePurchase => mobileAccess.canUse(MobileModule.purchase);
+  bool get canUseStock => mobileAccess.canUse(MobileModule.stock);
+  bool get canUseWarehouse => mobileAccess.canUse(MobileModule.warehouse);
+  bool get canUseLogistics => mobileAccess.canUse(MobileModule.logistics);
+  bool get canUseApprovals => mobileAccess.canUse(MobileModule.approvals);
+  bool get canUseCollection => mobileAccess.canUse(MobileModule.collection);
+  bool get canUseQualityControl =>
+      mobileAccess.canUse(MobileModule.qualityControl);
+  bool get canUseExecutive => mobileAccess.canUse(MobileModule.executive);
+  bool get canUseFinance => mobileAccess.canUse(MobileModule.finance);
+  bool get canUseAccounting => mobileAccess.canUse(MobileModule.accounting);
+  bool get canUsePlantation => mobileAccess.canUse(MobileModule.plantation);
 
   static const purchaseApprovalDoctypes = {
     'Purchase Order',
@@ -86,13 +138,12 @@ class AppState with ChangeNotifier {
     if (!_isAuthenticated) return;
     if (isSalesUserRole) {
       await resolveCurrentSalesIdentity();
+      await fetchWarehousesFromFrappe();
       await Future.wait([
         fetchSalesOrdersFromFrappe(),
         fetchSalesInvoicesFromFrappe(),
         fetchInventoryFromFrappe(
-          filters: const [
-            ['warehouse', '=', 'Stores - Jakarta'],
-          ],
+          filters: _inventoryScopeFiltersForCurrentRole(),
         ),
       ]);
       return;
@@ -104,6 +155,12 @@ class AppState with ChangeNotifier {
     final currentUser = _currentUser?.trim() ?? '';
     if (currentUser.isEmpty) {
       throw Exception('User login Frappe tidak tersedia.');
+    }
+    final boot = await fetchMobileBoot();
+    final bootRole = _roleProfileFromMobileBoot(boot);
+    if (bootRole.isNotEmpty && bootRole != MobileRole.unassigned) {
+      await _applyCurrentRole(bootRole);
+      return;
     }
     final access = await _authService.fetchCurrentUserAccess(currentUser);
     await _applyCurrentRole(access.roleProfile);
@@ -117,19 +174,27 @@ class AppState with ChangeNotifier {
   }
 
   String _normalizeRoleProfile(String roleProfile) {
-    final normalized = roleProfile.trim();
-    final lower = normalized.toLowerCase();
-    if (lower == 'administrator') return 'Administrator';
-    if (lower == 'sales' || lower == 'sales user') return 'Sales';
-    if (lower == 'sales manager') return 'Sales Manager';
-    if (lower == 'warehouse') return 'Warehouse';
-    if (lower == 'logistics') return 'Logistics';
-    if (lower == 'purchase manager') return 'Purchase Manager';
-    if (lower == 'purchase' || lower == 'purchase user') return 'Purchase';
-    if (lower == 'null' || lower == 'none' || lower == 'undefined') {
-      return 'Unassigned';
-    }
-    return normalized;
+    return MobileRoleRegistry.normalizeRoleProfile(roleProfile);
+  }
+
+  String _roleProfileFromMobileBoot(MobileBoot? boot) {
+    if (boot == null) return '';
+    final directRole = _cleanRoleValue(boot.roleProfile);
+    if (directRole.isNotEmpty) return directRole;
+
+    final roles = boot.roles.map((role) => role.toLowerCase()).toSet();
+    return _roleProfileFromRoleNames(roles);
+  }
+
+  String _roleProfileFromRoleNames(Set<String> roles) {
+    return MobileRoleRegistry.fromFrappeRoles(roles);
+  }
+
+  String _cleanRoleValue(Object? value) {
+    final cleaned = value?.toString().trim() ?? '';
+    final lower = cleaned.toLowerCase();
+    if (lower == 'null' || lower == 'none' || lower == 'undefined') return '';
+    return cleaned;
   }
 
   Future<String?> resolveCurrentSalesIdentity() async {
@@ -261,7 +326,7 @@ class AppState with ChangeNotifier {
   int get sellingPeriodMonth => _sellingPeriodMonth;
   String get sellingCompanyFilter => _sellingCompanyFilter;
   String get sellingCustomerTypeFilter => _sellingCustomerTypeFilter;
-  List<String> get sellingCompanies => _sellingCompanies;
+  List<String> get sellingCompanies => _scopedCompanyNames(_sellingCompanies);
   DateTime get sellingPeriodFrom => _sellingPeriodMonth == 0
       ? DateTime(_sellingPeriodYear, 1, 1)
       : DateTime(_sellingPeriodYear, _sellingPeriodMonth, 1);
@@ -295,13 +360,72 @@ class AppState with ChangeNotifier {
   int get buyingPeriodMonth => _buyingPeriodMonth;
   String get buyingCompanyFilter => _buyingCompanyFilter;
   String get buyingSupplierTypeFilter => _buyingSupplierTypeFilter;
-  List<String> get buyingCompanies => _buyingCompanies;
+  List<String> get buyingCompanies => _scopedCompanyNames(_buyingCompanies);
   DateTime get buyingPeriodFrom => _buyingPeriodMonth == 0
       ? DateTime(_buyingPeriodYear, 1, 1)
       : DateTime(_buyingPeriodYear, _buyingPeriodMonth, 1);
   DateTime get buyingPeriodTo => _buyingPeriodMonth == 0
       ? DateTime(_buyingPeriodYear, 12, 31)
       : DateTime(_buyingPeriodYear, _buyingPeriodMonth + 1, 0);
+
+  List<String> _scopedCompanyNames(List<String> fallback) {
+    final allowed = _mobileBoot?.companies ?? const <String>[];
+    final normalizedAllowed = allowed
+        .map((company) => company.trim())
+        .where((company) => company.isNotEmpty)
+        .toSet();
+    if (normalizedAllowed.isEmpty) return fallback;
+
+    final scoped = fallback
+        .where((company) => normalizedAllowed.contains(company.trim()))
+        .toList();
+    if (scoped.isNotEmpty) return scoped;
+    final sorted = normalizedAllowed.toList()..sort();
+    return sorted;
+  }
+
+  String? preferredCompany(Iterable<String> options) {
+    final available = options
+        .map((company) => company.trim())
+        .where((company) => company.isNotEmpty)
+        .toList();
+    if (available.isEmpty) return null;
+
+    final bootDefault = _mobileBoot?.defaultCompany.trim() ?? '';
+    if (bootDefault.isNotEmpty && available.contains(bootDefault)) {
+      return bootDefault;
+    }
+
+    final bootCompanies = _mobileBoot?.companies ?? const <String>[];
+    for (final company in bootCompanies) {
+      final trimmed = company.trim();
+      if (trimmed.isNotEmpty && available.contains(trimmed)) return trimmed;
+    }
+    return available.first;
+  }
+
+  String? preferredWarehouse(Iterable<WarehouseInfo> options) {
+    final warehouses = options
+        .where((warehouse) => warehouse.name.trim().isNotEmpty)
+        .toList();
+    if (warehouses.isEmpty) return null;
+
+    final bootWarehouses = _mobileBoot?.warehouses ?? const <String>[];
+    for (final bootWarehouse in bootWarehouses) {
+      final trimmed = bootWarehouse.trim();
+      if (trimmed.isEmpty) continue;
+      for (final warehouse in warehouses) {
+        if (warehouse.name == trimmed) return warehouse.name;
+      }
+    }
+
+    for (final warehouse in warehouses) {
+      if (warehouse.name.toLowerCase().contains('store')) {
+        return warehouse.name;
+      }
+    }
+    return warehouses.first.name;
+  }
 
   Future<void>? _orderSummaryJob;
   bool _isOrderSummaryLoading = false;
@@ -398,7 +522,47 @@ class AppState with ChangeNotifier {
   static const int _defaultFetchRowLimit = 500;
   static const int _documentPageSize = 50;
   static const String _prefsFrappeConfigKey = 'frappe_config';
+  static const String _prefsFrappeSiteHistoryKey = 'frappe_site_history';
   static const String _prefsSummaryCacheKey = 'erp_summary_cache';
+
+  static const Map<String, _LocalFrappeSite> _hardcodedSiteCodes = {
+    'TABI': _LocalFrappeSite(
+      name: 'Tabi',
+      baseUrl: 'http://103.27.206.41:8003',
+    ),
+    'ATIS': _LocalFrappeSite(
+      name: 'ATIS',
+      baseUrl: 'http://103.27.206.41:8011',
+    ),
+    'PAJAK': _LocalFrappeSite(
+      name: 'Pajak',
+      baseUrl: 'http://103.27.206.41:8010',
+    ),
+    'PLANTATION': _LocalFrappeSite(
+      name: 'Plantation',
+      baseUrl: 'http://103.27.206.41:8013',
+    ),
+    'TMSX': _LocalFrappeSite(
+      name: 'TMSX',
+      baseUrl: 'http://103.27.206.41:8014',
+    ),
+    'SMS': _LocalFrappeSite(
+      name: 'SABANG MAKMUR SENTOSA',
+      baseUrl: 'http://103.27.206.41:8001',
+    ),
+    'GREENHOUSE': _LocalFrappeSite(
+      name: 'Greenhouse Cisauk',
+      baseUrl: 'http://103.27.206.41:8012',
+    ),
+    'LAHATTS': _LocalFrappeSite(
+      name: 'Lahat Tani Sejahtera',
+      baseUrl: 'http://103.27.206.41:8015',
+    ),
+    'HOLTI': _LocalFrappeSite(
+      name: 'Holti',
+      baseUrl: 'http://103.27.206.41:8016',
+    ),
+  };
 
   final ErpServices services;
   final SalesVisitLocationService _visitLocationService =
@@ -428,6 +592,56 @@ class AppState with ChangeNotifier {
 
   FrappeService get frappeService => _frappeService;
 
+  Map<String, _LocalFrappeSite> get _siteCatalog {
+    final sites = <String, _LocalFrappeSite>{..._hardcodedSiteCodes};
+    final defaultUrl = AppConfig.optionalFrappeBaseUrl;
+    if (defaultUrl.isNotEmpty) {
+      sites.putIfAbsent(
+        'TMSX',
+        () => _LocalFrappeSite(name: 'TMSX Default', baseUrl: defaultUrl),
+      );
+      sites.putIfAbsent(
+        'DEFAULT',
+        () => _LocalFrappeSite(name: 'Default ERP Site', baseUrl: defaultUrl),
+      );
+    }
+    return sites;
+  }
+
+  List<String> get localSiteCodeHints {
+    final codes = _siteCatalog.keys.toList()..sort();
+    return codes;
+  }
+
+  List<MapEntry<String, String>> get localSiteOptions {
+    final entries = _siteCatalog.entries
+        .map((entry) => MapEntry(entry.key, entry.value.name))
+        .toList();
+    entries.sort((a, b) => a.key.compareTo(b.key));
+    return entries;
+  }
+
+  Future<List<Map<String, String>>> loadFrappeSiteHistory() async {
+    final sp = await SharedPreferences.getInstance();
+    final raw = sp.getString(_prefsFrappeSiteHistoryKey);
+    if (raw == null || raw.trim().isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const [];
+      return decoded
+          .whereType<Map>()
+          .map((entry) {
+            return entry.map((key, value) {
+              return MapEntry(key.toString(), value.toString());
+            });
+          })
+          .where((entry) => (entry['baseUrl'] ?? '').trim().isNotEmpty)
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<Map<String, dynamic>> fetchCurrentUserProfile() {
     final user = _currentUser?.trim() ?? '';
     if (user.isEmpty) throw Exception('User login tidak tersedia.');
@@ -454,15 +668,176 @@ class AppState with ChangeNotifier {
 
   Future<void> _restoreFrappeConfig() async {
     final cfg = await _loadFrappeConfig();
+    final savedBaseUrl = cfg?['baseUrl'] ?? AppConfig.optionalFrappeBaseUrl;
+    if (savedBaseUrl.trim().isNotEmpty) {
+      _frappeService.baseUrl = _normalizeBaseUrl(savedBaseUrl);
+      _selectedSiteName = _publicSiteName(
+        baseUrl: _frappeService.baseUrl,
+        storedName: cfg?['siteName'],
+      );
+    }
     if (cfg == null) return;
 
-    _frappeService.baseUrl = AppConfig.normalizedFrappeBaseUrl;
     if (cfg['username'] != null) {
       _frappeService.username = cfg['username'];
     }
     if (cfg['password'] != null) {
       _frappeService.password = cfg['password'];
     }
+  }
+
+  String _normalizeBaseUrl(String value) {
+    final trimmed = value.trim().replaceFirst(RegExp(r'/+$'), '');
+    if (trimmed.isEmpty) return '';
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    return 'https://$trimmed';
+  }
+
+  String _hostLabel(String baseUrl) {
+    final uri = Uri.tryParse(baseUrl);
+    final host = uri?.host ?? '';
+    return host.isEmpty ? baseUrl : host;
+  }
+
+  bool _looksLikeTechnicalHost(String value) {
+    final trimmed = value.trim().toLowerCase();
+    if (trimmed.isEmpty) return true;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return true;
+    }
+    if (RegExp(r'^\d{1,3}(\.\d{1,3}){3}(:\d+)?$').hasMatch(trimmed)) {
+      return true;
+    }
+    return false;
+  }
+
+  String _siteNameForBaseUrl(String baseUrl) {
+    final normalized = _normalizeBaseUrl(baseUrl);
+    if (normalized.isEmpty) return 'ERP Site';
+    for (final site in _siteCatalog.values) {
+      if (_normalizeBaseUrl(site.baseUrl) == normalized) return site.name;
+    }
+    return 'ERP Site';
+  }
+
+  String _publicSiteName({required String baseUrl, String? storedName}) {
+    final name = storedName?.trim() ?? '';
+    if (name.isNotEmpty && !_looksLikeTechnicalHost(name)) return name;
+    return _siteNameForBaseUrl(baseUrl);
+  }
+
+  String _activeFrappeBaseUrl([String? baseUrl]) {
+    final explicit = baseUrl?.trim() ?? '';
+    if (explicit.isNotEmpty) return _normalizeBaseUrl(explicit);
+    final current = _frappeService.baseUrl.trim();
+    if (current.isNotEmpty) return _normalizeBaseUrl(current);
+    return AppConfig.optionalFrappeBaseUrl;
+  }
+
+  Future<bool> configureFrappeSite({
+    required String codeOrUrl,
+    String? displayName,
+  }) async {
+    final resolved = _resolveLocalSite(codeOrUrl);
+    if (resolved == null) {
+      _lastAuthError = 'Kode perusahaan/site tidak valid.';
+      notifyListeners();
+      return false;
+    }
+
+    final baseUrl = _normalizeBaseUrl(resolved.baseUrl);
+    final previousBaseUrl = _normalizeBaseUrl(_frappeService.baseUrl);
+    final uri = Uri.tryParse(baseUrl);
+    if (uri == null ||
+        uri.host.isEmpty ||
+        (uri.scheme != 'https' && uri.scheme != 'http')) {
+      _lastAuthError = 'URL Frappe site tidak valid.';
+      notifyListeners();
+      return false;
+    }
+
+    if (previousBaseUrl.isNotEmpty && previousBaseUrl != baseUrl) {
+      _resetRuntimeDataForTenantSwitch();
+      await _clearSummaryCache();
+    }
+    _frappeService.baseUrl = baseUrl;
+    _selectedSiteName = _publicSiteName(
+      baseUrl: baseUrl,
+      storedName: displayName?.trim().isNotEmpty == true
+          ? displayName!.trim()
+          : resolved.name,
+    );
+    await _saveFrappeConfigPatch({
+      'baseUrl': baseUrl,
+      'siteName': _selectedSiteName,
+    });
+    _lastAuthError = null;
+    notifyListeners();
+    return true;
+  }
+
+  _ResolvedFrappeSite? _resolveLocalSite(String codeOrUrl) {
+    final raw = codeOrUrl.trim();
+    if (raw.isEmpty) return null;
+    if (raw.contains('.') ||
+        raw.startsWith('http://') ||
+        raw.startsWith('https://')) {
+      final baseUrl = _normalizeBaseUrl(raw);
+      return _ResolvedFrappeSite(
+        code: _hostLabel(baseUrl).toUpperCase(),
+        name: _siteNameForBaseUrl(baseUrl),
+        baseUrl: baseUrl,
+        directUrl: true,
+      );
+    }
+    final code = raw.toUpperCase();
+    final site = _siteCatalog[code];
+    if (site == null) return null;
+    return _ResolvedFrappeSite(
+      code: code,
+      name: site.name,
+      baseUrl: site.baseUrl,
+    );
+  }
+
+  Future<void> _saveFrappeConfigPatch(Map<String, String> patch) async {
+    final sp = await SharedPreferences.getInstance();
+    final current = await _loadFrappeConfig() ?? <String, String>{};
+    current.addAll(patch);
+    await sp.setString(_prefsFrappeConfigKey, jsonEncode(current));
+  }
+
+  Future<void> _saveFrappeSiteHistory({
+    required String baseUrl,
+    required String siteName,
+  }) async {
+    final sp = await SharedPreferences.getInstance();
+    final normalizedBaseUrl = _normalizeBaseUrl(baseUrl);
+    if (normalizedBaseUrl.isEmpty) return;
+
+    final current = await loadFrappeSiteHistory();
+    final next = <Map<String, String>>[
+      {
+        'baseUrl': normalizedBaseUrl,
+        'siteName': _publicSiteName(
+          baseUrl: normalizedBaseUrl,
+          storedName: siteName,
+        ),
+      },
+      for (final entry in current)
+        if (_normalizeBaseUrl(entry['baseUrl'] ?? '') != normalizedBaseUrl)
+          {
+            'baseUrl': _normalizeBaseUrl(entry['baseUrl'] ?? ''),
+            'siteName': _publicSiteName(
+              baseUrl: entry['baseUrl'] ?? '',
+              storedName: entry['siteName'],
+            ),
+          },
+    ].where((entry) => (entry['baseUrl'] ?? '').isNotEmpty).take(5).toList();
+
+    await sp.setString(_prefsFrappeSiteHistoryKey, jsonEncode(next));
   }
 
   AppState({ErpServices? services}) : services = services ?? ErpServices() {
@@ -496,7 +871,7 @@ class AppState with ChangeNotifier {
     }
 
     try {
-      _frappeService.baseUrl = AppConfig.normalizedFrappeBaseUrl;
+      if (_frappeService.baseUrl.trim().isEmpty) return false;
       _userRole = 'Unassigned';
       await _frappeService.login(cfg['username']!, password);
       _isAuthenticated = true;
@@ -511,6 +886,7 @@ class AppState with ChangeNotifier {
       _isAuthenticated = false;
       _currentUser = null;
       _userRole = 'Unassigned';
+      _mobileBoot = null;
       notifyListeners();
       return false;
     }
@@ -520,11 +896,7 @@ class AppState with ChangeNotifier {
     try {
       await fetchWarehousesFromFrappe();
       await fetchInventoryFromFrappe(
-        filters: _shouldScopeSalesData
-            ? const [
-                ['warehouse', '=', 'Stores - Jakarta'],
-              ]
-            : null,
+        filters: _inventoryScopeFiltersForCurrentRole(),
       );
       if (_shouldScopeSalesData) {
         await Future.wait([
@@ -600,11 +972,129 @@ class AppState with ChangeNotifier {
   Future<void> clearSessionConfig() async {
     try {
       final sp = await SharedPreferences.getInstance();
-      await sp.remove(_prefsFrappeConfigKey);
+      final cfg = await _loadFrappeConfig();
+      if (cfg == null) {
+        await sp.remove(_prefsFrappeConfigKey);
+      } else {
+        final next = <String, String>{
+          if (cfg['baseUrl']?.trim().isNotEmpty == true)
+            'baseUrl': cfg['baseUrl']!,
+          if (cfg['siteName']?.trim().isNotEmpty == true)
+            'siteName': cfg['siteName']!,
+        };
+        if (next.isEmpty) {
+          await sp.remove(_prefsFrappeConfigKey);
+        } else {
+          await sp.setString(_prefsFrappeConfigKey, jsonEncode(next));
+        }
+      }
       await sp.remove(_prefsUserRoleKey);
     } catch (_) {}
     _frappeService.username = null;
     _frappeService.password = null;
+  }
+
+  Future<void> _clearSummaryCache() async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      await sp.remove(_prefsSummaryCacheKey);
+    } catch (_) {}
+  }
+
+  void _resetRuntimeDataForTenantSwitch() {
+    _salesOrders = [];
+    _purchaseOrders = [];
+    _deliveryNotes = [];
+    _salesInvoices = [];
+    _purchaseReceipts = [];
+    _purchaseInvoices = [];
+    _materialRequests = [];
+    _stockEntries = [];
+    _stockReconciliations = [];
+    _inventory = [];
+    _warehouses = [];
+    _notifications = [];
+
+    _salesOrderSummary = const DocumentSummary();
+    _deliveryNoteSummary = const DocumentSummary();
+    _salesInvoiceSummary = const DocumentSummary();
+    _purchaseOrderSummary = const DocumentSummary();
+    _purchaseReceiptSummary = const DocumentSummary();
+    _purchaseInvoiceSummary = const DocumentSummary();
+    _dashboardSummary = const DashboardSummary();
+    _salesOrderTrendPoints = const [];
+    _deliveryNoteTrendPoints = const [];
+    _salesInvoiceTrendPoints = const [];
+    _purchaseOrderTrendPoints = const [];
+    _purchaseReceiptTrendPoints = const [];
+    _purchaseInvoiceTrendPoints = const [];
+    _materialRequestTrendPoints = const [];
+
+    _salesOrdersError = null;
+    _purchaseOrdersError = null;
+    _deliveryNotesError = null;
+    _salesInvoicesError = null;
+    _purchaseReceiptsError = null;
+    _purchaseInvoicesError = null;
+    _materialRequestsError = null;
+    _stockEntriesError = null;
+    _inventoryError = null;
+    _orderSummaryError = null;
+
+    _isSalesOrdersLoading = false;
+    _isMoreSalesOrdersLoading = false;
+    _isPurchaseOrdersLoading = false;
+    _isMorePurchaseOrdersLoading = false;
+    _isDeliveryNotesLoading = false;
+    _isMoreDeliveryNotesLoading = false;
+    _isSalesInvoicesLoading = false;
+    _isMoreSalesInvoicesLoading = false;
+    _isPurchaseReceiptsLoading = false;
+    _isMorePurchaseReceiptsLoading = false;
+    _isPurchaseInvoicesLoading = false;
+    _isMorePurchaseInvoicesLoading = false;
+    _isMaterialRequestsLoading = false;
+    _isMoreMaterialRequestsLoading = false;
+    _isStockEntriesLoading = false;
+    _isInventoryLoading = false;
+    _isNotificationsLoading = false;
+    _isOrderSummaryLoading = false;
+
+    _hasMoreSalesOrders = true;
+    _hasMorePurchaseOrders = true;
+    _hasMoreDeliveryNotes = true;
+    _hasMoreSalesInvoices = true;
+    _hasMorePurchaseReceipts = true;
+    _hasMorePurchaseInvoices = true;
+    _hasMoreMaterialRequests = true;
+
+    _salesOrderSearch = '';
+    _purchaseOrderSearch = '';
+    _deliveryNoteSearch = '';
+    _salesInvoiceSearch = '';
+    _purchaseReceiptSearch = '';
+    _purchaseInvoiceSearch = '';
+    _materialRequestSearch = '';
+    _salesOrderStatus = null;
+    _purchaseOrderStatus = null;
+    _deliveryNoteStatus = null;
+    _salesInvoiceStatus = null;
+    _purchaseReceiptStatus = null;
+    _purchaseInvoiceStatus = null;
+    _materialRequestStatus = null;
+
+    _sellingCompanyFilter = '';
+    _buyingCompanyFilter = '';
+    _sellingCustomerTypeFilter = 'all';
+    _buyingSupplierTypeFilter = 'all';
+    _sellingCustomerTypeIdsCacheKey = null;
+    _sellingCustomerTypeIdsCache = null;
+    _buyingSupplierTypeIdsCacheKey = null;
+    _buyingSupplierTypeIdsCache = null;
+    _salesOrderApprovalTodoCount = 0;
+    _purchaseApprovalTodoCount = 0;
+    _summarySyncStatus = SummarySyncStatus.idle;
+    _summaryProcessedRows = 0;
   }
 
   void setRememberDevice(bool value) {
@@ -619,8 +1109,20 @@ class AppState with ChangeNotifier {
   }) async {
     try {
       _lastAuthError = null;
-      _frappeService.baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
+      if (baseUrl != null && baseUrl.trim().isNotEmpty) {
+        final nextBaseUrl = _normalizeBaseUrl(baseUrl);
+        if (_normalizeBaseUrl(_frappeService.baseUrl) != nextBaseUrl) {
+          _resetRuntimeDataForTenantSwitch();
+          await _clearSummaryCache();
+        }
+        _frappeService.baseUrl = nextBaseUrl;
+      }
+      if (_frappeService.baseUrl.trim().isEmpty) {
+        throw Exception('Pilih Frappe site sebelum login.');
+      }
       _userRole = 'Unassigned';
+      _mobileBoot = null;
+      _resetRuntimeDataForTenantSwitch();
       await _frappeService.login(username, password);
       _isAuthenticated = true;
       _currentUser = username;
@@ -648,13 +1150,48 @@ class AppState with ChangeNotifier {
     _activeSalesVisit = null;
     _latestVisitLocation = null;
     _notifications = [];
+    _mobileCompatibilityWarning = null;
+    _mobileBoot = null;
     _salesOrderApprovalTodoCount = 0;
     _purchaseApprovalTodoCount = 0;
+    _resetRuntimeDataForTenantSwitch();
     _isAuthenticated = false;
     _currentUser = null;
     _userRole = 'Unassigned';
     await clearSessionConfig();
     notifyListeners();
+  }
+
+  Future<MobileBoot?> fetchMobileBoot() async {
+    try {
+      final result = await _frappeService.callMethod(
+        'tmsx_mobile.api.auth.get_mobile_boot',
+      );
+      final payload = result is Map<String, dynamic>
+          ? result
+          : result is Map
+          ? Map<String, dynamic>.from(result)
+          : null;
+      if (payload == null) {
+        _mobileBoot = null;
+        return null;
+      }
+      _mobileBoot = MobileBoot.fromJson(payload);
+      _mobileCompatibilityWarning = null;
+      notifyListeners();
+      return _mobileBoot;
+    } catch (_) {
+      _mobileBoot = null;
+      _mobileCompatibilityWarning =
+          'Site ini belum memasang package tmsx_mobile. App memakai API ERPNext langsung.';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> checkMobileBackendCompatibility() async {
+    final boot = await fetchMobileBoot();
+    return boot?.raw;
   }
 
   void _startNotificationPolling() {
@@ -2241,7 +2778,7 @@ class AppState with ChangeNotifier {
     notifyListeners();
 
     try {
-      _frappeService.baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
+      _frappeService.baseUrl = _activeFrappeBaseUrl(baseUrl);
       if (username != null && password != null) {
         await _frappeService.login(username, password);
       } else {
@@ -2268,7 +2805,7 @@ class AppState with ChangeNotifier {
     String? username,
     String? password,
   }) async {
-    _frappeService.baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
+    _frappeService.baseUrl = _activeFrappeBaseUrl(baseUrl);
     _isPurchaseOrdersLoading = true;
     _purchaseOrdersError = null;
     _hasMorePurchaseOrders = true;
@@ -2381,6 +2918,10 @@ class AppState with ChangeNotifier {
 
     try {
       await _frappeService.ensureLoggedIn();
+      if (await _refreshSellingSummariesFromMobileAnalytics()) {
+        _orderSummaryError = null;
+        return;
+      }
       final salesFilters = await _sellingDocumentFilters('transaction_date');
       final postingFilters = await _sellingDocumentFilters('posting_date');
       final customerTypeIds = await _sellingCustomerTypeCustomerIds();
@@ -2498,6 +3039,53 @@ class AppState with ChangeNotifier {
     }
   }
 
+  Future<bool> _refreshSellingSummariesFromMobileAnalytics() async {
+    if (_sellingCustomerTypeFilter.trim().isNotEmpty &&
+        _sellingCustomerTypeFilter.trim().toLowerCase() != 'all') {
+      return false;
+    }
+
+    try {
+      final salesOrder = await _fetchErpNextAnalyticsSection(
+        reportName: 'Sales Analytics',
+        treeType: 'Customer',
+        docType: 'Sales Order',
+        year: _sellingPeriodYear,
+        month: _sellingPeriodMonth,
+        company: _sellingCompanyFilter,
+      );
+      final deliveryNote = await _fetchErpNextAnalyticsSection(
+        reportName: 'Sales Analytics',
+        treeType: 'Customer',
+        docType: 'Delivery Note',
+        year: _sellingPeriodYear,
+        month: _sellingPeriodMonth,
+        company: _sellingCompanyFilter,
+      );
+      final salesInvoice = await _fetchErpNextAnalyticsSection(
+        reportName: 'Sales Analytics',
+        treeType: 'Customer',
+        docType: 'Sales Invoice',
+        year: _sellingPeriodYear,
+        month: _sellingPeriodMonth,
+        company: _sellingCompanyFilter,
+      );
+      if (salesOrder == null || deliveryNote == null || salesInvoice == null) {
+        return false;
+      }
+
+      _salesOrderSummary = salesOrder.summary;
+      _salesOrderTrendPoints = salesOrder.trend;
+      _deliveryNoteSummary = deliveryNote.summary;
+      _deliveryNoteTrendPoints = deliveryNote.trend;
+      _salesInvoiceSummary = salesInvoice.summary;
+      _salesInvoiceTrendPoints = salesInvoice.trend;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> setSellingPeriod({
     required int year,
     required int month,
@@ -2597,6 +3185,10 @@ class AppState with ChangeNotifier {
 
     try {
       await _frappeService.ensureLoggedIn();
+      if (await _refreshBuyingSummariesFromMobileAnalytics()) {
+        _orderSummaryError = null;
+        return;
+      }
       final buyingSupplierTypeIds = await _buyingSupplierTypeSupplierIds();
       final purchaseTrend = _emptyBuyingTrendPoints();
       final receiptTrend = _emptyBuyingTrendPoints();
@@ -2743,6 +3335,98 @@ class AppState with ChangeNotifier {
     }
   }
 
+  Future<bool> _refreshBuyingSummariesFromMobileAnalytics() async {
+    if (_buyingSupplierTypeFilter.trim().isNotEmpty &&
+        _buyingSupplierTypeFilter.trim().toLowerCase() != 'all') {
+      return false;
+    }
+
+    try {
+      final purchaseOrder = await _fetchErpNextAnalyticsSection(
+        reportName: 'Purchase Analytics',
+        treeType: 'Supplier',
+        docType: 'Purchase Order',
+        year: _buyingPeriodYear,
+        month: _buyingPeriodMonth,
+        company: _buyingCompanyFilter,
+      );
+      final purchaseReceipt = await _fetchErpNextAnalyticsSection(
+        reportName: 'Purchase Analytics',
+        treeType: 'Supplier',
+        docType: 'Purchase Receipt',
+        year: _buyingPeriodYear,
+        month: _buyingPeriodMonth,
+        company: _buyingCompanyFilter,
+      );
+      final purchaseInvoice = await _fetchErpNextAnalyticsSection(
+        reportName: 'Purchase Analytics',
+        treeType: 'Supplier',
+        docType: 'Purchase Invoice',
+        year: _buyingPeriodYear,
+        month: _buyingPeriodMonth,
+        company: _buyingCompanyFilter,
+      );
+      final materialRequest = await _fetchMaterialRequestAnalyticsSection();
+      if (purchaseOrder == null ||
+          purchaseReceipt == null ||
+          purchaseInvoice == null ||
+          materialRequest == null) {
+        return false;
+      }
+
+      _purchaseOrderSummary = purchaseOrder.summary;
+      _purchaseOrderTrendPoints = purchaseOrder.trend;
+      _purchaseReceiptSummary = purchaseReceipt.summary;
+      _purchaseReceiptTrendPoints = purchaseReceipt.trend;
+      _purchaseInvoiceSummary = purchaseInvoice.summary;
+      _purchaseInvoiceTrendPoints = purchaseInvoice.trend;
+      _materialRequestTrendPoints = materialRequest.trend;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<_MobileAnalyticsSection?>
+  _fetchMaterialRequestAnalyticsSection() async {
+    final trend = _emptyBuyingTrendPoints();
+    var totalValue = 0.0;
+    var documentCount = 0;
+    await _forEachResourcePage(
+      doctype: 'Material Request',
+      fields: const [
+        'name',
+        'total_qty',
+        'status',
+        'docstatus',
+        'transaction_date',
+      ],
+      filters: [
+        ..._buyingPeriodFilters('transaction_date'),
+        ['docstatus', '!=', 2],
+      ],
+      onRow: (row) {
+        if (!_isActiveBuyingTrendRow(row)) return;
+        final qty = NumParse.asDouble(row['total_qty']);
+        final value = qty <= 0 ? 1.0 : qty;
+        totalValue += value;
+        documentCount++;
+        _addBuyingTrendPoint(
+          trend,
+          dateRaw: row['transaction_date'],
+          amount: value,
+        );
+      },
+    );
+    return _MobileAnalyticsSection(
+      summary: DocumentSummary(
+        totalValue: totalValue,
+        documentCount: documentCount,
+      ),
+      trend: trend,
+    );
+  }
+
   Future<void> loadBuyingFilterOptions() async {
     if (_buyingCompanies.isNotEmpty || !_isAuthenticated) return;
     try {
@@ -2837,6 +3521,191 @@ class AppState with ChangeNotifier {
     points[index] = points[index].add(amount);
   }
 
+  Future<_MobileAnalyticsSection?> _fetchErpNextAnalyticsSection({
+    required String reportName,
+    required String treeType,
+    required String docType,
+    required int year,
+    required int month,
+    required String company,
+  }) async {
+    final from = month == 0 ? DateTime(year) : DateTime(year, month);
+    final to = month == 0
+        ? DateTime(year, 12, 31)
+        : DateTime(year, month + 1, 0);
+    final response = await _frappeService.callMethod(
+      'frappe.desk.query_report.run',
+      args: {
+        'report_name': reportName,
+        'filters': {
+          'tree_type': treeType,
+          'doc_type': docType,
+          'value_quantity': 'Value',
+          'range': month == 0 ? 'Monthly' : 'Weekly',
+          'from_date': DateRangePresets.toFrappeDate(from),
+          'to_date': DateRangePresets.toFrappeDate(to),
+          if (company.trim().isNotEmpty) 'company': company.trim(),
+          'show_aggregate_value_from_subsidiary_companies': 0,
+        },
+        'ignore_prepared_report': true,
+        'are_default_filters': false,
+      },
+    );
+    return _analyticsSectionFromQueryReport(response, month);
+  }
+
+  _MobileAnalyticsSection? _analyticsSectionFromQueryReport(
+    dynamic response,
+    int month,
+  ) {
+    final report = _queryReportPayload(response);
+    if (report == null) return null;
+    final columns = _queryReportColumns(report['columns']);
+    final rows = _queryReportRows(report['result'] ?? report['data']);
+    final periodColumns = _queryReportPeriodColumns(columns, month);
+    if (periodColumns.isEmpty) return null;
+
+    final trend = _emptyAnalyticsTrend(month);
+    var totalValue = 0.0;
+    var rowCount = 0;
+    for (final row in rows) {
+      final mapped = _queryReportRowMap(row, columns);
+      if (_isQueryReportTotalRow(mapped)) continue;
+      var hasValue = false;
+      for (final entry in periodColumns.entries) {
+        final value = NumParse.asDouble(mapped[entry.value]);
+        if (value == 0) continue;
+        totalValue += value;
+        hasValue = true;
+        trend[entry.key] = trend[entry.key].add(value);
+      }
+      if (hasValue) rowCount++;
+    }
+
+    return _MobileAnalyticsSection(
+      summary: DocumentSummary(totalValue: totalValue, documentCount: rowCount),
+      trend: trend,
+    );
+  }
+
+  Map<String, dynamic>? _queryReportPayload(dynamic response) {
+    if (response is! Map) return null;
+    final map = Map<String, dynamic>.from(response);
+    final message = map['message'];
+    if (message is Map) return Map<String, dynamic>.from(message);
+    return map;
+  }
+
+  List<Map<String, dynamic>> _queryReportColumns(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw.map((column) {
+      if (column is String) {
+        return {'label': column, 'fieldname': column};
+      }
+      if (column is Map) return Map<String, dynamic>.from(column);
+      return <String, dynamic>{};
+    }).toList();
+  }
+
+  List<dynamic> _queryReportRows(dynamic raw) => raw is List ? raw : const [];
+
+  Map<String, dynamic> _queryReportRowMap(
+    dynamic row,
+    List<Map<String, dynamic>> columns,
+  ) {
+    if (row is Map) return Map<String, dynamic>.from(row);
+    if (row is! List) return const {};
+    final mapped = <String, dynamic>{};
+    for (var i = 0; i < row.length && i < columns.length; i++) {
+      final fieldname =
+          columns[i]['fieldname']?.toString() ??
+          columns[i]['field']?.toString() ??
+          columns[i]['label']?.toString() ??
+          '';
+      if (fieldname.isEmpty) continue;
+      mapped[fieldname] = row[i];
+    }
+    return mapped;
+  }
+
+  Map<int, String> _queryReportPeriodColumns(
+    List<Map<String, dynamic>> columns,
+    int month,
+  ) {
+    final result = <int, String>{};
+    for (final column in columns) {
+      final fieldname =
+          column['fieldname']?.toString() ??
+          column['field']?.toString() ??
+          column['label']?.toString() ??
+          '';
+      if (fieldname.isEmpty) continue;
+      final label = (column['label']?.toString() ?? fieldname).toLowerCase();
+      final index = _queryReportPeriodIndex(label, month);
+      if (index == null) continue;
+      result[index] = fieldname;
+    }
+    return result;
+  }
+
+  int? _queryReportPeriodIndex(String label, int month) {
+    if (month == 0) {
+      const aliases = [
+        ['jan'],
+        ['feb'],
+        ['mar'],
+        ['apr'],
+        ['may', 'mei'],
+        ['jun'],
+        ['jul'],
+        ['aug', 'agu'],
+        ['sep'],
+        ['oct', 'okt'],
+        ['nov'],
+        ['dec', 'des'],
+      ];
+      for (var i = 0; i < aliases.length; i++) {
+        if (aliases[i].any(label.contains)) return i;
+      }
+      return null;
+    }
+
+    final match = RegExp(r'(week|minggu)\s*(\d+)').firstMatch(label);
+    if (match == null) return null;
+    final week = int.tryParse(match.group(2) ?? '');
+    if (week == null) return null;
+    return (week - 1).clamp(0, 3);
+  }
+
+  List<DocumentTrendPoint> _emptyAnalyticsTrend(int month) {
+    if (month == 0) {
+      const labels = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'Mei',
+        'Jun',
+        'Jul',
+        'Agu',
+        'Sep',
+        'Okt',
+        'Nov',
+        'Des',
+      ];
+      return [for (final label in labels) DocumentTrendPoint(label: label)];
+    }
+    return [
+      for (var i = 0; i < 4; i++) DocumentTrendPoint(label: 'Minggu ${i + 1}'),
+    ];
+  }
+
+  bool _isQueryReportTotalRow(Map<String, dynamic> row) {
+    return row.values
+        .take(3)
+        .any((value) => value?.toString().trim().toLowerCase() == 'total');
+  }
+
   Future<void> refreshAllSummaries({bool silent = false}) {
     if (!_isAuthenticated) return Future.value();
 
@@ -2859,6 +3728,10 @@ class AppState with ChangeNotifier {
 
     try {
       await _frappeService.ensureLoggedIn();
+      final salesOrderFilters = await _sellingDocumentFilters(
+        'transaction_date',
+      );
+      final salesPostingFilters = await _sellingDocumentFilters('posting_date');
       var salesTotal = 0.0;
       var salesOpen = 0.0;
       var salesCompleted = 0.0;
@@ -2876,7 +3749,7 @@ class AppState with ChangeNotifier {
           'delivery_date',
         ],
         filters: [
-          ..._sellingPeriodFilters('transaction_date'),
+          ...salesOrderFilters,
           ['docstatus', '!=', 2],
         ],
         onRow: (row) {
@@ -2901,7 +3774,7 @@ class AppState with ChangeNotifier {
         doctype: 'Delivery Note',
         fields: const ['name', 'grand_total'],
         filters: [
-          ..._sellingPeriodFilters('posting_date'),
+          ...salesPostingFilters,
           ['docstatus', '!=', 2],
         ],
         onRow: (row) {
@@ -2917,7 +3790,7 @@ class AppState with ChangeNotifier {
         doctype: 'Sales Invoice',
         fields: const ['name', 'grand_total', 'status', 'docstatus'],
         filters: [
-          ..._sellingPeriodFilters('posting_date'),
+          ...salesPostingFilters,
           ['docstatus', '!=', 2],
         ],
         onRow: (row) {
@@ -3008,6 +3881,7 @@ class AppState with ChangeNotifier {
       await _forEachResourcePage(
         doctype: 'Bin',
         fields: const ['name', 'item_code', 'actual_qty'],
+        filters: _warehouseScopeFilters(),
         onRow: (row) {
           final itemCode = row['item_code']?.toString() ?? '';
           if (itemCode.isEmpty) return;
@@ -3429,6 +4303,7 @@ class AppState with ChangeNotifier {
           'to_warehouse',
         ],
         orderBy: 'posting_date desc',
+        filters: _companyScopeFilters(''),
         maxRows: _defaultFetchRowLimit,
       );
       _stockEntries = data.map((e) => StockEntry.fromJson(e)).toList();
@@ -3468,7 +4343,7 @@ class AppState with ChangeNotifier {
     String? username,
     String? password,
   }) async {
-    _frappeService.baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
+    _frappeService.baseUrl = _activeFrappeBaseUrl(baseUrl);
 
     try {
       if (username != null && password != null) {
@@ -3493,6 +4368,7 @@ class AppState with ChangeNotifier {
           filters: [
             ['is_group', '=', 0],
             ['disabled', '=', 0],
+            ..._companyScopeFilters(''),
           ],
           maxRows: null,
         );
@@ -3508,6 +4384,7 @@ class AppState with ChangeNotifier {
             'disabled',
           ],
           orderBy: 'name asc',
+          filters: _companyScopeFilters(''),
           maxRows: null,
         );
       }
@@ -3529,7 +4406,20 @@ class AppState with ChangeNotifier {
       if (w.company.isEmpty) continue;
       labels.putIfAbsent(w.company, () => w.company);
     }
-    final entries = labels.entries.toList()
+    final allowed = _mobileBoot?.companies ?? const <String>[];
+    final allowedSet = allowed
+        .map((company) => company.trim())
+        .where((company) => company.isNotEmpty)
+        .toSet();
+    final source = allowedSet.isEmpty
+        ? labels
+        : {
+            for (final entry in labels.entries)
+              if (allowedSet.contains(entry.key)) entry.key: entry.value,
+            for (final company in allowedSet)
+              if (!labels.containsKey(company)) company: company,
+          };
+    final entries = source.entries.toList()
       ..sort((a, b) => a.value.compareTo(b.value));
     return entries;
   }
@@ -3589,13 +4479,94 @@ class AppState with ChangeNotifier {
     return names;
   }
 
+  List<String> get currentInventoryScopeWarehouses =>
+      _inventoryScopeWarehouseNames();
+
+  Future<void> refreshInventoryForCurrentRoleScope() {
+    return fetchInventoryFromFrappe(
+      filters: _inventoryScopeFiltersForCurrentRole(),
+    );
+  }
+
+  List<String> _inventoryScopeWarehouseNames() {
+    final bootWarehouseNames = (_mobileBoot?.warehouses ?? const <String>[])
+        .map((warehouse) => warehouse.trim())
+        .where((warehouse) => warehouse.isNotEmpty)
+        .toSet()
+        .toList();
+    if (bootWarehouseNames.isNotEmpty) {
+      bootWarehouseNames.sort(_compareWarehouseNames);
+      return bootWarehouseNames;
+    }
+
+    if (!_shouldScopeSalesData) {
+      final names = _warehouses
+          .where((w) => w.name.isNotEmpty)
+          .map((w) => w.name)
+          .toList();
+      names.sort(_compareWarehouseNames);
+      return names;
+    }
+
+    final employeeCompany =
+        _currentEmployeeProfile['company']?.toString().trim() ?? '';
+    final companyWarehouses = employeeCompany.isEmpty
+        ? const <String>[]
+        : erpWarehouseNamesForCompany(employeeCompany);
+    final names = companyWarehouses.isNotEmpty
+        ? companyWarehouses
+        : _warehouses
+              .where((w) => w.name.isNotEmpty)
+              .map((w) => w.name)
+              .toList();
+    names.sort(_compareWarehouseNames);
+    return names;
+  }
+
+  List<List<dynamic>>? _inventoryScopeFiltersForCurrentRole() {
+    final bootFilters = _warehouseScopeFilters();
+    if (bootFilters != null) return bootFilters;
+    if (!_shouldScopeSalesData) return null;
+    final warehouseNames = _inventoryScopeWarehouseNames();
+
+    if (warehouseNames.isEmpty) return null;
+    if (warehouseNames.length == 1) {
+      return [
+        ['warehouse', '=', warehouseNames.first],
+      ];
+    }
+    return [
+      ['warehouse', 'in', warehouseNames],
+    ];
+  }
+
+  List<List<dynamic>>? _warehouseScopeFilters() {
+    final warehouses = _mobileBoot?.warehouses ?? const <String>[];
+    final names =
+        warehouses
+            .map((warehouse) => warehouse.trim())
+            .where((warehouse) => warehouse.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    if (names.isEmpty) return null;
+    if (names.length == 1) {
+      return [
+        ['warehouse', '=', names.first],
+      ];
+    }
+    return [
+      ['warehouse', 'in', names],
+    ];
+  }
+
   Future<void> fetchInventoryFromFrappe({
     String? baseUrl,
     String? username,
     String? password,
     List<List<dynamic>>? filters,
   }) async {
-    _frappeService.baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
+    _frappeService.baseUrl = _activeFrappeBaseUrl(baseUrl);
     _isInventoryLoading = true;
     _inventoryError = null;
     notifyListeners();
@@ -3609,7 +4580,7 @@ class AppState with ChangeNotifier {
 
       if (_warehouses.isEmpty) {
         await fetchWarehousesFromFrappe(
-          baseUrl: baseUrl ?? AppConfig.normalizedFrappeBaseUrl,
+          baseUrl: _activeFrappeBaseUrl(baseUrl),
           username: username,
           password: password,
         );
@@ -3927,6 +4898,7 @@ class AppState with ChangeNotifier {
         ['item_code', '=', itemCode],
         ['posting_date', '>=', fromDate],
         ['posting_date', '<=', toDate],
+        ...?_warehouseScopeFilters(),
       ],
       maxRows: null,
     );
@@ -3952,6 +4924,7 @@ class AppState with ChangeNotifier {
       filters: [
         ['posting_date', '>=', DateRangePresets.toFrappeDate(from)],
         ['actual_qty', '>', 0],
+        ...?_warehouseScopeFilters(),
       ],
       orderBy: 'posting_date desc, posting_time desc',
       maxRows: 5000,
@@ -4001,6 +4974,7 @@ class AppState with ChangeNotifier {
       ],
       filters: [
         ['posting_date', '>=', DateRangePresets.toFrappeDate(from)],
+        ...?_warehouseScopeFilters(),
       ],
       orderBy: 'posting_date desc, posting_time desc',
       maxRows: 5000,
@@ -4047,6 +5021,7 @@ class AppState with ChangeNotifier {
       filters: [
         ['posting_date', '>=', DateRangePresets.toFrappeDate(from)],
         ['actual_qty', '<', 0],
+        ...?_warehouseScopeFilters(),
       ],
       orderBy: 'posting_date desc, posting_time desc',
       maxRows: 5000,
@@ -4101,6 +5076,7 @@ class AppState with ChangeNotifier {
     final rows = await _fetchAllResourcePages(
       doctype: 'Serial No',
       fields: const ['name', 'item_code', 'warehouse', 'status', 'batch_no'],
+      filters: _warehouseScopeFilters(),
       orderBy: 'modified desc',
       maxRows: 1000,
     );
@@ -4510,7 +5486,7 @@ class AppState with ChangeNotifier {
             'Material Request',
           ],
         ],
-        ['content', 'like', '%via TMSX App%'],
+        ['content', 'like', '%via TMSX%'],
       ],
       orderBy: 'creation desc',
       maxRows: 200,
@@ -4554,7 +5530,7 @@ class AppState with ChangeNotifier {
     );
     final decision = isReject ? 'REJECT' : 'APPROVE';
     final content = [
-      '$decision via TMSX App',
+      '$decision via TMSX Hub',
       'Action: $normalizedAction',
       if (reason.trim().isNotEmpty) 'Alasan: ${reason.trim()}',
     ].join('\n');
@@ -4618,7 +5594,7 @@ class AppState with ChangeNotifier {
     );
     final decision = isReject ? 'REJECT' : 'APPROVE';
     final content = [
-      '$decision via TMSX App',
+      '$decision via TMSX Hub',
       'Action: $normalizedAction',
       if (reason.trim().isNotEmpty) 'Alasan: ${reason.trim()}',
     ].join('\n');
@@ -4647,7 +5623,8 @@ class AppState with ChangeNotifier {
 
   Future<void> refreshSalesOrders() => fetchSalesOrdersFromFrappe();
   Future<void> refreshPurchaseOrders() => fetchPurchaseOrdersFromFrappe();
-  Future<void> refreshInventory() => fetchInventoryFromFrappe();
+  Future<void> refreshInventory() =>
+      fetchInventoryFromFrappe(filters: _inventoryScopeFiltersForCurrentRole());
 
   Future<void> refreshWarehouses() => fetchWarehousesFromFrappe();
 
@@ -4674,18 +5651,38 @@ class AppState with ChangeNotifier {
     required String username,
     String? password,
     bool savePassword = true,
+    String? baseUrl,
+    String? siteName,
   }) async {
     final sp = await SharedPreferences.getInstance();
     final shouldSavePassword =
         savePassword || _rememberDevice || password != null;
+    final resolvedBaseUrl = _normalizeBaseUrl(
+      baseUrl?.trim().isNotEmpty == true ? baseUrl! : _frappeService.baseUrl,
+    );
+    if (resolvedBaseUrl.isEmpty) {
+      throw Exception('Frappe site belum dipilih.');
+    }
     final cfg = {
       'username': username,
+      'baseUrl': resolvedBaseUrl,
+      'siteName': _publicSiteName(
+        baseUrl: resolvedBaseUrl,
+        storedName: siteName?.trim().isNotEmpty == true
+            ? siteName!.trim()
+            : _selectedSiteName,
+      ),
       if (shouldSavePassword && password != null) 'password': password,
     };
     await sp.setString(_prefsFrappeConfigKey, jsonEncode(cfg));
+    await _saveFrappeSiteHistory(
+      baseUrl: resolvedBaseUrl,
+      siteName: cfg['siteName']!,
+    );
 
-    _frappeService.baseUrl = AppConfig.normalizedFrappeBaseUrl;
+    _frappeService.baseUrl = resolvedBaseUrl;
     _frappeService.username = username;
+    _selectedSiteName = cfg['siteName']!;
     if (shouldSavePassword && password != null) {
       _frappeService.password = password;
     }
@@ -4843,8 +5840,7 @@ class AppState with ChangeNotifier {
   Future<List<List<dynamic>>> _sellingDocumentFilters(String dateField) async {
     final filters = <List<dynamic>>[
       ..._sellingPeriodFilters(dateField),
-      if (_sellingCompanyFilter.trim().isNotEmpty)
-        ['company', '=', _sellingCompanyFilter.trim()],
+      ..._companyScopeFilters(_sellingCompanyFilter),
     ];
 
     return filters;
@@ -4946,8 +5942,34 @@ class AppState with ChangeNotifier {
     return [
       [dateField, '>=', DateRangePresets.toFrappeDate(buyingPeriodFrom)],
       [dateField, '<=', DateRangePresets.toFrappeDate(buyingPeriodTo)],
-      if (_buyingCompanyFilter.trim().isNotEmpty)
-        ['company', '=', _buyingCompanyFilter.trim()],
+      ..._companyScopeFilters(_buyingCompanyFilter),
+    ];
+  }
+
+  List<List<dynamic>> _companyScopeFilters(String selectedCompany) {
+    final selected = selectedCompany.trim();
+    if (selected.isNotEmpty) {
+      return [
+        ['company', '=', selected],
+      ];
+    }
+
+    final allowed = _mobileBoot?.companies ?? const <String>[];
+    final companies =
+        allowed
+            .map((company) => company.trim())
+            .where((company) => company.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    if (companies.isEmpty) return const [];
+    if (companies.length == 1) {
+      return [
+        ['company', '=', companies.first],
+      ];
+    }
+    return [
+      ['company', 'in', companies],
     ];
   }
 
@@ -5651,4 +6673,11 @@ class AppState with ChangeNotifier {
     if (type == WarehouseType.inbound) return 2000;
     return 900;
   }
+}
+
+class _MobileAnalyticsSection {
+  final DocumentSummary summary;
+  final List<DocumentTrendPoint> trend;
+
+  const _MobileAnalyticsSection({required this.summary, required this.trend});
 }
