@@ -652,26 +652,113 @@ class FrappeService {
     if (decoded is Map) {
       final exception = decoded['exception']?.toString();
       if (exception != null && exception.isNotEmpty) {
-        return exception;
+        return _friendlyFrappeMessage(exception, statusCode);
       }
 
       final exc = decoded['exc']?.toString();
       if (exc != null && exc.isNotEmpty) {
-        return exc;
+        return _friendlyFrappeMessage(exc, statusCode);
       }
 
       final message = decoded['message'];
       if (message != null) {
-        return message.toString();
+        return _friendlyFrappeMessage(message.toString(), statusCode);
       }
 
       final serverMessages = decoded['_server_messages']?.toString();
       if (serverMessages != null && serverMessages.isNotEmpty) {
-        return serverMessages;
+        return _friendlyFrappeMessage(serverMessages, statusCode);
       }
     }
 
     return 'Frappe API error: $statusCode';
+  }
+
+  static String _friendlyFrappeMessage(String raw, int statusCode) {
+    final parsed = _parseServerMessage(raw).trim();
+    final message = parsed.isEmpty ? raw.trim() : parsed;
+    final lower = message.toLowerCase();
+
+    if (lower.contains('permissionerror') ||
+        lower.contains('not permitted') ||
+        lower.contains('insufficient permission')) {
+      return 'Akses ERPNext tidak diizinkan untuk data ini.';
+    }
+    if (lower.contains('doctype') &&
+        (lower.contains('not found') ||
+            lower.contains('does not exist') ||
+            lower.contains('tidak ditemukan'))) {
+      final doctype = _extractMissingDoctype(message);
+      return doctype == null
+          ? 'Fitur belum aktif di site ERPNext ini.'
+          : 'Fitur $doctype belum aktif di site ERPNext ini.';
+    }
+    if (statusCode == 401 || statusCode == 403) {
+      return 'Session atau akses ERPNext tidak diizinkan.';
+    }
+    if (statusCode == 404) {
+      return 'Data atau endpoint ERPNext tidak ditemukan.';
+    }
+    return message;
+  }
+
+  static String _parseServerMessage(String raw) {
+    dynamic value = raw;
+    for (var depth = 0; depth < 3; depth++) {
+      if (value is! String) break;
+      final trimmed = value.trim();
+      if (!(trimmed.startsWith('[') || trimmed.startsWith('{'))) break;
+      try {
+        value = jsonDecode(trimmed);
+      } on FormatException {
+        break;
+      }
+    }
+
+    if (value is List) {
+      final messages = value
+          .map(_messageFromServerMessageItem)
+          .where((message) => message.trim().isNotEmpty)
+          .toList();
+      if (messages.isNotEmpty) return messages.join('\n');
+    }
+    if (value is Map) {
+      return _messageFromServerMessageItem(value);
+    }
+    return raw;
+  }
+
+  static String _messageFromServerMessageItem(dynamic item) {
+    if (item is String) {
+      final nested = _parseServerMessage(item);
+      return nested == item ? item : nested;
+    }
+    if (item is Map) {
+      final message = item['message'] ?? item['title'] ?? item['indicator'];
+      return message?.toString() ?? '';
+    }
+    return item?.toString() ?? '';
+  }
+
+  static String? _extractMissingDoctype(String message) {
+    final patterns = [
+      RegExp(
+        r'DocType\s+(.+?)\s+(?:tidak ditemukan|not found|does not exist)',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'(.+?)\s+DocType\s+(?:tidak ditemukan|not found|does not exist)',
+        caseSensitive: false,
+      ),
+    ];
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(message);
+      final value = match?.group(1)?.trim();
+      if (value != null && value.isNotEmpty) {
+        return value.replaceAll(RegExp(r'["`.]'), '').trim();
+      }
+    }
+    return null;
   }
 
   void _logHttpError({

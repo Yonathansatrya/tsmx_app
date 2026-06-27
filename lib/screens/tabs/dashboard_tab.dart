@@ -52,7 +52,7 @@ class _DashboardTabState extends State<DashboardTab> {
       if (appState.canUseApprovals) {
         appState.fetchSalesOrderApprovals();
       }
-      if (appState.canUseSales || appState.canUseLogistics) {
+      if (appState.canUseSales) {
         _loadSalesTracking();
       }
     });
@@ -65,6 +65,12 @@ class _DashboardTabState extends State<DashboardTab> {
       _trackingError = null;
     });
     try {
+      final appState = context.read<AppState>();
+      if (!appState.canUseSales) {
+        if (!mounted) return;
+        setState(() => _salesTrackingPoints = const []);
+        return;
+      }
       final rows = await context
           .read<AppState>()
           .fetchLatestSalesTrackingPoints();
@@ -72,7 +78,10 @@ class _DashboardTabState extends State<DashboardTab> {
       setState(() => _salesTrackingPoints = rows);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _trackingError = error.toString());
+      setState(() {
+        _salesTrackingPoints = const [];
+        _trackingError = _visibleTrackingError(error);
+      });
     } finally {
       if (mounted) setState(() => _isTrackingLoading = false);
     }
@@ -104,7 +113,7 @@ class _DashboardTabState extends State<DashboardTab> {
           if (showStockKpi) appState.refreshInventory(),
           appState.refreshDashboardSummaryForCurrentAccess(),
           if (appState.canUseApprovals) appState.fetchSalesOrderApprovals(),
-          if (showTrackingWidget) _loadSalesTracking(),
+          if (appState.canUseSales) _loadSalesTracking(),
         ]);
       },
       child: SingleChildScrollView(
@@ -166,6 +175,20 @@ class _DashboardTabState extends State<DashboardTab> {
       return null;
     }
     return error;
+  }
+
+  String? _visibleTrackingError(Object error) {
+    final raw = error.toString();
+    final lower = raw.toLowerCase();
+    if (lower.contains('doctype sales tracking point') ||
+        lower.contains('sales tracking point') && lower.contains('not found') ||
+        lower.contains('does not exist') ||
+        lower.contains('permissionerror') ||
+        lower.contains('not permitted') ||
+        lower.contains('permission')) {
+      return null;
+    }
+    return raw;
   }
 
   List<LiveTrackingPoint> _trackingPoints(AppState appState) {
