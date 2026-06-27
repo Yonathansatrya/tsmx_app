@@ -1,0 +1,50 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "creation": "2026-06-27 00:00:00.000000",
+  "doctype": "DocType",
+  "editable_grid": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "competitor_name",
+    "product",
+    "price",
+    "notes"
+  ],
+  "fields": [
+    {
+      "fieldname": "competitor_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Competitor Name"
+    },
+    {
+      "fieldname": "product",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Product"
+    },
+    {
+      "fieldname": "price",
+      "fieldtype": "Currency",
+      "in_list_view": 1,
+      "label": "Price"
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "Notes"
+    }
+  ],
+  "istable": 1,
+  "links": [],
+  "modified": "2026-06-27 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "TMSX Mobile",
+  "name": "Sales Visit Competitor",
+  "owner": "Administrator",
+  "permissions": [],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": []
+}

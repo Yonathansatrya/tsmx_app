@@ -1,0 +1,187 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "format:SV-.YYYY.-.#####",
+  "creation": "2026-06-27 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "customer",
+    "sales_person",
+    "status",
+    "address",
+    "journey_start_time",
+    "check_in_time",
+    "check_out_time",
+    "location_section",
+    "target_latitude",
+    "target_longitude",
+    "check_in_latitude",
+    "check_in_longitude",
+    "check_out_latitude",
+    "check_out_longitude",
+    "check_in_distance",
+    "notes_section",
+    "notes",
+    "competitors",
+    "potential_orders"
+  ],
+  "fields": [
+    {
+      "fieldname": "customer",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Customer",
+      "options": "Customer",
+      "reqd": 1
+    },
+    {
+      "fieldname": "sales_person",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Sales Person",
+      "options": "Sales Person"
+    },
+    {
+      "default": "Traveling",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Status",
+      "options": "Traveling\nChecked In\nChecked Out\nCancelled"
+    },
+    {
+      "fieldname": "address",
+      "fieldtype": "Link",
+      "label": "Address",
+      "options": "Address"
+    },
+    {
+      "fieldname": "journey_start_time",
+      "fieldtype": "Datetime",
+      "in_list_view": 1,
+      "label": "Journey Start Time"
+    },
+    {
+      "fieldname": "check_in_time",
+      "fieldtype": "Datetime",
+      "in_standard_filter": 1,
+      "label": "Check In Time"
+    },
+    {
+      "fieldname": "check_out_time",
+      "fieldtype": "Datetime",
+      "label": "Check Out Time"
+    },
+    {
+      "fieldname": "location_section",
+      "fieldtype": "Section Break",
+      "label": "Location"
+    },
+    {
+      "fieldname": "target_latitude",
+      "fieldtype": "Float",
+      "label": "Target Latitude"
+    },
+    {
+      "fieldname": "target_longitude",
+      "fieldtype": "Float",
+      "label": "Target Longitude"
+    },
+    {
+      "fieldname": "check_in_latitude",
+      "fieldtype": "Float",
+      "label": "Check In Latitude"
+    },
+    {
+      "fieldname": "check_in_longitude",
+      "fieldtype": "Float",
+      "label": "Check In Longitude"
+    },
+    {
+      "fieldname": "check_out_latitude",
+      "fieldtype": "Float",
+      "label": "Check Out Latitude"
+    },
+    {
+      "fieldname": "check_out_longitude",
+      "fieldtype": "Float",
+      "label": "Check Out Longitude"
+    },
+    {
+      "fieldname": "check_in_distance",
+      "fieldtype": "Float",
+      "label": "Check In Distance"
+    },
+    {
+      "fieldname": "notes_section",
+      "fieldtype": "Section Break",
+      "label": "Notes"
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "Notes"
+    },
+    {
+      "fieldname": "competitors",
+      "fieldtype": "Table",
+      "label": "Competitors",
+      "options": "Sales Visit Competitor"
+    },
+    {
+      "fieldname": "potential_orders",
+      "fieldtype": "Table",
+      "label": "Potential Orders",
+      "options": "Sales Visit Potential Order"
+    }
+  ],
+  "links": [],
+  "modified": "2026-06-27 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "TMSX Mobile",
+  "name": "Sales Visit",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "role": "Sales User",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Sales Manager",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Sales Admin",
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "title_field": "customer"
+}

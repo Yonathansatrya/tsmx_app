@@ -7,11 +7,27 @@ app_license = "MIT"
 
 required_apps = ["frappe", "erpnext"]
 
+before_install = "tmsx_mobile.setup.setup_mobile_roles"
 after_install = "tmsx_mobile.setup.after_install"
 
 fixtures = [
     {
         "dt": "DocType",
-        "filters": [["name", "in", ["TMSX Mobile Settings", "TMSX Mobile Role Module"]]],
+        "filters": [
+            [
+                "name",
+                "in",
+                [
+                    "TMSX Mobile Settings",
+                    "TMSX Mobile Role Module",
+                    "Sales Visit",
+                    "Sales Visit Competitor",
+                    "Sales Visit Potential Order",
+                    "Sales Tracking Point",
+                    "Delivery Tracking Point",
+                    "Delivery Activity Log",
+                ],
+            ]
+        ],
     }
 ]

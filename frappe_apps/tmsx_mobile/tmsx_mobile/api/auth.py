@@ -116,39 +116,53 @@ ROLE_ALIASES = {
     "director": "Director",
     "owner": "Director",
     "executive": "Director",
+    "sales admin": "Sales Manager",
     "sales manager": "Sales Manager",
     "sales user": "Sales",
     "selling user": "Sales",
     "sales": "Sales",
+    "collection admin": "Collection",
     "collection user": "Collection",
     "collection manager": "Collection",
     "collection": "Collection",
     "accounts receivable": "Collection",
+    "purchase admin": "Purchase Manager",
     "purchase manager": "Purchase Manager",
     "buying manager": "Purchase Manager",
     "purchase user": "Purchase",
     "buying user": "Purchase",
     "purchase": "Purchase",
+    "quality control admin": "Quality Control",
     "quality control": "Quality Control",
+    "quality control manager": "Quality Control",
+    "quality control user": "Quality Control",
     "quality manager": "Quality Control",
     "qc manager": "Quality Control",
     "qc user": "Quality Control",
+    "warehouse admin": "Warehouse",
     "warehouse manager": "Warehouse",
     "warehouse user": "Warehouse",
     "stock manager": "Warehouse",
     "stock user": "Warehouse",
     "warehouse": "Warehouse",
+    "logistics admin": "Logistics",
     "logistics manager": "Logistics",
+    "logistics user": "Logistics",
     "delivery manager": "Logistics",
     "logistics": "Logistics",
     "delivery user": "Driver",
     "driver": "Driver",
+    "finance admin": "Finance",
     "finance manager": "Finance",
     "finance user": "Finance",
     "finance": "Finance",
+    "accounting admin": "Accounting",
+    "accounting manager": "Accounting",
+    "accounting user": "Accounting",
     "accounts manager": "Accounting",
     "accountant": "Accounting",
     "accounting": "Accounting",
+    "plantation admin": "Plantation Supervisor",
     "plantation supervisor": "Plantation Supervisor",
     "plantation manager": "Plantation Supervisor",
     "plantation": "Plantation Supervisor",
@@ -307,36 +321,50 @@ def _mobile_role_for_user(user_doc, roles):
         ("director", "Director"),
         ("owner", "Director"),
         ("executive", "Director"),
+        ("sales admin", "Sales Manager"),
         ("sales manager", "Sales Manager"),
         ("sales user", "Sales"),
         ("selling user", "Sales"),
         ("sales", "Sales"),
+        ("collection admin", "Collection"),
         ("collection user", "Collection"),
         ("collection manager", "Collection"),
         ("collection", "Collection"),
+        ("purchase admin", "Purchase Manager"),
         ("purchase manager", "Purchase Manager"),
         ("buying manager", "Purchase Manager"),
         ("purchase user", "Purchase"),
         ("buying user", "Purchase"),
         ("purchase", "Purchase"),
+        ("quality control admin", "Quality Control"),
         ("quality control", "Quality Control"),
+        ("quality control manager", "Quality Control"),
+        ("quality control user", "Quality Control"),
         ("quality manager", "Quality Control"),
+        ("warehouse admin", "Warehouse"),
         ("warehouse manager", "Warehouse"),
         ("warehouse user", "Warehouse"),
         ("stock manager", "Warehouse"),
         ("stock user", "Warehouse"),
         ("warehouse", "Warehouse"),
+        ("logistics admin", "Logistics"),
         ("logistics manager", "Logistics"),
+        ("logistics user", "Logistics"),
         ("delivery manager", "Logistics"),
         ("logistics", "Logistics"),
         ("delivery user", "Driver"),
         ("driver", "Driver"),
+        ("finance admin", "Finance"),
         ("finance manager", "Finance"),
         ("finance user", "Finance"),
         ("finance", "Finance"),
+        ("accounting admin", "Accounting"),
+        ("accounting manager", "Accounting"),
+        ("accounting user", "Accounting"),
         ("accounts manager", "Accounting"),
         ("accountant", "Accounting"),
         ("accounting", "Accounting"),
+        ("plantation admin", "Plantation Supervisor"),
         ("plantation supervisor", "Plantation Supervisor"),
         ("plantation manager", "Plantation Supervisor"),
         ("plantation", "Plantation Supervisor"),
@@ -426,10 +454,21 @@ def _mobile_modules_for_roles(roles):
             "plantation",
         ]
 
-    if role_names & {"sales manager", "sales user", "sales", "selling user"}:
+    if role_names & {
+        "sales admin",
+        "sales manager",
+    }:
         modules.update({"sales", "collection"})
 
     if role_names & {
+        "sales user",
+        "sales",
+        "selling user",
+    }:
+        modules.add("sales")
+
+    if role_names & {
+        "collection admin",
         "collection user",
         "collection manager",
         "collection",
@@ -438,6 +477,7 @@ def _mobile_modules_for_roles(roles):
         modules.add("collection")
 
     if role_names & {
+        "purchase admin",
         "purchase manager",
         "purchase user",
         "buying manager",
@@ -447,6 +487,7 @@ def _mobile_modules_for_roles(roles):
         modules.add("purchase")
 
     if role_names & {
+        "warehouse admin",
         "stock manager",
         "stock user",
         "warehouse",
@@ -456,26 +497,48 @@ def _mobile_modules_for_roles(roles):
         modules.update({"stock", "warehouse"})
 
     if role_names & {
+        "quality control admin",
         "quality control",
+        "quality control manager",
+        "quality control user",
         "quality manager",
         "qc manager",
         "qc user",
     }:
         modules.update({"stock", "warehouse", "quality_control"})
 
-    if role_names & {"logistics manager", "delivery manager", "logistics"}:
+    if role_names & {
+        "logistics admin",
+        "logistics manager",
+        "logistics user",
+        "delivery manager",
+        "logistics",
+    }:
         modules.add("logistics")
 
     if role_names & {"delivery user", "driver"}:
         modules.update({"logistics"})
 
-    if role_names & {"finance manager", "finance user", "finance"}:
+    if role_names & {
+        "finance admin",
+        "finance manager",
+        "finance user",
+        "finance",
+    }:
         modules.add("finance")
 
-    if role_names & {"accounts manager", "accountant", "accounting"}:
+    if role_names & {
+        "accounting admin",
+        "accounting manager",
+        "accounting user",
+        "accounts manager",
+        "accountant",
+        "accounting",
+    }:
         modules.add("accounting")
 
     if role_names & {
+        "plantation admin",
         "plantation supervisor",
         "plantation manager",
         "plantation",
@@ -483,8 +546,24 @@ def _mobile_modules_for_roles(roles):
         modules.add("plantation")
 
     if role_names & {
+        "sales admin",
         "sales manager",
+        "purchase admin",
         "purchase manager",
+        "warehouse admin",
+        "warehouse manager",
+        "quality control admin",
+        "quality control manager",
+        "logistics admin",
+        "logistics manager",
+        "finance admin",
+        "finance manager",
+        "accounting admin",
+        "accounting manager",
+        "plantation admin",
+        "plantation manager",
+        "collection admin",
+        "collection manager",
         "system manager",
         "company administrator",
         "director",

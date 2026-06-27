@@ -560,6 +560,10 @@ class AppState with ChangeNotifier {
       name: 'Holti',
       baseUrl: 'http://103.27.206.41:8016',
     ),
+    'EXAMPLE': _LocalFrappeSite(
+      name: 'Example Site',
+      baseUrl: 'http://172.30.218.103:8000',
+    ),
   };
 
   final ErpServices services;
