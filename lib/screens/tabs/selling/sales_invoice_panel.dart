@@ -334,10 +334,12 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
       children: [
         DocumentTrendCard(
           title: 'Sales Invoice',
-          emptyMessage: 'Belum ada Sales Invoice aktif pada periode ini.',
+          emptyMessage:
+              'Belum ada nilai Sales Invoice dari Sales Analytics pada periode ini.',
           points: appState.salesInvoiceTrendPoints,
           selectedYear: appState.sellingPeriodYear,
           selectedMonth: appState.sellingPeriodMonth,
+          sourceLabel: 'Sumber: Sales Analytics ERPNext',
         ),
 
         const SizedBox(height: 12),

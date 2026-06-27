@@ -337,10 +337,12 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
       children: [
         DocumentTrendCard(
           title: 'Purchase Invoice',
-          emptyMessage: 'Belum ada invoice supplier aktif pada periode ini.',
+          emptyMessage:
+              'Belum ada nilai Purchase Invoice dari Purchase Analytics pada periode ini.',
           points: appState.purchaseInvoiceTrendPoints,
           selectedYear: appState.buyingPeriodYear,
           selectedMonth: appState.buyingPeriodMonth,
+          sourceLabel: 'Sumber: Purchase Analytics ERPNext',
         ),
 
         const SizedBox(height: 12),

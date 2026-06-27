@@ -12,6 +12,7 @@ class DocumentTrendCard extends StatelessWidget {
   final int selectedMonth;
   final String valuePrefix;
   final String valueSuffix;
+  final String sourceLabel;
 
   const DocumentTrendCard({
     super.key,
@@ -22,6 +23,7 @@ class DocumentTrendCard extends StatelessWidget {
     required this.selectedMonth,
     this.valuePrefix = 'Rp ',
     this.valueSuffix = '',
+    this.sourceLabel = '',
   });
 
   @override
@@ -78,7 +80,9 @@ class DocumentTrendCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      selectedMonth == 0
+                      sourceLabel.trim().isNotEmpty
+                          ? sourceLabel.trim()
+                          : selectedMonth == 0
                           ? 'Akumulasi per bulan $selectedYear'
                           : 'Akumulasi per minggu',
                       style: const TextStyle(

@@ -350,10 +350,12 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
       children: [
         DocumentTrendCard(
           title: 'Purchase Receipt',
-          emptyMessage: 'Belum ada Purchase Receipt aktif pada periode ini.',
+          emptyMessage:
+              'Belum ada nilai Purchase Receipt dari Purchase Analytics pada periode ini.',
           points: appState.purchaseReceiptTrendPoints,
           selectedYear: appState.buyingPeriodYear,
           selectedMonth: appState.buyingPeriodMonth,
+          sourceLabel: 'Sumber: Purchase Analytics ERPNext',
         ),
         const SizedBox(height: 12),
         _ReceiptIssueSummaryCard(

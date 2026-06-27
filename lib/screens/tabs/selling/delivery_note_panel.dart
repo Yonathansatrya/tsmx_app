@@ -329,10 +329,12 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
       children: [
         DocumentTrendCard(
           title: 'Delivery Note',
-          emptyMessage: 'Belum ada Delivery Note aktif pada periode ini.',
+          emptyMessage:
+              'Belum ada nilai Delivery Note dari Sales Analytics pada periode ini.',
           points: appState.deliveryNoteTrendPoints,
           selectedYear: appState.sellingPeriodYear,
           selectedMonth: appState.sellingPeriodMonth,
+          sourceLabel: 'Sumber: Sales Analytics ERPNext',
         ),
 
         const SizedBox(height: 12),

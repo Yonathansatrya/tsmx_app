@@ -637,10 +637,12 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
 
         DocumentTrendCard(
           title: 'Purchase Order',
-          emptyMessage: 'Belum ada Purchase Order aktif pada periode ini.',
+          emptyMessage:
+              'Belum ada nilai Purchase Order dari Purchase Analytics pada periode ini.',
           points: appState.purchaseOrderTrendPoints,
           selectedYear: appState.buyingPeriodYear,
           selectedMonth: appState.buyingPeriodMonth,
+          sourceLabel: 'Sumber: Purchase Analytics ERPNext',
         ),
 
         const SizedBox(height: 12),

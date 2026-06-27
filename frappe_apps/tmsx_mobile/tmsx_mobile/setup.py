@@ -216,6 +216,7 @@ WORKSPACE_LINK_GROUPS = [
 
 def after_install():
     setup_mobile_roles()
+    setup_mobile_permissions()
     setup_mobile_settings()
     setup_mobile_workspace()
 
@@ -235,6 +236,185 @@ def setup_mobile_roles():
             doc.is_custom = 1
         doc.insert(ignore_permissions=True)
     frappe.db.commit()
+
+
+MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
+    "Sales User": {
+        "Customer": {"read": 1, "select": 1},
+        "Customer Group": {"read": 1, "select": 1},
+        "Territory": {"read": 1, "select": 1},
+        "Item": {"read": 1, "select": 1},
+        "Item Group": {"read": 1, "select": 1},
+        "Warehouse": {"read": 1, "select": 1},
+        "Price List": {"read": 1, "select": 1},
+        "Item Price": {"read": 1, "select": 1},
+        "Sales Order": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Sales Order Item": {"read": 1, "select": 1},
+        "Delivery Note": {"read": 1, "select": 1},
+        "Delivery Note Item": {"read": 1, "select": 1},
+        "Sales Invoice": {"read": 1, "select": 1},
+        "Sales Invoice Item": {"read": 1, "select": 1},
+        "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+    },
+    "Sales Manager": {
+        "Customer": {"read": 1, "select": 1},
+        "Item": {"read": 1, "select": 1},
+        "Warehouse": {"read": 1, "select": 1},
+        "Sales Order": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1},
+        "Delivery Note": {"read": 1, "select": 1},
+        "Sales Invoice": {"read": 1, "select": 1},
+        "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+    },
+    "Sales Admin": {
+        "Customer": {"read": 1, "select": 1},
+        "Item": {"read": 1, "select": 1},
+        "Warehouse": {"read": 1, "select": 1},
+        "Sales Order": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
+        "Delivery Note": {"read": 1, "select": 1},
+        "Sales Invoice": {"read": 1, "select": 1},
+        "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+    },
+    "Purchase User": {
+        "Supplier": {"read": 1, "select": 1},
+        "Supplier Group": {"read": 1, "select": 1},
+        "Item": {"read": 1, "select": 1},
+        "Item Group": {"read": 1, "select": 1},
+        "Warehouse": {"read": 1, "select": 1},
+        "Price List": {"read": 1, "select": 1},
+        "Item Price": {"read": 1, "select": 1},
+        "Material Request": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Material Request Item": {"read": 1, "select": 1},
+        "Purchase Order": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Purchase Order Item": {"read": 1, "select": 1},
+        "Purchase Receipt": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Purchase Receipt Item": {"read": 1, "select": 1},
+        "Purchase Invoice": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Purchase Invoice Item": {"read": 1, "select": 1},
+        "Supplier Quotation": {"read": 1, "select": 1},
+        "Quality Inspection": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1},
+    },
+    "Purchase Manager": {
+        "Supplier": {"read": 1, "select": 1},
+        "Item": {"read": 1, "select": 1},
+        "Warehouse": {"read": 1, "select": 1},
+        "Material Request": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1},
+        "Purchase Order": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1},
+        "Purchase Receipt": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1},
+        "Purchase Invoice": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1},
+        "Supplier Quotation": {"read": 1, "select": 1},
+        "Quality Inspection": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1},
+    },
+    "Purchase Admin": {
+        "Supplier": {"read": 1, "select": 1},
+        "Item": {"read": 1, "select": 1},
+        "Warehouse": {"read": 1, "select": 1},
+        "Material Request": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
+        "Purchase Order": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
+        "Purchase Receipt": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
+        "Purchase Invoice": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
+        "Supplier Quotation": {"read": 1, "select": 1},
+        "Quality Inspection": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1},
+    },
+}
+
+MOBILE_REPORT_ROLES = {
+    "Sales Analytics": ["Sales User", "Sales Manager", "Sales Admin"],
+    "Sales Order Analysis": ["Sales User", "Sales Manager", "Sales Admin"],
+    "Item-wise Sales Register": ["Sales User", "Sales Manager", "Sales Admin"],
+    "Accounts Receivable": ["Sales Manager", "Sales Admin", "Collection User", "Collection Manager", "Collection Admin"],
+    "Purchase Analytics": ["Purchase User", "Purchase Manager", "Purchase Admin", "Buying User", "Buying Manager"],
+    "Purchase Order Analysis": ["Purchase User", "Purchase Manager", "Purchase Admin", "Buying User", "Buying Manager"],
+    "Supplier Quotation Comparison": ["Purchase User", "Purchase Manager", "Purchase Admin", "Buying User", "Buying Manager"],
+    "Accounts Payable": ["Purchase Manager", "Purchase Admin", "Finance User", "Finance Manager", "Finance Admin"],
+}
+
+
+def setup_mobile_permissions():
+    if not frappe.db.exists("DocType", "Custom DocPerm"):
+        return
+
+    for role, doctypes in MOBILE_ROLE_DOCTYPE_PERMISSIONS.items():
+        if not frappe.db.exists("Role", role):
+            continue
+        for doctype, permissions in doctypes.items():
+            _ensure_custom_docperm(doctype, role, permissions)
+
+    for report_name, roles in MOBILE_REPORT_ROLES.items():
+        _ensure_report_roles(report_name, roles)
+
+    frappe.clear_cache()
+    frappe.db.commit()
+
+
+def _ensure_custom_docperm(doctype, role, permissions):
+    if not frappe.db.exists("DocType", doctype):
+        return
+
+    filters = {"parent": doctype, "role": role, "permlevel": 0}
+    name = frappe.db.exists("Custom DocPerm", filters)
+    doc = frappe.get_doc("Custom DocPerm", name) if name else frappe.new_doc("Custom DocPerm")
+    doc.parent = doctype
+    doc.parenttype = "DocType"
+    doc.parentfield = "permissions"
+    doc.role = role
+    doc.permlevel = 0
+
+    for field in (
+        "read",
+        "select",
+        "create",
+        "write",
+        "submit",
+        "cancel",
+        "amend",
+        "delete",
+        "report",
+        "export",
+        "print",
+        "email",
+        "share",
+    ):
+        if doc.meta.has_field(field):
+            doc.set(field, int(permissions.get(field, 0)))
+
+    if name:
+        doc.save(ignore_permissions=True)
+    else:
+        doc.insert(ignore_permissions=True)
+
+
+def _ensure_report_roles(report_name, roles):
+    if not frappe.db.exists("Report", report_name):
+        return
+    report = frappe.get_doc("Report", report_name)
+    if not report.meta.has_field("roles"):
+        return
+
+    existing = {
+        row.role
+        for row in frappe.get_all(
+            "Has Role",
+            filters={
+                "parent": report_name,
+                "parenttype": "Report",
+                "parentfield": "roles",
+            },
+            fields=["role"],
+        )
+    }
+    for role in roles:
+        if not frappe.db.exists("Role", role) or role in existing:
+            continue
+        doc = frappe.new_doc("Has Role")
+        doc.parent = report_name
+        doc.parenttype = "Report"
+        doc.parentfield = "roles"
+        doc.role = role
+        doc.insert(ignore_permissions=True)
+        existing.add(role)
 
 
 def setup_mobile_settings():

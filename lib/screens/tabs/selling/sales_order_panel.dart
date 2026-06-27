@@ -430,10 +430,12 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
       children: [
         DocumentTrendCard(
           title: 'Pendapatan',
-          emptyMessage: 'Belum ada Sales Order aktif pada periode ini.',
+          emptyMessage:
+              'Belum ada nilai Sales Order dari Sales Analytics pada periode ini.',
           points: appState.salesOrderTrendPoints,
           selectedYear: appState.sellingPeriodYear,
           selectedMonth: appState.sellingPeriodMonth,
+          sourceLabel: 'Sumber: Sales Analytics ERPNext',
         ),
 
         const SizedBox(height: 12),

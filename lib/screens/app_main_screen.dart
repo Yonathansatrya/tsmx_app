@@ -259,7 +259,7 @@ class _AppMainScreenState extends State<AppMainScreen> {
     AppState appState,
   ) async {
     final groups = <_QuickCreateGroup>[
-      if (appState.canUseSales)
+      if (appState.isSalesUserRole)
         _QuickCreateGroup(
           title: 'Sales',
           icon: Icons.point_of_sale_rounded,

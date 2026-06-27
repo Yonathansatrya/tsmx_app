@@ -75,7 +75,7 @@ class SellingTabState extends State<SellingTab>
     if (oldWidget.selectedSegment == widget.selectedSegment) return;
 
     final nextIndex = _segmentIds.indexOf(widget.selectedSegment);
-    if (nextIndex < 0 || nextIndex >= controller.index) return;
+    if (nextIndex < 0 || nextIndex == controller.index) return;
 
     controller.animateTo(nextIndex);
   }

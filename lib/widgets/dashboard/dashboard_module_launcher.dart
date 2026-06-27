@@ -6,6 +6,8 @@ import '../../models/delivery_note.dart';
 import '../../models/inventory_item.dart';
 import '../../models/mobile_boot.dart';
 import '../../screens/shared/module_screen_registry.dart';
+import '../../screens/shared/module_shell_screen.dart';
+import '../../screens/tabs/selling_tab.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 
@@ -44,6 +46,7 @@ class DashboardModuleLauncher extends StatelessWidget {
           .add(
             _ModuleEntry(
               entry: entry,
+              screen: _screenForEntry(appState, entry),
               order: bootMenuOrder[entry.moduleKey] ?? entry.meta.menuOrder,
               title: MobileRoleRegistry.moduleLabel(
                 entry.moduleKey,
@@ -140,6 +143,16 @@ class DashboardModuleLauncher extends StatelessWidget {
     if (count <= 0) return '';
     return '$count $suffix';
   }
+
+  Widget _screenForEntry(AppState appState, ModuleLaunchEntry entry) {
+    if (entry.routeKey == MobileModule.sales && !appState.isSalesUserRole) {
+      return const ModuleShellScreen(
+        title: 'Penjualan',
+        child: SellingTab(selectedSegment: 'so'),
+      );
+    }
+    return entry.screen;
+  }
 }
 
 class _ModuleGroup {
@@ -151,6 +164,7 @@ class _ModuleGroup {
 
 class _ModuleEntry {
   final ModuleLaunchEntry entry;
+  final Widget screen;
   final int order;
   final String title;
   final String subtitle;
@@ -159,6 +173,7 @@ class _ModuleEntry {
 
   const _ModuleEntry({
     required this.entry,
+    required this.screen,
     required this.order,
     required this.title,
     required this.subtitle,
@@ -220,7 +235,7 @@ class _ModuleEntryTile extends StatelessWidget {
         onTap: () {
           Navigator.of(
             context,
-          ).push(MaterialPageRoute(builder: (_) => entry.entry.screen));
+          ).push(MaterialPageRoute(builder: (_) => entry.screen));
         },
         borderRadius: BorderRadius.circular(16),
         child: Ink(

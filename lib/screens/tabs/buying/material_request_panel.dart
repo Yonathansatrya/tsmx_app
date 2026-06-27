@@ -425,12 +425,14 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
       children: [
         DocumentTrendCard(
           title: 'Material Request',
-          emptyMessage: 'Belum ada request aktif pada periode ini.',
+          emptyMessage:
+              'Belum ada kebutuhan barang pada periode dan filter ini.',
           points: appState.materialRequestTrendPoints,
           selectedYear: appState.buyingPeriodYear,
           selectedMonth: appState.buyingPeriodMonth,
           valuePrefix: '',
           valueSuffix: ' qty',
+          sourceLabel: 'Sumber: Material Request ERPNext',
         ),
 
         const SizedBox(height: 12),
