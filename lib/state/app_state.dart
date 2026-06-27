@@ -522,6 +522,8 @@ class AppState with ChangeNotifier {
   static const String _prefsFrappeConfigKey = 'frappe_config';
   static const String _prefsFrappeSiteHistoryKey = 'frappe_site_history';
   static const String _prefsSummaryCacheKey = 'erp_summary_cache';
+  static const String _prefsClearedNotificationsKey = 'cleared_notifications';
+  static const String _prefsReadNotificationsKey = 'read_notifications';
 
   static const Map<String, _LocalFrappeSite> _hardcodedSiteCodes = {
     'TABI': _LocalFrappeSite(
@@ -1227,6 +1229,9 @@ class AppState with ChangeNotifier {
   Future<void> markAllNotificationsRead() async {
     final unread = _notifications.where((n) => !n.isRead).toList();
     if (unread.isEmpty) return;
+    final sp = await SharedPreferences.getInstance();
+    final readIds = await _loadReadNotificationIds(sp);
+    readIds.addAll(unread.map((notification) => notification.id));
 
     for (final notification in unread) {
       if (notification.source != 'notification_log') continue;
@@ -1238,10 +1243,24 @@ class AppState with ChangeNotifier {
         );
       } catch (_) {}
     }
+    await sp.setStringList(_readNotificationPrefsKey, readIds.toList()..sort());
 
     _notifications = _notifications
         .map((n) => n.copyWith(isRead: true))
         .toList();
+    notifyListeners();
+  }
+
+  Future<void> clearNotifications() async {
+    if (_notifications.isEmpty) return;
+    final sp = await SharedPreferences.getInstance();
+    final dismissed = await _loadClearedNotificationIds(sp);
+    dismissed.addAll(_notifications.map((item) => item.id));
+    await sp.setStringList(
+      _clearedNotificationPrefsKey,
+      dismissed.toList()..sort(),
+    );
+    _notifications = [];
     notifyListeners();
   }
 
@@ -1250,6 +1269,9 @@ class AppState with ChangeNotifier {
     if (index < 0 || _notifications[index].isRead) return;
 
     final notification = _notifications[index];
+    final sp = await SharedPreferences.getInstance();
+    final readIds = await _loadReadNotificationIds(sp);
+    readIds.add(notification.id);
     if (notification.source == 'notification_log') {
       try {
         await _frappeService.updateDocument(
@@ -1259,6 +1281,7 @@ class AppState with ChangeNotifier {
         );
       } catch (_) {}
     }
+    await sp.setStringList(_readNotificationPrefsKey, readIds.toList()..sort());
 
     _notifications[index] = notification.copyWith(isRead: true);
     notifyListeners();
@@ -1270,7 +1293,7 @@ class AppState with ChangeNotifier {
 
     Future<void> loadNotificationLogs() async {
       try {
-        final rows = await _fetchResourceWithFieldFallback(
+        final rows = await _fetchAllResourcePages(
           doctype: 'Notification Log',
           fields: const [
             'name',
@@ -1283,8 +1306,8 @@ class AppState with ChangeNotifier {
             'modified',
             'type',
           ],
-          limit: 200,
           orderBy: 'modified desc',
+          maxRows: null,
           filters: [
             ['for_user', '=', user],
           ],
@@ -1294,7 +1317,7 @@ class AppState with ChangeNotifier {
           if (item.id.isNotEmpty) merged[item.id] = item;
         }
       } catch (_) {
-        final rows = await _fetchResourceWithFieldFallback(
+        final rows = await _fetchAllResourcePages(
           doctype: 'Notification Log',
           fields: const [
             'name',
@@ -1307,8 +1330,8 @@ class AppState with ChangeNotifier {
             'modified',
             'type',
           ],
-          limit: 200,
           orderBy: 'modified desc',
+          maxRows: null,
         );
         for (final row in rows) {
           final item = AppNotification.fromNotificationLog(row);
@@ -1319,7 +1342,7 @@ class AppState with ChangeNotifier {
 
     Future<void> loadActivityLogs() async {
       try {
-        final rows = await _fetchResourceWithFieldFallback(
+        final rows = await _fetchAllResourcePages(
           doctype: 'Activity Log',
           fields: const [
             'name',
@@ -1331,8 +1354,8 @@ class AppState with ChangeNotifier {
             'creation',
             'modified',
           ],
-          limit: 120,
           orderBy: 'creation desc',
+          maxRows: null,
         );
         for (final row in rows) {
           final item = AppNotification.fromActivityLog(row);
@@ -1351,7 +1374,42 @@ class AppState with ChangeNotifier {
         return bTime.compareTo(aTime);
       });
 
-    return list;
+    final dismissed = await _loadClearedNotificationIds();
+    final readIds = await _loadReadNotificationIds();
+    return list
+        .where((item) => !dismissed.contains(item.id))
+        .map(
+          (item) =>
+              readIds.contains(item.id) ? item.copyWith(isRead: true) : item,
+        )
+        .toList();
+  }
+
+  String get _clearedNotificationPrefsKey {
+    final site = _frappeService.baseUrl.trim();
+    final user = _currentUser?.trim() ?? '';
+    return '$_prefsClearedNotificationsKey::$site::$user';
+  }
+
+  String get _readNotificationPrefsKey {
+    final site = _frappeService.baseUrl.trim();
+    final user = _currentUser?.trim() ?? '';
+    return '$_prefsReadNotificationsKey::$site::$user';
+  }
+
+  Future<Set<String>> _loadClearedNotificationIds([
+    SharedPreferences? prefs,
+  ]) async {
+    final sp = prefs ?? await SharedPreferences.getInstance();
+    return sp.getStringList(_clearedNotificationPrefsKey)?.toSet() ??
+        <String>{};
+  }
+
+  Future<Set<String>> _loadReadNotificationIds([
+    SharedPreferences? prefs,
+  ]) async {
+    final sp = prefs ?? await SharedPreferences.getInstance();
+    return sp.getStringList(_readNotificationPrefsKey)?.toSet() ?? <String>{};
   }
 
   @override

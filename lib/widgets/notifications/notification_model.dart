@@ -79,7 +79,7 @@ class AppNotification {
       id: 'activity-${json['name'] ?? '$doctype-$docname-${json['creation']}'}',
       title: json['subject']?.toString().trim().isNotEmpty == true
           ? json['subject'].toString()
-          : '$operation · $doctype',
+          : '$operation - $doctype',
       description: _plainText(
         json['content']?.toString() ??
             (docname.isNotEmpty ? '$doctype $docname' : doctype),
@@ -140,7 +140,7 @@ class AppNotification {
     final docname = json['document_name']?.toString();
     if (doctype != null && doctype.isNotEmpty) {
       return docname != null && docname.isNotEmpty
-          ? '$doctype · $docname'
+          ? '$doctype - $docname'
           : doctype;
     }
     return 'ERP Notification';
