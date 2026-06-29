@@ -121,10 +121,8 @@ class AppState with ChangeNotifier {
   bool get canUseWarehouse => mobileAccess.canUse(MobileModule.warehouse);
   bool get canUseLogistics => mobileAccess.canUse(MobileModule.logistics);
   bool get canUseApprovals => mobileAccess.canUse(MobileModule.approvals);
-  bool get canUseCollection => mobileAccess.canUse(MobileModule.collection);
   bool get canUseQualityControl =>
       mobileAccess.canUse(MobileModule.qualityControl);
-  bool get canUseExecutive => mobileAccess.canUse(MobileModule.executive);
   bool get canUseFinance => mobileAccess.canUse(MobileModule.finance);
   bool get canUseAccounting => mobileAccess.canUse(MobileModule.accounting);
   bool get canUsePlantation => mobileAccess.canUse(MobileModule.plantation);
@@ -378,6 +376,15 @@ class AppState with ChangeNotifier {
         .where((company) => company.isNotEmpty)
         .toSet();
     if (normalizedAllowed.isEmpty) return fallback;
+    if (fallback.isNotEmpty) {
+      final merged = {
+        ...fallback
+            .map((company) => company.trim())
+            .where((company) => company.isNotEmpty),
+        ...normalizedAllowed,
+      }.toList()..sort();
+      return merged;
+    }
 
     final scoped = fallback
         .where((company) => normalizedAllowed.contains(company.trim()))
@@ -923,7 +930,9 @@ class AppState with ChangeNotifier {
   Future<void> _restoreSummaryCache() async {
     try {
       final sp = await SharedPreferences.getInstance();
-      final raw = sp.getString(_prefsSummaryCacheKey);
+      final raw =
+          sp.getString(_summaryCachePrefsKey) ??
+          sp.getString(_prefsSummaryCacheKey);
       if (raw == null) return;
       final json = Map<String, dynamic>.from(jsonDecode(raw) as Map);
       DocumentSummary documentSummary(String key) {
@@ -954,7 +963,7 @@ class AppState with ChangeNotifier {
   Future<void> _saveSummaryCache() async {
     final sp = await SharedPreferences.getInstance();
     await sp.setString(
-      _prefsSummaryCacheKey,
+      _summaryCachePrefsKey,
       jsonEncode({
         'salesOrder': _salesOrderSummary.toJson(),
         'deliveryNote': _deliveryNoteSummary.toJson(),
@@ -995,8 +1004,59 @@ class AppState with ChangeNotifier {
   Future<void> _clearSummaryCache() async {
     try {
       final sp = await SharedPreferences.getInstance();
+      await sp.remove(_summaryCachePrefsKey);
       await sp.remove(_prefsSummaryCacheKey);
     } catch (_) {}
+  }
+
+  String get _summaryCachePrefsKey {
+    final site = _frappeService.baseUrl.trim();
+    final user = _currentUser?.trim() ?? _frappeService.username?.trim() ?? '';
+    return '$_prefsSummaryCacheKey::$site::$user';
+  }
+
+  Future<void> resetLocalAppCache({bool keepSiteSelection = true}) async {
+    _stopNotificationPolling();
+    await _visitLocationService.stopTracking();
+    final sp = await SharedPreferences.getInstance();
+    final cfg = keepSiteSelection ? await _loadFrappeConfig() : null;
+    final history = keepSiteSelection
+        ? sp.getString(_prefsFrappeSiteHistoryKey)
+        : null;
+
+    for (final key in sp.getKeys().toList()) {
+      if (key == _prefsFrappeConfigKey && keepSiteSelection) continue;
+      if (key == _prefsFrappeSiteHistoryKey && keepSiteSelection) continue;
+      if (key.startsWith(_prefsSummaryCacheKey) ||
+          key.startsWith(_prefsClearedNotificationsKey) ||
+          key.startsWith(_prefsReadNotificationsKey) ||
+          key == _prefsUserRoleKey ||
+          key == _prefsFrappeConfigKey ||
+          key == _prefsFrappeSiteHistoryKey) {
+        await sp.remove(key);
+      }
+    }
+
+    if (keepSiteSelection && cfg != null) {
+      await sp.setString(_prefsFrappeConfigKey, jsonEncode(cfg));
+    }
+    if (keepSiteSelection && history != null) {
+      await sp.setString(_prefsFrappeSiteHistoryKey, history);
+    }
+
+    _frappeService.username = null;
+    _frappeService.password = null;
+    _mobileBoot = null;
+    _mobileCompatibilityWarning = null;
+    _currentUser = null;
+    _currentEmployee = null;
+    _currentEmployeeProfile = const {};
+    _currentSalesPerson = null;
+    _salesIdentityError = null;
+    _userRole = 'Unassigned';
+    _isAuthenticated = false;
+    _resetRuntimeDataForTenantSwitch();
+    notifyListeners();
   }
 
   void _resetRuntimeDataForTenantSwitch() {
@@ -1083,6 +1143,8 @@ class AppState with ChangeNotifier {
 
     _sellingCompanyFilter = '';
     _buyingCompanyFilter = '';
+    _sellingCompanies = const [];
+    _buyingCompanies = const [];
     _sellingCustomerTypeFilter = 'all';
     _buyingSupplierTypeFilter = 'all';
     _sellingCustomerTypeIdsCacheKey = null;
@@ -2973,7 +3035,7 @@ class AppState with ChangeNotifier {
   Future<void> refreshDashboardSummaryForCurrentAccess({
     bool silent = false,
   }) async {
-    if (canUseExecutive || MobileRoleRegistry.isFullAccessRole(_userRole)) {
+    if (MobileRoleRegistry.isFullAccessRole(_userRole)) {
       await refreshAllSummaries(silent: silent);
       return;
     }
@@ -3223,33 +3285,41 @@ class AppState with ChangeNotifier {
     }
 
     try {
-      final salesOrder = await _fetchErpNextAnalyticsSection(
-        reportName: 'Sales Analytics',
-        treeType: 'Customer',
-        docType: 'Sales Order',
-        year: _sellingPeriodYear,
-        month: _sellingPeriodMonth,
-        company: _sellingCompanyFilter,
-      );
-      final deliveryNote = await _fetchErpNextAnalyticsSection(
-        reportName: 'Sales Analytics',
-        treeType: 'Customer',
-        docType: 'Delivery Note',
-        year: _sellingPeriodYear,
-        month: _sellingPeriodMonth,
-        company: _sellingCompanyFilter,
-      );
-      final salesInvoice = await _fetchErpNextAnalyticsSection(
-        reportName: 'Sales Analytics',
-        treeType: 'Customer',
-        docType: 'Sales Invoice',
-        year: _sellingPeriodYear,
-        month: _sellingPeriodMonth,
-        company: _sellingCompanyFilter,
-      );
-      if (salesOrder == null || deliveryNote == null || salesInvoice == null) {
-        return false;
+      Future<_MobileAnalyticsSection> section({
+        required String docType,
+        required String dateField,
+      }) async {
+        try {
+          final analytics = await _fetchErpNextAnalyticsSection(
+            reportName: 'Sales Analytics',
+            treeType: 'Customer',
+            docType: docType,
+            year: _sellingPeriodYear,
+            month: _sellingPeriodMonth,
+            company: _sellingCompanyFilter,
+          );
+          if (analytics != null) return analytics;
+        } catch (_) {
+          // Keep the dashboard usable when one ERPNext report section fails.
+        }
+        return _fallbackSellingAnalyticsSection(
+          doctype: docType,
+          dateField: dateField,
+        );
       }
+
+      final salesOrder = await section(
+        docType: 'Sales Order',
+        dateField: 'transaction_date',
+      );
+      final deliveryNote = await section(
+        docType: 'Delivery Note',
+        dateField: 'posting_date',
+      );
+      final salesInvoice = await section(
+        docType: 'Sales Invoice',
+        dateField: 'posting_date',
+      );
 
       _salesOrderSummary = salesOrder.summary;
       _salesOrderTrendPoints = salesOrder.trend;
@@ -3261,6 +3331,45 @@ class AppState with ChangeNotifier {
     } catch (_) {
       return false;
     }
+  }
+
+  Future<_MobileAnalyticsSection> _fallbackSellingAnalyticsSection({
+    required String doctype,
+    required String dateField,
+  }) async {
+    final filters = await _sellingDocumentFilters(dateField);
+    final customerTypeIds = await _sellingCustomerTypeCustomerIds();
+    final trend = _emptySellingTrendPoints();
+    var total = 0.0;
+    var count = 0;
+
+    await _forEachResourcePage(
+      doctype: doctype,
+      fields: [
+        'name',
+        'base_net_total',
+        'net_total',
+        'grand_total',
+        dateField,
+        'customer',
+        'status',
+        'docstatus',
+      ],
+      filters: filters,
+      onRow: (row) {
+        if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
+        if (!_isActiveSellingTrendRow(row)) return;
+        final value = _sellingAnalyticsValue(row);
+        total += value;
+        count++;
+        _addSellingTrendPoint(trend, dateRaw: row[dateField], amount: value);
+      },
+    );
+
+    return _MobileAnalyticsSection(
+      summary: DocumentSummary(totalValue: total, documentCount: count),
+      trend: trend,
+    );
   }
 
   Future<void> setSellingPeriod({
@@ -3295,7 +3404,7 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> loadSellingFilterOptions() async {
-    if (_sellingCompanies.isNotEmpty || !_isAuthenticated) return;
+    if (!_isAuthenticated) return;
     try {
       await _frappeService.ensureLoggedIn();
       final rows = await _fetchAllResourcePages(
@@ -3313,7 +3422,10 @@ class AppState with ChangeNotifier {
             ..sort();
       _sellingCompanies = companies;
       notifyListeners();
-    } catch (_) {}
+    } catch (_) {
+      _sellingCompanies = const [];
+      notifyListeners();
+    }
   }
 
   List<DocumentTrendPoint> _emptySellingTrendPoints() {
@@ -3605,7 +3717,7 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> loadBuyingFilterOptions() async {
-    if (_buyingCompanies.isNotEmpty || !_isAuthenticated) return;
+    if (!_isAuthenticated) return;
     try {
       await _frappeService.ensureLoggedIn();
       final rows = await _fetchAllResourcePages(
@@ -3623,6 +3735,8 @@ class AppState with ChangeNotifier {
             ..sort();
       notifyListeners();
     } catch (_) {
+      _buyingCompanies = const [];
+      notifyListeners();
       // Filter options are helpful, but should not block buying data.
     }
   }
@@ -3706,10 +3820,14 @@ class AppState with ChangeNotifier {
     required int month,
     required String company,
   }) async {
-    final from = month == 0 ? DateTime(year) : DateTime(year, month);
-    final to = month == 0
+    final range = month == 0 ? 'Monthly' : 'Weekly';
+    final reportMonth = month;
+    final from = reportMonth == 0
+        ? DateTime(year)
+        : DateTime(year, reportMonth);
+    final to = reportMonth == 0
         ? DateTime(year, 12, 31)
-        : DateTime(year, month + 1, 0);
+        : DateTime(year, reportMonth + 1, 0);
     final response = await _frappeService.callMethod(
       'frappe.desk.query_report.run',
       args: {
@@ -3718,7 +3836,7 @@ class AppState with ChangeNotifier {
           'tree_type': treeType,
           'doc_type': docType,
           'value_quantity': 'Value',
-          'range': month == 0 ? 'Monthly' : 'Weekly',
+          'range': range,
           'from_date': DateRangePresets.toFrappeDate(from),
           'to_date': DateRangePresets.toFrappeDate(to),
           if (company.trim().isNotEmpty) 'company': company.trim(),
@@ -3728,7 +3846,7 @@ class AppState with ChangeNotifier {
         'are_default_filters': false,
       },
     );
-    return _analyticsSectionFromQueryReport(response, month);
+    return _analyticsSectionFromQueryReport(response, reportMonth);
   }
 
   _MobileAnalyticsSection? _analyticsSectionFromQueryReport(
@@ -3739,10 +3857,13 @@ class AppState with ChangeNotifier {
     if (report == null) return null;
     final columns = _queryReportColumns(report['columns']);
     final rows = _queryReportRows(report['result'] ?? report['data']);
-    final periodColumns = _queryReportPeriodColumns(columns, month);
+    var periodColumns = _queryReportPeriodColumns(columns, month);
+    if (periodColumns.isEmpty) {
+      periodColumns = _queryReportPeriodColumnsFromRows(rows, month);
+    }
     if (periodColumns.isEmpty) return null;
 
-    final trend = _emptyAnalyticsTrend(month);
+    final trend = _emptyAnalyticsTrend(month, periodColumns: periodColumns);
     var totalValue = 0.0;
     var rowCount = 0;
     for (final row in rows) {
@@ -3818,9 +3939,34 @@ class AppState with ChangeNotifier {
           '';
       if (fieldname.isEmpty) continue;
       final label = (column['label']?.toString() ?? fieldname).toLowerCase();
-      final index = _queryReportPeriodIndex(label, month);
+      final index = month > 0 && RegExp(r'(week|minggu)\s*\d+').hasMatch(label)
+          ? result.length
+          : _queryReportPeriodIndex(label, month);
       if (index == null) continue;
       result[index] = fieldname;
+    }
+    return result;
+  }
+
+  Map<int, String> _queryReportPeriodColumnsFromRows(
+    List<dynamic> rows,
+    int month,
+  ) {
+    final result = <int, String>{};
+    for (final row in rows) {
+      if (row is! Map) continue;
+      for (final key in row.keys) {
+        final fieldname = key.toString();
+        if (fieldname.trim().isEmpty) continue;
+        final label = fieldname.toLowerCase();
+        final index =
+            month > 0 && RegExp(r'(week|minggu)\s*\d+').hasMatch(label)
+            ? result.length
+            : _queryReportPeriodIndex(label, month);
+        if (index == null) continue;
+        result[index] = fieldname;
+      }
+      if (result.isNotEmpty) break;
     }
     return result;
   }
@@ -3848,13 +3994,91 @@ class AppState with ChangeNotifier {
     }
 
     final match = RegExp(r'(week|minggu)\s*(\d+)').firstMatch(label);
-    if (match == null) return null;
-    final week = int.tryParse(match.group(2) ?? '');
-    if (week == null) return null;
-    return (week - 1).clamp(0, 3);
+    if (match != null) {
+      final week = int.tryParse(match.group(2) ?? '');
+      if (week != null) return (week - 1).clamp(0, 3);
+    }
+
+    final date = _queryReportPeriodDate(label);
+    if (date != null && date.month == month) {
+      return ((date.day - 1) ~/ 7).clamp(0, 3);
+    }
+    return null;
   }
 
-  List<DocumentTrendPoint> _emptyAnalyticsTrend(int month) {
+  DateTime? _queryReportPeriodDate(String label) {
+    final normalized = label
+        .toLowerCase()
+        .replaceAll(RegExp(r'[_]+'), '-')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final iso = RegExp(
+      r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})',
+    ).firstMatch(normalized);
+    if (iso != null) {
+      return DateTime.tryParse(
+        '${iso.group(1)!}-${iso.group(2)!.padLeft(2, '0')}-${iso.group(3)!.padLeft(2, '0')}',
+      );
+    }
+
+    final numeric = RegExp(
+      r'(\d{1,2})[-/](\d{1,2})[-/](\d{4})',
+    ).firstMatch(normalized);
+    if (numeric != null) {
+      return DateTime.tryParse(
+        '${numeric.group(3)!}-${numeric.group(2)!.padLeft(2, '0')}-${numeric.group(1)!.padLeft(2, '0')}',
+      );
+    }
+
+    final named = RegExp(
+      r'(\d{1,2})\s+(jan|feb|mar|apr|may|mei|jun|jul|aug|agu|sep|oct|okt|nov|dec|des)\w*\s+(\d{4})',
+    ).firstMatch(normalized);
+    if (named == null) return null;
+    final month = _monthAliasNumber(named.group(2)!);
+    if (month == null) return null;
+    return DateTime.tryParse(
+      '${named.group(3)!}-${month.toString().padLeft(2, '0')}-${named.group(1)!.padLeft(2, '0')}',
+    );
+  }
+
+  int? _monthAliasNumber(String raw) {
+    final value = raw.toLowerCase();
+    const aliases = {
+      'jan': 1,
+      'feb': 2,
+      'mar': 3,
+      'apr': 4,
+      'may': 5,
+      'mei': 5,
+      'jun': 6,
+      'jul': 7,
+      'aug': 8,
+      'agu': 8,
+      'sep': 9,
+      'oct': 10,
+      'okt': 10,
+      'nov': 11,
+      'dec': 12,
+      'des': 12,
+    };
+    final key = value.length <= 3 ? value : value.substring(0, 3);
+    return aliases[key];
+  }
+
+  List<DocumentTrendPoint> _emptyAnalyticsTrend(
+    int month, {
+    Map<int, String>? periodColumns,
+  }) {
+    if (month > 0 && periodColumns != null && periodColumns.isNotEmpty) {
+      final entries = periodColumns.entries.toList()
+        ..sort((a, b) => a.key.compareTo(b.key));
+      return [
+        for (var i = 0; i < entries.length; i++)
+          DocumentTrendPoint(label: 'Minggu ${i + 1}'),
+      ];
+    }
+
     if (month == 0) {
       const labels = [
         'Jan',
@@ -6129,24 +6353,7 @@ class AppState with ChangeNotifier {
         ['company', '=', selected],
       ];
     }
-
-    final allowed = _mobileBoot?.companies ?? const <String>[];
-    final companies =
-        allowed
-            .map((company) => company.trim())
-            .where((company) => company.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
-    if (companies.isEmpty) return const [];
-    if (companies.length == 1) {
-      return [
-        ['company', '=', companies.first],
-      ];
-    }
-    return [
-      ['company', 'in', companies],
-    ];
+    return const [];
   }
 
   bool _matchesBuyingSupplierType(

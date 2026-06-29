@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../config/mobile_role_registry.dart';
-import '../collection/collection_main_screen.dart';
 import '../driver/driver_main_screen.dart';
-import '../executive/executive_main_screen.dart';
 import '../finance/finance_main_screen.dart';
 import '../logistics/logistics_delivery_tab.dart';
 import '../logistics/logistics_main_screen.dart';
@@ -37,9 +35,7 @@ class ModuleScreenRegistry {
       );
     }
 
-    add(MobileModule.executive);
     add(MobileModule.sales);
-    add(MobileModule.collection);
     add(MobileModule.purchase);
     add(MobileModule.stock);
     add(MobileModule.warehouse);
@@ -51,9 +47,7 @@ class ModuleScreenRegistry {
     add(MobileModule.accounting);
     add(MobileModule.plantation);
 
-    entries.sort(
-      (a, b) => a.meta.menuOrder.compareTo(b.meta.menuOrder),
-    );
+    entries.sort((a, b) => a.meta.menuOrder.compareTo(b.meta.menuOrder));
     return entries;
   }
 
@@ -67,12 +61,8 @@ class ModuleScreenRegistry {
     }
 
     switch (route) {
-      case MobileModule.executive:
-        return const ExecutiveMainScreen();
       case MobileModule.sales:
         return const SalesMainScreen();
-      case MobileModule.collection:
-        return const CollectionMainScreen();
       case MobileModule.purchase:
         return const PurchaseMainScreen();
       case MobileModule.stock:
@@ -109,16 +99,7 @@ class ModuleScreenRegistry {
     if (normalized == MobileRole.driver) {
       return const DriverMainScreen();
     }
-    if (normalized == MobileRole.collection) {
-      return const CollectionMainScreen();
-    }
-    if (normalized == MobileRole.director ||
-        normalized == MobileRole.administrator ||
-        normalized == MobileRole.companyAdministrator ||
-        normalized == MobileRole.developer) {
-      return const ExecutiveMainScreen();
-    }
-    return const ExecutiveMainScreen();
+    return const ModulePlaceholderScreen(moduleKey: MobileModule.dashboard);
   }
 }
 

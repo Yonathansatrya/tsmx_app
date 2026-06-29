@@ -90,11 +90,6 @@ class DashboardModuleLauncher extends StatelessWidget {
     switch (entry.routeKey) {
       case MobileModule.sales:
         return _countLabel(appState.dashboardSummary.salesOpenCount, 'open');
-      case MobileModule.collection:
-        return _countLabel(
-          appState.dashboardSummary.unpaidSalesInvoices,
-          'unpaid',
-        );
       case MobileModule.purchase:
         if (appState.purchaseApprovalTodoCount > 0) {
           return '${appState.purchaseApprovalTodoCount} approval';

@@ -6,7 +6,6 @@ class MobileModule {
 
   static const dashboard = 'dashboard';
   static const sales = 'sales';
-  static const collection = 'collection';
   static const purchase = 'purchase';
   static const stock = 'stock';
   static const warehouse = 'warehouse';
@@ -16,12 +15,10 @@ class MobileModule {
   static const finance = 'finance';
   static const accounting = 'accounting';
   static const plantation = 'plantation';
-  static const executive = 'executive';
 
   static const all = [
     dashboard,
     sales,
-    collection,
     purchase,
     stock,
     warehouse,
@@ -31,20 +28,17 @@ class MobileModule {
     finance,
     accounting,
     plantation,
-    executive,
   ];
 
   static const implemented = [
     dashboard,
     sales,
-    collection,
     purchase,
     stock,
     warehouse,
     qualityControl,
     logistics,
     approvals,
-    executive,
   ];
 
   static const planned = [finance, accounting, plantation];
@@ -120,7 +114,6 @@ class MobileRoleRegistry {
   static const defaultAppTagline = 'Mobile ERP';
 
   static const moduleGroups = [
-    MobileModuleGroupMeta(key: 'executive', title: 'Direksi', order: 5),
     MobileModuleGroupMeta(key: 'sales', title: 'Penjualan', order: 10),
     MobileModuleGroupMeta(key: 'purchase', title: 'Pembelian', order: 20),
     MobileModuleGroupMeta(key: 'warehouse', title: 'Gudang & Stok', order: 30),
@@ -132,19 +125,11 @@ class MobileRoleRegistry {
   static const moduleCatalog = {
     MobileModule.dashboard: MobileModuleMeta(
       key: MobileModule.dashboard,
-      groupKey: 'executive',
+      groupKey: 'sales',
       defaultLabel: 'Beranda',
       defaultSubtitle: 'Ringkasan operasional',
       icon: Icons.dashboard_rounded,
       menuOrder: 10,
-    ),
-    MobileModule.executive: MobileModuleMeta(
-      key: MobileModule.executive,
-      groupKey: 'executive',
-      defaultLabel: 'Executive Dashboard',
-      defaultSubtitle: 'Monitoring bisnis lintas divisi',
-      icon: Icons.insights_rounded,
-      menuOrder: 15,
     ),
     MobileModule.sales: MobileModuleMeta(
       key: MobileModule.sales,
@@ -153,14 +138,6 @@ class MobileRoleRegistry {
       defaultSubtitle: 'Order, invoice, collection, visit',
       icon: Icons.point_of_sale_rounded,
       menuOrder: 20,
-    ),
-    MobileModule.collection: MobileModuleMeta(
-      key: MobileModule.collection,
-      groupKey: 'sales',
-      defaultLabel: 'Collection',
-      defaultSubtitle: 'AR aging, outstanding, janji bayar',
-      icon: Icons.account_balance_wallet_rounded,
-      menuOrder: 25,
     ),
     MobileModule.purchase: MobileModuleMeta(
       key: MobileModule.purchase,
@@ -204,7 +181,7 @@ class MobileRoleRegistry {
     ),
     MobileModule.approvals: MobileModuleMeta(
       key: MobileModule.approvals,
-      groupKey: 'executive',
+      groupKey: 'purchase',
       defaultLabel: 'Todo',
       defaultSubtitle: 'Approval dokumen',
       icon: Icons.checklist_rounded,
@@ -322,9 +299,7 @@ class MobileRoleRegistry {
   static const _roleModules = {
     MobileRole.administrator: {
       MobileModule.dashboard,
-      MobileModule.executive,
       MobileModule.sales,
-      MobileModule.collection,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -337,9 +312,7 @@ class MobileRoleRegistry {
     },
     MobileRole.developer: {
       MobileModule.dashboard,
-      MobileModule.executive,
       MobileModule.sales,
-      MobileModule.collection,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -352,9 +325,7 @@ class MobileRoleRegistry {
     },
     MobileRole.companyAdministrator: {
       MobileModule.dashboard,
-      MobileModule.executive,
       MobileModule.sales,
-      MobileModule.collection,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -364,9 +335,7 @@ class MobileRoleRegistry {
     },
     MobileRole.director: {
       MobileModule.dashboard,
-      MobileModule.executive,
       MobileModule.sales,
-      MobileModule.collection,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -376,11 +345,10 @@ class MobileRoleRegistry {
     MobileRole.salesManager: {
       MobileModule.dashboard,
       MobileModule.sales,
-      MobileModule.collection,
       MobileModule.approvals,
     },
     MobileRole.sales: {MobileModule.dashboard, MobileModule.sales},
-    MobileRole.collection: {MobileModule.dashboard, MobileModule.collection},
+    MobileRole.collection: {MobileModule.dashboard, MobileModule.sales},
     MobileRole.purchaseManager: {
       MobileModule.dashboard,
       MobileModule.purchase,

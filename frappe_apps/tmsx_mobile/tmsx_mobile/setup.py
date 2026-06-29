@@ -240,6 +240,7 @@ def setup_mobile_roles():
 
 MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
     "Sales User": {
+        "Company": {"read": 1, "select": 1},
         "Customer": {"read": 1, "select": 1},
         "Customer Group": {"read": 1, "select": 1},
         "Territory": {"read": 1, "select": 1},
@@ -257,6 +258,7 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
     "Sales Manager": {
+        "Company": {"read": 1, "select": 1},
         "Customer": {"read": 1, "select": 1},
         "Item": {"read": 1, "select": 1},
         "Warehouse": {"read": 1, "select": 1},
@@ -266,6 +268,7 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
     "Sales Admin": {
+        "Company": {"read": 1, "select": 1},
         "Customer": {"read": 1, "select": 1},
         "Item": {"read": 1, "select": 1},
         "Warehouse": {"read": 1, "select": 1},
@@ -275,6 +278,7 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
     "Purchase User": {
+        "Company": {"read": 1, "select": 1},
         "Supplier": {"read": 1, "select": 1},
         "Supplier Group": {"read": 1, "select": 1},
         "Item": {"read": 1, "select": 1},
@@ -295,6 +299,7 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "File": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
     "Purchase Manager": {
+        "Company": {"read": 1, "select": 1},
         "Supplier": {"read": 1, "select": 1},
         "Item": {"read": 1, "select": 1},
         "Warehouse": {"read": 1, "select": 1},
@@ -307,6 +312,7 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "File": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
     "Purchase Admin": {
+        "Company": {"read": 1, "select": 1},
         "Supplier": {"read": 1, "select": 1},
         "Item": {"read": 1, "select": 1},
         "Warehouse": {"read": 1, "select": 1},

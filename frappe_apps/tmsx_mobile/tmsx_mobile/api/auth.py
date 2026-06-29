@@ -262,6 +262,8 @@ def _allowed_companies(user, user_doc, settings):
     if allow_all_for_system_manager and role_names & {
         "administrator",
         "system manager",
+        "developer",
+        "company administrator",
     }:
         return _all_companies()
 
