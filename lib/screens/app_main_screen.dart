@@ -17,7 +17,7 @@ import 'purchase/purchase_invoice/create_purchase_invoice_screen.dart';
 import 'purchase/purchase_receipt/create_purchase_receipt_screen.dart';
 import 'purchase/material_request/create_material_request_screen.dart';
 import 'stock/stock_entry/create_stock_entry_screen.dart';
-import 'sales/sales_order/create_sales_order_screen.dart';
+import 'sales/create_sales_order_screen.dart';
 import 'todo/todo_list.dart';
 
 class AppMainScreen extends StatefulWidget {

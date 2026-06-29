@@ -3,9 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../shared/role_main_screen.dart';
+import '../tabs/selling_tab.dart';
 import '../todo/todo_list.dart';
 import 'sales_collection_tab.dart';
-import 'sales_order_tab.dart';
 import 'sales_overview_tab.dart';
 import 'sales_visit_tab.dart';
 
@@ -18,6 +18,7 @@ class SalesMainScreen extends StatefulWidget {
 
 class _SalesMainScreenState extends State<SalesMainScreen> {
   final _orderTabIndex = ValueNotifier<int>(0);
+  static const _sellingSegments = ['so', 'dn', 'si'];
 
   @override
   void dispose() {
@@ -26,7 +27,13 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
   }
 
   void _selectOrderTab(int index) {
-    _orderTabIndex.value = index;
+    _orderTabIndex.value = index.clamp(0, _sellingSegments.length - 1);
+  }
+
+  void _handleSellingSegmentChanged(String segment) {
+    final nextIndex = _sellingSegments.indexOf(segment);
+    if (nextIndex < 0 || _orderTabIndex.value == nextIndex) return;
+    _orderTabIndex.value = nextIndex;
   }
 
   @override
@@ -49,7 +56,15 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
           onMenuSelected: onMenuSelected,
           onOrderTabSelected: _selectOrderTab,
         ),
-        SalesOrderTab(selectedTabIndex: _orderTabIndex),
+        ValueListenableBuilder<int>(
+          valueListenable: _orderTabIndex,
+          builder: (context, index, _) {
+            return SellingTab(
+              selectedSegment: _sellingSegments[index],
+              onSegmentChanged: _handleSellingSegmentChanged,
+            );
+          },
+        ),
         const SalesCollectionTab(),
         const SalesVisitTab(),
         if (showTodo)

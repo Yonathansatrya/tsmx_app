@@ -1485,11 +1485,30 @@ class AppState with ChangeNotifier {
     return _salesOrderService.load(orderId);
   }
 
-  List<List<dynamic>> get _salesOwnerFilter => _shouldScopeSalesData
-      ? [
-          ['owner', '=', _currentUser ?? '__unmapped_sales_user__'],
-        ]
-      : const [];
+  Future<List<List<dynamic>>> _salesCustomerScopeFilters() async {
+    if (!_shouldScopeSalesData) return const [];
+
+    final customers = await fetchSalesCustomers();
+    final customerIds = customers
+        .map((customer) => customer.id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (customerIds.isEmpty) {
+      return const [
+        ['customer', '=', '__unmapped_sales_customer__'],
+      ];
+    }
+    customerIds.sort();
+    if (customerIds.length == 1) {
+      return [
+        ['customer', '=', customerIds.first],
+      ];
+    }
+    return [
+      ['customer', 'in', customerIds],
+    ];
+  }
 
   Future<List<SalesCustomerOption>> fetchSalesCustomers() async {
     if (_shouldScopeSalesData &&
@@ -3161,8 +3180,15 @@ class AppState with ChangeNotifier {
         _orderSummaryError = null;
         return;
       }
-      final salesFilters = await _sellingDocumentFilters('transaction_date');
-      final postingFilters = await _sellingDocumentFilters('posting_date');
+      final salesCustomerScopeFilters = await _salesCustomerScopeFilters();
+      final salesFilters = [
+        ...await _sellingDocumentFilters('transaction_date'),
+        ...salesCustomerScopeFilters,
+      ];
+      final postingFilters = [
+        ...await _sellingDocumentFilters('posting_date'),
+        ...salesCustomerScopeFilters,
+      ];
       final customerTypeIds = await _sellingCustomerTypeCustomerIds();
       final salesTrend = _emptySellingTrendPoints();
       final deliveryTrend = _emptySellingTrendPoints();
@@ -3279,6 +3305,8 @@ class AppState with ChangeNotifier {
   }
 
   Future<bool> _refreshSellingSummariesFromMobileAnalytics() async {
+    if (_shouldScopeSalesData) return false;
+
     if (_sellingCustomerTypeFilter.trim().isNotEmpty &&
         _sellingCustomerTypeFilter.trim().toLowerCase() != 'all') {
       return false;
@@ -3337,7 +3365,10 @@ class AppState with ChangeNotifier {
     required String doctype,
     required String dateField,
   }) async {
-    final filters = await _sellingDocumentFilters(dateField);
+    final filters = [
+      ...await _sellingDocumentFilters(dateField),
+      ...await _salesCustomerScopeFilters(),
+    ];
     final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final trend = _emptySellingTrendPoints();
     var total = 0.0;
@@ -6106,7 +6137,7 @@ class AppState with ChangeNotifier {
     final filters = <List<dynamic>>[
       ...await _sellingDocumentFilters('transaction_date'),
       ...?_salesOrderFilters(_salesOrderStatus),
-      ..._salesOwnerFilter,
+      ...await _salesCustomerScopeFilters(),
     ];
     final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(
@@ -6150,12 +6181,14 @@ class AppState with ChangeNotifier {
     final filters = <List<dynamic>>[
       ...await _sellingDocumentFilters('posting_date'),
       ...?_statusFilters(_deliveryNoteStatus),
+      ...await _salesCustomerScopeFilters(),
     ];
     final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Delivery Note',
       fields: const [
         'name',
+        'owner',
         'customer',
         'customer_name',
         'status',
@@ -6188,7 +6221,7 @@ class AppState with ChangeNotifier {
     final filters = <List<dynamic>>[
       ...await _sellingDocumentFilters('posting_date'),
       ...?_statusFilters(_salesInvoiceStatus),
-      ..._salesOwnerFilter,
+      ...await _salesCustomerScopeFilters(),
     ];
     final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(

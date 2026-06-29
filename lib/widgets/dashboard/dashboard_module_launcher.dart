@@ -6,8 +6,6 @@ import '../../models/delivery_note.dart';
 import '../../models/inventory_item.dart';
 import '../../models/mobile_boot.dart';
 import '../../screens/shared/module_screen_registry.dart';
-import '../../screens/shared/module_shell_screen.dart';
-import '../../screens/tabs/selling_tab.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 
@@ -140,12 +138,6 @@ class DashboardModuleLauncher extends StatelessWidget {
   }
 
   Widget _screenForEntry(AppState appState, ModuleLaunchEntry entry) {
-    if (entry.routeKey == MobileModule.sales && !appState.isSalesUserRole) {
-      return const ModuleShellScreen(
-        title: 'Penjualan',
-        child: SellingTab(selectedSegment: 'so'),
-      );
-    }
     return entry.screen;
   }
 }
