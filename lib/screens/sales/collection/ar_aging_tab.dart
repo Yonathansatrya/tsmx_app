@@ -20,12 +20,10 @@ class ArAgingTab extends StatefulWidget {
 
 class _ArAgingTabState extends State<ArAgingTab> {
   List<SalesInvoice> outstanding = const [];
-  List<CollectionRanking> ranking = const [];
   List<CollectionPayment> payments = const [];
   late DateRangePreset range;
   bool loading = true;
   String? agingError;
-  String? rankingError;
   String? paymentError;
 
   @override
@@ -39,7 +37,6 @@ class _ArAgingTabState extends State<ArAgingTab> {
     setState(() {
       loading = true;
       agingError = null;
-      rankingError = null;
       paymentError = null;
     });
     final state = context.read<AppState>();
@@ -48,24 +45,12 @@ class _ArAgingTabState extends State<ArAgingTab> {
         (value) => outstanding = value,
         onError: (Object error) => agingError = error.toString(),
       ),
-      state
-          .fetchCollectionPayments(
-            from: range.from,
-            to: range.to,
-            scopeToCurrentSales: false,
-          )
-          .then((value) {
-            payments = value;
-          }, onError: (Object error) => paymentError = error.toString()),
+      state.fetchCollectionPayments(from: range.from, to: range.to).then((
+        value,
+      ) {
+        payments = value;
+      }, onError: (Object error) => paymentError = error.toString()),
     ]);
-    try {
-      ranking = await state.fetchCollectionRanking(
-        from: range.from,
-        to: range.to,
-      );
-    } catch (error) {
-      rankingError = error.toString();
-    }
     if (mounted) setState(() => loading = false);
   }
 
@@ -222,61 +207,15 @@ class _ArAgingTabState extends State<ArAgingTab> {
         }),
 
         const SizedBox(height: 18),
-
         CollectionSectionHeader(
-          title: 'Ranking Collection',
-          subtitle: 'Berdasarkan nilai Sales Order dari Sales Team',
-          icon: Icons.emoji_events_rounded,
+          title: 'Histori Pembayaran',
+          subtitle: 'Pembayaran customer pada periode terpilih',
+          icon: Icons.history_rounded,
           trailing: IconButton.filledTonal(
             tooltip: 'Pilih periode',
             onPressed: _pickRange,
             icon: const Icon(Icons.date_range_rounded),
           ),
-        ),
-
-        const SizedBox(height: 10),
-
-        if (rankingError != null)
-          ErpErrorBox(message: rankingError!)
-        else if (!loading && ranking.isEmpty)
-          const ErpEmptyState(
-            title: 'Belum ada Sales Order pada periode ini',
-            message:
-                'Ranking dibaca dari Sales Team pada Sales Order sesuai periode.',
-          )
-        else
-          ...ranking.map(
-            (row) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: row.rank <= 3
-                        ? AppColors.accentYellow.withValues(alpha: 0.35)
-                        : AppColors.softGreen,
-                    foregroundColor: AppColors.primaryDark,
-                    child: Text(
-                      '${row.rank}',
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                  ),
-                  title: Text(
-                    row.salesPerson,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  trailing: Text(
-                    'Rp ${formatErpCurrency(row.amount)}',
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        const SizedBox(height: 18),
-        const CollectionSectionHeader(
-          title: 'Histori Pembayaran',
-          subtitle: 'Pembayaran customer pada periode terpilih',
-          icon: Icons.history_rounded,
         ),
         if (paymentError != null)
           ErpErrorBox(message: paymentError!)
@@ -313,7 +252,7 @@ class _ArAgingTabState extends State<ArAgingTab> {
               ),
             ),
           ),
-        if (agingError != null || rankingError != null || paymentError != null)
+        if (agingError != null || paymentError != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: OutlinedButton.icon(
