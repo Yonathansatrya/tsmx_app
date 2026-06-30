@@ -38,8 +38,9 @@ MOBILE_ROLES = [
 ]
 
 DEFAULT_ROLE_MODULES = {
-    "Administrator": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "approvals"],
-    "System Manager": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "approvals"],
+    "Administrator": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
+    "System Manager": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
+    "Developer": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
     "Sales Admin": ["dashboard", "sales", "collection", "approvals"],
     "Sales Manager": ["dashboard", "sales", "collection", "approvals"],
     "Sales User": ["dashboard", "sales"],
@@ -337,7 +338,76 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Quality Inspection": {"read": 1, "select": 1, "create": 1, "write": 1},
         "File": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
+    "Finance User": {
+        "Company": {"read": 1, "select": 1},
+        "Account": {"read": 1, "select": 1},
+        "GL Entry": {"read": 1, "select": 1},
+        "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Sales Invoice": {"read": 1, "select": 1},
+        "Purchase Invoice": {"read": 1, "select": 1},
+        "Journal Entry": {"read": 1, "select": 1},
+    },
+    "Finance Manager": {
+        "Company": {"read": 1, "select": 1},
+        "Account": {"read": 1, "select": 1},
+        "GL Entry": {"read": 1, "select": 1},
+        "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1},
+        "Sales Invoice": {"read": 1, "select": 1},
+        "Purchase Invoice": {"read": 1, "select": 1},
+        "Journal Entry": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1},
+    },
+    "Finance Admin": {
+        "Company": {"read": 1, "select": 1},
+        "Account": {"read": 1, "select": 1},
+        "GL Entry": {"read": 1, "select": 1},
+        "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
+        "Sales Invoice": {"read": 1, "select": 1},
+        "Purchase Invoice": {"read": 1, "select": 1},
+        "Journal Entry": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
+    },
+    "Accounting User": {
+        "Company": {"read": 1, "select": 1},
+        "Account": {"read": 1, "select": 1},
+        "GL Entry": {"read": 1, "select": 1},
+        "Journal Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Payment Entry": {"read": 1, "select": 1},
+        "Sales Invoice": {"read": 1, "select": 1},
+        "Purchase Invoice": {"read": 1, "select": 1},
+    },
+    "Accounting Manager": {
+        "Company": {"read": 1, "select": 1},
+        "Account": {"read": 1, "select": 1},
+        "GL Entry": {"read": 1, "select": 1},
+        "Journal Entry": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1},
+        "Payment Entry": {"read": 1, "select": 1},
+        "Sales Invoice": {"read": 1, "select": 1},
+        "Purchase Invoice": {"read": 1, "select": 1},
+    },
+    "Accounting Admin": {
+        "Company": {"read": 1, "select": 1},
+        "Account": {"read": 1, "select": 1},
+        "GL Entry": {"read": 1, "select": 1},
+        "Journal Entry": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
+        "Payment Entry": {"read": 1, "select": 1},
+        "Sales Invoice": {"read": 1, "select": 1},
+        "Purchase Invoice": {"read": 1, "select": 1},
+    },
 }
+
+_PRIVILEGED_FINANCE_PERMISSIONS = {
+    "Company": {"read": 1, "select": 1},
+    "Account": {"read": 1, "select": 1},
+    "GL Entry": {"read": 1, "select": 1},
+    "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
+    "Sales Invoice": {"read": 1, "select": 1},
+    "Purchase Invoice": {"read": 1, "select": 1},
+    "Journal Entry": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
+}
+
+for _role in ("Developer", "System Manager", "Administrator", "Company Administrator", "Director"):
+    MOBILE_ROLE_DOCTYPE_PERMISSIONS.setdefault(_role, {}).update(
+        _PRIVILEGED_FINANCE_PERMISSIONS
+    )
 
 MOBILE_REPORT_ROLES = {
     "Sales Analytics": ["Sales User", "Sales Manager", "Sales Admin"],
@@ -347,7 +417,11 @@ MOBILE_REPORT_ROLES = {
     "Purchase Analytics": ["Purchase User", "Purchase Manager", "Purchase Admin", "Buying User", "Buying Manager"],
     "Purchase Order Analysis": ["Purchase User", "Purchase Manager", "Purchase Admin", "Buying User", "Buying Manager"],
     "Supplier Quotation Comparison": ["Purchase User", "Purchase Manager", "Purchase Admin", "Buying User", "Buying Manager"],
-    "Accounts Payable": ["Purchase Manager", "Purchase Admin", "Finance User", "Finance Manager", "Finance Admin"],
+    "Accounts Payable": ["Purchase Manager", "Purchase Admin", "Finance User", "Finance Manager", "Finance Admin", "Developer", "System Manager", "Administrator"],
+    "General Ledger": ["Finance User", "Finance Manager", "Finance Admin", "Accounting User", "Accounting Manager", "Accounting Admin", "Developer", "System Manager", "Administrator", "Company Administrator", "Director"],
+    "Profit and Loss Statement": ["Finance Manager", "Finance Admin", "Accounting User", "Accounting Manager", "Accounting Admin", "Developer", "System Manager", "Administrator", "Company Administrator", "Director"],
+    "Balance Sheet": ["Finance Manager", "Finance Admin", "Accounting User", "Accounting Manager", "Accounting Admin", "Developer", "System Manager", "Administrator", "Company Administrator", "Director"],
+    "Cash Flow": ["Finance User", "Finance Manager", "Finance Admin", "Accounting Manager", "Accounting Admin", "Developer", "System Manager", "Administrator", "Company Administrator", "Director"],
 }
 
 

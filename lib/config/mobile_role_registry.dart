@@ -41,7 +41,7 @@ class MobileModule {
     approvals,
   ];
 
-  static const planned = [finance, accounting, plantation];
+  static const planned = [plantation];
 }
 
 /// Canonical mobile role profile names shown in the app.
@@ -194,7 +194,6 @@ class MobileRoleRegistry {
       defaultSubtitle: 'Cash flow, bank, AR/AP monitoring',
       icon: Icons.payments_rounded,
       menuOrder: 60,
-      isPlanned: true,
     ),
     MobileModule.accounting: MobileModuleMeta(
       key: MobileModule.accounting,
@@ -203,7 +202,6 @@ class MobileRoleRegistry {
       defaultSubtitle: 'GL, journal, laporan keuangan',
       icon: Icons.calculate_rounded,
       menuOrder: 65,
-      isPlanned: true,
     ),
     MobileModule.plantation: MobileModuleMeta(
       key: MobileModule.plantation,

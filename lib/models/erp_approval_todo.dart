@@ -34,6 +34,7 @@ class ErpApprovalTodo {
     'Purchase Order' => 'Purchase Order',
     'Purchase Invoice' => 'Purchase Invoice',
     'Material Request' => 'Material Request',
+    'Journal Entry' => 'Journal Entry',
     _ => doctype,
   };
 
@@ -53,6 +54,7 @@ class ErpApprovalTodo {
       'Purchase Order' ||
       'Purchase Invoice' => json['supplier']?.toString() ?? '',
       'Material Request' => json['material_request_type']?.toString() ?? '',
+      'Journal Entry' => json['company']?.toString() ?? '',
       _ => '',
     };
     final partyName = switch (doctype) {
@@ -64,6 +66,8 @@ class ErpApprovalTodo {
         json['company']?.toString() ??
             json['material_request_type']?.toString() ??
             '',
+      'Journal Entry' =>
+        json['title']?.toString() ?? json['company']?.toString() ?? '',
       _ => '',
     };
     final date = switch (doctype) {
@@ -76,6 +80,9 @@ class ErpApprovalTodo {
     };
     final amount = switch (doctype) {
       'Material Request' => NumParse.asDouble(json['total_qty']),
+      'Journal Entry' => NumParse.asDouble(
+        json['total_debit'] ?? json['total_credit'],
+      ),
       _ => NumParse.asDouble(json['grand_total'] ?? json['rounded_total']),
     };
 

@@ -41,8 +41,7 @@ class _AppMainScreenState extends State<AppMainScreen> {
     });
   }
 
-  int _totalTodoCount(AppState appState) =>
-      appState.salesOrderApprovalTodoCount + appState.purchaseApprovalTodoCount;
+  int _totalTodoCount(AppState appState) => appState.approvalTodoCount;
 
   List<_MainTabItem> _tabs(AppState appState) {
     final tabs = <_MainTabItem>[

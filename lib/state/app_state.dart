@@ -133,6 +133,8 @@ class AppState with ChangeNotifier {
     'Material Request',
   };
 
+  static const financeApprovalDoctypes = {'Journal Entry'};
+
   static const String _prefsUserRoleKey = 'user_role';
 
   Future<void> refreshDataForCurrentRole() async {
@@ -5839,6 +5841,20 @@ class AppState with ChangeNotifier {
           'docstatus',
         ],
       ),
+      (
+        doctype: 'Journal Entry',
+        fields: [
+          'name',
+          'title',
+          'workflow_state',
+          'owner',
+          'company',
+          'posting_date',
+          'total_debit',
+          'total_credit',
+          'docstatus',
+        ],
+      ),
     ];
 
     final todos = <ErpApprovalTodo>[];
@@ -5915,6 +5931,7 @@ class AppState with ChangeNotifier {
             'Purchase Order',
             'Purchase Invoice',
             'Material Request',
+            'Journal Entry',
           ],
         ],
         ['content', 'like', '%via TMSX%'],

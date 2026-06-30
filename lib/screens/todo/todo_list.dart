@@ -523,12 +523,16 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     'Purchase Order' => Icons.shopping_bag_rounded,
     'Purchase Invoice' => Icons.receipt_long_rounded,
     'Material Request' => Icons.assignment_turned_in_rounded,
+    'Journal Entry' => Icons.auto_stories_rounded,
     _ => Icons.approval_outlined,
   };
 
   String _approvalAmount(ErpApprovalTodo row) {
     if (row.doctype == 'Material Request') {
       return '${formatErpCurrency(row.amount)} qty';
+    }
+    if (row.doctype == 'Journal Entry') {
+      return 'Debit Rp ${formatErpCurrency(row.amount)}';
     }
     return 'Rp ${formatErpCurrency(row.amount)}';
   }
@@ -744,6 +748,7 @@ class _ApprovalTodoSummary {
       'Purchase Order',
       'Purchase Invoice',
       'Material Request',
+      'Journal Entry',
       'Sales Order',
     ];
     final ordered = [
@@ -769,6 +774,7 @@ class _ApprovalTodoSummaryCard extends StatelessWidget {
     'Purchase Order' => Icons.shopping_bag_rounded,
     'Purchase Invoice' => Icons.receipt_long_rounded,
     'Material Request' => Icons.assignment_turned_in_rounded,
+    'Journal Entry' => Icons.auto_stories_rounded,
     'Sales Order' => Icons.point_of_sale_rounded,
     _ => Icons.approval_outlined,
   };
@@ -777,6 +783,7 @@ class _ApprovalTodoSummaryCard extends StatelessWidget {
     'Purchase Order' => AppColors.primary,
     'Purchase Invoice' => AppColors.warning,
     'Material Request' => AppColors.success,
+    'Journal Entry' => AppColors.primaryLight,
     'Sales Order' => AppColors.navy,
     _ => AppColors.slate,
   };
@@ -785,6 +792,7 @@ class _ApprovalTodoSummaryCard extends StatelessWidget {
     'Purchase Order' => 'PO',
     'Purchase Invoice' => 'PI',
     'Material Request' => 'MR',
+    'Journal Entry' => 'JE',
     'Sales Order' => 'SO',
     _ => doctype,
   };
@@ -1171,6 +1179,7 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
     'Purchase Order' => Icons.shopping_bag_rounded,
     'Purchase Invoice' => Icons.receipt_long_rounded,
     'Material Request' => Icons.assignment_turned_in_rounded,
+    'Journal Entry' => Icons.auto_stories_rounded,
     _ => Icons.approval_outlined,
   };
 
@@ -1204,6 +1213,8 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
         ? 'Customer'
         : widget.approval.doctype == 'Material Request'
         ? 'Tipe Request'
+        : widget.approval.doctype == 'Journal Entry'
+        ? 'Title'
         : 'Supplier';
     return [
       _detailRow(partnerLabel, widget.approval.partyLabel),
@@ -1224,6 +1235,13 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
     if (widget.approval.doctype == 'Material Request') {
       return [
         _detailRow('Total Qty', formatErpCurrency(detail['total_qty'])),
+        _detailRow('Status Dokumen', docStatusLabel(widget.approval.docStatus)),
+      ];
+    }
+    if (widget.approval.doctype == 'Journal Entry') {
+      return [
+        _moneyRow('Total Debit', detail['total_debit']),
+        _moneyRow('Total Credit', detail['total_credit']),
         _detailRow('Status Dokumen', docStatusLabel(widget.approval.docStatus)),
       ];
     }
@@ -1682,6 +1700,9 @@ class _SalesOrderApprovalHistoryDetailPageState
     if (widget.group.doctype == 'Material Request') {
       return NumParse.asDouble(detail['total_qty']);
     }
+    if (widget.group.doctype == 'Journal Entry') {
+      return NumParse.asDouble(detail['total_debit'] ?? detail['total_credit']);
+    }
     return NumParse.asDouble(detail['grand_total'] ?? detail['rounded_total']);
   }
 
@@ -1690,6 +1711,8 @@ class _SalesOrderApprovalHistoryDetailPageState
         ? 'Customer'
         : widget.group.doctype == 'Material Request'
         ? 'Tipe Request'
+        : widget.group.doctype == 'Journal Entry'
+        ? 'Title'
         : 'Supplier';
     return [
       _detailRow(partnerLabel, party),
@@ -1712,6 +1735,13 @@ class _SalesOrderApprovalHistoryDetailPageState
     if (widget.group.doctype == 'Material Request') {
       return [
         _detailRow('Total Qty', formatErpCurrency(detail['total_qty'])),
+        _detailRow('Status Dokumen', _text(detail['status'])),
+      ];
+    }
+    if (widget.group.doctype == 'Journal Entry') {
+      return [
+        _moneyRow('Total Debit', detail['total_debit']),
+        _moneyRow('Total Credit', detail['total_credit']),
         _detailRow('Status Dokumen', _text(detail['status'])),
       ];
     }

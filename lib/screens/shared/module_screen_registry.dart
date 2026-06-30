@@ -86,7 +86,7 @@ class ModuleScreenRegistry {
       case MobileModule.finance:
         return const FinanceMainScreen();
       case MobileModule.accounting:
-        return ModulePlaceholderScreen(moduleKey: MobileModule.accounting);
+        return const FinanceMainScreen(initialTabIndex: 3);
       case MobileModule.plantation:
         return const PlantationMainScreen();
       default:
