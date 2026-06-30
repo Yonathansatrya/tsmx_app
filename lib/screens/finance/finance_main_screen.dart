@@ -380,6 +380,25 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       orderBy: 'modified desc',
       limit: 20,
     );
+    final recentJournalRows = await _safeFetchResource(
+      state,
+      'Journal Entry',
+      fields: const [
+        'name',
+        'title',
+        'posting_date',
+        'workflow_state',
+        'docstatus',
+        'total_debit',
+      ],
+      filters: [
+        ['posting_date', '>=', fromText],
+        ['posting_date', '<=', toText],
+        ...companyFilter,
+      ],
+      orderBy: 'posting_date desc, modified desc',
+      limit: 30,
+    );
 
     final ledgerRows = await _safeFetchResource(
       state,
@@ -403,6 +422,26 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       orderBy: 'posting_date desc, creation desc',
       limit: 30,
     );
+
+    final cashFlowMetrics = await _loadCashFlowMetrics(
+      state,
+      from: from,
+      to: to,
+      company: company,
+    );
+    final cashFlowReportTotal = _metricValue(
+      cashFlowMetrics,
+      'Net Change in Cash',
+    );
+    final cashFlowReportTrend = cashFlowMetrics.isEmpty
+        ? trend
+        : [
+            for (final metric in cashFlowMetrics)
+              DocumentTrendPoint(
+                label: _shortCashFlowLabel(metric.label),
+                value: metric.value,
+              ),
+          ];
 
     final profitLoss = await _loadReportMetrics(
       state,
@@ -429,6 +468,7 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
     return FinanceDashboardData(
       cashIn: cashIn,
       cashOut: cashOut,
+      cashFlowTotal: cashFlowReportTotal,
       dailyCollection: dailyCollection,
       bankBalance: bankBalance,
       outstandingAr: outstandingAr,
@@ -437,6 +477,9 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       pendingJournalCount: journalRows.length,
       bankBalances: bankBalances,
       journalEntries: journalRows
+          .map(FinanceDocumentRow.fromJournalEntry)
+          .toList(),
+      recentJournalEntries: recentJournalRows
           .map(FinanceDocumentRow.fromJournalEntry)
           .toList(),
       cashFlowEntries: paymentRows
@@ -452,9 +495,10 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
           .map(FinanceDocumentRow.fromExpenseGl)
           .toList(),
       ledgerRows: ledgerRows.map(GeneralLedgerRow.fromJson).toList(),
+      cashFlowMetrics: cashFlowMetrics,
       profitLoss: profitLoss,
       balanceSheet: balanceSheet,
-      cashFlowTrend: trend,
+      cashFlowTrend: cashFlowReportTrend,
     );
   }
 
@@ -695,6 +739,60 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
     }
   }
 
+  Future<List<FinanceReportMetric>> _loadCashFlowMetrics(
+    AppState state, {
+    required DateTime from,
+    required DateTime to,
+    required String company,
+  }) async {
+    try {
+      final response = await state.frappeService.callMethod(
+        'frappe.desk.query_report.run',
+        args: {
+          'report_name': 'Cash Flow',
+          'filters': {
+            if (company.trim().isNotEmpty) 'company': company.trim(),
+            'filter_based_on': 'Fiscal Year',
+            'from_fiscal_year': from.year.toString(),
+            'to_fiscal_year': to.year.toString(),
+            'periodicity': 'Yearly',
+            'include_default_book_entries': 1,
+            'show_opening_and_closing_balance': 0,
+          },
+          'ignore_prepared_report': true,
+          'are_default_filters': false,
+        },
+      );
+      final report = _queryReportPayload(response);
+      final columns = _queryReportColumns(report?['columns']);
+      final rows = _queryReportRows(report?['result'] ?? report?['data']);
+      final labels = const [
+        'Net Cash from Operations',
+        'Net Cash from Investing',
+        'Net Cash from Financing',
+        'Net Change in Cash',
+      ];
+      final metrics = <FinanceReportMetric>[];
+      for (final wanted in labels) {
+        final row = rows
+            .map((item) => _queryReportRowMap(item, columns))
+            .where(
+              (item) =>
+                  _rowLabel(item).toLowerCase().contains(wanted.toLowerCase()),
+            )
+            .cast<Map<String, dynamic>?>()
+            .firstWhere((item) => item != null, orElse: () => null);
+        if (row == null) continue;
+        metrics.add(
+          FinanceReportMetric(label: wanted, value: _lastNumericValue(row)),
+        );
+      }
+      return metrics;
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Map<String, dynamic>? _queryReportPayload(dynamic response) {
     if (response is! Map) return null;
     final message = response['message'];
@@ -746,6 +844,22 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       if (!number.isNaN) return number;
     }
     return 0;
+  }
+
+  double? _metricValue(List<FinanceReportMetric> rows, String label) {
+    for (final row in rows) {
+      if (row.label.toLowerCase() == label.toLowerCase()) return row.value;
+    }
+    return null;
+  }
+
+  String _shortCashFlowLabel(String label) {
+    final normalized = label.toLowerCase();
+    if (normalized.contains('operations')) return 'Operasi';
+    if (normalized.contains('investing')) return 'Investasi';
+    if (normalized.contains('financing')) return 'Pendanaan';
+    if (normalized.contains('net change')) return 'Net Cash';
+    return label;
   }
 
   String? _matchingAccount(Map<String, dynamic> row, List<String> accounts) {
@@ -930,7 +1044,16 @@ class _DashboardView extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        _TrendCard(title: 'Cash Flow Monitoring', points: data.cashFlowTrend),
+        _TrendCard(
+          title: 'Cash Flow Monitoring',
+          points: data.cashFlowTrend,
+          onTap: () => _showTrendDetails(
+            context,
+            title: 'Cash Flow Monitoring',
+            points: data.cashFlowTrend,
+            reportRows: data.cashFlowMetrics,
+          ),
+        ),
         const SizedBox(height: 12),
         _MetricGrid(
           metrics: [
@@ -1099,6 +1222,22 @@ class _AccountingView extends StatelessWidget {
                 ),
         ),
         const SizedBox(height: 12),
+        _SectionCard(
+          title: 'Journal Entry Monitoring',
+          icon: Icons.receipt_long_rounded,
+          child: data.recentJournalEntries.isEmpty
+              ? const ErpEmptyState(
+                  title: 'Belum ada Journal Entry',
+                  message: 'Journal periode ini belum tersedia.',
+                )
+              : Column(
+                  children: [
+                    for (final row in data.recentJournalEntries.take(8))
+                      _DocumentRow(row: row, doctype: 'Journal Entry'),
+                  ],
+                ),
+        ),
+        const SizedBox(height: 12),
         _ReportSection(title: 'Profit & Loss', rows: data.profitLoss),
         const SizedBox(height: 12),
         _ReportSection(title: 'Balance Sheet', rows: data.balanceSheet),
@@ -1145,6 +1284,67 @@ void _showDocumentRows(
                 : '',
           ),
       ],
+    ),
+  );
+}
+
+void _showTrendDetails(
+  BuildContext context, {
+  required String title,
+  required List<DocumentTrendPoint> points,
+  required List<FinanceReportMetric> reportRows,
+}) {
+  final summary = _TrendSummary.from(points);
+  final rows = reportRows.isNotEmpty
+      ? [
+          for (final row in reportRows)
+            _SimpleRow(
+              title: row.label,
+              subtitle: 'ERPNext Query Report',
+              trailing: 'Amount',
+              amount: row.value,
+            ),
+        ]
+      : [
+          _SimpleRow(
+            title: 'Total',
+            subtitle: 'Akumulasi dari bar chart aktif',
+            trailing: 'Amount',
+            amount: summary.total,
+          ),
+          _SimpleRow(
+            title: 'Rata-rata',
+            subtitle: '${points.length} periode',
+            trailing: 'Average',
+            amount: summary.average,
+          ),
+          _SimpleRow(
+            title: 'Tertinggi',
+            subtitle: summary.highestLabel,
+            trailing: 'Peak',
+            amount: summary.highest,
+          ),
+          _SimpleRow(
+            title: 'Terendah',
+            subtitle: summary.lowestLabel,
+            trailing: 'Low',
+            amount: summary.lowest,
+          ),
+          _SimpleRow(
+            title: summary.directionTitle,
+            subtitle: summary.directionSubtitle,
+            trailing: 'Trend',
+            amount: summary.delta,
+          ),
+        ];
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _FinanceListSheet(
+      title: title,
+      emptyTitle: 'Belum ada data trend',
+      children: rows,
     ),
   );
 }
@@ -1351,68 +1551,252 @@ class _MetricCard extends StatelessWidget {
 class _TrendCard extends StatelessWidget {
   final String title;
   final List<DocumentTrendPoint> points;
+  final VoidCallback? onTap;
 
-  const _TrendCard({required this.title, required this.points});
+  const _TrendCard({required this.title, required this.points, this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final summary = _TrendSummary.from(points);
     final maxValue = points.fold<double>(
       0,
       (max, point) => point.value.abs() > max ? point.value.abs() : max,
     );
-    return _SectionCard(
-      title: title,
-      icon: Icons.show_chart_rounded,
-      child: SizedBox(
-        height: 144,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: _SectionCard(
+        title: title,
+        icon: Icons.show_chart_rounded,
+        child: Column(
           children: [
-            for (final point in points)
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          child: FractionallySizedBox(
-                            heightFactor: maxValue == 0
-                                ? 0.04
-                                : (point.value.abs() / maxValue).clamp(0.04, 1),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: point.value < 0
-                                    ? AppColors.warning.withValues(alpha: 0.7)
-                                    : AppColors.primary,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        point.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.slate,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+            Row(
+              children: [
+                Expanded(
+                  child: _TrendSummaryPill(
+                    label: 'Total',
+                    value: _compactMoney(summary.total),
                   ),
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _TrendSummaryPill(
+                    label: 'Rata-rata',
+                    value: _compactMoney(summary.average),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _TrendSummaryPill(
+                    label: 'Trend',
+                    value: summary.directionShort,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 164,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (final point in points)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              _compactMoney(point.value),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.slate,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.bottomCenter,
+                                child: FractionallySizedBox(
+                                  heightFactor: maxValue == 0
+                                      ? 0.04
+                                      : (point.value.abs() / maxValue).clamp(
+                                          0.04,
+                                          1,
+                                        ),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: point.value < 0
+                                          ? AppColors.warning.withValues(
+                                              alpha: 0.7,
+                                            )
+                                          : AppColors.primary,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              point.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.slate,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ),
+            ),
           ],
         ),
       ),
     );
   }
+}
+
+class _TrendSummaryPill extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _TrendSummaryPill({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.softGreen,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.primary,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrendSummary {
+  final double total;
+  final double average;
+  final double highest;
+  final String highestLabel;
+  final double lowest;
+  final String lowestLabel;
+  final double delta;
+
+  const _TrendSummary({
+    required this.total,
+    required this.average,
+    required this.highest,
+    required this.highestLabel,
+    required this.lowest,
+    required this.lowestLabel,
+    required this.delta,
+  });
+
+  factory _TrendSummary.from(List<DocumentTrendPoint> points) {
+    if (points.isEmpty) {
+      return const _TrendSummary(
+        total: 0,
+        average: 0,
+        highest: 0,
+        highestLabel: '-',
+        lowest: 0,
+        lowestLabel: '-',
+        delta: 0,
+      );
+    }
+    final total = points.fold<double>(0, (sum, point) => sum + point.value);
+    var highest = points.first;
+    var lowest = points.first;
+    for (final point in points) {
+      if (point.value > highest.value) highest = point;
+      if (point.value < lowest.value) lowest = point;
+    }
+    final firstNonZero = points.cast<DocumentTrendPoint?>().firstWhere(
+      (point) => point != null && point.value != 0,
+      orElse: () => points.first,
+    )!;
+    final lastNonZero = points.reversed.cast<DocumentTrendPoint?>().firstWhere(
+      (point) => point != null && point.value != 0,
+      orElse: () => points.last,
+    )!;
+    return _TrendSummary(
+      total: total,
+      average: total / points.length,
+      highest: highest.value,
+      highestLabel: highest.label,
+      lowest: lowest.value,
+      lowestLabel: lowest.label,
+      delta: lastNonZero.value - firstNonZero.value,
+    );
+  }
+
+  String get directionShort {
+    if (delta > 0) return 'Naik';
+    if (delta < 0) return 'Turun';
+    return 'Stabil';
+  }
+
+  String get directionTitle => 'Trend $directionShort';
+
+  String get directionSubtitle {
+    if (delta > 0) return 'Naik ${_compactMoney(delta)} dari periode awal';
+    if (delta < 0) {
+      return 'Turun ${_compactMoney(delta.abs())} dari periode awal';
+    }
+    return 'Tidak ada perubahan dari periode awal';
+  }
+}
+
+String _compactMoney(double value) {
+  final abs = value.abs();
+  final prefix = value < 0 ? '-' : '';
+  if (abs >= 1000000000) {
+    return '${prefix}Rp ${(abs / 1000000000).toStringAsFixed(1)} M';
+  }
+  if (abs >= 1000000) {
+    return '${prefix}Rp ${(abs / 1000000).toStringAsFixed(1)} jt';
+  }
+  if (abs >= 1000) {
+    return '${prefix}Rp ${(abs / 1000).toStringAsFixed(0)} rb';
+  }
+  return '$prefix${formatErpCurrency(abs)}';
 }
 
 class _ReportSection extends StatelessWidget {

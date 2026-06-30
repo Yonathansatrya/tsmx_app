@@ -6,17 +6,20 @@ class FinanceDashboardData {
   final double cashOut;
   final double dailyCollection;
   final double bankBalance;
+  final double? cashFlowTotal;
   final double outstandingAr;
   final double outstandingAp;
   final double expenseTotal;
   final int pendingJournalCount;
   final List<FinanceBankBalance> bankBalances;
   final List<FinanceDocumentRow> journalEntries;
+  final List<FinanceDocumentRow> recentJournalEntries;
   final List<FinanceDocumentRow> cashFlowEntries;
   final List<FinanceDocumentRow> arInvoices;
   final List<FinanceDocumentRow> apInvoices;
   final List<FinanceDocumentRow> expenseEntries;
   final List<GeneralLedgerRow> ledgerRows;
+  final List<FinanceReportMetric> cashFlowMetrics;
   final List<FinanceReportMetric> profitLoss;
   final List<FinanceReportMetric> balanceSheet;
   final List<DocumentTrendPoint> cashFlowTrend;
@@ -26,23 +29,26 @@ class FinanceDashboardData {
     this.cashOut = 0,
     this.dailyCollection = 0,
     this.bankBalance = 0,
+    this.cashFlowTotal,
     this.outstandingAr = 0,
     this.outstandingAp = 0,
     this.expenseTotal = 0,
     this.pendingJournalCount = 0,
     this.bankBalances = const [],
     this.journalEntries = const [],
+    this.recentJournalEntries = const [],
     this.cashFlowEntries = const [],
     this.arInvoices = const [],
     this.apInvoices = const [],
     this.expenseEntries = const [],
     this.ledgerRows = const [],
+    this.cashFlowMetrics = const [],
     this.profitLoss = const [],
     this.balanceSheet = const [],
     this.cashFlowTrend = const [],
   });
 
-  double get netCashFlow => cashIn - cashOut;
+  double get netCashFlow => cashFlowTotal ?? cashIn - cashOut;
 }
 
 class FinanceBankBalance {
