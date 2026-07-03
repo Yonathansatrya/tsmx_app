@@ -41,13 +41,13 @@ DEFAULT_ROLE_MODULES = {
     "Administrator": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
     "System Manager": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
     "Developer": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
-    "Sales Admin": ["dashboard", "sales", "collection", "approvals"],
-    "Sales Manager": ["dashboard", "sales", "collection", "approvals"],
+    "Sales Admin": ["dashboard", "sales", "approvals"],
+    "Sales Manager": ["dashboard", "sales", "approvals"],
     "Sales User": ["dashboard", "sales"],
     "Sales": ["dashboard", "sales"],
-    "Collection Admin": ["dashboard", "collection", "approvals"],
-    "Collection Manager": ["dashboard", "collection", "approvals"],
-    "Collection User": ["dashboard", "collection"],
+    "Collection Admin": ["dashboard", "sales", "approvals"],
+    "Collection Manager": ["dashboard", "sales", "approvals"],
+    "Collection User": ["dashboard", "sales"],
     "Purchase Admin": ["dashboard", "purchase", "approvals"],
     "Purchase Manager": ["dashboard", "purchase", "approvals"],
     "Purchase": ["dashboard", "purchase"],
@@ -217,6 +217,7 @@ WORKSPACE_LINK_GROUPS = [
 
 def after_install():
     setup_mobile_roles()
+    setup_mobile_custom_fields()
     setup_mobile_permissions()
     setup_mobile_settings()
     setup_mobile_workspace()
@@ -237,6 +238,75 @@ def setup_mobile_roles():
             doc.is_custom = 1
         doc.insert(ignore_permissions=True)
     frappe.db.commit()
+
+
+def setup_mobile_custom_fields():
+    """Create small ERPNext custom fields used by the mobile app."""
+    if not frappe.db.exists("DocType", "Custom Field"):
+        return
+
+    for doctype in ("Address", "Customer"):
+        if not frappe.db.exists("DocType", doctype):
+            continue
+        _ensure_custom_field(
+            doctype,
+            {
+                "fieldname": "custom_visit_location_section",
+                "label": "Mobile Visit Location",
+                "fieldtype": "Section Break",
+                "insert_after": "disabled" if doctype == "Customer" else "email_id",
+            },
+        )
+        _ensure_custom_field(
+            doctype,
+            {
+                "fieldname": "custom_latitude",
+                "label": "Latitude",
+                "fieldtype": "Float",
+                "insert_after": "custom_visit_location_section",
+            },
+        )
+        _ensure_custom_field(
+            doctype,
+            {
+                "fieldname": "custom_longitude",
+                "label": "Longitude",
+                "fieldtype": "Float",
+                "insert_after": "custom_latitude",
+            },
+        )
+        _ensure_custom_field(
+            doctype,
+            {
+                "fieldname": "custom_geofence_radius",
+                "label": "Geofence Radius (meter)",
+                "fieldtype": "Float",
+                "default": "250",
+                "insert_after": "custom_longitude",
+            },
+        )
+    frappe.db.commit()
+
+
+def _ensure_custom_field(doctype, values):
+    fieldname = values["fieldname"]
+    name = f"{doctype}-{fieldname}"
+    if frappe.db.exists("Custom Field", name):
+        doc = frappe.get_doc("Custom Field", name)
+        changed = False
+        for key, value in values.items():
+            if getattr(doc, key, None) != value:
+                setattr(doc, key, value)
+                changed = True
+        if changed:
+            doc.save(ignore_permissions=True)
+        return
+
+    doc = frappe.new_doc("Custom Field")
+    doc.dt = doctype
+    for key, value in values.items():
+        setattr(doc, key, value)
+    doc.insert(ignore_permissions=True)
 
 
 MOBILE_ROLE_DOCTYPE_PERMISSIONS = {

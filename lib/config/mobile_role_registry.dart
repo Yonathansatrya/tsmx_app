@@ -39,6 +39,8 @@ class MobileModule {
     qualityControl,
     logistics,
     approvals,
+    finance,
+    accounting,
   ];
 
   static const planned = [plantation];

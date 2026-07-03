@@ -9,6 +9,7 @@ required_apps = ["frappe", "erpnext"]
 
 before_install = "tmsx_mobile.setup.setup_mobile_roles"
 after_install = "tmsx_mobile.setup.after_install"
+after_migrate = "tmsx_mobile.setup.after_install"
 
 fixtures = [
     {

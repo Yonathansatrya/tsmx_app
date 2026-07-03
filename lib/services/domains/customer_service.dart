@@ -12,25 +12,38 @@ class CustomerService {
     final customerDoc = await _frappe.fetchDocument('Customer', customer);
     final addressId =
         customerDoc['customer_primary_address']?.toString().trim() ?? '';
-    if (addressId.isEmpty) {
-      throw Exception(
-        'Customer belum memiliki Primary Address untuk validasi lokasi.',
-      );
+    Map<String, dynamic> address = const {};
+    if (addressId.isNotEmpty) {
+      address = await _frappe.fetchDocument('Address', addressId);
     }
-    final address = await _frappe.fetchDocument('Address', addressId);
     final latitude = _coordinate(
       address['custom_latitude_text'],
+      address['custom_visit_latitude'],
       address['custom_latitude'],
       address['latitude'],
+      customerDoc['custom_latitude_text'],
+      customerDoc['custom_visit_latitude'],
+      customerDoc['custom_latitude'],
+      customerDoc['latitude'],
     );
     final longitude = _coordinate(
       address['custom_longitude_text'],
+      address['custom_visit_longitude'],
       address['custom_longitude'],
       address['longitude'],
+      customerDoc['custom_longitude_text'],
+      customerDoc['custom_visit_longitude'],
+      customerDoc['custom_longitude'],
+      customerDoc['longitude'],
     );
+    if (addressId.isEmpty && latitude == 0 && longitude == 0) {
+      throw Exception(
+        'Customer belum memiliki Primary Address atau koordinat untuk validasi lokasi.',
+      );
+    }
     if (latitude == 0 && longitude == 0) {
       throw Exception(
-        'Koordinat Primary Address customer belum dikonfigurasi.',
+        'Koordinat customer belum dikonfigurasi di Primary Address atau Customer.',
       );
     }
     if (latitude < -90 || latitude > 90) {
@@ -41,20 +54,47 @@ class CustomerService {
     }
     return CustomerVisitLocation(
       addressId: addressId,
-      displayAddress:
-          address['display']?.toString() ??
-          address['address_title']?.toString() ??
-          addressId,
+      displayAddress: address['display']?.toString().trim().isNotEmpty == true
+          ? address['display'].toString()
+          : address['address_title']?.toString().trim().isNotEmpty == true
+          ? address['address_title'].toString()
+          : customerDoc['customer_name']?.toString() ?? customer,
       latitude: latitude,
       longitude: longitude,
-      geofenceRadius: NumParse.asDouble(address['custom_geofence_radius']) > 0
-          ? NumParse.asDouble(address['custom_geofence_radius'])
+      geofenceRadius:
+          NumParse.asDouble(
+                address['custom_geofence_radius'] ??
+                    customerDoc['custom_geofence_radius'],
+              ) >
+              0
+          ? NumParse.asDouble(
+              address['custom_geofence_radius'] ??
+                  customerDoc['custom_geofence_radius'],
+            )
           : 50,
     );
   }
 
-  double _coordinate(dynamic textValue, dynamic customValue, dynamic fallback) {
-    for (final value in [textValue, customValue, fallback]) {
+  double _coordinate(
+    dynamic first,
+    dynamic second,
+    dynamic third,
+    dynamic fourth, [
+    dynamic fifth,
+    dynamic sixth,
+    dynamic seventh,
+    dynamic eighth,
+  ]) {
+    for (final value in [
+      first,
+      second,
+      third,
+      fourth,
+      fifth,
+      sixth,
+      seventh,
+      eighth,
+    ]) {
       final text = value?.toString().trim() ?? '';
       if (text.isEmpty) continue;
       final parsed = double.tryParse(text.replaceAll(',', '.'));

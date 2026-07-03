@@ -15,6 +15,7 @@ class FinanceDashboardData {
   final List<FinanceDocumentRow> journalEntries;
   final List<FinanceDocumentRow> recentJournalEntries;
   final List<FinanceDocumentRow> cashFlowEntries;
+  final List<FinanceDocumentRow> collectionEntries;
   final List<FinanceDocumentRow> arInvoices;
   final List<FinanceDocumentRow> apInvoices;
   final List<FinanceDocumentRow> expenseEntries;
@@ -38,6 +39,7 @@ class FinanceDashboardData {
     this.journalEntries = const [],
     this.recentJournalEntries = const [],
     this.cashFlowEntries = const [],
+    this.collectionEntries = const [],
     this.arInvoices = const [],
     this.apInvoices = const [],
     this.expenseEntries = const [],
@@ -144,6 +146,20 @@ class FinanceDocumentRow {
       status: json['voucher_type']?.toString() ?? 'Expense',
       amount:
           NumParse.asDouble(json['debit']) - NumParse.asDouble(json['credit']),
+    );
+  }
+
+  factory FinanceDocumentRow.fromCollectionGl(Map<String, dynamic> json) {
+    final id = json['voucher_no']?.toString().trim().isNotEmpty == true
+        ? json['voucher_no'].toString()
+        : json['name']?.toString() ?? '';
+    final party = json['party']?.toString().trim() ?? '';
+    return FinanceDocumentRow(
+      id: id,
+      title: party.isNotEmpty ? party : json['account']?.toString() ?? id,
+      date: json['posting_date']?.toString() ?? '',
+      status: json['voucher_type']?.toString() ?? 'Collection',
+      amount: NumParse.asDouble(json['debit']),
     );
   }
 }

@@ -347,7 +347,33 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       0,
       (sum, row) => sum + row.balance,
     );
-    final expenseTotal = await _expenseTotal(
+    final collectionLedgerRows = await _collectionLedgerEntries(
+      state,
+      bankAccounts: bankAccounts,
+      from: from,
+      to: to,
+      company: company,
+    );
+    final ledgerCollectionTotal = collectionLedgerRows.fold<double>(
+      0,
+      (sum, row) => sum + NumParse.asDouble(row['debit']),
+    );
+    final collectionEntries = [
+      ...paymentRows
+          .where(
+            (row) =>
+                row['payment_type']?.toString() == 'Receive' &&
+                row['party_type']?.toString() == 'Customer',
+          )
+          .map(FinanceDocumentRow.fromPaymentEntry),
+      if (dailyCollection == 0)
+        ...collectionLedgerRows.map(FinanceDocumentRow.fromCollectionGl),
+    ];
+    if (dailyCollection == 0) {
+      dailyCollection = ledgerCollectionTotal;
+    }
+
+    final glExpenseTotal = await _expenseTotal(
       state,
       accounts: expenseAccounts,
       from: from,
@@ -362,7 +388,7 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       company: company,
     );
 
-    final journalRows = await _safeFetchResource(
+    final approvalCandidateRows = await _safeFetchResource(
       state,
       'Journal Entry',
       fields: const [
@@ -374,12 +400,13 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
         'total_debit',
       ],
       filters: [
-        ['docstatus', '=', 0],
+        ['docstatus', '<', 2],
         ...companyFilter,
       ],
       orderBy: 'modified desc',
-      limit: 20,
+      limit: 100,
     );
+    final journalRows = approvalCandidateRows.where(_isJournalPending).toList();
     final recentJournalRows = await _safeFetchResource(
       state,
       'Journal Entry',
@@ -456,6 +483,8 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
         'Profit for the year',
       ],
     );
+    final expenseTotal =
+        _metricValue(profitLoss, 'Total Expense') ?? glExpenseTotal;
     final balanceSheet = await _loadReportMetrics(
       state,
       reportName: 'Balance Sheet',
@@ -485,6 +514,7 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       cashFlowEntries: paymentRows
           .map(FinanceDocumentRow.fromPaymentEntry)
           .toList(),
+      collectionEntries: collectionEntries,
       arInvoices: arRows
           .map((row) => FinanceDocumentRow.fromInvoice(row, purchase: false))
           .toList(),
@@ -515,7 +545,7 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       to: to,
       company: company,
     );
-    if (reportBalances.isNotEmpty) return reportBalances;
+    if (reportBalances.any((row) => row.balance != 0)) return reportBalances;
 
     final rows = <Map<String, dynamic>>[];
     const pageSize = 5000;
@@ -630,6 +660,41 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
           sum +
           NumParse.asDouble(row['debit']) -
           NumParse.asDouble(row['credit']),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _collectionLedgerEntries(
+    AppState state, {
+    required List<String> bankAccounts,
+    required DateTime from,
+    required DateTime to,
+    required String company,
+  }) async {
+    if (bankAccounts.isEmpty) return const [];
+    return _safeFetchResource(
+      state,
+      'GL Entry',
+      fields: const [
+        'name',
+        'posting_date',
+        'account',
+        'party_type',
+        'party',
+        'voucher_type',
+        'voucher_no',
+        'debit',
+      ],
+      filters: [
+        ['is_cancelled', '=', 0],
+        ['posting_date', '>=', DateRangePresets.toFrappeDate(from)],
+        ['posting_date', '<=', DateRangePresets.toFrappeDate(to)],
+        ['debit', '>', 0],
+        ['party_type', '=', 'Customer'],
+        if (company.trim().isNotEmpty) ['company', '=', company.trim()],
+        ['account', 'in', bankAccounts],
+      ],
+      orderBy: 'posting_date desc, creation desc',
+      limit: 100,
     );
   }
 
@@ -862,6 +927,14 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
     return label;
   }
 
+  bool _isJournalPending(Map<String, dynamic> row) {
+    if (row['docstatus']?.toString() == '0') return true;
+    final workflowState = row['workflow_state']?.toString().toLowerCase() ?? '';
+    if (workflowState.isEmpty) return false;
+    const pendingWords = ['pending', 'approval', 'review', 'check'];
+    return pendingWords.any(workflowState.contains);
+  }
+
   String? _matchingAccount(Map<String, dynamic> row, List<String> accounts) {
     final candidates = <String>{
       _rowLabel(row),
@@ -1024,9 +1097,7 @@ class _DashboardView extends StatelessWidget {
               onTap: () => _showDocumentRows(
                 context,
                 title: 'Daily Collection',
-                rows: data.cashFlowEntries
-                    .where((row) => row.status == 'Receive')
-                    .toList(),
+                rows: data.collectionEntries,
                 emptyTitle: 'Belum ada collection',
               ),
             ),
@@ -1109,8 +1180,32 @@ class _CashBankView extends StatelessWidget {
       children: [
         _MetricGrid(
           metrics: [
-            _MetricData('Cash In', data.cashIn, Icons.south_west_rounded),
-            _MetricData('Cash Out', data.cashOut, Icons.north_east_rounded),
+            _MetricData(
+              'Cash In',
+              data.cashIn,
+              Icons.south_west_rounded,
+              onTap: () => _showDocumentRows(
+                context,
+                title: 'Cash In',
+                rows: data.cashFlowEntries
+                    .where((row) => row.status == 'Receive')
+                    .toList(),
+                emptyTitle: 'Belum ada cash in',
+              ),
+            ),
+            _MetricData(
+              'Cash Out',
+              data.cashOut,
+              Icons.north_east_rounded,
+              onTap: () => _showDocumentRows(
+                context,
+                title: 'Cash Out',
+                rows: data.cashFlowEntries
+                    .where((row) => row.status == 'Pay')
+                    .toList(),
+                emptyTitle: 'Belum ada cash out',
+              ),
+            ),
             _MetricData('Net Flow', data.netCashFlow, Icons.swap_vert_rounded),
           ],
         ),
@@ -1156,6 +1251,12 @@ class _ReceivablePayableView extends StatelessWidget {
               'Daily Collection',
               data.dailyCollection,
               Icons.payments,
+              onTap: () => _showDocumentRows(
+                context,
+                title: 'Daily Collection',
+                rows: data.collectionEntries,
+                emptyTitle: 'Belum ada collection',
+              ),
             ),
           ],
         ),

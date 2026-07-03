@@ -3,9 +3,7 @@ from frappe.utils import cint
 
 MOBILE_MODULES = [
     "dashboard",
-    "executive",
     "sales",
-    "collection",
     "purchase",
     "stock",
     "warehouse",
@@ -34,23 +32,11 @@ MENU_MAP = {
         "icon": "dashboard",
         "order": 10,
     },
-    "executive": {
-        "module": "executive",
-        "label": "Executive",
-        "icon": "insights",
-        "order": 15,
-    },
     "sales": {
         "module": "sales",
         "label": "Sales",
         "icon": "point_of_sale",
         "order": 20,
-    },
-    "collection": {
-        "module": "collection",
-        "label": "Collection",
-        "icon": "account_balance_wallet",
-        "order": 25,
     },
     "approvals": {
         "module": "approvals",
@@ -442,9 +428,7 @@ def _mobile_modules_for_roles(roles):
     if role_names & FULL_ACCESS_ROLES:
         return [
             "dashboard",
-            "executive",
             "sales",
-            "collection",
             "purchase",
             "stock",
             "warehouse",
@@ -460,7 +444,7 @@ def _mobile_modules_for_roles(roles):
         "sales admin",
         "sales manager",
     }:
-        modules.update({"sales", "collection"})
+        modules.add("sales")
 
     if role_names & {
         "sales user",
@@ -476,7 +460,7 @@ def _mobile_modules_for_roles(roles):
         "collection",
         "accounts receivable",
     }:
-        modules.add("collection")
+        modules.add("sales")
 
     if role_names & {
         "purchase admin",
@@ -573,8 +557,5 @@ def _mobile_modules_for_roles(roles):
         "executive",
     }:
         modules.add("approvals")
-
-    if role_names & {"director", "owner", "executive", "company administrator"}:
-        modules.add("executive")
 
     return sorted(modules)
