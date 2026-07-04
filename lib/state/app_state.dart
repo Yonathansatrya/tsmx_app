@@ -1487,29 +1487,98 @@ class AppState with ChangeNotifier {
     return _salesOrderService.load(orderId);
   }
 
-  Future<List<List<dynamic>>> _salesCustomerScopeFilters() async {
-    if (!_shouldScopeSalesData) return const [];
+  Future<String?> _salesPersonScopeName() async {
+    if (!_shouldScopeSalesData) return null;
+    if (_currentSalesPerson == null || _currentSalesPerson!.isEmpty) {
+      await resolveCurrentSalesIdentity();
+    }
+    final salesPerson = _currentSalesPerson?.trim();
+    if (salesPerson == null || salesPerson.isEmpty) {
+      throw Exception(
+        _salesIdentityError ?? 'Sales Person user login belum tersedia.',
+      );
+    }
+    return salesPerson;
+  }
 
-    final customers = await fetchSalesCustomers();
-    final customerIds = customers
-        .map((customer) => customer.id.trim())
-        .where((id) => id.isNotEmpty)
-        .toSet()
-        .toList();
-    if (customerIds.isEmpty) {
+  Future<List<List<dynamic>>?> _salesDocumentScopeFilters(
+    String doctype,
+  ) async {
+    final salesPerson = await _salesPersonScopeName();
+    if (salesPerson == null) return const [];
+
+    List<Map<String, dynamic>> rows;
+    try {
+      rows = await _fetchAllResourcePages(
+        doctype: 'Sales Team',
+        fields: const ['parent'],
+        filters: [
+          ['parenttype', '=', doctype],
+          ['sales_person', '=', salesPerson],
+        ],
+        maxRows: null,
+      );
+    } catch (_) {
+      return null;
+    }
+    final parentIds =
+        rows
+            .map((row) => row['parent']?.toString().trim() ?? '')
+            .where((id) => id.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    if (parentIds.isEmpty) {
       return const [
-        ['customer', '=', '__unmapped_sales_customer__'],
+        ['name', '=', '__unmapped_sales_document__'],
       ];
     }
-    customerIds.sort();
-    if (customerIds.length == 1) {
+    if (parentIds.length == 1) {
       return [
-        ['customer', '=', customerIds.first],
+        ['name', '=', parentIds.first],
       ];
     }
     return [
-      ['customer', 'in', customerIds],
+      ['name', 'in', parentIds],
     ];
+  }
+
+  Future<List<T>> _filterSalesDocumentsByCurrentSalesPerson<T>({
+    required String doctype,
+    required List<T> docs,
+    required String Function(T doc) idOf,
+  }) async {
+    final salesPerson = await _salesPersonScopeName();
+    if (salesPerson == null || docs.isEmpty) return docs;
+
+    final documents = await _fetchDocumentsInBatches(
+      doctype,
+      docs.map(idOf),
+      batchSize: 12,
+    );
+    return docs.where((doc) {
+      final document = documents[idOf(doc)];
+      if (document == null) return false;
+      return _documentChildRows(
+        document['sales_team'],
+      ).any((row) => row['sales_person']?.toString().trim() == salesPerson);
+    }).toList();
+  }
+
+  Future<bool> _salesDocumentBelongsToCurrentSalesPerson({
+    required String doctype,
+    required String name,
+  }) async {
+    final salesPerson = await _salesPersonScopeName();
+    if (salesPerson == null || name.trim().isEmpty) return true;
+    try {
+      final document = await _frappeService.fetchDocument(doctype, name);
+      return _documentChildRows(
+        document['sales_team'],
+      ).any((row) => row['sales_person']?.toString().trim() == salesPerson);
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<List<SalesCustomerOption>> fetchSalesCustomers() async {
@@ -1529,12 +1598,7 @@ class AppState with ChangeNotifier {
   }
 
   Future<List<SalesInvoice>> fetchCollectionOutstandingInvoices() async {
-    Set<String>? permittedCustomers;
-    if (_shouldScopeSalesData) {
-      final customers = await fetchSalesCustomers();
-      permittedCustomers = customers.map((customer) => customer.id).toSet();
-      if (permittedCustomers.isEmpty) return const [];
-    }
+    final scopeFilters = await _salesDocumentScopeFilters('Sales Invoice');
     final rows = await _fetchAllResourcePages(
       doctype: 'Sales Invoice',
       fields: const [
@@ -1554,18 +1618,20 @@ class AppState with ChangeNotifier {
       filters: [
         ['docstatus', '=', 1],
         ['outstanding_amount', '>', 0],
+        ...?scopeFilters,
       ],
       orderBy: 'due_date asc, name asc',
       maxRows: null,
     );
-    return rows
-        .where(
-          (row) =>
-              permittedCustomers == null ||
-              permittedCustomers.contains(row['customer']?.toString() ?? ''),
-        )
-        .map(SalesInvoice.fromJson)
-        .toList();
+    var invoices = rows.map(SalesInvoice.fromJson).toList();
+    if (scopeFilters == null) {
+      invoices = await _filterSalesDocumentsByCurrentSalesPerson(
+        doctype: 'Sales Invoice',
+        docs: invoices,
+        idOf: (invoice) => invoice.id,
+      );
+    }
+    return invoices;
   }
 
   Future<List<CollectionRanking>> fetchCollectionRanking({
@@ -3182,14 +3248,24 @@ class AppState with ChangeNotifier {
         _orderSummaryError = null;
         return;
       }
-      final salesCustomerScopeFilters = await _salesCustomerScopeFilters();
+      final salesScopeFilters = await _salesDocumentScopeFilters('Sales Order');
+      final deliveryScopeFilters = await _salesDocumentScopeFilters(
+        'Delivery Note',
+      );
+      final invoiceScopeFilters = await _salesDocumentScopeFilters(
+        'Sales Invoice',
+      );
       final salesFilters = [
         ...await _sellingDocumentFilters('transaction_date'),
-        ...salesCustomerScopeFilters,
+        ...?salesScopeFilters,
       ];
-      final postingFilters = [
+      final deliveryFilters = [
         ...await _sellingDocumentFilters('posting_date'),
-        ...salesCustomerScopeFilters,
+        ...?deliveryScopeFilters,
+      ];
+      final invoiceFilters = [
+        ...await _sellingDocumentFilters('posting_date'),
+        ...?invoiceScopeFilters,
       ];
       final customerTypeIds = await _sellingCustomerTypeCustomerIds();
       final salesTrend = _emptySellingTrendPoints();
@@ -3210,9 +3286,16 @@ class AppState with ChangeNotifier {
           'docstatus',
         ],
         filters: salesFilters,
-        onRow: (row) {
+        onRow: (row) async {
           if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
           if (!_isActiveSellingTrendRow(row)) return;
+          if (salesScopeFilters == null &&
+              !await _salesDocumentBelongsToCurrentSalesPerson(
+                doctype: 'Sales Order',
+                name: row['name']?.toString() ?? '',
+              )) {
+            return;
+          }
           final value = _sellingAnalyticsValue(row);
           salesTotal += value;
           salesDocumentCount++;
@@ -3238,10 +3321,17 @@ class AppState with ChangeNotifier {
           'status',
           'docstatus',
         ],
-        filters: postingFilters,
-        onRow: (row) {
+        filters: deliveryFilters,
+        onRow: (row) async {
           if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
           if (!_isActiveSellingTrendRow(row)) return;
+          if (deliveryScopeFilters == null &&
+              !await _salesDocumentBelongsToCurrentSalesPerson(
+                doctype: 'Delivery Note',
+                name: row['name']?.toString() ?? '',
+              )) {
+            return;
+          }
           final value = _sellingAnalyticsValue(row);
           deliveryTotal += value;
           deliveryCount++;
@@ -3267,10 +3357,17 @@ class AppState with ChangeNotifier {
           'status',
           'docstatus',
         ],
-        filters: postingFilters,
-        onRow: (row) {
+        filters: invoiceFilters,
+        onRow: (row) async {
           if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
           if (!_isActiveSellingTrendRow(row)) return;
+          if (invoiceScopeFilters == null &&
+              !await _salesDocumentBelongsToCurrentSalesPerson(
+                doctype: 'Sales Invoice',
+                name: row['name']?.toString() ?? '',
+              )) {
+            return;
+          }
           final value = _sellingAnalyticsValue(row);
           invoiceTotal += value;
           invoiceCount++;
@@ -3367,9 +3464,10 @@ class AppState with ChangeNotifier {
     required String doctype,
     required String dateField,
   }) async {
+    final scopeFilters = await _salesDocumentScopeFilters(doctype);
     final filters = [
       ...await _sellingDocumentFilters(dateField),
-      ...await _salesCustomerScopeFilters(),
+      ...?scopeFilters,
     ];
     final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final trend = _emptySellingTrendPoints();
@@ -3389,9 +3487,16 @@ class AppState with ChangeNotifier {
         'docstatus',
       ],
       filters: filters,
-      onRow: (row) {
+      onRow: (row) async {
         if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
         if (!_isActiveSellingTrendRow(row)) return;
+        if (scopeFilters == null &&
+            !await _salesDocumentBelongsToCurrentSalesPerson(
+              doctype: doctype,
+              name: row['name']?.toString() ?? '',
+            )) {
+          return;
+        }
         final value = _sellingAnalyticsValue(row);
         total += value;
         count++;
@@ -6151,10 +6256,11 @@ class AppState with ChangeNotifier {
   Future<List<SalesOrder>> _fetchSalesOrderPage({
     required int limitStart,
   }) async {
+    final scopeFilters = await _salesDocumentScopeFilters('Sales Order');
     final filters = <List<dynamic>>[
       ...await _sellingDocumentFilters('transaction_date'),
       ...?_salesOrderFilters(_salesOrderStatus),
-      ...await _salesCustomerScopeFilters(),
+      ...?scopeFilters,
     ];
     final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(
@@ -6188,6 +6294,13 @@ class AppState with ChangeNotifier {
         .where((item) => _matchesSellingCustomerType(item, customerTypeIds))
         .map((item) => SalesOrder.fromJson(item))
         .toList();
+    if (scopeFilters == null) {
+      orders = await _filterSalesDocumentsByCurrentSalesPerson(
+        doctype: 'Sales Order',
+        docs: orders,
+        idOf: (order) => order.id,
+      );
+    }
     orders = await _attachSalesOrderItems(orders);
     return orders;
   }
@@ -6195,10 +6308,11 @@ class AppState with ChangeNotifier {
   Future<List<DeliveryNote>> _fetchDeliveryNotePage({
     required int limitStart,
   }) async {
+    final scopeFilters = await _salesDocumentScopeFilters('Delivery Note');
     final filters = <List<dynamic>>[
       ...await _sellingDocumentFilters('posting_date'),
       ...?_statusFilters(_deliveryNoteStatus),
-      ...await _salesCustomerScopeFilters(),
+      ...?scopeFilters,
     ];
     final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(
@@ -6226,19 +6340,28 @@ class AppState with ChangeNotifier {
         'customer_name',
       ]),
     );
-    return data
+    var docs = data
         .where((item) => _matchesSellingCustomerType(item, customerTypeIds))
         .map(DeliveryNote.fromJson)
         .toList();
+    if (scopeFilters == null) {
+      docs = await _filterSalesDocumentsByCurrentSalesPerson(
+        doctype: 'Delivery Note',
+        docs: docs,
+        idOf: (doc) => doc.id,
+      );
+    }
+    return docs;
   }
 
   Future<List<SalesInvoice>> _fetchSalesInvoicePage({
     required int limitStart,
   }) async {
+    final scopeFilters = await _salesDocumentScopeFilters('Sales Invoice');
     final filters = <List<dynamic>>[
       ...await _sellingDocumentFilters('posting_date'),
       ...?_statusFilters(_salesInvoiceStatus),
-      ...await _salesCustomerScopeFilters(),
+      ...?scopeFilters,
     ];
     final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(
@@ -6267,10 +6390,18 @@ class AppState with ChangeNotifier {
         'customer_name',
       ]),
     );
-    return data
+    var docs = data
         .where((item) => _matchesSellingCustomerType(item, customerTypeIds))
         .map(SalesInvoice.fromJson)
         .toList();
+    if (scopeFilters == null) {
+      docs = await _filterSalesDocumentsByCurrentSalesPerson(
+        doctype: 'Sales Invoice',
+        docs: docs,
+        idOf: (doc) => doc.id,
+      );
+    }
+    return docs;
   }
 
   List<List<dynamic>>? _statusFilters(String? status) {
@@ -6449,20 +6580,7 @@ class AppState with ChangeNotifier {
   }
 
   List<List<dynamic>>? _salesOrderFilters(String? status) {
-    if (status != 'Overdue') return _statusFilters(status);
-    final now = DateTime.now();
-    final today =
-        '${now.year.toString().padLeft(4, '0')}-'
-        '${now.month.toString().padLeft(2, '0')}-'
-        '${now.day.toString().padLeft(2, '0')}';
-    return [
-      ['delivery_date', '<', today],
-      [
-        'status',
-        'not in',
-        ['Draft', 'Completed', 'Closed', 'Cancelled'],
-      ],
-    ];
+    return _statusFilters(status);
   }
 
   List<List<dynamic>>? _searchFilters(String search, List<String> fields) {

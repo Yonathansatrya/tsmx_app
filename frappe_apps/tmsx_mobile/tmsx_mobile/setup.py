@@ -5,6 +5,7 @@ MOBILE_ROLES = [
     "Developer",
     "Company Administrator",
     "Director",
+    "Sales",
     "Sales Admin",
     "Sales Manager",
     "Sales User",
@@ -310,6 +311,27 @@ def _ensure_custom_field(doctype, values):
 
 
 MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
+    "Sales": {
+        "Company": {"read": 1, "select": 1},
+        "Customer": {"read": 1, "select": 1},
+        "Customer Group": {"read": 1, "select": 1},
+        "Territory": {"read": 1, "select": 1},
+        "Employee": {"read": 1, "select": 1},
+        "Sales Person": {"read": 1, "select": 1},
+        "Sales Team": {"read": 1, "select": 1},
+        "Item": {"read": 1, "select": 1},
+        "Item Group": {"read": 1, "select": 1},
+        "Warehouse": {"read": 1, "select": 1},
+        "Price List": {"read": 1, "select": 1},
+        "Item Price": {"read": 1, "select": 1},
+        "Sales Order": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Sales Order Item": {"read": 1, "select": 1},
+        "Delivery Note": {"read": 1, "select": 1},
+        "Delivery Note Item": {"read": 1, "select": 1},
+        "Sales Invoice": {"read": 1, "select": 1},
+        "Sales Invoice Item": {"read": 1, "select": 1},
+        "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+    },
     "Sales User": {
         "Company": {"read": 1, "select": 1},
         "Customer": {"read": 1, "select": 1},
@@ -480,9 +502,9 @@ for _role in ("Developer", "System Manager", "Administrator", "Company Administr
     )
 
 MOBILE_REPORT_ROLES = {
-    "Sales Analytics": ["Sales User", "Sales Manager", "Sales Admin"],
-    "Sales Order Analysis": ["Sales User", "Sales Manager", "Sales Admin"],
-    "Item-wise Sales Register": ["Sales User", "Sales Manager", "Sales Admin"],
+    "Sales Analytics": ["Sales", "Sales User", "Sales Manager", "Sales Admin"],
+    "Sales Order Analysis": ["Sales", "Sales User", "Sales Manager", "Sales Admin"],
+    "Item-wise Sales Register": ["Sales", "Sales User", "Sales Manager", "Sales Admin"],
     "Accounts Receivable": ["Sales Manager", "Sales Admin", "Collection User", "Collection Manager", "Collection Admin"],
     "Purchase Analytics": ["Purchase User", "Purchase Manager", "Purchase Admin", "Buying User", "Buying Manager"],
     "Purchase Order Analysis": ["Purchase User", "Purchase Manager", "Purchase Admin", "Buying User", "Buying Manager"],

@@ -41,15 +41,23 @@ class _ArAgingTabState extends State<ArAgingTab> {
     });
     final state = context.read<AppState>();
     await Future.wait([
-      state.fetchCollectionOutstandingInvoices().then(
-        (value) => outstanding = value,
-        onError: (Object error) => agingError = error.toString(),
-      ),
-      state.fetchCollectionPayments(from: range.from, to: range.to).then((
-        value,
-      ) {
-        payments = value;
-      }, onError: (Object error) => paymentError = error.toString()),
+      () async {
+        try {
+          outstanding = await state.fetchCollectionOutstandingInvoices();
+        } catch (error) {
+          agingError = error.toString();
+        }
+      }(),
+      () async {
+        try {
+          payments = await state.fetchCollectionPayments(
+            from: range.from,
+            to: range.to,
+          );
+        } catch (error) {
+          paymentError = error.toString();
+        }
+      }(),
     ]);
     if (mounted) setState(() => loading = false);
   }

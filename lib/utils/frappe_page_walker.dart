@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 typedef FrappePageFetcher =
@@ -7,7 +8,7 @@ Future<List<Map<String, dynamic>>> walkFrappePages({
   required FrappePageFetcher fetchPage,
   required int pageSize,
   int? maxRows,
-  void Function(Map<String, dynamic> row)? onRow,
+  FutureOr<void> Function(Map<String, dynamic> row)? onRow,
   void Function(int processed)? onProgress,
 }) async {
   final rows = <Map<String, dynamic>>[];
@@ -27,7 +28,7 @@ Future<List<Map<String, dynamic>>> walkFrappePages({
       final name = row['name']?.toString() ?? '';
       if (name.isNotEmpty && !seenNames.add(name)) continue;
       rows.add(row);
-      onRow?.call(row);
+      await onRow?.call(row);
       added++;
       if (maxRows != null && rows.length >= maxRows) break;
     }
