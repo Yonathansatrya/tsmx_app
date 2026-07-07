@@ -162,14 +162,10 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
   }
 
   Future<void> _captureCustomerSignature(DeliveryNote row) async {
-    final filePath = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+    final filePath = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => _DeliverySignatureDocumentScreen(initialRow: row),
       ),
-      builder: (_) => _SignatureCaptureSheet(deliveryNoteId: row.id),
     );
     if (filePath == null || !mounted) return;
 
@@ -947,6 +943,616 @@ class _DetailMetricPill extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _DeliverySignatureDocumentScreen extends StatefulWidget {
+  const _DeliverySignatureDocumentScreen({required this.initialRow});
+
+  final DeliveryNote initialRow;
+
+  @override
+  State<_DeliverySignatureDocumentScreen> createState() =>
+      _DeliverySignatureDocumentScreenState();
+}
+
+class _DeliverySignatureDocumentScreenState
+    extends State<_DeliverySignatureDocumentScreen> {
+  final _strokes = <List<Offset>>[];
+  late Future<DeliveryNote> _future;
+  Size _canvasSize = Size.zero;
+  bool _saving = false;
+
+  bool get _hasSignature => _strokes.any((stroke) => stroke.length > 1);
+
+  @override
+  void initState() {
+    super.initState();
+    _future = context.read<AppState>().loadDeliveryNoteDetail(
+      widget.initialRow.id,
+    );
+  }
+
+  void _startStroke(Offset point, Size canvasSize) {
+    setState(() {
+      _canvasSize = canvasSize;
+      _strokes.add([_clampPoint(point, canvasSize)]);
+    });
+  }
+
+  void _appendStroke(Offset point, Size canvasSize) {
+    if (_strokes.isEmpty) return;
+    setState(() {
+      _canvasSize = canvasSize;
+      _strokes.last.add(_clampPoint(point, canvasSize));
+    });
+  }
+
+  Offset _clampPoint(Offset point, Size size) => Offset(
+    point.dx.clamp(0, size.width).toDouble(),
+    point.dy.clamp(0, size.height).toDouble(),
+  );
+
+  Future<void> _saveSignature() async {
+    if (!_hasSignature || _canvasSize == Size.zero || _saving) return;
+    setState(() => _saving = true);
+    try {
+      final safeName = widget.initialRow.id.replaceAll(
+        RegExp(r'[^A-Za-z0-9_-]+'),
+        '_',
+      );
+      final file = File(
+        '${Directory.systemTemp.path}/delivery_note_signature_$safeName'
+        '_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      final data = await _renderSignaturePng();
+      await file.writeAsBytes(data, flush: true);
+      if (mounted) Navigator.pop(context, file.path);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<List<int>> _renderSignaturePng() async {
+    const outputWidth = 1200;
+    const outputHeight = 520;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final paint = Paint()..color = AppColors.white;
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, outputWidth.toDouble(), outputHeight.toDouble()),
+      paint,
+    );
+    canvas.scale(
+      outputWidth / _canvasSize.width,
+      outputHeight / _canvasSize.height,
+    );
+    _SignaturePainter(
+      strokes: _strokes,
+      showGuide: false,
+    ).paint(canvas, _canvasSize);
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(outputWidth, outputHeight);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) {
+      throw Exception('Tanda tangan gagal dibuat. Coba ulangi.');
+    }
+    return byteData.buffer.asUint8List();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        foregroundColor: AppColors.primary,
+        elevation: 0,
+        title: const Text(
+          'Tanda Tangan Dokumen',
+          style: TextStyle(
+            color: AppColors.navy,
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+          decoration: const BoxDecoration(
+            color: AppColors.white,
+            border: Border(top: BorderSide(color: AppColors.border)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving || _strokes.isEmpty
+                      ? null
+                      : () => setState(_strokes.clear),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Ulangi'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _saving || !_hasSignature ? null : _saveSignature,
+                  icon: _saving
+                      ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_alt_rounded),
+                  label: Text(_saving ? 'Menyimpan...' : 'Simpan TTD'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: FutureBuilder<DeliveryNote>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            final detail = snapshot.data ?? widget.initialRow;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.softGreen,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.zoom_out_map_rounded,
+                        color: AppColors.primary,
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Cubit untuk zoom dokumen, geser untuk melihat area lain, lalu tanda tangan di kotak penerima.',
+                          style: TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: InteractiveViewer(
+                    minScale: 0.7,
+                    maxScale: 3.5,
+                    boundaryMargin: const EdgeInsets.all(180),
+                    child: Center(
+                      child: _DeliverySignatureDocument(
+                        detail: detail,
+                        strokes: _strokes,
+                        onStartStroke: _startStroke,
+                        onAppendStroke: _appendStroke,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _DeliverySignatureDocument extends StatelessWidget {
+  const _DeliverySignatureDocument({
+    required this.detail,
+    required this.strokes,
+    required this.onStartStroke,
+    required this.onAppendStroke,
+  });
+
+  final DeliveryNote detail;
+  final List<List<Offset>> strokes;
+  final void Function(Offset point, Size canvasSize) onStartStroke;
+  final void Function(Offset point, Size canvasSize) onAppendStroke;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = detail.items;
+    return Container(
+      width: 780,
+      margin: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: DefaultTextStyle(
+        style: const TextStyle(color: AppColors.navy, fontSize: 13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'DELIVERY NOTE',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        detail.id,
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _DocumentInfoBlock(
+                  rows: [
+                    ('Posting Date', detail.date.isEmpty ? '-' : detail.date),
+                    ('Status', detail.statusText),
+                    ('Total Qty', '${detail.itemsCount}'),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _DocumentSection(
+                    title: 'Customer',
+                    lines: [detail.customer],
+                  ),
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: _DocumentSection(
+                    title: 'Delivery Summary',
+                    lines: [
+                      'Total: Rp ${formatErpCurrency(detail.value)}',
+                      'Items: ${items.isEmpty ? detail.itemsCount : items.length}',
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Items',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+            ),
+            const SizedBox(height: 8),
+            _DocumentItemsTable(items: items),
+            const SizedBox(height: 28),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: _DocumentSignatureBox(
+                    title: 'Diserahkan Oleh',
+                    subtitle: 'Driver / Warehouse',
+                    enabled: false,
+                    strokes: const [],
+                    onStartStroke: (_, _) {},
+                    onAppendStroke: (_, _) {},
+                  ),
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: _DocumentSignatureBox(
+                    title: 'Diterima Oleh',
+                    subtitle: 'Tanda tangan customer',
+                    enabled: true,
+                    strokes: strokes,
+                    onStartStroke: onStartStroke,
+                    onAppendStroke: onAppendStroke,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DocumentInfoBlock extends StatelessWidget {
+  const _DocumentInfoBlock({required this.rows});
+
+  final List<(String, String)> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 250,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: rows
+            .map(
+              (row) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        row.$1,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        row.$2,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _DocumentSection extends StatelessWidget {
+  const _DocumentSection({required this.title, required this.lines});
+
+  final String title;
+  final List<String> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...lines.map(
+            (line) => Text(
+              line,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DocumentItemsTable extends StatelessWidget {
+  const _DocumentItemsTable({required this.items});
+
+  final List<DeliveryNoteItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleItems = items.take(12).toList();
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          _row(
+            values: const ['No', 'Item', 'Qty', 'UOM', 'Warehouse'],
+            header: true,
+          ),
+          if (visibleItems.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(18),
+              child: Text(
+                'Item detail belum tersedia.',
+                style: TextStyle(color: AppColors.slate),
+              ),
+            )
+          else
+            ...visibleItems.indexed.map(
+              (entry) => _row(
+                values: [
+                  '${entry.$1 + 1}',
+                  entry.$2.itemName,
+                  _formatQty(entry.$2.qty),
+                  entry.$2.uom.isEmpty ? '-' : entry.$2.uom,
+                  entry.$2.warehouse.isEmpty ? '-' : entry.$2.warehouse,
+                ],
+              ),
+            ),
+          if (items.length > visibleItems.length)
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Text(
+                '+${items.length - visibleItems.length} item lainnya',
+                style: const TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _formatQty(num value) {
+    final fixed = value.toStringAsFixed(
+      value.truncateToDouble() == value ? 0 : 2,
+    );
+    return fixed.replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
+  }
+
+  Widget _row({required List<String> values, bool header = false}) {
+    final weights = [0.7, 4.0, 1.2, 1.0, 2.4];
+    return Container(
+      decoration: BoxDecoration(
+        color: header ? AppColors.background : AppColors.white,
+        border: const Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < values.length; i++)
+            Expanded(
+              flex: (weights[i] * 10).round(),
+              child: Padding(
+                padding: const EdgeInsets.all(9),
+                child: Text(
+                  values[i],
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: header ? AppColors.slate : AppColors.navy,
+                    fontSize: 11,
+                    fontWeight: header ? FontWeight.w900 : FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DocumentSignatureBox extends StatelessWidget {
+  const _DocumentSignatureBox({
+    required this.title,
+    required this.subtitle,
+    required this.enabled,
+    required this.strokes,
+    required this.onStartStroke,
+    required this.onAppendStroke,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool enabled;
+  final List<List<Offset>> strokes;
+  final void Function(Offset point, Size canvasSize) onStartStroke;
+  final void Function(Offset point, Size canvasSize) onAppendStroke;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final size = Size(constraints.maxWidth, 150);
+            return Container(
+              height: size.height,
+              decoration: BoxDecoration(
+                color: enabled ? AppColors.background : AppColors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: enabled ? AppColors.primary : AppColors.border,
+                  width: enabled ? 1.5 : 1,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: enabled
+                    ? GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onPanStart: (details) =>
+                            onStartStroke(details.localPosition, size),
+                        onPanUpdate: (details) =>
+                            onAppendStroke(details.localPosition, size),
+                        child: CustomPaint(
+                          painter: _SignaturePainter(strokes: strokes),
+                          size: size,
+                        ),
+                      )
+                    : const Center(
+                        child: Text(
+                          'TTD / Nama',
+                          style: TextStyle(
+                            color: AppColors.slate,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          subtitle,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.slate,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _SignatureCaptureSheet extends StatefulWidget {

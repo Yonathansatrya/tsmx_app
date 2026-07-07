@@ -982,35 +982,10 @@ class _DeliveryActivitySectionState extends State<_DeliveryActivitySection> {
   }
 
   Future<String?> _askNotes(String status) {
-    final controller = TextEditingController();
     return showDialog<String>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(status),
-          content: TextField(
-            controller: controller,
-            minLines: 2,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              labelText: 'Catatan opsional',
-              hintText: 'Contoh: barang sudah dimuat lengkap',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: const Text('Simpan'),
-            ),
-          ],
-        );
-      },
-    ).whenComplete(controller.dispose);
+      builder: (_) => _DeliveryActivityNotesDialog(status: status),
+    );
   }
 
   @override
@@ -1180,6 +1155,60 @@ class _DeliveryActivitySectionState extends State<_DeliveryActivitySection> {
     final nextIndex = currentIndex + 1;
     if (nextIndex >= _statuses.length) return _statuses.last;
     return _statuses[nextIndex];
+  }
+}
+
+class _DeliveryActivityNotesDialog extends StatefulWidget {
+  const _DeliveryActivityNotesDialog({required this.status});
+
+  final String status;
+
+  @override
+  State<_DeliveryActivityNotesDialog> createState() =>
+      _DeliveryActivityNotesDialogState();
+}
+
+class _DeliveryActivityNotesDialogState
+    extends State<_DeliveryActivityNotesDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.status),
+      content: TextField(
+        controller: _controller,
+        minLines: 2,
+        maxLines: 4,
+        decoration: const InputDecoration(
+          labelText: 'Catatan opsional',
+          hintText: 'Contoh: barang sudah dimuat lengkap',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Batal'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: const Text('Simpan'),
+        ),
+      ],
+    );
   }
 }
 

@@ -553,7 +553,7 @@ class AppState with ChangeNotifier {
     ),
     'TMSX': _LocalFrappeSite(
       name: 'TMSX',
-      baseUrl: 'http://103.27.206.41:8014',
+      baseUrl: 'https://jakarta.willshine.id',
     ),
     'SMS': _LocalFrappeSite(
       name: 'SABANG MAKMUR SENTOSA',
@@ -561,7 +561,7 @@ class AppState with ChangeNotifier {
     ),
     'GREENHOUSE': _LocalFrappeSite(
       name: 'Greenhouse Cisauk',
-      baseUrl: 'http://103.27.206.41:8012',
+      baseUrl: 'https://ghcisauk.willshine.id',
     ),
     'LAHATTS': _LocalFrappeSite(
       name: 'Lahat Tani Sejahtera',

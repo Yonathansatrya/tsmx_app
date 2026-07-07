@@ -171,7 +171,9 @@ class _DashboardTabState extends State<DashboardTab> {
     final lower = error.toLowerCase();
     if (lower.contains('permissionerror') ||
         lower.contains('not permitted') ||
-        lower.contains('permission')) {
+        lower.contains('permission') ||
+        lower.contains('tidak diizinkan') ||
+        lower.contains('akses erpnext')) {
       return null;
     }
     return error;
@@ -185,7 +187,9 @@ class _DashboardTabState extends State<DashboardTab> {
         lower.contains('does not exist') ||
         lower.contains('permissionerror') ||
         lower.contains('not permitted') ||
-        lower.contains('permission')) {
+        lower.contains('permission') ||
+        lower.contains('tidak diizinkan') ||
+        lower.contains('akses erpnext')) {
       return null;
     }
     return raw;

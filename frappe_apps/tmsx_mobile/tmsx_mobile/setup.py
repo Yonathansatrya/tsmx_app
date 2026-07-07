@@ -331,6 +331,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Sales Invoice": {"read": 1, "select": 1},
         "Sales Invoice Item": {"read": 1, "select": 1},
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Sales Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
     "Sales User": {
         "Company": {"read": 1, "select": 1},
@@ -352,6 +354,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Sales Invoice": {"read": 1, "select": 1},
         "Sales Invoice Item": {"read": 1, "select": 1},
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Sales Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
     "Sales Manager": {
         "Company": {"read": 1, "select": 1},
@@ -367,6 +371,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Delivery Note": {"read": 1, "select": 1},
         "Sales Invoice": {"read": 1, "select": 1},
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
+        "Sales Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
     },
     "Sales Admin": {
         "Company": {"read": 1, "select": 1},
@@ -382,6 +388,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Delivery Note": {"read": 1, "select": 1},
         "Sales Invoice": {"read": 1, "select": 1},
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+        "Sales Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
     },
     "Purchase User": {
         "Company": {"read": 1, "select": 1},
@@ -484,6 +492,42 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Sales Invoice": {"read": 1, "select": 1},
         "Purchase Invoice": {"read": 1, "select": 1},
     },
+    "Logistics User": {
+        "Company": {"read": 1, "select": 1},
+        "Customer": {"read": 1, "select": 1},
+        "Delivery Note": {"read": 1, "select": 1},
+        "Delivery Note Item": {"read": 1, "select": 1},
+        "Delivery Activity Log": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Delivery Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1},
+    },
+    "Logistics Manager": {
+        "Company": {"read": 1, "select": 1},
+        "Customer": {"read": 1, "select": 1},
+        "Delivery Note": {"read": 1, "select": 1},
+        "Delivery Note Item": {"read": 1, "select": 1},
+        "Delivery Activity Log": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
+        "Delivery Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1},
+    },
+    "Logistics Admin": {
+        "Company": {"read": 1, "select": 1},
+        "Customer": {"read": 1, "select": 1},
+        "Delivery Note": {"read": 1, "select": 1},
+        "Delivery Note Item": {"read": 1, "select": 1},
+        "Delivery Activity Log": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+        "Delivery Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1},
+    },
+    "Driver": {
+        "Company": {"read": 1, "select": 1},
+        "Customer": {"read": 1, "select": 1},
+        "Delivery Note": {"read": 1, "select": 1},
+        "Delivery Note Item": {"read": 1, "select": 1},
+        "Delivery Activity Log": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Delivery Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1},
+    },
 }
 
 _PRIVILEGED_FINANCE_PERMISSIONS = {
@@ -496,9 +540,19 @@ _PRIVILEGED_FINANCE_PERMISSIONS = {
     "Journal Entry": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
 }
 
+_PRIVILEGED_OPERATION_PERMISSIONS = {
+    "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+    "Sales Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+    "Delivery Activity Log": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+    "Delivery Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+}
+
 for _role in ("Developer", "System Manager", "Administrator", "Company Administrator", "Director"):
     MOBILE_ROLE_DOCTYPE_PERMISSIONS.setdefault(_role, {}).update(
         _PRIVILEGED_FINANCE_PERMISSIONS
+    )
+    MOBILE_ROLE_DOCTYPE_PERMISSIONS.setdefault(_role, {}).update(
+        _PRIVILEGED_OPERATION_PERMISSIONS
     )
 
 MOBILE_REPORT_ROLES = {

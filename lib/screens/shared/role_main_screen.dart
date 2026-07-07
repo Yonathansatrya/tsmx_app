@@ -104,13 +104,6 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
         titleSpacing: 16,
         title: Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              padding: const EdgeInsets.all(6),
-              child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
-            ),
-            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
