@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
+import '../../theme/app_colors.dart';
 import '../shared/role_main_screen.dart';
 import '../tabs/selling_tab.dart';
 import '../todo/todo_list.dart';
+import 'create_sales_order_screen.dart';
 import 'sales_collection_tab.dart';
 import 'sales_overview_tab.dart';
 import 'sales_visit_tab.dart';
@@ -73,6 +75,7 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
             title: 'Approval Sales Order',
           ),
       ],
+      floatingActionButtonBuilder: _buildSalesFab,
       destinations: [
         const NavigationDestination(
           icon: Icon(Icons.home_outlined),
@@ -102,6 +105,35 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
           ),
       ],
     );
+  }
+
+  Widget? _buildSalesFab(BuildContext context, int currentIndex) {
+    if (currentIndex != 1) return null;
+    return ValueListenableBuilder<int>(
+      valueListenable: _orderTabIndex,
+      builder: (context, orderTabIndex, _) {
+        if (orderTabIndex != 0) return const SizedBox.shrink();
+        return FloatingActionButton.extended(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.white,
+          onPressed: () => _openCreateSalesOrder(context),
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Buat SO'),
+        );
+      },
+    );
+  }
+
+  Future<void> _openCreateSalesOrder(BuildContext context) async {
+    final state = context.read<AppState>();
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const CreateSalesOrderScreen()));
+    if (!context.mounted) return;
+    await Future.wait([
+      state.refreshSalesOrders(),
+      state.refreshSellingSummaries(),
+    ]);
   }
 
   Widget _todoIcon(IconData icon, int count) {

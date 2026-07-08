@@ -112,6 +112,64 @@ class CollectionRanking {
   }
 }
 
+class SalesPersonCustomerRanking {
+  final String salesPerson;
+  final String customer;
+  final String customerName;
+  final double amount;
+  final int orderCount;
+  final int rank;
+
+  const SalesPersonCustomerRanking({
+    required this.salesPerson,
+    required this.customer,
+    required this.customerName,
+    required this.amount,
+    required this.orderCount,
+    required this.rank,
+  });
+}
+
+class DailySalesReport {
+  final List<DailySalesItemSummary> items;
+  final List<DailySalesCustomerSummary> customers;
+  final double totalQty;
+  final double totalAmount;
+
+  const DailySalesReport({
+    this.items = const [],
+    this.customers = const [],
+    this.totalQty = 0,
+    this.totalAmount = 0,
+  });
+
+  bool get isEmpty => items.isEmpty && customers.isEmpty;
+}
+
+class DailySalesItemSummary {
+  final String itemLabel;
+  final double qty;
+  final double amount;
+
+  const DailySalesItemSummary({
+    required this.itemLabel,
+    required this.qty,
+    required this.amount,
+  });
+}
+
+class DailySalesCustomerSummary {
+  final String customer;
+  final List<DailySalesItemSummary> items;
+  final double totalAmount;
+
+  const DailySalesCustomerSummary({
+    required this.customer,
+    required this.items,
+    required this.totalAmount,
+  });
+}
+
 class CollectionPayment {
   final String id;
   final String customer;

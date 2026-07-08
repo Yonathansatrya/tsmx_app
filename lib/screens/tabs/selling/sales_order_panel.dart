@@ -421,17 +421,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     if (ok && mounted) Navigator.pop(context);
   }
 
-  Future<void> _createSo() async {
-    final appState = context.read<AppState>();
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const CreateSalesOrderScreen()));
-    if (mounted) {
-      await appState.refreshSalesOrders();
-      await appState.refreshSellingSummaries();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
@@ -447,25 +436,6 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
           selectedYear: appState.sellingPeriodYear,
           selectedMonth: appState.sellingPeriodMonth,
           sourceLabel: 'Sumber: Sales Analytics ERPNext',
-        ),
-
-        const SizedBox(height: 12),
-
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.icon(
-            onPressed: _createSo,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Buat Sales Order'),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: AppColors.white,
-              padding: const EdgeInsets.symmetric(vertical: 13),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
-            ),
-          ),
         ),
 
         const SizedBox(height: 12),

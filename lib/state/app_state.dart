@@ -1702,6 +1702,336 @@ class AppState with ChangeNotifier {
     return _collectionRankingRows(totals);
   }
 
+  Future<List<SalesPersonCustomerRanking>> fetchTopCustomersBySalesPerson({
+    DateTime? from,
+    DateTime? to,
+    int limit = 10,
+    bool scopeToCurrentSales = true,
+  }) async {
+    final scopedSalesPerson = scopeToCurrentSales
+        ? await _salesPersonScopeName()
+        : null;
+    final orderRows = await _fetchAllResourcePages(
+      doctype: 'Sales Order',
+      fields: const [
+        'name',
+        'customer',
+        'customer_name',
+        'grand_total',
+        'net_total',
+        'transaction_date',
+      ],
+      filters: [
+        ['docstatus', '!=', 2],
+        if (from != null)
+          ['transaction_date', '>=', DateRangePresets.toFrappeDate(from)],
+        if (to != null)
+          ['transaction_date', '<=', DateRangePresets.toFrappeDate(to)],
+      ],
+      orderBy: 'transaction_date desc, name desc',
+      maxRows: null,
+    );
+    if (orderRows.isEmpty) return const [];
+
+    final orderData = <String, Map<String, dynamic>>{};
+    for (final order in orderRows) {
+      final id = order['name']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      orderData[id] = order;
+    }
+    if (orderData.isEmpty) return const [];
+
+    final orderDocuments = await _fetchDocumentsInBatches(
+      'Sales Order',
+      orderData.keys,
+    );
+    final totals = <String, _CustomerSalesTotal>{};
+    for (final entry in orderData.entries) {
+      final document = orderDocuments[entry.key];
+      if (document == null) continue;
+      final order = entry.value;
+      final amount = NumParse.asDouble(
+        order['grand_total'] ?? order['net_total'],
+      ).clamp(0, double.infinity);
+      if (amount <= 0) continue;
+      final customer = order['customer']?.toString() ?? '';
+      if (customer.isEmpty) continue;
+      final customerName =
+          order['customer_name']?.toString().trim().isNotEmpty == true
+          ? order['customer_name']!.toString()
+          : customer;
+
+      for (final team in _documentChildRows(document['sales_team'])) {
+        final salesPerson = team['sales_person']?.toString() ?? '';
+        if (salesPerson.isEmpty) continue;
+        if (scopedSalesPerson != null && salesPerson != scopedSalesPerson) {
+          continue;
+        }
+        final percentage = NumParse.asDouble(team['allocated_percentage']);
+        final ratio = percentage > 0 ? percentage / 100 : 1.0;
+        final key = '$salesPerson\t$customer';
+        final previous = totals[key];
+        totals[key] = _CustomerSalesTotal(
+          salesPerson: salesPerson,
+          customer: customer,
+          customerName: customerName,
+          amount: (previous?.amount ?? 0) + amount * ratio,
+          orderCount: (previous?.orderCount ?? 0) + 1,
+        );
+      }
+    }
+
+    final sorted = totals.values.toList()
+      ..sort((a, b) {
+        final amountComparison = b.amount.compareTo(a.amount);
+        if (amountComparison != 0) return amountComparison;
+        final salesComparison = a.salesPerson.compareTo(b.salesPerson);
+        if (salesComparison != 0) return salesComparison;
+        return a.customerName.compareTo(b.customerName);
+      });
+
+    return [
+      for (var index = 0; index < sorted.take(limit).length; index++)
+        SalesPersonCustomerRanking(
+          salesPerson: sorted[index].salesPerson,
+          customer: sorted[index].customer,
+          customerName: sorted[index].customerName,
+          amount: sorted[index].amount,
+          orderCount: sorted[index].orderCount,
+          rank: index + 1,
+        ),
+    ];
+  }
+
+  Future<DailySalesReport> fetchDailySalesReport({
+    required String doctype,
+    DateTime? date,
+  }) async {
+    final normalizedDoctype = switch (doctype.trim().toLowerCase()) {
+      'delivery note' || 'dn' => 'Delivery Note',
+      'sales invoice' || 'si' => 'Sales Invoice',
+      _ => 'Sales Order',
+    };
+    final dateField = normalizedDoctype == 'Sales Order'
+        ? 'transaction_date'
+        : 'posting_date';
+    final selectedDate = date ?? DateTime.now();
+    final scopeFilters = await _salesDocumentScopeFilters(normalizedDoctype);
+    final scopedSalesPerson = _shouldScopeSalesData
+        ? await _salesPersonScopeName()
+        : null;
+    final company = _sellingCompanyFilter.trim();
+
+    final rows = await _fetchAllResourcePages(
+      doctype: normalizedDoctype,
+      fields: [
+        'name',
+        'customer',
+        'customer_name',
+        'company',
+        'grand_total',
+        'net_total',
+        dateField,
+      ],
+      filters: [
+        ['docstatus', '!=', 2],
+        [dateField, '=', DateRangePresets.toFrappeDate(selectedDate)],
+        if (company.isNotEmpty) ['company', '=', company],
+        ...?scopeFilters,
+      ],
+      orderBy: '$dateField desc, name desc',
+      maxRows: null,
+    );
+    if (rows.isEmpty) return const DailySalesReport();
+
+    final documentIds = rows
+        .map((row) => row['name']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (documentIds.isEmpty) return const DailySalesReport();
+
+    final documents = await _fetchDocumentsInBatches(
+      normalizedDoctype,
+      documentIds,
+    );
+    final itemTotals = <String, _DailySalesMutable>{};
+    final customerTotals = <String, _DailyCustomerMutable>{};
+
+    for (final id in documentIds) {
+      final document = documents[id];
+      if (document == null) continue;
+      if (scopedSalesPerson != null) {
+        final belongsToSales = _documentChildRows(
+          document['sales_team'],
+        ).any((row) => row['sales_person']?.toString() == scopedSalesPerson);
+        if (!belongsToSales) continue;
+      }
+
+      final customer =
+          document['customer_name']?.toString().trim().isNotEmpty == true
+          ? document['customer_name']!.toString()
+          : (document['customer']?.toString() ?? 'Unknown Customer');
+      final customerBucket = customerTotals.putIfAbsent(
+        customer,
+        () => _DailyCustomerMutable(customer),
+      );
+
+      for (final item in _documentChildRows(document['items'])) {
+        final label = _dailySalesItemLabel(item);
+        if (label.isEmpty) continue;
+        final qty = NumParse.asDouble(item['qty'] ?? item['stock_qty']);
+        if (qty == 0) continue;
+        final amount = _dailySalesItemAmount(item, qty);
+
+        itemTotals
+            .putIfAbsent(label, () => _DailySalesMutable(label))
+            .add(qty: qty, amount: amount);
+        customerBucket.add(label: label, qty: qty, amount: amount);
+      }
+    }
+
+    final itemRows = itemTotals.values.map((row) => row.toSummary()).toList()
+      ..sort((a, b) {
+        final amountComparison = b.amount.compareTo(a.amount);
+        if (amountComparison != 0) return amountComparison;
+        return a.itemLabel.compareTo(b.itemLabel);
+      });
+    final customerRows =
+        customerTotals.values.map((row) => row.toSummary()).toList()
+          ..sort((a, b) {
+            final amountComparison = b.totalAmount.compareTo(a.totalAmount);
+            if (amountComparison != 0) return amountComparison;
+            return a.customer.compareTo(b.customer);
+          });
+    final totalQty = itemRows.fold<double>(0, (sum, row) => sum + row.qty);
+    final totalAmount = itemRows.fold<double>(
+      0,
+      (sum, row) => sum + row.amount,
+    );
+
+    return DailySalesReport(
+      items: itemRows,
+      customers: customerRows,
+      totalQty: totalQty,
+      totalAmount: totalAmount,
+    );
+  }
+
+  double _dailySalesItemAmount(Map<String, dynamic> item, double qty) {
+    final amount = NumParse.asDouble(item['net_amount'] ?? item['amount']);
+    if (amount != 0) return amount;
+    final rate = NumParse.asDouble(item['net_rate'] ?? item['rate']);
+    return qty * rate;
+  }
+
+  String _dailySalesItemLabel(Map<String, dynamic> item) {
+    final itemGroup = item['item_group']?.toString().trim() ?? '';
+    final itemCode = item['item_code']?.toString().trim() ?? '';
+    final itemName = item['item_name']?.toString().trim() ?? '';
+    final raw = [
+      itemGroup,
+      item['item_code']?.toString() ?? '',
+      item['item_name']?.toString() ?? '',
+      item['description']?.toString() ?? '',
+    ].join(' ');
+    final upper = raw.toUpperCase();
+    const knownLabels = {
+      'CHIBI': 'Chibi',
+      'BARANGAN': 'Barangan',
+      'LAKATAN': 'Lakatan',
+      'CL': 'CL',
+      'FB': 'FB',
+      'FS': 'FS',
+      'FK': 'FK',
+    };
+    for (final entry in knownLabels.entries) {
+      if (RegExp(
+        r'(^|[^A-Z0-9])' + entry.key + r'([^A-Z0-9]|$)',
+      ).hasMatch(upper)) {
+        return entry.value;
+      }
+    }
+
+    final normalizedGroup = _normalizeDailyItemFallback(itemGroup);
+    if (normalizedGroup.isNotEmpty &&
+        !_isGenericDailyItemLabel(normalizedGroup)) {
+      return normalizedGroup;
+    }
+
+    final normalizedName = _normalizeDailyItemFallback(itemName);
+    if (normalizedName.isNotEmpty) return normalizedName;
+
+    final normalizedCode = _normalizeDailyItemFallback(itemCode);
+    if (normalizedCode.isNotEmpty) return normalizedCode;
+
+    return 'Item Lainnya';
+  }
+
+  String _normalizeDailyItemFallback(String value) {
+    final cleaned = value
+        .replaceAll(RegExp(r'<[^>]*>'), ' ')
+        .replaceAll(RegExp(r'[_/]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    if (cleaned.isEmpty) return '';
+
+    final parts = cleaned
+        .split(RegExp(r'[\s\-]+'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return '';
+
+    final meaningful = parts.where((part) {
+      final lower = part.toLowerCase();
+      if (RegExp(r'^\d+$').hasMatch(lower)) return false;
+      return !const {
+        'item',
+        'buah',
+        'pisang',
+        'banana',
+        'grade',
+        'kg',
+        'pcs',
+        'pc',
+      }.contains(lower);
+    }).toList();
+
+    final source = meaningful.isEmpty ? parts : meaningful;
+    if (source.length == 1 && _isSizeLabel(source.first)) {
+      return 'Pisang ${_titleCase(source.first)}';
+    }
+
+    final label = source.take(3).map(_titleCase).join(' ');
+    if (label.trim().isEmpty || RegExp(r'^\d+$').hasMatch(label.trim())) {
+      return '';
+    }
+    return label;
+  }
+
+  bool _isSizeLabel(String value) {
+    return const {'besar', 'sedang', 'kecil'}.contains(value.toLowerCase());
+  }
+
+  bool _isGenericDailyItemLabel(String value) {
+    final lower = value.toLowerCase();
+    return const {
+      'all item groups',
+      'all item',
+      'item',
+      'produk',
+      'products',
+      'stock',
+    }.contains(lower);
+  }
+
+  String _titleCase(String value) {
+    if (value.isEmpty) return value;
+    if (value.length <= 2) return value.toUpperCase();
+    final lower = value.toLowerCase();
+    return '${lower[0].toUpperCase()}${lower.substring(1)}';
+  }
+
   static List<CollectionRanking> _collectionRankingRows(
     Map<String, double> totals,
   ) {
@@ -3585,9 +3915,7 @@ class AppState with ChangeNotifier {
       return [for (final label in labels) DocumentTrendPoint(label: label)];
     }
 
-    return [
-      for (var i = 0; i < 4; i++) DocumentTrendPoint(label: 'Minggu ${i + 1}'),
-    ];
+    return _emptyWeeklyTrendPoints(_sellingPeriodYear, _sellingPeriodMonth);
   }
 
   void _addSellingTrendPoint(
@@ -3600,7 +3928,7 @@ class AppState with ChangeNotifier {
 
     final index = _sellingPeriodMonth == 0
         ? date.month - 1
-        : ((date.day - 1) ~/ 7).clamp(0, points.length - 1);
+        : _weeklyTrendIndex(points, date);
     if (index < 0 || index >= points.length) return;
     points[index] = points[index].add(amount);
   }
@@ -3930,9 +4258,7 @@ class AppState with ChangeNotifier {
       return [for (final label in labels) DocumentTrendPoint(label: label)];
     }
 
-    return [
-      for (var i = 0; i < 4; i++) DocumentTrendPoint(label: 'Minggu ${i + 1}'),
-    ];
+    return _emptyWeeklyTrendPoints(_buyingPeriodYear, _buyingPeriodMonth);
   }
 
   void _addBuyingTrendPoint(
@@ -3945,7 +4271,7 @@ class AppState with ChangeNotifier {
 
     final index = _buyingPeriodMonth == 0
         ? date.month - 1
-        : ((date.day - 1) ~/ 7).clamp(0, points.length - 1);
+        : _weeklyTrendIndex(points, date);
     if (index < 0 || index >= points.length) return;
     points[index] = points[index].add(amount);
   }
@@ -3984,11 +4310,12 @@ class AppState with ChangeNotifier {
         'are_default_filters': false,
       },
     );
-    return _analyticsSectionFromQueryReport(response, reportMonth);
+    return _analyticsSectionFromQueryReport(response, year, reportMonth);
   }
 
   _MobileAnalyticsSection? _analyticsSectionFromQueryReport(
     dynamic response,
+    int year,
     int month,
   ) {
     final report = _queryReportPayload(response);
@@ -4001,7 +4328,11 @@ class AppState with ChangeNotifier {
     }
     if (periodColumns.isEmpty) return null;
 
-    final trend = _emptyAnalyticsTrend(month, periodColumns: periodColumns);
+    final trend = _emptyAnalyticsTrend(
+      year,
+      month,
+      periodColumns: periodColumns,
+    );
     var totalValue = 0.0;
     var rowCount = 0;
     for (final row in rows) {
@@ -4205,6 +4536,7 @@ class AppState with ChangeNotifier {
   }
 
   List<DocumentTrendPoint> _emptyAnalyticsTrend(
+    int year,
     int month, {
     Map<int, String>? periodColumns,
   }) {
@@ -4213,7 +4545,7 @@ class AppState with ChangeNotifier {
         ..sort((a, b) => a.key.compareTo(b.key));
       return [
         for (var i = 0; i < entries.length; i++)
-          DocumentTrendPoint(label: 'Minggu ${i + 1}'),
+          DocumentTrendPoint(label: _weeklyReportLabel(entries[i].value, i)),
       ];
     }
 
@@ -4234,9 +4566,50 @@ class AppState with ChangeNotifier {
       ];
       return [for (final label in labels) DocumentTrendPoint(label: label)];
     }
+    return _emptyWeeklyTrendPoints(year, month);
+  }
+
+  List<DocumentTrendPoint> _emptyWeeklyTrendPoints(int year, int month) {
+    if (month <= 0) return const [];
+    final lastDay = DateTime(year, month + 1, 0).day;
+    final weeks = <int>{};
+    for (var day = 1; day <= lastDay; day++) {
+      weeks.add(_isoWeekNumber(DateTime(year, month, day)));
+    }
+    final sortedWeeks = weeks.toList()..sort();
     return [
-      for (var i = 0; i < 4; i++) DocumentTrendPoint(label: 'Minggu ${i + 1}'),
+      for (final week in sortedWeeks) DocumentTrendPoint(label: 'Minggu $week'),
     ];
+  }
+
+  int _weeklyTrendIndex(List<DocumentTrendPoint> points, DateTime date) {
+    final label = 'Minggu ${_isoWeekNumber(date)}';
+    final index = points.indexWhere(
+      (point) => point.label.toLowerCase() == label.toLowerCase(),
+    );
+    if (index >= 0) return index;
+    return ((date.day - 1) ~/ 7).clamp(0, points.length - 1);
+  }
+
+  String _weeklyReportLabel(String rawLabel, int fallbackIndex) {
+    final normalized = rawLabel
+        .toLowerCase()
+        .replaceAll(RegExp(r'[_-]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final match = RegExp(r'(week|minggu)\s*(\d+)').firstMatch(normalized);
+    final week = match == null ? null : int.tryParse(match.group(2) ?? '');
+    return 'Minggu ${week ?? fallbackIndex + 1}';
+  }
+
+  int _isoWeekNumber(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    final thursday = normalized.add(Duration(days: 4 - normalized.weekday));
+    final firstThursdayBase = DateTime(thursday.year, 1, 4);
+    final firstThursday = firstThursdayBase.add(
+      Duration(days: 4 - firstThursdayBase.weekday),
+    );
+    return 1 + thursday.difference(firstThursday).inDays ~/ 7;
   }
 
   bool _isQueryReportTotalRow(Map<String, dynamic> row) {
@@ -7231,4 +7604,69 @@ class _MobileAnalyticsSection {
   final List<DocumentTrendPoint> trend;
 
   const _MobileAnalyticsSection({required this.summary, required this.trend});
+}
+
+class _CustomerSalesTotal {
+  final String salesPerson;
+  final String customer;
+  final String customerName;
+  final double amount;
+  final int orderCount;
+
+  const _CustomerSalesTotal({
+    required this.salesPerson,
+    required this.customer,
+    required this.customerName,
+    required this.amount,
+    required this.orderCount,
+  });
+}
+
+class _DailySalesMutable {
+  final String label;
+  double qty = 0;
+  double amount = 0;
+
+  _DailySalesMutable(this.label);
+
+  void add({required double qty, required double amount}) {
+    this.qty += qty;
+    this.amount += amount;
+  }
+
+  DailySalesItemSummary toSummary() {
+    return DailySalesItemSummary(itemLabel: label, qty: qty, amount: amount);
+  }
+}
+
+class _DailyCustomerMutable {
+  final String customer;
+  final Map<String, _DailySalesMutable> _items = {};
+
+  _DailyCustomerMutable(this.customer);
+
+  void add({
+    required String label,
+    required double qty,
+    required double amount,
+  }) {
+    _items
+        .putIfAbsent(label, () => _DailySalesMutable(label))
+        .add(qty: qty, amount: amount);
+  }
+
+  DailySalesCustomerSummary toSummary() {
+    final items = _items.values.map((row) => row.toSummary()).toList()
+      ..sort((a, b) {
+        final labelComparison = a.itemLabel.compareTo(b.itemLabel);
+        if (labelComparison != 0) return labelComparison;
+        return b.amount.compareTo(a.amount);
+      });
+    final total = items.fold<double>(0, (sum, row) => sum + row.amount);
+    return DailySalesCustomerSummary(
+      customer: customer,
+      items: items,
+      totalAmount: total,
+    );
+  }
 }
