@@ -795,7 +795,7 @@ class _TopCustomerCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${row.salesPerson} • ${row.orderCount} SO',
+                  '${row.salesPerson} | ${row.orderCount} SO',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

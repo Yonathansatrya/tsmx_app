@@ -4,13 +4,24 @@ import 'package:provider/provider.dart';
 import '../../../models/sales_invoice.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
+import '../../../utils/date_range_presets.dart';
 import '../../../utils/erp_format.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
+import 'ar_aging_tab.dart';
 import 'collection_widgets.dart';
 
 class CustomerPaymentScheduleTab extends StatefulWidget {
-  const CustomerPaymentScheduleTab({super.key});
+  const CustomerPaymentScheduleTab({
+    super.key,
+    required this.range,
+    required this.dateBasis,
+    required this.applyDateFilter,
+  });
+
+  final DateRangePreset range;
+  final CollectionAgingDateBasis dateBasis;
+  final bool applyDateFilter;
 
   @override
   State<CustomerPaymentScheduleTab> createState() =>
@@ -46,16 +57,39 @@ class _CustomerPaymentScheduleTabState
   }
 
   bool _isDue(SalesInvoice row) {
-    final date = DateTime.tryParse(row.dueDate);
+    final date = DateTime.tryParse(row.collectionDueDate);
     if (date == null) return false;
     final today = DateTime.now();
     return !date.isAfter(DateTime(today.year, today.month, today.day));
   }
 
+  List<SalesInvoice> get filteredInvoices {
+    if (!widget.applyDateFilter) return invoices;
+    return invoices.where((invoice) {
+      final rawDate = widget.dateBasis == CollectionAgingDateBasis.invoiceDate
+          ? invoice.date
+          : invoice.tukarFakturDate;
+      final parsed = DateTime.tryParse(rawDate);
+      if (parsed == null) return false;
+      final date = DateTime(parsed.year, parsed.month, parsed.day);
+      final from = DateTime(
+        widget.range.from.year,
+        widget.range.from.month,
+        widget.range.from.day,
+      );
+      final to = DateTime(
+        widget.range.to.year,
+        widget.range.to.month,
+        widget.range.to.day,
+      );
+      return !date.isBefore(from) && !date.isAfter(to);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final sorted = invoices.toList()
-      ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    final sorted = filteredInvoices.toList()
+      ..sort((a, b) => a.collectionDueDate.compareTo(b.collectionDueDate));
     final due = sorted.where(_isDue).length;
     final total = sorted.fold<double>(
       0,
@@ -148,7 +182,7 @@ class _CustomerPaymentScheduleTabState
                       style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
                     subtitle: Text(
-                      'Tanggal janji: ${row.dueDate}\nInvoice: ${row.id}',
+                      'Tanggal janji: ${row.collectionDueDate}\nInvoice: ${row.id}',
                     ),
                     isThreeLine: true,
                     trailing: Column(

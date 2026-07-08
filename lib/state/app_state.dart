@@ -1599,6 +1599,7 @@ class AppState with ChangeNotifier {
 
   Future<List<SalesInvoice>> fetchCollectionOutstandingInvoices() async {
     final scopeFilters = await _salesDocumentScopeFilters('Sales Invoice');
+    final company = _sellingCompanyFilter.trim();
     final rows = await _fetchAllResourcePages(
       doctype: 'Sales Invoice',
       fields: const [
@@ -1606,6 +1607,7 @@ class AppState with ChangeNotifier {
         'owner',
         'customer',
         'customer_name',
+        'company',
         'status',
         'docstatus',
         'posting_date',
@@ -1618,12 +1620,19 @@ class AppState with ChangeNotifier {
       filters: [
         ['docstatus', '=', 1],
         ['outstanding_amount', '>', 0],
+        [
+          'status',
+          'not in',
+          ['Cancelled', 'Closed'],
+        ],
+        if (company.isNotEmpty) ['company', '=', company],
         ...?scopeFilters,
       ],
       orderBy: 'due_date asc, name asc',
       maxRows: null,
     );
-    var invoices = rows.map(SalesInvoice.fromJson).toList();
+    final enrichedRows = await _enrichCollectionInvoiceRows(rows);
+    var invoices = enrichedRows.map(SalesInvoice.fromJson).toList();
     if (scopeFilters == null) {
       invoices = await _filterSalesDocumentsByCurrentSalesPerson(
         doctype: 'Sales Invoice',
@@ -1632,6 +1641,78 @@ class AppState with ChangeNotifier {
       );
     }
     return invoices;
+  }
+
+  Future<List<Map<String, dynamic>>> _enrichCollectionInvoiceRows(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    if (rows.isEmpty) return rows;
+    final ids = rows
+        .map((row) => row['name']?.toString().trim() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+    final documents = await _fetchDocumentsInBatches('Sales Invoice', ids);
+    final enriched = rows.map((row) {
+      final id = row['name']?.toString().trim() ?? '';
+      return {...row, if (documents[id] != null) ...documents[id]!};
+    }).toList();
+
+    final tukarFakturIds = enriched
+        .map(_collectionTukarFakturId)
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (tukarFakturIds.isEmpty) return enriched;
+
+    final tukarFakturDocs = await _fetchDocumentsInBatches(
+      'Tukar Faktur',
+      tukarFakturIds,
+    );
+    if (tukarFakturDocs.isEmpty) return enriched;
+
+    return enriched.map((row) {
+      final tukarFakturId = _collectionTukarFakturId(row);
+      final doc = tukarFakturDocs[tukarFakturId];
+      if (doc == null) return row;
+      return {
+        ...row,
+        '_resolved_tukar_faktur': tukarFakturId,
+        '_resolved_tukar_faktur_date': _firstCollectionField(doc, const [
+          'tanggal_tukar_faktur',
+          'tgl_tukar_faktur',
+          'posting_date',
+          'transaction_date',
+          'date',
+        ]),
+        '_resolved_tukar_faktur_due_date': _firstCollectionField(doc, const [
+          'jatuh_tempo_tukar_faktur',
+          'tanggal_jatuh_tempo_tukar_faktur',
+          'tgl_jatuh_tempo_tukar_faktur',
+          'due_date',
+          'payment_due_date',
+        ]),
+      };
+    }).toList();
+  }
+
+  String _collectionTukarFakturId(Map<String, dynamic> row) {
+    return _firstCollectionField(row, const [
+      'tukar_faktur',
+      'custom_tukar_faktur',
+      'no_tukar_faktur',
+      'nomor_tukar_faktur',
+      'tukar_faktur_no',
+      'tt_no',
+      'no_tt',
+    ]);
+  }
+
+  String _firstCollectionField(Map<String, dynamic> row, List<String> keys) {
+    for (final key in keys) {
+      final value = row[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty && value.toLowerCase() != 'null') return value;
+    }
+    return '';
   }
 
   Future<List<CollectionRanking>> fetchCollectionRanking({
@@ -1970,6 +2051,7 @@ class AppState with ChangeNotifier {
       permittedCustomers = customers.map((customer) => customer.id).toSet();
       if (permittedCustomers.isEmpty) return const [];
     }
+    final company = _sellingCompanyFilter.trim();
 
     final rows = await _fetchAllResourcePages(
       doctype: 'Payment Entry',
@@ -1977,6 +2059,7 @@ class AppState with ChangeNotifier {
         'name',
         'party',
         'party_name',
+        'company',
         'posting_date',
         'paid_amount',
         'received_amount',
@@ -1987,6 +2070,7 @@ class AppState with ChangeNotifier {
         ['docstatus', '=', 1],
         ['payment_type', '=', 'Receive'],
         ['party_type', '=', 'Customer'],
+        if (company.isNotEmpty) ['company', '=', company],
         if (from != null)
           ['posting_date', '>=', DateRangePresets.toFrappeDate(from)],
         if (to != null)
@@ -2020,6 +2104,87 @@ class AppState with ChangeNotifier {
       }
       return payment;
     }).toList();
+  }
+
+  Future<Map<String, List<SalesInvoicePaymentAllocation>>>
+  fetchSalesInvoicePaymentAllocations(Iterable<String> invoiceIds) async {
+    final ids = invoiceIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (ids.isEmpty) return const {};
+
+    try {
+      final references = await _fetchAllResourcePages(
+        doctype: 'Payment Entry Reference',
+        fields: const [
+          'parent',
+          'reference_doctype',
+          'reference_name',
+          'allocated_amount',
+        ],
+        filters: [
+          ['reference_doctype', '=', 'Sales Invoice'],
+          ['reference_name', 'in', ids],
+          ['allocated_amount', '>', 0],
+        ],
+        maxRows: null,
+      );
+      if (references.isEmpty) return const {};
+
+      final paymentIds = references
+          .map((row) => row['parent']?.toString().trim() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      final paymentRows = paymentIds.isEmpty
+          ? const <Map<String, dynamic>>[]
+          : await _fetchAllResourcePages(
+              doctype: 'Payment Entry',
+              fields: const [
+                'name',
+                'posting_date',
+                'mode_of_payment',
+                'reference_no',
+                'docstatus',
+              ],
+              filters: [
+                ['name', 'in', paymentIds],
+                ['docstatus', '=', 1],
+              ],
+              maxRows: null,
+            );
+      final paymentById = {
+        for (final payment in paymentRows)
+          payment['name']?.toString() ?? '': payment,
+      };
+
+      final grouped = <String, List<SalesInvoicePaymentAllocation>>{};
+      for (final row in references) {
+        final parent = row['parent']?.toString() ?? '';
+        final payment = paymentById[parent];
+        if (payment == null) continue;
+        final allocation = SalesInvoicePaymentAllocation.fromJson(
+          row,
+          paymentEntry: payment,
+        );
+        if (allocation.invoice.isEmpty || allocation.allocatedAmount <= 0) {
+          continue;
+        }
+        grouped.putIfAbsent(allocation.invoice, () => []).add(allocation);
+      }
+      for (final rows in grouped.values) {
+        rows.sort((a, b) {
+          final dateComparison = b.postingDate.compareTo(a.postingDate);
+          if (dateComparison != 0) return dateComparison;
+          return b.paymentEntry.compareTo(a.paymentEntry);
+        });
+      }
+      return grouped;
+    } catch (_) {
+      return const {};
+    }
   }
 
   Future<List<SalesVisit>> fetchSalesVisits() async {

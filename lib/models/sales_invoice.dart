@@ -50,6 +50,9 @@ class SalesInvoice {
   final int docStatus;
   final String date;
   final String dueDate;
+  final String tukarFaktur;
+  final String tukarFakturDate;
+  final String tukarFakturDueDate;
   final List<SalesInvoiceItem> items;
 
   SalesInvoice({
@@ -62,6 +65,9 @@ class SalesInvoice {
     this.docStatus = 0,
     required this.date,
     required this.dueDate,
+    this.tukarFaktur = '',
+    this.tukarFakturDate = '',
+    this.tukarFakturDueDate = '',
     this.items = const [],
   });
 
@@ -99,7 +105,51 @@ class SalesInvoice {
       docStatus: docstatus,
       date: json['posting_date']?.toString() ?? '',
       dueDate: json['due_date']?.toString() ?? '',
+      tukarFaktur: _firstValue(json, const [
+        '_resolved_tukar_faktur',
+        'tukar_faktur',
+        'custom_tukar_faktur',
+        'no_tukar_faktur',
+        'nomor_tukar_faktur',
+        'tukar_faktur_no',
+        'tt_no',
+        'no_tt',
+      ]),
+      tukarFakturDate: _firstValue(json, const [
+        '_resolved_tukar_faktur_date',
+        'tanggal_tukar_faktur',
+        'tgl_tukar_faktur',
+        'custom_tanggal_tukar_faktur',
+        'custom_tgl_tukar_faktur',
+        'tukar_faktur_date',
+        'tt_date',
+        'tanggal_tt',
+        'tgl_tt',
+      ]),
+      tukarFakturDueDate: _firstValue(json, const [
+        '_resolved_tukar_faktur_due_date',
+        'jatuh_tempo_tukar_faktur',
+        'tanggal_jatuh_tempo_tukar_faktur',
+        'custom_jatuh_tempo_tukar_faktur',
+        'custom_tanggal_jatuh_tempo_tukar_faktur',
+        'tukar_faktur_due_date',
+        'tt_due_date',
+        'jatuh_tempo_tt',
+        'tanggal_jatuh_tempo_tt',
+        'tgl_jatuh_tempo_tt',
+      ]),
       items: items,
     );
+  }
+
+  String get collectionDueDate =>
+      tukarFakturDueDate.trim().isNotEmpty ? tukarFakturDueDate : dueDate;
+
+  static String _firstValue(Map<String, dynamic> json, List<String> keys) {
+    for (final key in keys) {
+      final value = json[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty && value.toLowerCase() != 'null') return value;
+    }
+    return '';
   }
 }

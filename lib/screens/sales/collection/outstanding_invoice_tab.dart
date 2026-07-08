@@ -4,13 +4,24 @@ import 'package:provider/provider.dart';
 import '../../../models/sales_invoice.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
+import '../../../utils/date_range_presets.dart';
 import '../../../utils/erp_format.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
+import 'ar_aging_tab.dart';
 import 'collection_widgets.dart';
 
 class OutstandingInvoiceTab extends StatefulWidget {
-  const OutstandingInvoiceTab({super.key});
+  const OutstandingInvoiceTab({
+    super.key,
+    required this.range,
+    required this.dateBasis,
+    required this.applyDateFilter,
+  });
+
+  final DateRangePreset range;
+  final CollectionAgingDateBasis dateBasis;
+  final bool applyDateFilter;
 
   @override
   State<OutstandingInvoiceTab> createState() => _OutstandingInvoiceTabState();
@@ -45,7 +56,7 @@ class _OutstandingInvoiceTabState extends State<OutstandingInvoiceTab> {
 
   List<_CustomerOutstanding> get summaries {
     final grouped = <String, List<SalesInvoice>>{};
-    for (final invoice in invoices) {
+    for (final invoice in filteredInvoices) {
       grouped.putIfAbsent(invoice.customer, () => []).add(invoice);
     }
     final result =
@@ -54,6 +65,29 @@ class _OutstandingInvoiceTabState extends State<OutstandingInvoiceTab> {
             .toList()
           ..sort((a, b) => b.total.compareTo(a.total));
     return result;
+  }
+
+  List<SalesInvoice> get filteredInvoices {
+    if (!widget.applyDateFilter) return invoices;
+    return invoices.where((invoice) {
+      final rawDate = widget.dateBasis == CollectionAgingDateBasis.invoiceDate
+          ? invoice.date
+          : invoice.tukarFakturDate;
+      final parsed = DateTime.tryParse(rawDate);
+      if (parsed == null) return false;
+      final date = DateTime(parsed.year, parsed.month, parsed.day);
+      final from = DateTime(
+        widget.range.from.year,
+        widget.range.from.month,
+        widget.range.from.day,
+      );
+      final to = DateTime(
+        widget.range.to.year,
+        widget.range.to.month,
+        widget.range.to.day,
+      );
+      return !date.isBefore(from) && !date.isAfter(to);
+    }).toList();
   }
 
   @override

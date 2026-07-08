@@ -218,6 +218,28 @@ class CollectionPayment {
       references: references,
     );
   }
+
+  Iterable<CollectionPaymentReference> get salesInvoiceReferences {
+    return references.where(
+      (reference) =>
+          reference.doctype.trim().toLowerCase() == 'sales invoice' &&
+          reference.documentName.trim().isNotEmpty,
+    );
+  }
+
+  double get allocatedToSalesInvoices {
+    return salesInvoiceReferences.fold<double>(
+      0,
+      (sum, reference) => sum + reference.allocatedAmount,
+    );
+  }
+
+  double get unallocatedAmount {
+    final unallocated = amount - allocatedToSalesInvoices;
+    return unallocated > 0 ? unallocated : 0;
+  }
+
+  bool get isAllocatedToSalesInvoice => allocatedToSalesInvoices > 0;
 }
 
 class CollectionPaymentReference {
@@ -236,6 +258,38 @@ class CollectionPaymentReference {
       doctype: json['reference_doctype']?.toString() ?? '',
       documentName: json['reference_name']?.toString() ?? '',
       allocatedAmount: NumParse.asDouble(json['allocated_amount']),
+    );
+  }
+}
+
+class SalesInvoicePaymentAllocation {
+  final String paymentEntry;
+  final String invoice;
+  final String postingDate;
+  final String modeOfPayment;
+  final String referenceNo;
+  final double allocatedAmount;
+
+  const SalesInvoicePaymentAllocation({
+    required this.paymentEntry,
+    required this.invoice,
+    required this.allocatedAmount,
+    this.postingDate = '',
+    this.modeOfPayment = '',
+    this.referenceNo = '',
+  });
+
+  factory SalesInvoicePaymentAllocation.fromJson(
+    Map<String, dynamic> json, {
+    Map<String, dynamic> paymentEntry = const {},
+  }) {
+    return SalesInvoicePaymentAllocation(
+      paymentEntry: json['parent']?.toString() ?? '',
+      invoice: json['reference_name']?.toString() ?? '',
+      allocatedAmount: NumParse.asDouble(json['allocated_amount']),
+      postingDate: paymentEntry['posting_date']?.toString() ?? '',
+      modeOfPayment: paymentEntry['mode_of_payment']?.toString() ?? '',
+      referenceNo: paymentEntry['reference_no']?.toString() ?? '',
     );
   }
 }
