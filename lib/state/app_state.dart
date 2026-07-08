@@ -1925,111 +1925,20 @@ class AppState with ChangeNotifier {
   }
 
   String _dailySalesItemLabel(Map<String, dynamic> item) {
-    final itemGroup = item['item_group']?.toString().trim() ?? '';
-    final itemCode = item['item_code']?.toString().trim() ?? '';
-    final itemName = item['item_name']?.toString().trim() ?? '';
-    final raw = [
-      itemGroup,
-      item['item_code']?.toString() ?? '',
-      item['item_name']?.toString() ?? '',
-      item['description']?.toString() ?? '',
-    ].join(' ');
-    final upper = raw.toUpperCase();
-    const knownLabels = {
-      'CHIBI': 'Chibi',
-      'BARANGAN': 'Barangan',
-      'LAKATAN': 'Lakatan',
-      'CL': 'CL',
-      'FB': 'FB',
-      'FS': 'FS',
-      'FK': 'FK',
-    };
-    for (final entry in knownLabels.entries) {
-      if (RegExp(
-        r'(^|[^A-Z0-9])' + entry.key + r'([^A-Z0-9]|$)',
-      ).hasMatch(upper)) {
-        return entry.value;
-      }
-    }
+    final itemName = _cleanDailyItemLabel(item['item_name']);
+    if (itemName.isNotEmpty) return itemName;
 
-    final normalizedGroup = _normalizeDailyItemFallback(itemGroup);
-    if (normalizedGroup.isNotEmpty &&
-        !_isGenericDailyItemLabel(normalizedGroup)) {
-      return normalizedGroup;
-    }
-
-    final normalizedName = _normalizeDailyItemFallback(itemName);
-    if (normalizedName.isNotEmpty) return normalizedName;
-
-    final normalizedCode = _normalizeDailyItemFallback(itemCode);
-    if (normalizedCode.isNotEmpty) return normalizedCode;
+    final itemCode = _cleanDailyItemLabel(item['item_code']);
+    if (itemCode.isNotEmpty) return itemCode;
 
     return 'Item Lainnya';
   }
 
-  String _normalizeDailyItemFallback(String value) {
-    final cleaned = value
+  String _cleanDailyItemLabel(Object? value) {
+    return (value?.toString() ?? '')
         .replaceAll(RegExp(r'<[^>]*>'), ' ')
-        .replaceAll(RegExp(r'[_/]+'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
-    if (cleaned.isEmpty) return '';
-
-    final parts = cleaned
-        .split(RegExp(r'[\s\-]+'))
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return '';
-
-    final meaningful = parts.where((part) {
-      final lower = part.toLowerCase();
-      if (RegExp(r'^\d+$').hasMatch(lower)) return false;
-      return !const {
-        'item',
-        'buah',
-        'pisang',
-        'banana',
-        'grade',
-        'kg',
-        'pcs',
-        'pc',
-      }.contains(lower);
-    }).toList();
-
-    final source = meaningful.isEmpty ? parts : meaningful;
-    if (source.length == 1 && _isSizeLabel(source.first)) {
-      return 'Pisang ${_titleCase(source.first)}';
-    }
-
-    final label = source.take(3).map(_titleCase).join(' ');
-    if (label.trim().isEmpty || RegExp(r'^\d+$').hasMatch(label.trim())) {
-      return '';
-    }
-    return label;
-  }
-
-  bool _isSizeLabel(String value) {
-    return const {'besar', 'sedang', 'kecil'}.contains(value.toLowerCase());
-  }
-
-  bool _isGenericDailyItemLabel(String value) {
-    final lower = value.toLowerCase();
-    return const {
-      'all item groups',
-      'all item',
-      'item',
-      'produk',
-      'products',
-      'stock',
-    }.contains(lower);
-  }
-
-  String _titleCase(String value) {
-    if (value.isEmpty) return value;
-    if (value.length <= 2) return value.toUpperCase();
-    final lower = value.toLowerCase();
-    return '${lower[0].toUpperCase()}${lower.substring(1)}';
   }
 
   static List<CollectionRanking> _collectionRankingRows(

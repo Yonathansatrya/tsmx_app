@@ -457,40 +457,63 @@ class _DailySalesReportCard extends StatelessWidget {
           const SizedBox(height: 12),
 
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                child: Wrap(
-                  spacing: 8,
+                child: Row(
                   children: [
-                    _DailyDocChip(
-                      label: 'SO',
-                      selected: selectedType == _DailySalesDocType.salesOrder,
-                      onTap: () => onTypeChanged(_DailySalesDocType.salesOrder),
+                    Expanded(
+                      child: _DailyDocChip(
+                        label: 'SO',
+                        selected: selectedType == _DailySalesDocType.salesOrder,
+                        onTap: () =>
+                            onTypeChanged(_DailySalesDocType.salesOrder),
+                      ),
                     ),
-                    _DailyDocChip(
-                      label: 'DN',
-                      selected: selectedType == _DailySalesDocType.deliveryNote,
-                      onTap: () =>
-                          onTypeChanged(_DailySalesDocType.deliveryNote),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _DailyDocChip(
+                        label: 'DN',
+                        selected:
+                            selectedType == _DailySalesDocType.deliveryNote,
+                        onTap: () =>
+                            onTypeChanged(_DailySalesDocType.deliveryNote),
+                      ),
                     ),
-                    _DailyDocChip(
-                      label: 'SI',
-                      selected: selectedType == _DailySalesDocType.salesInvoice,
-                      onTap: () =>
-                          onTypeChanged(_DailySalesDocType.salesInvoice),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _DailyDocChip(
+                        label: 'SI',
+                        selected:
+                            selectedType == _DailySalesDocType.salesInvoice,
+                        onTap: () =>
+                            onTypeChanged(_DailySalesDocType.salesInvoice),
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              Text(
-                '${selectedDate.day.toString().padLeft(2, '0')}/'
-                '${selectedDate.month.toString().padLeft(2, '0')}/'
-                '${selectedDate.year}',
-                style: const TextStyle(
-                  color: AppColors.slate,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
+              const SizedBox(width: 12),
+
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: onPickDate,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    '${selectedDate.day.toString().padLeft(2, '0')}/'
+                    '${selectedDate.month.toString().padLeft(2, '0')}/'
+                    '${selectedDate.year}',
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -536,17 +559,43 @@ class _DailyDocChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChoiceChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: (_) => onTap(),
-      selectedColor: AppColors.primary,
-      labelStyle: TextStyle(
-        color: selected ? AppColors.white : AppColors.primary,
-        fontWeight: FontWeight.w900,
+    return Material(
+      color: selected ? AppColors.primary : AppColors.softGreen,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (selected) ...[
+                const Icon(
+                  Icons.check_rounded,
+                  color: AppColors.white,
+                  size: 14,
+                ),
+                const SizedBox(width: 5),
+              ],
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? AppColors.white : AppColors.primary,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      side: BorderSide(color: AppColors.primary.withValues(alpha: 0.25)),
-      backgroundColor: AppColors.softGreen,
     );
   }
 }
