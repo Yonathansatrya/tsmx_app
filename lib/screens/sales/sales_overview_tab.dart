@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../models/sales_workspace.dart';
 import '../../state/app_state.dart';
@@ -28,8 +32,10 @@ class SalesOverviewTab extends StatefulWidget {
 }
 
 class _SalesOverviewTabState extends State<SalesOverviewTab> {
-  late DateRangePreset _rankingRange;
-  DateTime _dailyReportDate = DateTime.now();
+  late DateRangePreset _filterRange;
+  String? _selectedSalesPerson;
+  List<String> _salesPersonOptions = const [];
+  bool _filterLoading = true;
   _DailySalesDocType _dailyDocType = _DailySalesDocType.salesOrder;
   DailySalesReport _dailyReport = const DailySalesReport();
   bool _dailyReportLoading = true;
@@ -44,8 +50,9 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   @override
   void initState() {
     super.initState();
-    _rankingRange = DateRangePresets.monthToDateRange();
+    _filterRange = DateRangePresets.monthToDateRange();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadFilterOptions();
       await _loadDailyReport();
       await _loadRanking();
     });
@@ -56,6 +63,42 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     _DailySalesDocType.salesInvoice => 'Sales Invoice',
     _ => 'Sales Order',
   };
+
+  Future<void> _loadFilterOptions() async {
+    final state = context.read<AppState>();
+    try {
+      if (state.mobileAccess.shouldScopeSalesData) {
+        _selectedSalesPerson = state.currentSalesPerson;
+        _salesPersonOptions = [
+          if (state.currentSalesPerson?.isNotEmpty == true)
+            state.currentSalesPerson!,
+        ];
+      } else {
+        final rows = await state.frappeService.fetchResource(
+          'Sales Person',
+          fields: const ['name'],
+          filters: const [
+            ['is_group', '=', 0],
+            ['enabled', '=', 1],
+          ],
+          orderBy: 'name asc',
+          limit: 500,
+        );
+        _salesPersonOptions = rows
+            .map((row) => row['name']?.toString() ?? '')
+            .where((name) => name.isNotEmpty)
+            .toSet()
+            .toList();
+      }
+    } catch (_) {
+      _salesPersonOptions = [
+        if (state.currentSalesPerson?.isNotEmpty == true)
+          state.currentSalesPerson!,
+      ];
+    } finally {
+      if (mounted) setState(() => _filterLoading = false);
+    }
+  }
 
   Future<void> _loadDailyReport() async {
     final state = context.read<AppState>();
@@ -76,7 +119,9 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     try {
       final report = await state.fetchDailySalesReport(
         doctype: _dailyDoctype,
-        date: _dailyReportDate,
+        from: _filterRange.from,
+        to: _filterRange.to,
+        salesPerson: _selectedSalesPerson,
       );
       if (mounted) setState(() => _dailyReport = report);
     } catch (error) {
@@ -86,16 +131,21 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     }
   }
 
-  Future<void> _pickDailyReportDate() async {
-    final picked = await showDatePicker(
+  Future<void> _pickFilterRange() async {
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: _dailyReportDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
+      initialDateRange: DateTimeRange(
+        start: _filterRange.from,
+        end: _filterRange.to,
+      ),
     );
     if (picked == null) return;
-    setState(() => _dailyReportDate = picked);
-    await _loadDailyReport();
+    setState(() {
+      _filterRange = DateRangePreset(from: picked.start, to: picked.end);
+    });
+    await _reloadReports();
   }
 
   void _setDailyDocType(_DailySalesDocType type) {
@@ -130,9 +180,10 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     if (canViewTopCustomers) {
       try {
         final topCustomers = await state.fetchTopCustomersBySalesPerson(
-          from: _rankingRange.from,
-          to: _rankingRange.to,
+          from: _filterRange.from,
+          to: _filterRange.to,
           scopeToCurrentSales: state.mobileAccess.shouldScopeSalesData,
+          salesPerson: _selectedSalesPerson,
         );
         if (mounted) setState(() => _topCustomers = topCustomers);
       } catch (error) {
@@ -145,8 +196,9 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     if (canViewRanking) {
       try {
         final ranking = await state.fetchCollectionRanking(
-          from: _rankingRange.from,
-          to: _rankingRange.to,
+          from: _filterRange.from,
+          to: _filterRange.to,
+          filterSalesPerson: _selectedSalesPerson,
         );
         if (mounted) setState(() => _ranking = ranking);
       } catch (error) {
@@ -157,21 +209,8 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     }
   }
 
-  Future<void> _pickRankingRange() async {
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
-      initialDateRange: DateTimeRange(
-        start: _rankingRange.from,
-        end: _rankingRange.to,
-      ),
-    );
-    if (picked == null) return;
-    setState(() {
-      _rankingRange = DateRangePreset(from: picked.start, to: picked.end);
-    });
-    await _loadRanking();
+  Future<void> _reloadReports() async {
+    await Future.wait([_loadDailyReport(), _loadRanking()]);
   }
 
   bool _canViewRanking(AppState state) {
@@ -184,6 +223,88 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 
   bool _canViewTopCustomers(AppState state) {
     return state.canUseSales;
+  }
+
+  String _csvCell(Object? value) {
+    final text = value?.toString() ?? '';
+    return '"${text.replaceAll('"', '""')}"';
+  }
+
+  Future<void> _shareCsv(String fileName, List<List<Object?>> rows) async {
+    if (rows.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Belum ada data untuk diexport')),
+      );
+      return;
+    }
+    final directory = await getTemporaryDirectory();
+    final file = File('${directory.path}/$fileName');
+    final csv = rows
+        .map((row) => row.map(_csvCell).join(','))
+        .join(Platform.lineTerminator);
+    await file.writeAsString(csv, flush: true);
+    if (!mounted) return;
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path, mimeType: 'text/csv')],
+        subject: fileName,
+      ),
+    );
+  }
+
+  String get _rangeFileLabel =>
+      '${DateRangePresets.toFrappeDate(_filterRange.from)}_'
+      '${DateRangePresets.toFrappeDate(_filterRange.to)}';
+
+  Future<void> _exportDailyReport() {
+    return _shareCsv('sales_report_$_rangeFileLabel.csv', [
+      ['Tipe Dokumen', _dailyDoctype],
+      ['Dari', DateRangePresets.toFrappeDate(_filterRange.from)],
+      ['Sampai', DateRangePresets.toFrappeDate(_filterRange.to)],
+      ['Sales Person', _selectedSalesPerson ?? 'Semua'],
+      [],
+      ['Item', 'Qty', 'Omzet'],
+      ..._dailyReport.items.map(
+        (item) => [item.itemLabel, item.qty, item.amount],
+      ),
+      ['TOTAL SALES', _dailyReport.totalQty, _dailyReport.totalAmount],
+      [],
+      ['Customer', 'Item', 'Qty', 'Omzet Customer'],
+      ..._dailyReport.customers.expand(
+        (customer) => customer.items.map(
+          (item) => [
+            customer.customer,
+            item.itemLabel,
+            item.qty,
+            customer.totalAmount,
+          ],
+        ),
+      ),
+    ]);
+  }
+
+  Future<void> _exportTopCustomers() {
+    return _shareCsv('top_10_customer_$_rangeFileLabel.csv', [
+      ['Rank', 'Sales Person', 'Customer', 'Jumlah SO', 'Nilai'],
+      ..._topCustomers
+          .take(10)
+          .map(
+            (row) => [
+              row.rank,
+              row.salesPerson,
+              row.customerName,
+              row.orderCount,
+              row.amount,
+            ],
+          ),
+    ]);
+  }
+
+  Future<void> _exportCollectionRanking() {
+    return _shareCsv('ranking_collection_$_rangeFileLabel.csv', [
+      ['Rank', 'Sales Person', 'Nilai'],
+      ..._ranking.take(5).map((row) => [row.rank, row.salesPerson, row.amount]),
+    ]);
   }
 
   @override
@@ -209,44 +330,18 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
             icon: Icons.point_of_sale_rounded,
           ),
 
-          SalesUi.gap(18),
-
-          const SalesSectionTitle(
-            title: 'Menu Cepat',
-            subtitle: 'Aksi harian yang paling sering dipakai sales',
-          ),
-
-          SalesUi.gap(10),
-
-          _QuickMenuGrid(
-            items: [
-              _QuickMenuItem(
-                label: 'Sales Order',
-                icon: Icons.receipt_long,
-                tap: () {
-                  widget.onOrderTabSelected?.call(0);
-                  widget.onMenuSelected(1);
-                },
-              ),
-              _QuickMenuItem(
-                label: 'Invoice',
-                icon: Icons.request_quote_outlined,
-                tap: () {
-                  widget.onOrderTabSelected?.call(2);
-                  widget.onMenuSelected(1);
-                },
-              ),
-              _QuickMenuItem(
-                label: 'Collection',
-                icon: Icons.account_balance_wallet,
-                tap: () => widget.onMenuSelected(2),
-              ),
-              _QuickMenuItem(
-                label: 'Sales Visit',
-                icon: Icons.route_rounded,
-                tap: () => widget.onMenuSelected(3),
-              ),
-            ],
+          SalesUi.gap(14),
+          _SalesOverviewFilterCard(
+            range: _filterRange,
+            selectedSalesPerson: _selectedSalesPerson,
+            salesPersons: _salesPersonOptions,
+            lockSalesPerson: state.mobileAccess.shouldScopeSalesData,
+            loading: _filterLoading,
+            onPickRange: _pickFilterRange,
+            onSalesPersonChanged: (salesPerson) {
+              setState(() => _selectedSalesPerson = salesPerson);
+              _reloadReports();
+            },
           ),
 
           if (state.canUseSales) ...[
@@ -256,9 +351,8 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
               loading: _dailyReportLoading,
               error: _dailyReportError,
               selectedType: _dailyDocType,
-              selectedDate: _dailyReportDate,
               onTypeChanged: _setDailyDocType,
-              onPickDate: _pickDailyReportDate,
+              onExport: _exportDailyReport,
             ),
           ],
 
@@ -269,9 +363,9 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
               subtitle: topCustomerSubtitle,
               icon: Icons.groups_2_rounded,
               trailing: IconButton.filledTonal(
-                tooltip: 'Pilih periode',
-                onPressed: _pickRankingRange,
-                icon: const Icon(Icons.date_range_rounded),
+                tooltip: 'Export CSV',
+                onPressed: _topCustomersLoading ? null : _exportTopCustomers,
+                icon: const Icon(Icons.file_download_outlined),
               ),
             ),
             SalesUi.gap(10),
@@ -303,9 +397,9 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
               subtitle: 'Berdasarkan nilai Sales Order dari Sales Team',
               icon: Icons.emoji_events_rounded,
               trailing: IconButton.filledTonal(
-                tooltip: 'Pilih periode',
-                onPressed: _pickRankingRange,
-                icon: const Icon(Icons.date_range_rounded),
+                tooltip: 'Export CSV',
+                onPressed: _rankingLoading ? null : _exportCollectionRanking,
+                icon: const Icon(Icons.file_download_outlined),
               ),
             ),
             SalesUi.gap(10),
@@ -373,24 +467,133 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   }
 }
 
+class _SalesOverviewFilterCard extends StatelessWidget {
+  const _SalesOverviewFilterCard({
+    required this.range,
+    required this.selectedSalesPerson,
+    required this.salesPersons,
+    required this.lockSalesPerson,
+    required this.loading,
+    required this.onPickRange,
+    required this.onSalesPersonChanged,
+  });
+
+  final DateRangePreset range;
+  final String? selectedSalesPerson;
+  final List<String> salesPersons;
+  final bool lockSalesPerson;
+  final bool loading;
+  final VoidCallback onPickRange;
+  final ValueChanged<String?> onSalesPersonChanged;
+
+  String _date(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}/'
+      '${value.month.toString().padLeft(2, '0')}/${value.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    return SalesInfoCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.tune_rounded, color: AppColors.primary),
+              SizedBox(width: 8),
+              Text(
+                'Filter Sales Overview',
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          InkWell(
+            onTap: onPickRange,
+            borderRadius: BorderRadius.circular(12),
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Rentang Tanggal',
+                prefixIcon: Icon(Icons.date_range_rounded),
+              ),
+              child: Text(
+                '${_date(range.from)} - ${_date(range.to)}',
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (lockSalesPerson)
+            InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Sales Person',
+                prefixIcon: Icon(Icons.person_rounded),
+              ),
+              child: Text(
+                selectedSalesPerson ?? '-',
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            )
+          else
+            DropdownButtonFormField<String>(
+              initialValue: salesPersons.contains(selectedSalesPerson)
+                  ? selectedSalesPerson
+                  : null,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Sales Person',
+                prefixIcon: Icon(Icons.person_search_rounded),
+              ),
+              hint: Text(loading ? 'Memuat Sales Person...' : 'Semua Sales'),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: '',
+                  child: Text('Semua Sales'),
+                ),
+                ...salesPersons.map(
+                  (salesPerson) => DropdownMenuItem<String>(
+                    value: salesPerson,
+                    child: Text(salesPerson, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              ],
+              onChanged: loading
+                  ? null
+                  : (value) => onSalesPersonChanged(
+                      value?.trim().isEmpty == true ? null : value,
+                    ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _DailySalesReportCard extends StatelessWidget {
   const _DailySalesReportCard({
     required this.report,
     required this.loading,
     required this.error,
     required this.selectedType,
-    required this.selectedDate,
     required this.onTypeChanged,
-    required this.onPickDate,
+    required this.onExport,
   });
 
   final DailySalesReport report;
   final bool loading;
   final String? error;
   final _DailySalesDocType selectedType;
-  final DateTime selectedDate;
   final ValueChanged<_DailySalesDocType> onTypeChanged;
-  final VoidCallback onPickDate;
+  final VoidCallback onExport;
 
   String get _docLabel => switch (selectedType) {
     _DailySalesDocType.deliveryNote => 'DN',
@@ -447,9 +650,9 @@ class _DailySalesReportCard extends StatelessWidget {
               ),
 
               IconButton.filledTonal(
-                tooltip: 'Pilih tanggal',
-                onPressed: onPickDate,
-                icon: const Icon(Icons.event_rounded),
+                tooltip: 'Export CSV',
+                onPressed: loading ? null : onExport,
+                icon: const Icon(Icons.file_download_outlined),
               ),
             ],
           ),
@@ -457,63 +660,28 @@ class _DailySalesReportCard extends StatelessWidget {
           const SizedBox(height: 12),
 
           Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _DailyDocChip(
-                        label: 'SO',
-                        selected: selectedType == _DailySalesDocType.salesOrder,
-                        onTap: () =>
-                            onTypeChanged(_DailySalesDocType.salesOrder),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _DailyDocChip(
-                        label: 'DN',
-                        selected:
-                            selectedType == _DailySalesDocType.deliveryNote,
-                        onTap: () =>
-                            onTypeChanged(_DailySalesDocType.deliveryNote),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _DailyDocChip(
-                        label: 'SI',
-                        selected:
-                            selectedType == _DailySalesDocType.salesInvoice,
-                        onTap: () =>
-                            onTypeChanged(_DailySalesDocType.salesInvoice),
-                      ),
-                    ),
-                  ],
+                child: _DailyDocChip(
+                  label: 'SO',
+                  selected: selectedType == _DailySalesDocType.salesOrder,
+                  onTap: () => onTypeChanged(_DailySalesDocType.salesOrder),
                 ),
               ),
-
-              const SizedBox(width: 12),
-
-              InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: onPickDate,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    '${selectedDate.day.toString().padLeft(2, '0')}/'
-                    '${selectedDate.month.toString().padLeft(2, '0')}/'
-                    '${selectedDate.year}',
-                    style: const TextStyle(
-                      color: AppColors.slate,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DailyDocChip(
+                  label: 'DN',
+                  selected: selectedType == _DailySalesDocType.deliveryNote,
+                  onTap: () => onTypeChanged(_DailySalesDocType.deliveryNote),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DailyDocChip(
+                  label: 'SI',
+                  selected: selectedType == _DailySalesDocType.salesInvoice,
+                  onTap: () => onTypeChanged(_DailySalesDocType.salesInvoice),
                 ),
               ),
             ],
@@ -527,8 +695,8 @@ class _DailySalesReportCard extends StatelessWidget {
             ErpErrorBox(message: error!)
           else if (report.isEmpty)
             ErpEmptyState(
-              title: 'Belum ada data $_docLabel pada tanggal ini',
-              message: 'Coba pilih tanggal atau tipe dokumen lain.',
+              title: 'Belum ada data $_docLabel pada periode ini',
+              message: 'Coba pilih rentang tanggal atau tipe dokumen lain.',
             )
           else ...[
             _DailyItemSummaryTable(report: report),
@@ -820,79 +988,4 @@ class _TopCustomerCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _QuickMenuItem {
-  final String label;
-  final IconData icon;
-  final VoidCallback tap;
-
-  const _QuickMenuItem({
-    required this.label,
-    required this.icon,
-    required this.tap,
-  });
-}
-
-class _QuickMenuGrid extends StatelessWidget {
-  final List<_QuickMenuItem> items;
-
-  const _QuickMenuGrid({required this.items});
-
-  @override
-  Widget build(BuildContext context) {
-    final itemWidth = (MediaQuery.sizeOf(context).width - 42) / 2;
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: [for (final item in items) _Menu(item: item, width: itemWidth)],
-    );
-  }
-}
-
-class _Menu extends StatelessWidget {
-  final _QuickMenuItem item;
-  final double width;
-
-  const _Menu({required this.item, required this.width});
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: width,
-    child: SalesInfoCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-      onTap: item.tap,
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: AppColors.softGreen,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(item.icon, color: AppColors.primary, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              item.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.navy,
-                fontSize: 13,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const Icon(
-            Icons.chevron_right_rounded,
-            color: AppColors.slate,
-            size: 18,
-          ),
-        ],
-      ),
-    ),
-  );
 }

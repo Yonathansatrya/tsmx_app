@@ -47,6 +47,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   String? _initialItemText;
   String? _selectedItemCode;
   String? _selectedSeries;
+  String? _selectedCompany;
   String? _selectedWarehouse;
   String? _selectedCenter;
   String? _selectedSalesPerson;
@@ -69,6 +70,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   List<String> _territoryOptions = [];
   List<String> _paymentTermsOptions = [];
   List<String> _salesPersonOptions = [];
+  List<String> _companyOptions = [];
   List<String> _currencyOptions = [];
   List<String> _priceListOptions = [];
   List<_CostCenterOption> _costCenterOptions = [];
@@ -87,6 +89,15 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       seen.add(name);
       return true;
     }).toList();
+  }
+
+  List<WarehouseInfo> _warehousesForCompany(AppState appState) {
+    final warehouses = _warehouseOptions(appState);
+    final company = _selectedCompany?.trim() ?? '';
+    if (company.isEmpty) return warehouses;
+    return warehouses
+        .where((warehouse) => warehouse.company == company)
+        .toList();
   }
 
   Future<void> _ensureWarehouseEnabled(AppState appState) async {
@@ -249,10 +260,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     return null;
   }
 
-  List<_CostCenterOption> _costCentersForWarehouse(
-    List<WarehouseInfo> warehouses,
-  ) {
-    final company = _selectedWarehouseInfo(warehouses)?.company ?? '';
+  List<_CostCenterOption> _costCentersForCompany() {
+    final company = _selectedCompany?.trim() ?? '';
     if (company.isEmpty) return _costCenterOptions;
 
     final filtered = _costCenterOptions
@@ -261,8 +270,199 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     return filtered.isNotEmpty ? filtered : _costCenterOptions;
   }
 
-  String _selectedCompany(List<WarehouseInfo> warehouses) {
-    return _selectedWarehouseInfo(warehouses)?.company ?? '';
+  String _activeCompany() => _selectedCompany?.trim() ?? '';
+
+  String? _customerSalesPerson(_CustomerOption? customer) {
+    if (customer == null) return null;
+    for (final row in customer.salesTeam) {
+      final salesPerson = row['sales_person']?.toString().trim() ?? '';
+      if (salesPerson.isNotEmpty) return salesPerson;
+    }
+    return null;
+  }
+
+  void _clearCustomer() {
+    setState(() {
+      _customerCtrl.clear();
+      _customerError = null;
+      _customerInsight = null;
+      _customerInsightError = null;
+      _pricingRequestVersion++;
+      _itemInsights.clear();
+    });
+  }
+
+  void _applyCustomerSelection(String customerId) {
+    final appState = context.read<AppState>();
+    _customerCtrl.text = customerId;
+    final customer = _selectedCustomerOption();
+    if (appState.mobileAccess.isSalesUser) {
+      _selectedSalesPerson = appState.currentSalesPerson;
+    } else {
+      final customerSalesPerson = _customerSalesPerson(customer);
+      _selectedSalesPerson = _salesPersonOptions.contains(customerSalesPerson)
+          ? customerSalesPerson
+          : null;
+    }
+    _customerError = null;
+    _customerInsight = null;
+    _customerInsightError = null;
+    _pricingRequestVersion++;
+    _itemInsights.clear();
+  }
+
+  Future<void> _applyCustomerErpDefaults(String customerId) async {
+    final appState = context.read<AppState>();
+    try {
+      final customer = await appState.frappeService.fetchDocument(
+        'Customer',
+        customerId,
+      );
+      if (!mounted || _customerCtrl.text.trim() != customerId) return;
+
+      String resolveDefault({
+        required List<String> fields,
+        required List<String> keyFragments,
+      }) {
+        String fromRow(Map<dynamic, dynamic> row) {
+          for (final field in fields) {
+            final value = row[field]?.toString().trim() ?? '';
+            if (value.isNotEmpty) return value;
+          }
+          for (final entry in row.entries) {
+            final key = entry.key.toString().toLowerCase();
+            if (!keyFragments.any(key.contains)) continue;
+            final value = entry.value?.toString().trim() ?? '';
+            if (value.isNotEmpty && value != 'null') return value;
+          }
+          return '';
+        }
+
+        final direct = fromRow(customer);
+        if (direct.isNotEmpty) return direct;
+
+        final company = _activeCompany().toLowerCase();
+        for (final value in customer.values) {
+          if (value is! List) continue;
+          for (final rawRow in value) {
+            if (rawRow is! Map) continue;
+            final rowCompany =
+                rawRow['company']?.toString().trim().toLowerCase() ?? '';
+            if (company.isNotEmpty &&
+                rowCompany.isNotEmpty &&
+                rowCompany != company) {
+              continue;
+            }
+            final nested = fromRow(rawRow);
+            if (nested.isNotEmpty) return nested;
+          }
+        }
+        return '';
+      }
+
+      final defaultCostCenter = resolveDefault(
+        fields: const [
+          'cost_center',
+          'default_cost_center',
+          'custom_cost_center',
+          'custom_default_cost_center',
+        ],
+        keyFragments: const ['cost_center', 'costcentre'],
+      );
+      final defaultWarehouse = resolveDefault(
+        fields: const [
+          'warehouse',
+          'default_warehouse',
+          'custom_warehouse',
+          'custom_default_warehouse',
+        ],
+        keyFragments: const ['warehouse'],
+      );
+      final salesTeam = customer['sales_team'];
+
+      String? customerSalesPerson;
+      if (salesTeam is List) {
+        for (final rawRow in salesTeam) {
+          if (rawRow is! Map) continue;
+          final salesPerson = rawRow['sales_person']?.toString().trim() ?? '';
+          if (salesPerson.isNotEmpty) {
+            customerSalesPerson = salesPerson;
+            break;
+          }
+        }
+      }
+
+      final warehouses = _warehousesForCompany(appState);
+      final costCenters = _costCentersForCompany();
+      String? matchingWarehouse;
+      for (final warehouse in warehouses) {
+        if (warehouse.name.trim().toLowerCase() ==
+            defaultWarehouse.toLowerCase()) {
+          matchingWarehouse = warehouse.name;
+          break;
+        }
+      }
+      String? matchingCostCenter;
+      for (final costCenter in costCenters) {
+        if (costCenter.name.trim().toLowerCase() ==
+            defaultCostCenter.toLowerCase()) {
+          matchingCostCenter = costCenter.name;
+          break;
+        }
+      }
+      setState(() {
+        _selectedCenter = matchingCostCenter;
+        _selectedWarehouse = matchingWarehouse;
+        if (appState.mobileAccess.isSalesUser) {
+          _selectedSalesPerson = appState.currentSalesPerson;
+        } else {
+          _selectedSalesPerson =
+              _salesPersonOptions.contains(customerSalesPerson)
+              ? customerSalesPerson
+              : null;
+        }
+      });
+      _scheduleRepriceAllItems();
+    } catch (_) {
+      // Customer defaults are optional; manual selectors remain available.
+    }
+  }
+
+  Future<void> _onCompanySelected(String? company) async {
+    final appState = context.read<AppState>();
+    setState(() {
+      _selectedCompany = company;
+      final warehouses = _warehousesForCompany(appState);
+      if (!warehouses.any((row) => row.name == _selectedWarehouse)) {
+        _selectedWarehouse = null;
+      }
+      final costCenters = _costCentersForCompany();
+      if (!costCenters.any((row) => row.name == _selectedCenter)) {
+        _selectedCenter = null;
+      }
+    });
+
+    if (company?.trim().isNotEmpty == true) {
+      try {
+        final companyDoc = await appState.frappeService.fetchDocument(
+          'Company',
+          company!,
+        );
+        final currency =
+            companyDoc['default_currency']?.toString() ??
+            companyDoc['currency']?.toString() ??
+            '';
+        if (mounted && _currencyOptions.contains(currency)) {
+          setState(() {
+            _selectedCurrency = currency;
+            _priceListCurrency ??= currency;
+          });
+        }
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    await _loadCustomerInsight();
+    _scheduleRepriceAllItems();
   }
 
   Future<List<_CostCenterOption>> _fetchCostCenterOptions(
@@ -383,6 +583,27 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     setState(() => _additionalItems.add(row));
   }
 
+  void _clearPrimaryItem() {
+    setState(() {
+      _selectedItemCode = null;
+      _initialItemText = null;
+      _itemTextController?.clear();
+      _qtyCtrl.text = '1';
+      _rateCtrl.clear();
+      _discountCtrl.text = '0';
+      _itemError = null;
+    });
+    _calculateTotal();
+  }
+
+  void _adjustQuantity(TextEditingController controller, double delta) {
+    final current = double.tryParse(controller.text.trim()) ?? 1;
+    final next = (current + delta).clamp(1, double.infinity);
+    controller.text = next == next.roundToDouble()
+        ? next.toInt().toString()
+        : next.toStringAsFixed(2);
+  }
+
   void _scheduleRepriceAllItems() {
     _pricingRequestVersion++;
     _pricingDebounce?.cancel();
@@ -477,7 +698,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     try {
       final insight = await context.read<AppState>().fetchCustomerSalesInsight(
         customer,
-        company: _selectedCompany(_warehouseOptions(context.read<AppState>())),
+        company: _activeCompany(),
       );
       if (!mounted) return;
       setState(() {
@@ -511,13 +732,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     final loadingKey = row == null ? 'first:$itemCode' : 'row:${row.hashCode}';
     setState(() => _loadingItemPrices.add(loadingKey));
     try {
-      final appState = context.read<AppState>();
       final qty =
           double.tryParse((row?.qtyController ?? _qtyCtrl).text.trim()) ?? 1;
       final insight = await context.read<AppState>().fetchItemSalesInsight(
         itemCode,
         customer: _customerCtrl.text.trim(),
-        company: _selectedCompany(_warehouseOptions(appState)),
+        company: _activeCompany(),
         priceList: _selectedPriceList,
         currency: _selectedCurrency,
         warehouse: row?.warehouse ?? _selectedWarehouse,
@@ -626,12 +846,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _CustomerHistorySheet(
-        customer: customer,
-        company: _selectedCompany(
-          _warehouseOptions(this.context.read<AppState>()),
-        ),
-      ),
+      builder: (context) =>
+          _CustomerHistorySheet(customer: customer, company: _activeCompany()),
     );
   }
 
@@ -939,14 +1155,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }
 
     if (selectedCustomerId != null && mounted) {
-      setState(() {
-        _customerCtrl.text = selectedCustomerId!;
-        _customerError = null;
-        _customerInsight = null;
-        _customerInsightError = null;
-        _pricingRequestVersion++;
-        _itemInsights.clear();
-      });
+      setState(() => _applyCustomerSelection(selectedCustomerId!));
+      await _applyCustomerErpDefaults(selectedCustomerId);
       await _loadCustomerInsight();
     }
 
@@ -957,8 +1167,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
   Future<void> _showAddCustomerSheet() async {
     final appState = context.read<AppState>();
-    final warehouses = _warehouseOptions(appState);
-    final company = _selectedCompany(warehouses);
+    final company = _activeCompany();
     final nameCtrl = TextEditingController(text: _customerCtrl.text.trim());
     final formKey = GlobalKey<FormState>();
     String? selectedSeries = _customerSeriesOptions.isNotEmpty
@@ -980,9 +1189,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     if (company.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Pilih warehouse terlebih dahulu untuk menentukan company.',
-          ),
+          content: Text('Pilih Company terlebih dahulu.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -1228,6 +1435,15 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       );
       return;
     }
+    if (_selectedCompany == null || _selectedCompany!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Company wajib dipilih'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     if (_selectedWarehouse == null || _selectedWarehouse!.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1307,9 +1523,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       }
       final items = _buildItemsPayload(itemCode);
       if (!await _confirmOrderRisks(items)) return;
-      final selectedWarehouseInfo = _selectedWarehouseInfo(
-        _warehouseOptions(appState),
-      );
       final SalesOrder savedOrder;
       if (widget.isEditMode) {
         savedOrder = await appState.updateSalesOrder(
@@ -1318,13 +1531,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           items: items,
           warehouse: _selectedWarehouse,
           costCenter: _selectedCenter,
-          company: selectedWarehouseInfo?.company,
+          company: _selectedCompany,
           currency: _selectedCurrency,
           sellingPriceList: _selectedPriceList,
           priceListCurrency: _priceListCurrency,
           ignorePricingRule: false,
-          salesPerson: isSalesUser ? null : _selectedSalesPerson,
-          salesTeam: isSalesUser ? customerSalesTeam : null,
+          salesPerson: _selectedSalesPerson,
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
         );
@@ -1335,12 +1547,11 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           warehouse: _selectedWarehouse,
           series: _selectedSeries,
           costCenter: _selectedCenter,
-          company: selectedWarehouseInfo?.company,
+          company: _selectedCompany,
           currency: _selectedCurrency,
           sellingPriceList: _selectedPriceList,
           priceListCurrency: _priceListCurrency,
-          salesPerson: isSalesUser ? null : _selectedSalesPerson,
-          salesTeam: isSalesUser ? customerSalesTeam : null,
+          salesPerson: _selectedSalesPerson,
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
         );
@@ -1571,25 +1782,37 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         );
       }
       final warehouseOptions = _warehouseOptions(appState);
-      final selectedWarehouseValid = warehouseOptions.any(
+      final companyOptions = <String>{
+        ...appState.sellingCompanies,
+        ...warehouseOptions
+            .map((warehouse) => warehouse.company)
+            .where((company) => company.trim().isNotEmpty),
+      }.toList()..sort();
+      final warehouseCompany = _selectedWarehouseInfo(
+        warehouseOptions,
+      )?.company;
+      final selectedCompany = companyOptions.contains(_selectedCompany)
+          ? _selectedCompany
+          : (companyOptions.contains(warehouseCompany)
+                ? warehouseCompany
+                : appState.preferredCompany(companyOptions));
+      final companyWarehouses = selectedCompany?.isNotEmpty == true
+          ? warehouseOptions
+                .where((warehouse) => warehouse.company == selectedCompany)
+                .toList()
+          : warehouseOptions;
+      final selectedWarehouseValid = companyWarehouses.any(
         (warehouse) => warehouse.name == _selectedWarehouse,
       );
       final selectedWarehouse = selectedWarehouseValid
           ? _selectedWarehouse
-          : appState.preferredWarehouse(warehouseOptions);
-      String selectedWarehouseCompany = '';
-      for (final warehouse in warehouseOptions) {
-        if (warehouse.name == selectedWarehouse) {
-          selectedWarehouseCompany = warehouse.company;
-          break;
-        }
-      }
+          : appState.preferredWarehouse(companyWarehouses);
       String companyCurrency = '';
-      if (selectedWarehouseCompany.isNotEmpty) {
+      if (selectedCompany?.isNotEmpty == true) {
         try {
           final companyDoc = await appState.frappeService.fetchDocument(
             'Company',
-            selectedWarehouseCompany,
+            selectedCompany!,
           );
           companyCurrency =
               companyDoc['default_currency']?.toString() ??
@@ -1597,10 +1820,10 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
               '';
         } catch (_) {}
       }
-      final availableCostCenters = selectedWarehouseCompany.isEmpty
+      final availableCostCenters = selectedCompany?.isNotEmpty != true
           ? costCenters
           : costCenters
-                .where((center) => center.company == selectedWarehouseCompany)
+                .where((center) => center.company == selectedCompany)
                 .toList();
       final costCenterChoices = availableCostCenters.isNotEmpty
           ? availableCostCenters
@@ -1624,6 +1847,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         _territoryOptions = _normalizeOptions(territoryOptions);
         _paymentTermsOptions = _normalizeOptions(paymentTermsOptions);
         _salesPersonOptions = _normalizeOptions(salesPersonOptions);
+        _companyOptions = _normalizeOptions(companyOptions);
         _currencyOptions = _normalizeOptions(currencyOptions);
         _priceListOptions = _normalizeOptions(priceListOptions);
         _costCenterOptions = _normalizeCostCenterOptions(costCenters);
@@ -1631,6 +1855,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         _selectedSeries = _seriesOptions.contains(_selectedSeries)
             ? _selectedSeries
             : (_seriesOptions.isNotEmpty ? _seriesOptions.first : null);
+        _selectedCompany = selectedCompany;
         _selectedCenter =
             costCenterChoices.any((center) => center.name == _selectedCenter)
             ? _selectedCenter
@@ -1642,9 +1867,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
             ? appState.currentSalesPerson
             : (_salesPersonOptions.contains(_selectedSalesPerson)
                   ? _selectedSalesPerson
-                  : (_salesPersonOptions.isNotEmpty
-                        ? _salesPersonOptions.first
-                        : null));
+                  : null);
         _itemOptions = itemOptions;
         _selectedWarehouse = selectedWarehouse;
         _selectedCurrency = _currencyOptions.contains(_selectedCurrency)
@@ -1727,6 +1950,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         _rateCtrl.text = firstItem.rate > 0 ? firstItem.rate.toString() : '';
         if (firstItem.warehouse.isNotEmpty) {
           _selectedWarehouse = firstItem.warehouse;
+          final warehouse = _selectedWarehouseInfo(
+            _warehouseOptions(context.read<AppState>()),
+          );
+          if (warehouse?.company.isNotEmpty == true) {
+            _selectedCompany = warehouse!.company;
+          }
         }
         _initialItemText = firstItem.itemCode.isNotEmpty
             ? '${firstItem.itemName} (${firstItem.itemCode})'
@@ -1743,8 +1972,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final warehouseOptions = _warehouseOptions(appState);
-    final costCenterOptions = _costCentersForWarehouse(warehouseOptions);
+    final warehouseOptions = _warehousesForCompany(appState);
+    final costCenterOptions = _costCentersForCompany();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -1834,7 +2063,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const Text(
-                      'Document Info',
+                      'Informasi Sales Order',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -1901,6 +2130,42 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             label: const Text('Retry'),
                           ),
                         ],
+                      ),
+                    ],
+
+                    if (!appState.mobileAccess.isSalesUser) ...[
+                      const SizedBox(height: 12),
+                      ErpItemAutocompleteField(
+                        label: 'Sales Person',
+                        selectedId:
+                            _salesPersonOptions.contains(_selectedSalesPerson)
+                            ? _selectedSalesPerson
+                            : null,
+                        decoration: InputDecoration(
+                          labelText: 'Sales Person',
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                        ),
+                        options: _salesPersonOptions
+                            .map(
+                              (salesPerson) => ErpItemOption(
+                                id: salesPerson,
+                                label: salesPerson,
+                              ),
+                            )
+                            .toList(),
+                        onSelected: (value) =>
+                            setState(() => _selectedSalesPerson = value),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? 'Sales Person wajib dipilih'
+                            : null,
                       ),
                     ],
 
@@ -2053,13 +2318,82 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                     const SizedBox(height: 12),
 
                     ErpItemAutocompleteField(
+                      label: 'Company',
+                      selectedId: _companyOptions.contains(_selectedCompany)
+                          ? _selectedCompany
+                          : null,
+                      decoration: InputDecoration(
+                        labelText: 'Company',
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      options: _companyOptions
+                          .map(
+                            (company) =>
+                                ErpItemOption(id: company, label: company),
+                          )
+                          .toList(),
+                      onSelected: _onCompanySelected,
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Company wajib dipilih'
+                          : null,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    TextFormField(
+                      controller: _customerCtrl,
+                      readOnly: true,
+                      onTap: _showCustomerSelectSheet,
+                      decoration: InputDecoration(
+                        labelText: 'Nama Customer',
+                        hintText: _isLoadingSelectors
+                            ? 'Loading customer...'
+                            : 'Pilih atau search customer',
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        suffixIcon: _customerCtrl.text.isNotEmpty
+                            ? IconButton(
+                                tooltip: 'Bersihkan Customer',
+                                onPressed: _clearCustomer,
+                                icon: const Icon(Icons.close_rounded),
+                              )
+                            : const Icon(Icons.search_rounded),
+                        errorText: _customerError,
+                      ),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Customer wajib diisi'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    ErpItemAutocompleteField(
                       label: 'Cost Center',
-                      selectedId: costCenterOptions.isNotEmpty
-                          ? (costCenterOptions.any(
-                                  (center) => center.name == _selectedCenter,
-                                )
-                                ? _selectedCenter
-                                : costCenterOptions.first.name)
+                      selectedId:
+                          costCenterOptions.any(
+                            (center) => center.name == _selectedCenter,
+                          )
+                          ? _selectedCenter
                           : null,
                       decoration: InputDecoration(
                         labelText: 'Cost Center',
@@ -2086,38 +2420,20 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                           .toList(),
                       onSelected: (v) => setState(() => _selectedCenter = v),
                     ),
-
                     const SizedBox(height: 12),
-
-                    if (appState.mobileAccess.isSalesUser)
-                      InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: 'Sales',
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                            ),
-                          ),
-                        ),
-                        child: Text(
-                          appState.currentSalesPerson ??
-                              appState.salesIdentityError ??
-                              '-',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      )
-                    else
+                    if (warehouseOptions.isNotEmpty)
                       ErpItemAutocompleteField(
-                        label: 'Sales Person',
+                        key: ValueKey('warehouse:${_selectedWarehouse ?? ''}'),
+                        label: 'Warehouse',
                         selectedId:
-                            _salesPersonOptions.contains(_selectedSalesPerson)
-                            ? _selectedSalesPerson
+                            warehouseOptions.any(
+                              (warehouse) =>
+                                  warehouse.name == _selectedWarehouse,
+                            )
+                            ? _selectedWarehouse
                             : null,
                         decoration: InputDecoration(
-                          labelText: 'Sales Person',
+                          labelText: 'Warehouse',
                           filled: true,
                           fillColor: AppColors.background,
                           border: OutlineInputBorder(
@@ -2127,59 +2443,29 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             ),
                           ),
                         ),
-                        options: _salesPersonOptions
+                        options: warehouseOptions
                             .map(
-                              (salesPerson) => ErpItemOption(
-                                id: salesPerson,
-                                label: salesPerson,
+                              (warehouse) => ErpItemOption(
+                                id: warehouse.name,
+                                label: warehouse.name,
                               ),
                             )
                             .toList(),
-                        onSelected: (value) =>
-                            setState(() => _selectedSalesPerson = value),
+                        onSelected: (value) {
+                          setState(() => _selectedWarehouse = value);
+                          _loadCustomerInsight();
+                          _scheduleRepriceAllItems();
+                        },
                         validator: (value) =>
                             value == null || value.trim().isEmpty
-                            ? 'Sales Person wajib dipilih'
+                            ? 'Warehouse wajib dipilih'
                             : null,
+                      )
+                    else
+                      const Text(
+                        'Warehouse tidak tersedia untuk Company ini.',
+                        style: TextStyle(color: Colors.orange),
                       ),
-
-                    const SizedBox(height: 12),
-
-                    TextFormField(
-                      controller: _customerCtrl,
-                      readOnly: true,
-                      onTap: _showCustomerSelectSheet,
-                      decoration: InputDecoration(
-                        labelText: 'Nama Customer',
-                        hintText: _isLoadingSelectors
-                            ? 'Loading customer...'
-                            : 'Pilih atau search customer',
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        suffixIcon:
-                            _customerError == null &&
-                                _customerCtrl.text.isNotEmpty
-                            ? const Icon(
-                                Icons.check_circle,
-                                color: Colors.green,
-                              )
-                            : const Icon(Icons.arrow_drop_down_rounded),
-                        errorText: _customerError,
-                      ),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Customer wajib diisi'
-                          : null,
-                    ),
                     if (_isLoadingCustomerInsight) ...[
                       const SizedBox(height: 10),
                       const LinearProgressIndicator(),
@@ -2311,110 +2597,31 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
-                      'Warehouse',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.slate,
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    if (warehouseOptions.isNotEmpty)
-                      ErpItemAutocompleteField(
-                        key: ValueKey('warehouse:${_selectedWarehouse ?? ''}'),
-                        label: 'Pilih Warehouse',
-                        selectedId:
-                            warehouseOptions.any(
-                              (w) => w.name == _selectedWarehouse,
-                            )
-                            ? _selectedWarehouse
-                            : null,
-                        decoration: InputDecoration(
-                          labelText: 'Pilih Warehouse',
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.2),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Items',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.navy,
                             ),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
+                        ),
+                        TextButton.icon(
+                          onPressed:
+                              _selectedItemCode == null &&
+                                  (_itemTextController?.text.isEmpty ?? true)
+                              ? null
+                              : _clearPrimaryItem,
+                          icon: const Icon(Icons.delete_outline_rounded),
+                          label: const Text('Hapus Item'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.redAccent,
                           ),
                         ),
-                        options: warehouseOptions
-                            .map(
-                              (w) => ErpItemOption(id: w.name, label: w.name),
-                            )
-                            .toList(),
-                        onSelected: (v) {
-                          setState(() {
-                            _selectedWarehouse = v;
-                            final nextCostCenters = _costCentersForWarehouse(
-                              warehouseOptions,
-                            );
-                            _selectedCenter =
-                                nextCostCenters.any(
-                                  (center) => center.name == _selectedCenter,
-                                )
-                                ? _selectedCenter
-                                : (nextCostCenters.isNotEmpty
-                                      ? nextCostCenters.first.name
-                                      : null);
-                          });
-                          _loadCustomerInsight();
-                          _scheduleRepriceAllItems();
-                        },
-                      )
-                    else
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.orange.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        child: const Text(
-                          'Warehouse tidak tersedia. Refresh Stock tab terlebih dahulu.',
-                          style: TextStyle(fontSize: 12, color: Colors.orange),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Item Details',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.slate,
-                      ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     Autocomplete<_ItemOption>(
@@ -2528,6 +2735,16 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             ),
                             decoration: InputDecoration(
                               labelText: 'Quantity',
+                              prefixIcon: IconButton(
+                                tooltip: 'Kurangi quantity',
+                                onPressed: () => _adjustQuantity(_qtyCtrl, -1),
+                                icon: const Icon(Icons.remove_rounded),
+                              ),
+                              suffixIcon: IconButton(
+                                tooltip: 'Tambah quantity',
+                                onPressed: () => _adjustQuantity(_qtyCtrl, 1),
+                                icon: const Icon(Icons.add_rounded),
+                              ),
                               filled: true,
                               fillColor: AppColors.background,
                               border: OutlineInputBorder(
@@ -2763,8 +2980,24 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                                         const TextInputType.numberWithOptions(
                                           decimal: true,
                                         ),
-                                    decoration: const InputDecoration(
+                                    decoration: InputDecoration(
                                       labelText: 'Quantity',
+                                      prefixIcon: IconButton(
+                                        tooltip: 'Kurangi quantity',
+                                        onPressed: () => _adjustQuantity(
+                                          row.qtyController,
+                                          -1,
+                                        ),
+                                        icon: const Icon(Icons.remove_rounded),
+                                      ),
+                                      suffixIcon: IconButton(
+                                        tooltip: 'Tambah quantity',
+                                        onPressed: () => _adjustQuantity(
+                                          row.qtyController,
+                                          1,
+                                        ),
+                                        icon: const Icon(Icons.add_rounded),
+                                      ),
                                     ),
                                     validator: (value) {
                                       final qty = double.tryParse(

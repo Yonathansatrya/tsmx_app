@@ -1718,6 +1718,7 @@ class AppState with ChangeNotifier {
   Future<List<CollectionRanking>> fetchCollectionRanking({
     DateTime? from,
     DateTime? to,
+    String? filterSalesPerson,
   }) async {
     final totals = <String, double>{};
     final salesPersons = await _fetchAllResourcePages(
@@ -1733,7 +1734,10 @@ class AppState with ChangeNotifier {
       final name = row['name']?.toString() ?? '';
       final enabled = row['enabled'];
       if (name.isEmpty || enabled == 0 || enabled == false) continue;
-      totals[name] = 0;
+      if (filterSalesPerson?.trim().isEmpty != false ||
+          name == filterSalesPerson!.trim()) {
+        totals[name] = 0;
+      }
     }
 
     final orderRows = await _fetchAllResourcePages(
@@ -1772,6 +1776,10 @@ class AppState with ChangeNotifier {
       for (final team in _documentChildRows(document['sales_team'])) {
         final salesPerson = team['sales_person']?.toString() ?? '';
         if (salesPerson.isEmpty) continue;
+        if (filterSalesPerson?.trim().isNotEmpty == true &&
+            salesPerson != filterSalesPerson!.trim()) {
+          continue;
+        }
         final percentage = NumParse.asDouble(team['allocated_percentage']);
         final ratio = percentage > 0 ? percentage / 100 : 1.0;
         totals[salesPerson] =
@@ -1788,10 +1796,12 @@ class AppState with ChangeNotifier {
     DateTime? to,
     int limit = 10,
     bool scopeToCurrentSales = true,
+    String? salesPerson,
   }) async {
-    final scopedSalesPerson = scopeToCurrentSales
-        ? await _salesPersonScopeName()
-        : null;
+    final explicitSalesPerson = salesPerson?.trim() ?? '';
+    final scopedSalesPerson = explicitSalesPerson.isNotEmpty
+        ? explicitSalesPerson
+        : (scopeToCurrentSales ? await _salesPersonScopeName() : null);
     final orderRows = await _fetchAllResourcePages(
       doctype: 'Sales Order',
       fields: const [
@@ -1887,6 +1897,9 @@ class AppState with ChangeNotifier {
   Future<DailySalesReport> fetchDailySalesReport({
     required String doctype,
     DateTime? date,
+    DateTime? from,
+    DateTime? to,
+    String? salesPerson,
   }) async {
     final normalizedDoctype = switch (doctype.trim().toLowerCase()) {
       'delivery note' || 'dn' => 'Delivery Note',
@@ -1897,10 +1910,13 @@ class AppState with ChangeNotifier {
         ? 'transaction_date'
         : 'posting_date';
     final selectedDate = date ?? DateTime.now();
+    final selectedFrom = from ?? selectedDate;
+    final selectedTo = to ?? selectedDate;
     final scopeFilters = await _salesDocumentScopeFilters(normalizedDoctype);
-    final scopedSalesPerson = _shouldScopeSalesData
-        ? await _salesPersonScopeName()
-        : null;
+    final explicitSalesPerson = salesPerson?.trim() ?? '';
+    final scopedSalesPerson = explicitSalesPerson.isNotEmpty
+        ? explicitSalesPerson
+        : (_shouldScopeSalesData ? await _salesPersonScopeName() : null);
     final company = _sellingCompanyFilter.trim();
 
     final rows = await _fetchAllResourcePages(
@@ -1916,7 +1932,8 @@ class AppState with ChangeNotifier {
       ],
       filters: [
         ['docstatus', '!=', 2],
-        [dateField, '=', DateRangePresets.toFrappeDate(selectedDate)],
+        [dateField, '>=', DateRangePresets.toFrappeDate(selectedFrom)],
+        [dateField, '<=', DateRangePresets.toFrappeDate(selectedTo)],
         if (company.isNotEmpty) ['company', '=', company],
         ...?scopeFilters,
       ],
