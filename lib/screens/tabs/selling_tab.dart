@@ -166,13 +166,16 @@ class SellingTabState extends State<SellingTab>
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final salesGroupFilter =
-        const {
-          'all',
-          'sales',
-          'others',
-        }.contains(appState.sellingCustomerTypeFilter)
+        appState.sellingCustomerTypeFilter == 'all' ||
+            appState.sellingSalesGroups.contains(
+              appState.sellingCustomerTypeFilter,
+            )
         ? appState.sellingCustomerTypeFilter
         : 'all';
+    final salesGroupOptions = <String, String>{
+      'all': 'All',
+      for (final group in appState.sellingSalesGroups) group: group,
+    };
 
     final controller = _tabController;
 
@@ -212,11 +215,7 @@ class SellingTabState extends State<SellingTab>
                     selectedCustomerType: salesGroupFilter,
                     partnerTypeLabel: 'Sales Group',
                     partnerTypeIcon: Icons.account_tree_rounded,
-                    partnerTypeOptions: const {
-                      'all': 'All',
-                      'sales': 'Sales',
-                      'others': 'Others',
-                    },
+                    partnerTypeOptions: salesGroupOptions,
                     onChanged: (year, month) {
                       context.read<AppState>().setSellingPeriod(
                         year: year,

@@ -323,12 +323,14 @@ class AppState with ChangeNotifier {
   String _sellingCompanyFilter = '';
   String _sellingCustomerTypeFilter = 'all';
   List<String> _sellingCompanies = const [];
+  List<String> _sellingSalesGroups = const [];
   final Map<String, List<String>> _sellingSalesGroupDocumentIdsCache = {};
   int get sellingPeriodYear => _sellingPeriodYear;
   int get sellingPeriodMonth => _sellingPeriodMonth;
   String get sellingCompanyFilter => _sellingCompanyFilter;
   String get sellingCustomerTypeFilter => _sellingCustomerTypeFilter;
   List<String> get sellingCompanies => _scopedCompanyNames(_sellingCompanies);
+  List<String> get sellingSalesGroups => List.unmodifiable(_sellingSalesGroups);
   DateTime get sellingPeriodFrom => _sellingPeriodMonth == 0
       ? DateTime(_sellingPeriodYear, 1, 1)
       : DateTime(_sellingPeriodYear, _sellingPeriodMonth, 1);
@@ -1145,6 +1147,7 @@ class AppState with ChangeNotifier {
     _sellingCompanyFilter = '';
     _buyingCompanyFilter = '';
     _sellingCompanies = const [];
+    _sellingSalesGroups = const [];
     _buyingCompanies = const [];
     _sellingCustomerTypeFilter = 'all';
     _buyingSupplierTypeFilter = 'all';
@@ -3966,25 +3969,66 @@ class AppState with ChangeNotifier {
     if (!_isAuthenticated) return;
     try {
       await _frappeService.ensureLoggedIn();
-      final rows = await _fetchAllResourcePages(
+      final companyRows = await _fetchAllResourcePages(
         doctype: 'Company',
         fields: const ['name'],
         orderBy: 'name asc',
         maxRows: 500,
       );
       final companies =
-          rows
+          companyRows
               .map((row) => row['name']?.toString() ?? '')
               .where((name) => name.trim().isNotEmpty)
               .toSet()
               .toList()
             ..sort();
       _sellingCompanies = companies;
-      notifyListeners();
     } catch (_) {
       _sellingCompanies = const [];
-      notifyListeners();
     }
+
+    try {
+      final rows = await _fetchAllResourcePages(
+        doctype: 'Sales Person',
+        fields: const ['name', 'parent_sales_person', 'is_group', 'lft'],
+        filters: const [
+          ['is_group', '=', 1],
+        ],
+        orderBy: 'lft asc, name asc',
+        maxRows: null,
+      );
+      final roots = rows
+          .where(
+            (row) =>
+                (row['parent_sales_person']?.toString().trim() ?? '').isEmpty,
+          )
+          .map((row) => row['name']?.toString() ?? '')
+          .where((name) => name.isNotEmpty)
+          .toSet();
+      final groups =
+          rows
+              .where(
+                (row) => roots.contains(
+                  row['parent_sales_person']?.toString() ?? '',
+                ),
+              )
+              .map((row) => row['name']?.toString() ?? '')
+              .where((name) => name.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+      _sellingSalesGroups = groups;
+      if (_sellingCustomerTypeFilter != 'all' &&
+          !groups.contains(_sellingCustomerTypeFilter)) {
+        _sellingCustomerTypeFilter = 'all';
+        _sellingSalesGroupDocumentIdsCache.clear();
+      }
+    } catch (_) {
+      _sellingSalesGroups = const [];
+      _sellingCustomerTypeFilter = 'all';
+      _sellingSalesGroupDocumentIdsCache.clear();
+    }
+    notifyListeners();
   }
 
   List<DocumentTrendPoint> _emptySellingTrendPoints() {
@@ -6921,12 +6965,7 @@ class AppState with ChangeNotifier {
     final type = _sellingCustomerTypeFilter.trim().toLowerCase();
     if (type.isEmpty || type == 'all') return null;
 
-    final targetGroup = switch (type) {
-      'sales' => 'sales team',
-      'others' => 'others',
-      _ => '',
-    };
-    if (targetGroup.isEmpty) return null;
+    final targetGroup = type;
 
     try {
       final salesPersons = await _fetchAllResourcePages(
@@ -6947,14 +6986,6 @@ class AppState with ChangeNotifier {
         if (row['name']?.toString().trim().toLowerCase() == targetGroup) {
           group = row;
           break;
-        }
-      }
-      if (group == null && type == 'sales') {
-        for (final row in salesPersons) {
-          if (row['name']?.toString().trim().toLowerCase() == 'sales') {
-            group = row;
-            break;
-          }
         }
       }
       if (group == null) return const [];
