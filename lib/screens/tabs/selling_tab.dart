@@ -165,6 +165,14 @@ class SellingTabState extends State<SellingTab>
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final salesGroupFilter =
+        const {
+          'all',
+          'sales',
+          'others',
+        }.contains(appState.sellingCustomerTypeFilter)
+        ? appState.sellingCustomerTypeFilter
+        : 'all';
 
     final controller = _tabController;
 
@@ -201,7 +209,14 @@ class SellingTabState extends State<SellingTab>
                     loading: appState.isOrderSummaryLoading,
                     companyOptions: appState.sellingCompanies,
                     selectedCompany: appState.sellingCompanyFilter,
-                    selectedCustomerType: appState.sellingCustomerTypeFilter,
+                    selectedCustomerType: salesGroupFilter,
+                    partnerTypeLabel: 'Sales Group',
+                    partnerTypeIcon: Icons.account_tree_rounded,
+                    partnerTypeOptions: const {
+                      'all': 'All',
+                      'sales': 'Sales',
+                      'others': 'Others',
+                    },
                     onChanged: (year, month) {
                       context.read<AppState>().setSellingPeriod(
                         year: year,

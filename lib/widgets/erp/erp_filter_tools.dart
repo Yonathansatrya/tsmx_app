@@ -16,6 +16,7 @@ class ErpPeriodFilterCard extends StatelessWidget {
   final ValueChanged<String>? onCustomerTypeChanged;
   final String partnerTypeLabel;
   final IconData partnerTypeIcon;
+  final Map<String, String> partnerTypeOptions;
 
   const ErpPeriodFilterCard({
     super.key,
@@ -33,6 +34,11 @@ class ErpPeriodFilterCard extends StatelessWidget {
     this.onCustomerTypeChanged,
     this.partnerTypeLabel = 'Customer',
     this.partnerTypeIcon = Icons.groups_2_rounded,
+    this.partnerTypeOptions = const {
+      'all': 'Semua',
+      'external': 'External',
+      'internal': 'Internal',
+    },
   });
 
   static const monthLabels = [
@@ -233,17 +239,14 @@ class ErpPeriodFilterCard extends StatelessWidget {
                           labelText: partnerTypeLabel,
                           prefixIcon: Icon(partnerTypeIcon, size: 18),
                         ),
-                        items: const [
-                          DropdownMenuItem(value: 'all', child: Text('Semua')),
-                          DropdownMenuItem(
-                            value: 'external',
-                            child: Text('External'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'internal',
-                            child: Text('Internal'),
-                          ),
-                        ],
+                        items: partnerTypeOptions.entries
+                            .map(
+                              (option) => DropdownMenuItem(
+                                value: option.key,
+                                child: Text(option.value),
+                              ),
+                            )
+                            .toList(),
                         onChanged: loading
                             ? null
                             : (value) =>

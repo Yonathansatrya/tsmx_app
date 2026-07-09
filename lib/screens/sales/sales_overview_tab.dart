@@ -32,25 +32,26 @@ class SalesOverviewTab extends StatefulWidget {
 }
 
 class _SalesOverviewTabState extends State<SalesOverviewTab> {
-  late DateRangePreset _filterRange;
+  DateTime _filterDate = DateTime.now();
   String? _selectedSalesPerson;
   List<String> _salesPersonOptions = const [];
   bool _filterLoading = true;
   _DailySalesDocType _dailyDocType = _DailySalesDocType.salesOrder;
   DailySalesReport _dailyReport = const DailySalesReport();
   bool _dailyReportLoading = true;
+  int _dailyRequestVersion = 0;
   String? _dailyReportError;
   List<SalesPersonCustomerRanking> _topCustomers = const [];
   List<CollectionRanking> _ranking = const [];
   bool _topCustomersLoading = true;
   bool _rankingLoading = true;
+  int _rankingRequestVersion = 0;
   String? _topCustomersError;
   String? _rankingError;
 
   @override
   void initState() {
     super.initState();
-    _filterRange = DateRangePresets.monthToDateRange();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadFilterOptions();
       await _loadDailyReport();
@@ -101,6 +102,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   }
 
   Future<void> _loadDailyReport() async {
+    final requestVersion = ++_dailyRequestVersion;
     final state = context.read<AppState>();
     if (!state.canUseSales) {
       if (mounted) {
@@ -119,32 +121,33 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     try {
       final report = await state.fetchDailySalesReport(
         doctype: _dailyDoctype,
-        from: _filterRange.from,
-        to: _filterRange.to,
+        from: _filterDate,
+        to: _filterDate,
         salesPerson: _selectedSalesPerson,
       );
-      if (mounted) setState(() => _dailyReport = report);
+      if (mounted && requestVersion == _dailyRequestVersion) {
+        setState(() => _dailyReport = report);
+      }
     } catch (error) {
-      if (mounted) setState(() => _dailyReportError = error.toString());
+      if (mounted && requestVersion == _dailyRequestVersion) {
+        setState(() => _dailyReportError = error.toString());
+      }
     } finally {
-      if (mounted) setState(() => _dailyReportLoading = false);
+      if (mounted && requestVersion == _dailyRequestVersion) {
+        setState(() => _dailyReportLoading = false);
+      }
     }
   }
 
-  Future<void> _pickFilterRange() async {
-    final picked = await showDateRangePicker(
+  Future<void> _pickFilterDate() async {
+    final picked = await showDatePicker(
       context: context,
+      initialDate: _filterDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      initialDateRange: DateTimeRange(
-        start: _filterRange.from,
-        end: _filterRange.to,
-      ),
     );
     if (picked == null) return;
-    setState(() {
-      _filterRange = DateRangePreset(from: picked.start, to: picked.end);
-    });
+    setState(() => _filterDate = picked);
     await _reloadReports();
   }
 
@@ -155,6 +158,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   }
 
   Future<void> _loadRanking() async {
+    final requestVersion = ++_rankingRequestVersion;
     final state = context.read<AppState>();
     final canViewTopCustomers = _canViewTopCustomers(state);
     final canViewRanking = _canViewRanking(state);
@@ -180,31 +184,43 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     if (canViewTopCustomers) {
       try {
         final topCustomers = await state.fetchTopCustomersBySalesPerson(
-          from: _filterRange.from,
-          to: _filterRange.to,
+          from: _filterDate,
+          to: _filterDate,
           scopeToCurrentSales: state.mobileAccess.shouldScopeSalesData,
           salesPerson: _selectedSalesPerson,
         );
-        if (mounted) setState(() => _topCustomers = topCustomers);
+        if (mounted && requestVersion == _rankingRequestVersion) {
+          setState(() => _topCustomers = topCustomers);
+        }
       } catch (error) {
-        if (mounted) setState(() => _topCustomersError = error.toString());
+        if (mounted && requestVersion == _rankingRequestVersion) {
+          setState(() => _topCustomersError = error.toString());
+        }
       } finally {
-        if (mounted) setState(() => _topCustomersLoading = false);
+        if (mounted && requestVersion == _rankingRequestVersion) {
+          setState(() => _topCustomersLoading = false);
+        }
       }
     }
 
     if (canViewRanking) {
       try {
         final ranking = await state.fetchCollectionRanking(
-          from: _filterRange.from,
-          to: _filterRange.to,
+          from: _filterDate,
+          to: _filterDate,
           filterSalesPerson: _selectedSalesPerson,
         );
-        if (mounted) setState(() => _ranking = ranking);
+        if (mounted && requestVersion == _rankingRequestVersion) {
+          setState(() => _ranking = ranking);
+        }
       } catch (error) {
-        if (mounted) setState(() => _rankingError = error.toString());
+        if (mounted && requestVersion == _rankingRequestVersion) {
+          setState(() => _rankingError = error.toString());
+        }
       } finally {
-        if (mounted) setState(() => _rankingLoading = false);
+        if (mounted && requestVersion == _rankingRequestVersion) {
+          setState(() => _rankingLoading = false);
+        }
       }
     }
   }
@@ -252,15 +268,12 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     );
   }
 
-  String get _rangeFileLabel =>
-      '${DateRangePresets.toFrappeDate(_filterRange.from)}_'
-      '${DateRangePresets.toFrappeDate(_filterRange.to)}';
+  String get _dateFileLabel => DateRangePresets.toFrappeDate(_filterDate);
 
   Future<void> _exportDailyReport() {
-    return _shareCsv('sales_report_$_rangeFileLabel.csv', [
+    return _shareCsv('sales_report_$_dateFileLabel.csv', [
       ['Tipe Dokumen', _dailyDoctype],
-      ['Dari', DateRangePresets.toFrappeDate(_filterRange.from)],
-      ['Sampai', DateRangePresets.toFrappeDate(_filterRange.to)],
+      ['Tanggal', _dateFileLabel],
       ['Sales Person', _selectedSalesPerson ?? 'Semua'],
       [],
       ['Item', 'Qty', 'Omzet'],
@@ -284,7 +297,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   }
 
   Future<void> _exportTopCustomers() {
-    return _shareCsv('top_10_customer_$_rangeFileLabel.csv', [
+    return _shareCsv('top_10_customer_$_dateFileLabel.csv', [
       ['Rank', 'Sales Person', 'Customer', 'Jumlah SO', 'Nilai'],
       ..._topCustomers
           .take(10)
@@ -301,7 +314,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   }
 
   Future<void> _exportCollectionRanking() {
-    return _shareCsv('ranking_collection_$_rangeFileLabel.csv', [
+    return _shareCsv('ranking_collection_$_dateFileLabel.csv', [
       ['Rank', 'Sales Person', 'Nilai'],
       ..._ranking.take(5).map((row) => [row.rank, row.salesPerson, row.amount]),
     ]);
@@ -332,12 +345,12 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 
           SalesUi.gap(14),
           _SalesOverviewFilterCard(
-            range: _filterRange,
+            date: _filterDate,
             selectedSalesPerson: _selectedSalesPerson,
             salesPersons: _salesPersonOptions,
             lockSalesPerson: state.mobileAccess.shouldScopeSalesData,
             loading: _filterLoading,
-            onPickRange: _pickFilterRange,
+            onPickDate: _pickFilterDate,
             onSalesPersonChanged: (salesPerson) {
               setState(() => _selectedSalesPerson = salesPerson);
               _reloadReports();
@@ -358,108 +371,78 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 
           if (canViewTopCustomers) ...[
             SalesUi.gap(18),
-            CollectionSectionHeader(
-              title: 'Top 10 Customer per Sales Person',
-              subtitle: topCustomerSubtitle,
-              icon: Icons.groups_2_rounded,
-              trailing: IconButton.filledTonal(
-                tooltip: 'Export CSV',
-                onPressed: _topCustomersLoading ? null : _exportTopCustomers,
-                icon: const Icon(Icons.file_download_outlined),
-              ),
-            ),
-            SalesUi.gap(10),
-            if (_topCustomersLoading)
-              const LinearProgressIndicator()
-            else if (_topCustomersError != null)
-              ErpErrorBox(message: _topCustomersError!)
-            else if (_topCustomers.isEmpty)
-              const ErpEmptyState(
-                title: 'Belum ada customer pada periode ini',
-                message:
-                    'Top customer dibaca dari Sales Team pada Sales Order sesuai periode.',
-              )
-            else
-              ..._topCustomers
-                  .take(10)
-                  .map(
-                    (row) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _TopCustomerCard(row: row),
+            SalesInfoCard(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  CollectionSectionHeader(
+                    title: 'Top 10 Customer per Sales Person',
+                    subtitle: topCustomerSubtitle,
+                    icon: Icons.groups_2_rounded,
+                    trailing: IconButton.filledTonal(
+                      tooltip: 'Export CSV',
+                      onPressed: _topCustomersLoading
+                          ? null
+                          : _exportTopCustomers,
+                      icon: const Icon(Icons.file_download_outlined),
                     ),
                   ),
+                  SalesUi.gap(10),
+                  if (_topCustomersLoading)
+                    const LinearProgressIndicator()
+                  else if (_topCustomersError != null)
+                    ErpErrorBox(message: _topCustomersError!)
+                  else if (_topCustomers.isEmpty)
+                    const ErpEmptyState(
+                      title: 'Belum ada customer pada periode ini',
+                      message:
+                          'Top customer dibaca dari Sales Team pada Sales Order sesuai periode.',
+                    )
+                  else
+                    ..._topCustomers
+                        .take(10)
+                        .map((row) => _TopCustomerCard(row: row)),
+                ],
+              ),
+            ),
           ],
 
           if (canViewRanking) ...[
             SalesUi.gap(18),
-            CollectionSectionHeader(
-              title: 'Ranking Collection',
-              subtitle: 'Berdasarkan nilai Sales Order dari Sales Team',
-              icon: Icons.emoji_events_rounded,
-              trailing: IconButton.filledTonal(
-                tooltip: 'Export CSV',
-                onPressed: _rankingLoading ? null : _exportCollectionRanking,
-                icon: const Icon(Icons.file_download_outlined),
-              ),
-            ),
-            SalesUi.gap(10),
-            if (_rankingLoading)
-              const LinearProgressIndicator()
-            else if (_rankingError != null)
-              ErpErrorBox(message: _rankingError!)
-            else if (_ranking.isEmpty)
-              const ErpEmptyState(
-                title: 'Belum ada Sales Order pada periode ini',
-                message:
-                    'Ranking dibaca dari Sales Team pada Sales Order sesuai periode.',
-              )
-            else
-              ..._ranking
-                  .take(5)
-                  .map(
-                    (row) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: SalesInfoCard(
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: row.rank <= 3
-                                  ? AppColors.accentYellow.withValues(
-                                      alpha: 0.35,
-                                    )
-                                  : AppColors.softGreen,
-                              foregroundColor: AppColors.primaryDark,
-                              child: Text(
-                                '${row.rank}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                row.salesPerson,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: AppColors.navy,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              'Rp ${formatErpCurrency(row.amount)}',
-                              style: const TextStyle(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+            SalesInfoCard(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  CollectionSectionHeader(
+                    title: 'Ranking Collection',
+                    subtitle: 'Berdasarkan nilai Sales Order dari Sales Team',
+                    icon: Icons.emoji_events_rounded,
+                    trailing: IconButton.filledTonal(
+                      tooltip: 'Export CSV',
+                      onPressed: _rankingLoading
+                          ? null
+                          : _exportCollectionRanking,
+                      icon: const Icon(Icons.file_download_outlined),
                     ),
                   ),
+                  SalesUi.gap(10),
+                  if (_rankingLoading)
+                    const LinearProgressIndicator()
+                  else if (_rankingError != null)
+                    ErpErrorBox(message: _rankingError!)
+                  else if (_ranking.isEmpty)
+                    const ErpEmptyState(
+                      title: 'Belum ada Sales Order pada periode ini',
+                      message:
+                          'Ranking dibaca dari Sales Team pada Sales Order sesuai periode.',
+                    )
+                  else
+                    ..._ranking
+                        .take(5)
+                        .map((row) => _CollectionRankingRow(row: row)),
+                ],
+              ),
+            ),
           ],
         ],
       ),
@@ -469,21 +452,21 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 
 class _SalesOverviewFilterCard extends StatelessWidget {
   const _SalesOverviewFilterCard({
-    required this.range,
+    required this.date,
     required this.selectedSalesPerson,
     required this.salesPersons,
     required this.lockSalesPerson,
     required this.loading,
-    required this.onPickRange,
+    required this.onPickDate,
     required this.onSalesPersonChanged,
   });
 
-  final DateRangePreset range;
+  final DateTime date;
   final String? selectedSalesPerson;
   final List<String> salesPersons;
   final bool lockSalesPerson;
   final bool loading;
-  final VoidCallback onPickRange;
+  final VoidCallback onPickDate;
   final ValueChanged<String?> onSalesPersonChanged;
 
   String _date(DateTime value) =>
@@ -512,15 +495,15 @@ class _SalesOverviewFilterCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           InkWell(
-            onTap: onPickRange,
+            onTap: onPickDate,
             borderRadius: BorderRadius.circular(12),
             child: InputDecorator(
               decoration: const InputDecoration(
-                labelText: 'Rentang Tanggal',
-                prefixIcon: Icon(Icons.date_range_rounded),
+                labelText: 'Tanggal',
+                prefixIcon: Icon(Icons.event_rounded),
               ),
               child: Text(
-                '${_date(range.from)} - ${_date(range.to)}',
+                _date(date),
                 style: const TextStyle(
                   color: AppColors.navy,
                   fontWeight: FontWeight.w800,
@@ -933,7 +916,11 @@ class _TopCustomerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SalesInfoCard(
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
       child: Row(
         children: [
           CircleAvatar(
@@ -979,6 +966,55 @@ class _TopCustomerCard extends StatelessWidget {
           Text(
             'Rp ${formatErpCurrency(row.amount)}',
             textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: AppColors.primary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CollectionRankingRow extends StatelessWidget {
+  const _CollectionRankingRow({required this.row});
+
+  final CollectionRanking row;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            backgroundColor: row.rank <= 3
+                ? AppColors.accentYellow.withValues(alpha: 0.35)
+                : AppColors.softGreen,
+            foregroundColor: AppColors.primaryDark,
+            child: Text(
+              '${row.rank}',
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              row.salesPerson,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.navy,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          Text(
+            'Rp ${formatErpCurrency(row.amount)}',
             style: const TextStyle(
               color: AppColors.primary,
               fontWeight: FontWeight.w900,

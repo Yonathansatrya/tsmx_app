@@ -323,8 +323,7 @@ class AppState with ChangeNotifier {
   String _sellingCompanyFilter = '';
   String _sellingCustomerTypeFilter = 'all';
   List<String> _sellingCompanies = const [];
-  String? _sellingCustomerTypeIdsCacheKey;
-  List<String>? _sellingCustomerTypeIdsCache;
+  final Map<String, List<String>> _sellingSalesGroupDocumentIdsCache = {};
   int get sellingPeriodYear => _sellingPeriodYear;
   int get sellingPeriodMonth => _sellingPeriodMonth;
   String get sellingCompanyFilter => _sellingCompanyFilter;
@@ -1149,8 +1148,7 @@ class AppState with ChangeNotifier {
     _buyingCompanies = const [];
     _sellingCustomerTypeFilter = 'all';
     _buyingSupplierTypeFilter = 'all';
-    _sellingCustomerTypeIdsCacheKey = null;
-    _sellingCustomerTypeIdsCache = null;
+    _sellingSalesGroupDocumentIdsCache.clear();
     _buyingSupplierTypeIdsCacheKey = null;
     _buyingSupplierTypeIdsCache = null;
     _salesOrderApprovalTodoCount = 0;
@@ -1518,8 +1516,8 @@ class AppState with ChangeNotifier {
         ],
         maxRows: null,
       );
-    } catch (_) {
-      return null;
+    } catch (error) {
+      throw Exception('Gagal membaca struktur Sales Person Tree: $error');
     }
     final parentIds =
         rows
@@ -3677,18 +3675,26 @@ class AppState with ChangeNotifier {
         'Sales Invoice',
       );
       final salesFilters = [
-        ...await _sellingDocumentFilters('transaction_date'),
+        ...await _sellingDocumentFilters(
+          'transaction_date',
+          doctype: 'Sales Order',
+        ),
         ...?salesScopeFilters,
       ];
       final deliveryFilters = [
-        ...await _sellingDocumentFilters('posting_date'),
+        ...await _sellingDocumentFilters(
+          'posting_date',
+          doctype: 'Delivery Note',
+        ),
         ...?deliveryScopeFilters,
       ];
       final invoiceFilters = [
-        ...await _sellingDocumentFilters('posting_date'),
+        ...await _sellingDocumentFilters(
+          'posting_date',
+          doctype: 'Sales Invoice',
+        ),
         ...?invoiceScopeFilters,
       ];
-      final customerTypeIds = await _sellingCustomerTypeCustomerIds();
       final salesTrend = _emptySellingTrendPoints();
       final deliveryTrend = _emptySellingTrendPoints();
       final invoiceTrend = _emptySellingTrendPoints();
@@ -3708,7 +3714,6 @@ class AppState with ChangeNotifier {
         ],
         filters: salesFilters,
         onRow: (row) async {
-          if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
           if (!_isActiveSellingTrendRow(row)) return;
           if (salesScopeFilters == null &&
               !await _salesDocumentBelongsToCurrentSalesPerson(
@@ -3744,7 +3749,6 @@ class AppState with ChangeNotifier {
         ],
         filters: deliveryFilters,
         onRow: (row) async {
-          if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
           if (!_isActiveSellingTrendRow(row)) return;
           if (deliveryScopeFilters == null &&
               !await _salesDocumentBelongsToCurrentSalesPerson(
@@ -3780,7 +3784,6 @@ class AppState with ChangeNotifier {
         ],
         filters: invoiceFilters,
         onRow: (row) async {
-          if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
           if (!_isActiveSellingTrendRow(row)) return;
           if (invoiceScopeFilters == null &&
               !await _salesDocumentBelongsToCurrentSalesPerson(
@@ -3887,10 +3890,9 @@ class AppState with ChangeNotifier {
   }) async {
     final scopeFilters = await _salesDocumentScopeFilters(doctype);
     final filters = [
-      ...await _sellingDocumentFilters(dateField),
+      ...await _sellingDocumentFilters(dateField, doctype: doctype),
       ...?scopeFilters,
     ];
-    final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final trend = _emptySellingTrendPoints();
     var total = 0.0;
     var count = 0;
@@ -3909,7 +3911,6 @@ class AppState with ChangeNotifier {
       ],
       filters: filters,
       onRow: (row) async {
-        if (!_matchesSellingCustomerType(row, customerTypeIds)) return;
         if (!_isActiveSellingTrendRow(row)) return;
         if (scopeFilters == null &&
             !await _salesDocumentBelongsToCurrentSalesPerson(
@@ -3949,8 +3950,7 @@ class AppState with ChangeNotifier {
     _sellingPeriodMonth = month;
     _sellingCompanyFilter = nextCompany;
     if (_sellingCustomerTypeFilter != nextCustomerType) {
-      _sellingCustomerTypeIdsCacheKey = null;
-      _sellingCustomerTypeIdsCache = null;
+      _sellingSalesGroupDocumentIdsCache.clear();
     }
     _sellingCustomerTypeFilter = nextCustomerType;
     notifyListeners();
@@ -4733,8 +4733,16 @@ class AppState with ChangeNotifier {
       await _frappeService.ensureLoggedIn();
       final salesOrderFilters = await _sellingDocumentFilters(
         'transaction_date',
+        doctype: 'Sales Order',
       );
-      final salesPostingFilters = await _sellingDocumentFilters('posting_date');
+      final deliveryFilters = await _sellingDocumentFilters(
+        'posting_date',
+        doctype: 'Delivery Note',
+      );
+      final invoiceFilters = await _sellingDocumentFilters(
+        'posting_date',
+        doctype: 'Sales Invoice',
+      );
       var salesTotal = 0.0;
       var salesOpen = 0.0;
       var salesCompleted = 0.0;
@@ -4777,7 +4785,7 @@ class AppState with ChangeNotifier {
         doctype: 'Delivery Note',
         fields: const ['name', 'grand_total'],
         filters: [
-          ...salesPostingFilters,
+          ...deliveryFilters,
           ['docstatus', '!=', 2],
         ],
         onRow: (row) {
@@ -4793,7 +4801,7 @@ class AppState with ChangeNotifier {
         doctype: 'Sales Invoice',
         fields: const ['name', 'grand_total', 'status', 'docstatus'],
         filters: [
-          ...salesPostingFilters,
+          ...invoiceFilters,
           ['docstatus', '!=', 2],
         ],
         onRow: (row) {
@@ -6712,8 +6720,8 @@ class AppState with ChangeNotifier {
     try {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
       return decoded.map((k, v) => MapEntry(k, v.toString()));
-    } catch (_) {
-      return null;
+    } catch (error) {
+      throw Exception('Gagal membaca struktur Sales Person Tree: $error');
     }
   }
 
@@ -6722,11 +6730,13 @@ class AppState with ChangeNotifier {
   }) async {
     final scopeFilters = await _salesDocumentScopeFilters('Sales Order');
     final filters = <List<dynamic>>[
-      ...await _sellingDocumentFilters('transaction_date'),
+      ...await _sellingDocumentFilters(
+        'transaction_date',
+        doctype: 'Sales Order',
+      ),
       ...?_salesOrderFilters(_salesOrderStatus),
       ...?scopeFilters,
     ];
-    final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Sales Order',
       fields: const [
@@ -6754,10 +6764,7 @@ class AppState with ChangeNotifier {
       ]),
     );
 
-    var orders = data
-        .where((item) => _matchesSellingCustomerType(item, customerTypeIds))
-        .map((item) => SalesOrder.fromJson(item))
-        .toList();
+    var orders = data.map((item) => SalesOrder.fromJson(item)).toList();
     if (scopeFilters == null) {
       orders = await _filterSalesDocumentsByCurrentSalesPerson(
         doctype: 'Sales Order',
@@ -6774,11 +6781,13 @@ class AppState with ChangeNotifier {
   }) async {
     final scopeFilters = await _salesDocumentScopeFilters('Delivery Note');
     final filters = <List<dynamic>>[
-      ...await _sellingDocumentFilters('posting_date'),
+      ...await _sellingDocumentFilters(
+        'posting_date',
+        doctype: 'Delivery Note',
+      ),
       ...?_statusFilters(_deliveryNoteStatus),
       ...?scopeFilters,
     ];
-    final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Delivery Note',
       fields: const [
@@ -6804,10 +6813,7 @@ class AppState with ChangeNotifier {
         'customer_name',
       ]),
     );
-    var docs = data
-        .where((item) => _matchesSellingCustomerType(item, customerTypeIds))
-        .map(DeliveryNote.fromJson)
-        .toList();
+    var docs = data.map(DeliveryNote.fromJson).toList();
     if (scopeFilters == null) {
       docs = await _filterSalesDocumentsByCurrentSalesPerson(
         doctype: 'Delivery Note',
@@ -6823,11 +6829,13 @@ class AppState with ChangeNotifier {
   }) async {
     final scopeFilters = await _salesDocumentScopeFilters('Sales Invoice');
     final filters = <List<dynamic>>[
-      ...await _sellingDocumentFilters('posting_date'),
+      ...await _sellingDocumentFilters(
+        'posting_date',
+        doctype: 'Sales Invoice',
+      ),
       ...?_statusFilters(_salesInvoiceStatus),
       ...?scopeFilters,
     ];
-    final customerTypeIds = await _sellingCustomerTypeCustomerIds();
     final data = await _fetchResourceWithFieldFallback(
       doctype: 'Sales Invoice',
       fields: const [
@@ -6854,10 +6862,7 @@ class AppState with ChangeNotifier {
         'customer_name',
       ]),
     );
-    var docs = data
-        .where((item) => _matchesSellingCustomerType(item, customerTypeIds))
-        .map(SalesInvoice.fromJson)
-        .toList();
+    var docs = data.map(SalesInvoice.fromJson).toList();
     if (scopeFilters == null) {
       docs = await _filterSalesDocumentsByCurrentSalesPerson(
         doctype: 'Sales Invoice',
@@ -6882,22 +6887,26 @@ class AppState with ChangeNotifier {
     ];
   }
 
-  Future<List<List<dynamic>>> _sellingDocumentFilters(String dateField) async {
+  Future<List<List<dynamic>>> _sellingDocumentFilters(
+    String dateField, {
+    String? doctype,
+  }) async {
     final filters = <List<dynamic>>[
       ..._sellingPeriodFilters(dateField),
       ..._companyScopeFilters(_sellingCompanyFilter),
     ];
+    if (doctype != null) {
+      final documentIds = await _sellingSalesGroupDocumentIds(doctype);
+      if (documentIds != null) {
+        filters.add([
+          'name',
+          documentIds.isEmpty ? '=' : 'in',
+          documentIds.isEmpty ? '' : documentIds,
+        ]);
+      }
+    }
 
     return filters;
-  }
-
-  bool _matchesSellingCustomerType(
-    Map<String, dynamic> row,
-    List<String>? customerIds,
-  ) {
-    if (customerIds == null) return true;
-    if (customerIds.isEmpty) return false;
-    return customerIds.contains(row['customer']?.toString() ?? '');
   }
 
   double _sellingAnalyticsValue(Map<String, dynamic> row) {
@@ -6908,37 +6917,132 @@ class AppState with ChangeNotifier {
     return NumParse.asDouble(row['grand_total']);
   }
 
-  Future<List<String>?> _sellingCustomerTypeCustomerIds() async {
+  Future<List<String>?> _sellingSalesGroupSalesPersons() async {
     final type = _sellingCustomerTypeFilter.trim().toLowerCase();
     if (type.isEmpty || type == 'all') return null;
-    if (_sellingCustomerTypeIdsCacheKey == type &&
-        _sellingCustomerTypeIdsCache != null) {
-      return _sellingCustomerTypeIdsCache;
-    }
 
-    final internal = type == 'internal';
-    List<Map<String, dynamic>> rows;
+    final targetGroup = switch (type) {
+      'sales' => 'sales team',
+      'others' => 'others',
+      _ => '',
+    };
+    if (targetGroup.isEmpty) return null;
+
     try {
-      rows = await _fetchAllResourcePages(
-        doctype: 'Customer',
-        fields: const ['name', 'is_internal_customer'],
-        filters: [
-          ['is_internal_customer', '=', internal ? 1 : 0],
+      final salesPersons = await _fetchAllResourcePages(
+        doctype: 'Sales Person',
+        fields: const [
+          'name',
+          'parent_sales_person',
+          'is_group',
+          'enabled',
+          'lft',
+          'rgt',
         ],
         orderBy: 'name asc',
         maxRows: null,
       );
-    } catch (_) {
-      return null;
-    }
+      Map<String, dynamic>? group;
+      for (final row in salesPersons) {
+        if (row['name']?.toString().trim().toLowerCase() == targetGroup) {
+          group = row;
+          break;
+        }
+      }
+      if (group == null && type == 'sales') {
+        for (final row in salesPersons) {
+          if (row['name']?.toString().trim().toLowerCase() == 'sales') {
+            group = row;
+            break;
+          }
+        }
+      }
+      if (group == null) return const [];
 
-    final ids = rows
-        .map((row) => row['name']?.toString() ?? '')
-        .where((name) => name.trim().isNotEmpty)
-        .toList();
-    _sellingCustomerTypeIdsCacheKey = type;
-    _sellingCustomerTypeIdsCache = ids;
-    return ids;
+      final groupName = group['name']?.toString() ?? '';
+      final groupLeft = NumParse.asInt(group['lft']);
+      final groupRight = NumParse.asInt(group['rgt']);
+      final descendants = <String>{};
+      for (final row in salesPersons) {
+        final name = row['name']?.toString() ?? '';
+        if (name.isEmpty || name == groupName) continue;
+        final enabled = row['enabled'];
+        if (enabled == 0 || enabled == false) continue;
+        final isGroup = row['is_group'] == 1 || row['is_group'] == true;
+        if (isGroup) continue;
+        final left = NumParse.asInt(row['lft']);
+        final right = NumParse.asInt(row['rgt']);
+        final insideNestedSet =
+            groupLeft > 0 &&
+            groupRight > groupLeft &&
+            left > groupLeft &&
+            right < groupRight;
+        final directChild = row['parent_sales_person']?.toString() == groupName;
+        if (insideNestedSet || directChild) descendants.add(name);
+      }
+      if (descendants.isEmpty) return const [];
+      return descendants.toList();
+    } catch (error) {
+      throw Exception('Gagal membaca struktur Sales Person Tree: $error');
+    }
+  }
+
+  Future<List<String>?> _sellingSalesGroupDocumentIds(String doctype) async {
+    final type = _sellingCustomerTypeFilter.trim().toLowerCase();
+    if (type.isEmpty || type == 'all') return null;
+    final cacheKey =
+        '$type:$doctype:$_sellingPeriodYear:$_sellingPeriodMonth:'
+        '$_sellingCompanyFilter';
+    final cached = _sellingSalesGroupDocumentIdsCache[cacheKey];
+    if (cached != null) return cached;
+
+    final salesPersons = await _sellingSalesGroupSalesPersons();
+    if (salesPersons == null) return null;
+    if (salesPersons.isEmpty) return const [];
+    try {
+      final dateField = doctype == 'Sales Order'
+          ? 'transaction_date'
+          : 'posting_date';
+      final candidates = await _fetchAllResourcePages(
+        doctype: doctype,
+        fields: ['name', dateField, 'company'],
+        filters: [
+          ..._sellingPeriodFilters(dateField),
+          ..._companyScopeFilters(_sellingCompanyFilter),
+        ],
+        orderBy: '$dateField desc, name desc',
+        maxRows: null,
+      );
+      final candidateIds = candidates
+          .map((row) => row['name']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      if (candidateIds.isEmpty) {
+        _sellingSalesGroupDocumentIdsCache[cacheKey] = const [];
+        return const [];
+      }
+
+      final documents = await _fetchDocumentsInBatches(doctype, candidateIds);
+      final allowedSalesPersons = salesPersons.toSet();
+      final ids = <String>[];
+      for (final id in candidateIds) {
+        final document = documents[id];
+        if (document == null) continue;
+        final belongsToGroup = _documentChildRows(document['sales_team']).any(
+          (row) => allowedSalesPersons.contains(
+            row['sales_person']?.toString() ?? '',
+          ),
+        );
+        if (belongsToGroup) ids.add(id);
+      }
+      _sellingSalesGroupDocumentIdsCache[cacheKey] = ids;
+      return ids;
+    } catch (error) {
+      throw Exception(
+        'Gagal membaca Sales Team untuk filter $type pada $doctype: $error',
+      );
+    }
   }
 
   bool _isActiveSellingTrendRow(Map<String, dynamic> row) {
