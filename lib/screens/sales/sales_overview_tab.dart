@@ -17,6 +17,8 @@ import 'sales_ui.dart';
 
 enum _DailySalesDocType { salesOrder, deliveryNote, salesInvoice }
 
+enum _DailySalesSort { itemGroup, qty, amount }
+
 class SalesOverviewTab extends StatefulWidget {
   final ValueChanged<int> onMenuSelected;
   final ValueChanged<int>? onOrderTabSelected;
@@ -33,10 +35,13 @@ class SalesOverviewTab extends StatefulWidget {
 
 class _SalesOverviewTabState extends State<SalesOverviewTab> {
   DateTime _filterDate = DateTime.now();
+  String _selectedCompany = '';
+  List<String> _companyOptions = const [];
   String _selectedSalesGroup = 'all';
   List<String> _salesGroupOptions = const [];
   bool _filterLoading = true;
   _DailySalesDocType _dailyDocType = _DailySalesDocType.salesOrder;
+  _DailySalesSort _dailySort = _DailySalesSort.amount;
   DailySalesReport _dailyReport = const DailySalesReport();
   bool _dailyReportLoading = true;
   int _dailyRequestVersion = 0;
@@ -54,8 +59,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadFilterOptions();
-      await _loadDailyReport();
-      await _loadRanking();
+      await Future.wait([_loadDailyReport(), _loadRanking()]);
     });
   }
 
@@ -69,6 +73,9 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     final state = context.read<AppState>();
     try {
       if (state.mobileAccess.shouldScopeSalesData) {
+        await state.loadSellingFilterOptions();
+        _companyOptions = state.sellingCompanies;
+        _selectedCompany = state.sellingCompanyFilter;
         _selectedSalesGroup = state.currentSalesPerson ?? 'all';
         _salesGroupOptions = [
           if (state.currentSalesPerson?.isNotEmpty == true)
@@ -76,6 +83,8 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
         ];
       } else {
         await state.loadSellingFilterOptions();
+        _companyOptions = state.sellingCompanies;
+        _selectedCompany = state.sellingCompanyFilter;
         _salesGroupOptions = state.sellingSalesGroups;
         if (_selectedSalesGroup != 'all' &&
             !_salesGroupOptions.contains(_selectedSalesGroup)) {
@@ -83,6 +92,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
         }
       }
     } catch (_) {
+      _companyOptions = const [];
       _salesGroupOptions = [
         if (state.currentSalesPerson?.isNotEmpty == true)
           state.currentSalesPerson!,
@@ -119,6 +129,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
             ? state.currentSalesPerson
             : null,
         salesPersons: selectedSalesPersons,
+        company: _selectedCompany,
       );
       if (mounted && requestVersion == _dailyRequestVersion) {
         setState(() => _dailyReport = report);
@@ -187,6 +198,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
               ? state.currentSalesPerson
               : null,
           salesPersons: selectedSalesPersons,
+          company: _selectedCompany,
         );
         if (mounted && requestVersion == _rankingRequestVersion) {
           setState(() => _topCustomers = topCustomers);
@@ -212,6 +224,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
               ? state.currentSalesPerson
               : null,
           filterSalesPersons: selectedSalesPersons,
+          company: _selectedCompany,
         );
         if (mounted && requestVersion == _rankingRequestVersion) {
           setState(() => _ranking = ranking);
@@ -256,6 +269,27 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     return _selectedSalesGroup;
   }
 
+  List<DailySalesItemSummary> _sortedDailyItems() {
+    final items = [..._dailyReport.items];
+    items.sort((a, b) {
+      switch (_dailySort) {
+        case _DailySalesSort.itemGroup:
+          final groupComparison = a.itemGroup.compareTo(b.itemGroup);
+          if (groupComparison != 0) return groupComparison;
+          return a.itemLabel.compareTo(b.itemLabel);
+        case _DailySalesSort.qty:
+          final qtyComparison = b.qty.compareTo(a.qty);
+          if (qtyComparison != 0) return qtyComparison;
+          return a.itemLabel.compareTo(b.itemLabel);
+        case _DailySalesSort.amount:
+          final amountComparison = b.amount.compareTo(a.amount);
+          if (amountComparison != 0) return amountComparison;
+          return a.itemLabel.compareTo(b.itemLabel);
+      }
+    });
+    return items;
+  }
+
   String _csvCell(Object? value) {
     final text = value?.toString() ?? '';
     return '"${text.replaceAll('"', '""')}"';
@@ -289,11 +323,15 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     return _shareCsv('sales_report_$_dateFileLabel.csv', [
       ['Tipe Dokumen', _dailyDoctype],
       ['Tanggal', _dateFileLabel],
+      [
+        'Company',
+        _selectedCompany.isEmpty ? 'Semua Company' : _selectedCompany,
+      ],
       ['Sales Group', _selectedSalesGroupLabel],
       [],
-      ['Item', 'Qty', 'Omzet'],
-      ..._dailyReport.items.map(
-        (item) => [item.itemLabel, item.qty, item.amount],
+      ['Item Group', 'Item', 'Qty', 'Omzet'],
+      ..._sortedDailyItems().map(
+        (item) => [item.itemGroup, item.itemLabel, item.qty, item.amount],
       ),
       ['TOTAL SALES', _dailyReport.totalQty, _dailyReport.totalAmount],
       [],
@@ -313,6 +351,13 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 
   Future<void> _exportTopCustomers() {
     return _shareCsv('top_10_customer_$_dateFileLabel.csv', [
+      [
+        'Company',
+        _selectedCompany.isEmpty ? 'Semua Company' : _selectedCompany,
+      ],
+      ['Tanggal', _dateFileLabel],
+      ['Sales Group', _selectedSalesGroupLabel],
+      [],
       ['Rank', 'Sales Person', 'Customer', 'Jumlah SO', 'Nilai'],
       ..._topCustomers
           .take(10)
@@ -330,6 +375,13 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 
   Future<void> _exportCollectionRanking() {
     return _shareCsv('ranking_collection_$_dateFileLabel.csv', [
+      [
+        'Company',
+        _selectedCompany.isEmpty ? 'Semua Company' : _selectedCompany,
+      ],
+      ['Tanggal', _dateFileLabel],
+      ['Sales Group', _selectedSalesGroupLabel],
+      [],
       ['Rank', 'Sales Person', 'Nilai'],
       ..._ranking.take(5).map((row) => [row.rank, row.salesPerson, row.amount]),
     ]);
@@ -361,11 +413,17 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
           SalesUi.gap(14),
           _SalesOverviewFilterCard(
             date: _filterDate,
+            selectedCompany: _selectedCompany,
+            companies: _companyOptions,
             selectedSalesGroup: _selectedSalesGroup,
             salesGroups: _salesGroupOptions,
             lockSalesPerson: state.mobileAccess.shouldScopeSalesData,
             loading: _filterLoading,
             onPickDate: _pickFilterDate,
+            onCompanyChanged: (company) {
+              setState(() => _selectedCompany = company);
+              _reloadReports();
+            },
             onSalesGroupChanged: (salesGroup) {
               setState(() => _selectedSalesGroup = salesGroup);
               _reloadReports();
@@ -379,7 +437,9 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
               loading: _dailyReportLoading,
               error: _dailyReportError,
               selectedType: _dailyDocType,
+              selectedSort: _dailySort,
               onTypeChanged: _setDailyDocType,
+              onSortChanged: (sort) => setState(() => _dailySort = sort),
               onExport: _exportDailyReport,
             ),
           ],
@@ -468,20 +528,26 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 class _SalesOverviewFilterCard extends StatelessWidget {
   const _SalesOverviewFilterCard({
     required this.date,
+    required this.selectedCompany,
+    required this.companies,
     required this.selectedSalesGroup,
     required this.salesGroups,
     required this.lockSalesPerson,
     required this.loading,
     required this.onPickDate,
+    required this.onCompanyChanged,
     required this.onSalesGroupChanged,
   });
 
   final DateTime date;
+  final String selectedCompany;
+  final List<String> companies;
   final String selectedSalesGroup;
   final List<String> salesGroups;
   final bool lockSalesPerson;
   final bool loading;
   final VoidCallback onPickDate;
+  final ValueChanged<String> onCompanyChanged;
   final ValueChanged<String> onSalesGroupChanged;
 
   String _date(DateTime value) =>
@@ -525,6 +591,34 @@ class _SalesOverviewFilterCard extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue:
+                selectedCompany.isEmpty || companies.contains(selectedCompany)
+                ? selectedCompany
+                : '',
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Company',
+              prefixIcon: Icon(Icons.business_rounded),
+            ),
+            hint: Text(loading ? 'Memuat Company...' : 'Semua Company'),
+            items: [
+              const DropdownMenuItem<String>(
+                value: '',
+                child: Text('Semua Company'),
+              ),
+              ...companies.map(
+                (company) => DropdownMenuItem<String>(
+                  value: company,
+                  child: Text(company, overflow: TextOverflow.ellipsis),
+                ),
+              ),
+            ],
+            onChanged: loading
+                ? null
+                : (value) => onCompanyChanged(value ?? ''),
           ),
           const SizedBox(height: 10),
           if (lockSalesPerson)
@@ -582,7 +676,9 @@ class _DailySalesReportCard extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.selectedType,
+    required this.selectedSort,
     required this.onTypeChanged,
+    required this.onSortChanged,
     required this.onExport,
   });
 
@@ -590,7 +686,9 @@ class _DailySalesReportCard extends StatelessWidget {
   final bool loading;
   final String? error;
   final _DailySalesDocType selectedType;
+  final _DailySalesSort selectedSort;
   final ValueChanged<_DailySalesDocType> onTypeChanged;
+  final ValueChanged<_DailySalesSort> onSortChanged;
   final VoidCallback onExport;
 
   String get _docLabel => switch (selectedType) {
@@ -687,6 +785,10 @@ class _DailySalesReportCard extends StatelessWidget {
 
           const SizedBox(height: 12),
 
+          _DailySortSelector(selected: selectedSort, onChanged: onSortChanged),
+
+          const SizedBox(height: 12),
+
           if (loading)
             const LinearProgressIndicator()
           else if (error != null)
@@ -694,10 +796,11 @@ class _DailySalesReportCard extends StatelessWidget {
           else if (report.isEmpty)
             ErpEmptyState(
               title: 'Belum ada data $_docLabel pada periode ini',
-              message: 'Coba pilih rentang tanggal atau tipe dokumen lain.',
+              message:
+                  'Coba pilih tanggal, sales group, atau tipe dokumen lain.',
             )
           else ...[
-            _DailyItemSummaryTable(report: report),
+            _DailyItemSummaryTable(report: report, sort: selectedSort),
             const SizedBox(height: 12),
             ...report.customers.map(
               (customer) => Padding(
@@ -766,13 +869,114 @@ class _DailyDocChip extends StatelessWidget {
   }
 }
 
-class _DailyItemSummaryTable extends StatelessWidget {
-  const _DailyItemSummaryTable({required this.report});
+class _DailySortSelector extends StatelessWidget {
+  const _DailySortSelector({required this.selected, required this.onChanged});
 
-  final DailySalesReport report;
+  final _DailySalesSort selected;
+  final ValueChanged<_DailySalesSort> onChanged;
 
   @override
   Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          _DailySortChip(
+            label: 'Item Group',
+            selected: selected == _DailySalesSort.itemGroup,
+            onTap: () => onChanged(_DailySalesSort.itemGroup),
+          ),
+          _DailySortChip(
+            label: 'Qty',
+            selected: selected == _DailySalesSort.qty,
+            onTap: () => onChanged(_DailySalesSort.qty),
+          ),
+          _DailySortChip(
+            label: 'Omzet',
+            selected: selected == _DailySalesSort.amount,
+            onTap: () => onChanged(_DailySalesSort.amount),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DailySortChip extends StatelessWidget {
+  const _DailySortChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: selected ? AppColors.primary : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            height: 34,
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: selected ? AppColors.white : AppColors.slate,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DailyItemSummaryTable extends StatelessWidget {
+  const _DailyItemSummaryTable({required this.report, required this.sort});
+
+  final DailySalesReport report;
+  final _DailySalesSort sort;
+
+  List<DailySalesItemSummary> get _items {
+    final items = [...report.items];
+    items.sort((a, b) {
+      switch (sort) {
+        case _DailySalesSort.itemGroup:
+          final groupComparison = a.itemGroup.compareTo(b.itemGroup);
+          if (groupComparison != 0) return groupComparison;
+          return a.itemLabel.compareTo(b.itemLabel);
+        case _DailySalesSort.qty:
+          final qtyComparison = b.qty.compareTo(a.qty);
+          if (qtyComparison != 0) return qtyComparison;
+          return a.itemLabel.compareTo(b.itemLabel);
+        case _DailySalesSort.amount:
+          final amountComparison = b.amount.compareTo(a.amount);
+          if (amountComparison != 0) return amountComparison;
+          return a.itemLabel.compareTo(b.itemLabel);
+      }
+    });
+    return items;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _items;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.background,
@@ -787,7 +991,7 @@ class _DailyItemSummaryTable extends StatelessWidget {
             amount: 'Omzet',
             header: true,
           ),
-          ...report.items.map(
+          ...items.map(
             (item) => _DailySummaryRow(
               item: item.itemLabel,
               qty: _formatQty(item.qty),

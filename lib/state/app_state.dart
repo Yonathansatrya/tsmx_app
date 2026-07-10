@@ -1721,12 +1721,14 @@ class AppState with ChangeNotifier {
     DateTime? to,
     String? filterSalesPerson,
     List<String>? filterSalesPersons,
+    String? company,
   }) async {
     final allowedSalesPersons = filterSalesPersons
         ?.map((name) => name.trim())
         .where((name) => name.isNotEmpty)
         .toSet();
     final singleFilterSalesPerson = filterSalesPerson?.trim() ?? '';
+    final selectedCompany = company?.trim() ?? '';
     final totals = <String, double>{};
     final salesPersons = await _fetchAllResourcePages(
       doctype: 'Sales Person',
@@ -1754,6 +1756,7 @@ class AppState with ChangeNotifier {
       fields: const ['name', 'grand_total', 'net_total', 'transaction_date'],
       filters: [
         ['docstatus', '!=', 2],
+        if (selectedCompany.isNotEmpty) ['company', '=', selectedCompany],
         if (from != null)
           ['transaction_date', '>=', DateRangePresets.toFrappeDate(from)],
         if (to != null)
@@ -1812,6 +1815,7 @@ class AppState with ChangeNotifier {
     bool scopeToCurrentSales = true,
     String? salesPerson,
     List<String>? salesPersons,
+    String? company,
   }) async {
     final explicitSalesPerson = salesPerson?.trim() ?? '';
     final explicitSalesPersons = salesPersons
@@ -1823,6 +1827,7 @@ class AppState with ChangeNotifier {
         : (explicitSalesPersons == null && scopeToCurrentSales
               ? await _salesPersonScopeName()
               : null);
+    final selectedCompany = company?.trim() ?? '';
     final orderRows = await _fetchAllResourcePages(
       doctype: 'Sales Order',
       fields: const [
@@ -1835,6 +1840,7 @@ class AppState with ChangeNotifier {
       ],
       filters: [
         ['docstatus', '!=', 2],
+        if (selectedCompany.isNotEmpty) ['company', '=', selectedCompany],
         if (from != null)
           ['transaction_date', '>=', DateRangePresets.toFrappeDate(from)],
         if (to != null)
@@ -1926,6 +1932,7 @@ class AppState with ChangeNotifier {
     DateTime? to,
     String? salesPerson,
     List<String>? salesPersons,
+    String? company,
   }) async {
     final normalizedDoctype = switch (doctype.trim().toLowerCase()) {
       'delivery note' || 'dn' => 'Delivery Note',
@@ -1949,8 +1956,7 @@ class AppState with ChangeNotifier {
         : (explicitSalesPersons == null && _shouldScopeSalesData
               ? await _salesPersonScopeName()
               : null);
-    final company = _sellingCompanyFilter.trim();
-
+    final selectedCompany = company?.trim() ?? '';
     final rows = await _fetchAllResourcePages(
       doctype: normalizedDoctype,
       fields: [
@@ -1966,7 +1972,7 @@ class AppState with ChangeNotifier {
         ['docstatus', '!=', 2],
         [dateField, '>=', DateRangePresets.toFrappeDate(selectedFrom)],
         [dateField, '<=', DateRangePresets.toFrappeDate(selectedTo)],
-        if (company.isNotEmpty) ['company', '=', company],
+        if (selectedCompany.isNotEmpty) ['company', '=', selectedCompany],
         ...?scopeFilters,
       ],
       orderBy: '$dateField desc, name desc',
@@ -2017,14 +2023,23 @@ class AppState with ChangeNotifier {
       for (final item in _documentChildRows(document['items'])) {
         final label = _dailySalesItemLabel(item);
         if (label.isEmpty) continue;
+        final itemGroup = _cleanDailyItemLabel(item['item_group']);
         final qty = NumParse.asDouble(item['qty'] ?? item['stock_qty']);
         if (qty == 0) continue;
         final amount = _dailySalesItemAmount(item, qty);
 
         itemTotals
-            .putIfAbsent(label, () => _DailySalesMutable(label))
+            .putIfAbsent(
+              label,
+              () => _DailySalesMutable(label, itemGroup: itemGroup),
+            )
             .add(qty: qty, amount: amount);
-        customerBucket.add(label: label, qty: qty, amount: amount);
+        customerBucket.add(
+          label: label,
+          itemGroup: itemGroup,
+          qty: qty,
+          amount: amount,
+        );
       }
     }
 
@@ -7000,8 +7015,8 @@ class AppState with ChangeNotifier {
     return NumParse.asDouble(row['grand_total']);
   }
 
-  Future<List<String>?> _sellingSalesGroupSalesPersons() async {
-    final type = _sellingCustomerTypeFilter.trim().toLowerCase();
+  Future<List<String>?> _sellingSalesGroupSalesPersons({String? group}) async {
+    final type = (group ?? _sellingCustomerTypeFilter).trim().toLowerCase();
     if (type.isEmpty || type == 'all') return null;
 
     final targetGroup = type;
@@ -7062,13 +7077,7 @@ class AppState with ChangeNotifier {
     if (selectedGroup.isEmpty || selectedGroup.toLowerCase() == 'all') {
       return null;
     }
-    final previousFilter = _sellingCustomerTypeFilter;
-    _sellingCustomerTypeFilter = selectedGroup;
-    try {
-      return await _sellingSalesGroupSalesPersons();
-    } finally {
-      _sellingCustomerTypeFilter = previousFilter;
-    }
+    return _sellingSalesGroupSalesPersons(group: selectedGroup);
   }
 
   Future<List<String>?> _sellingSalesGroupDocumentIds(String doctype) async {
@@ -7903,10 +7912,11 @@ class _CustomerSalesTotal {
 
 class _DailySalesMutable {
   final String label;
+  final String itemGroup;
   double qty = 0;
   double amount = 0;
 
-  _DailySalesMutable(this.label);
+  _DailySalesMutable(this.label, {this.itemGroup = ''});
 
   void add({required double qty, required double amount}) {
     this.qty += qty;
@@ -7914,7 +7924,12 @@ class _DailySalesMutable {
   }
 
   DailySalesItemSummary toSummary() {
-    return DailySalesItemSummary(itemLabel: label, qty: qty, amount: amount);
+    return DailySalesItemSummary(
+      itemLabel: label,
+      itemGroup: itemGroup,
+      qty: qty,
+      amount: amount,
+    );
   }
 }
 
@@ -7926,11 +7941,15 @@ class _DailyCustomerMutable {
 
   void add({
     required String label,
+    required String itemGroup,
     required double qty,
     required double amount,
   }) {
     _items
-        .putIfAbsent(label, () => _DailySalesMutable(label))
+        .putIfAbsent(
+          label,
+          () => _DailySalesMutable(label, itemGroup: itemGroup),
+        )
         .add(qty: qty, amount: amount);
   }
 

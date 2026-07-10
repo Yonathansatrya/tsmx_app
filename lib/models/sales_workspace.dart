@@ -148,11 +148,13 @@ class DailySalesReport {
 
 class DailySalesItemSummary {
   final String itemLabel;
+  final String itemGroup;
   final double qty;
   final double amount;
 
   const DailySalesItemSummary({
     required this.itemLabel,
+    this.itemGroup = '',
     required this.qty,
     required this.amount,
   });
