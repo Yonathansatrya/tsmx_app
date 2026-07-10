@@ -120,7 +120,6 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       _dailyReportError = null;
     });
     try {
-      final selectedSalesPersons = await _selectedSalesPersons(state);
       final report = await state.fetchDailySalesReport(
         doctype: _dailyDoctype,
         from: _filterDate,
@@ -128,7 +127,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
         salesPerson: state.mobileAccess.shouldScopeSalesData
             ? state.currentSalesPerson
             : null,
-        salesPersons: selectedSalesPersons,
+        parentSalesPerson: _selectedParentSalesPerson(state),
         company: _selectedCompany,
       );
       if (mounted && requestVersion == _dailyRequestVersion) {
@@ -189,7 +188,6 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     });
     if (canViewTopCustomers) {
       try {
-        final selectedSalesPersons = await _selectedSalesPersons(state);
         final topCustomers = await state.fetchTopCustomersBySalesPerson(
           from: _filterDate,
           to: _filterDate,
@@ -197,7 +195,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
           salesPerson: state.mobileAccess.shouldScopeSalesData
               ? state.currentSalesPerson
               : null,
-          salesPersons: selectedSalesPersons,
+          parentSalesPerson: _selectedParentSalesPerson(state),
           company: _selectedCompany,
         );
         if (mounted && requestVersion == _rankingRequestVersion) {
@@ -216,14 +214,13 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 
     if (canViewRanking) {
       try {
-        final selectedSalesPersons = await _selectedSalesPersons(state);
         final ranking = await state.fetchCollectionRanking(
           from: _filterDate,
           to: _filterDate,
           filterSalesPerson: state.mobileAccess.shouldScopeSalesData
               ? state.currentSalesPerson
               : null,
-          filterSalesPersons: selectedSalesPersons,
+          parentSalesPerson: _selectedParentSalesPerson(state),
           company: _selectedCompany,
         );
         if (mounted && requestVersion == _rankingRequestVersion) {
@@ -257,9 +254,11 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     return state.canUseSales;
   }
 
-  Future<List<String>?> _selectedSalesPersons(AppState state) {
-    if (state.mobileAccess.shouldScopeSalesData) return Future.value(null);
-    return state.resolveSalesPersonsForSalesGroup(_selectedSalesGroup);
+  String? _selectedParentSalesPerson(AppState state) {
+    if (state.mobileAccess.shouldScopeSalesData) return null;
+    final group = _selectedSalesGroup.trim();
+    if (group.isEmpty || group.toLowerCase() == 'all') return null;
+    return group;
   }
 
   String get _selectedSalesGroupLabel {
