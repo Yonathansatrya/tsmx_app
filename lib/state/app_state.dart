@@ -1720,7 +1720,13 @@ class AppState with ChangeNotifier {
     DateTime? from,
     DateTime? to,
     String? filterSalesPerson,
+    List<String>? filterSalesPersons,
   }) async {
+    final allowedSalesPersons = filterSalesPersons
+        ?.map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet();
+    final singleFilterSalesPerson = filterSalesPerson?.trim() ?? '';
     final totals = <String, double>{};
     final salesPersons = await _fetchAllResourcePages(
       doctype: 'Sales Person',
@@ -1735,8 +1741,10 @@ class AppState with ChangeNotifier {
       final name = row['name']?.toString() ?? '';
       final enabled = row['enabled'];
       if (name.isEmpty || enabled == 0 || enabled == false) continue;
-      if (filterSalesPerson?.trim().isEmpty != false ||
-          name == filterSalesPerson!.trim()) {
+      if ((allowedSalesPersons != null && allowedSalesPersons.contains(name)) ||
+          (allowedSalesPersons == null &&
+              (singleFilterSalesPerson.isEmpty ||
+                  name == singleFilterSalesPerson))) {
         totals[name] = 0;
       }
     }
@@ -1777,8 +1785,13 @@ class AppState with ChangeNotifier {
       for (final team in _documentChildRows(document['sales_team'])) {
         final salesPerson = team['sales_person']?.toString() ?? '';
         if (salesPerson.isEmpty) continue;
-        if (filterSalesPerson?.trim().isNotEmpty == true &&
-            salesPerson != filterSalesPerson!.trim()) {
+        if (allowedSalesPersons != null &&
+            !allowedSalesPersons.contains(salesPerson)) {
+          continue;
+        }
+        if (allowedSalesPersons == null &&
+            singleFilterSalesPerson.isNotEmpty &&
+            salesPerson != singleFilterSalesPerson) {
           continue;
         }
         final percentage = NumParse.asDouble(team['allocated_percentage']);
@@ -1798,11 +1811,18 @@ class AppState with ChangeNotifier {
     int limit = 10,
     bool scopeToCurrentSales = true,
     String? salesPerson,
+    List<String>? salesPersons,
   }) async {
     final explicitSalesPerson = salesPerson?.trim() ?? '';
+    final explicitSalesPersons = salesPersons
+        ?.map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet();
     final scopedSalesPerson = explicitSalesPerson.isNotEmpty
         ? explicitSalesPerson
-        : (scopeToCurrentSales ? await _salesPersonScopeName() : null);
+        : (explicitSalesPersons == null && scopeToCurrentSales
+              ? await _salesPersonScopeName()
+              : null);
     final orderRows = await _fetchAllResourcePages(
       doctype: 'Sales Order',
       fields: const [
@@ -1856,6 +1876,10 @@ class AppState with ChangeNotifier {
       for (final team in _documentChildRows(document['sales_team'])) {
         final salesPerson = team['sales_person']?.toString() ?? '';
         if (salesPerson.isEmpty) continue;
+        if (explicitSalesPersons != null &&
+            !explicitSalesPersons.contains(salesPerson)) {
+          continue;
+        }
         if (scopedSalesPerson != null && salesPerson != scopedSalesPerson) {
           continue;
         }
@@ -1901,6 +1925,7 @@ class AppState with ChangeNotifier {
     DateTime? from,
     DateTime? to,
     String? salesPerson,
+    List<String>? salesPersons,
   }) async {
     final normalizedDoctype = switch (doctype.trim().toLowerCase()) {
       'delivery note' || 'dn' => 'Delivery Note',
@@ -1915,9 +1940,15 @@ class AppState with ChangeNotifier {
     final selectedTo = to ?? selectedDate;
     final scopeFilters = await _salesDocumentScopeFilters(normalizedDoctype);
     final explicitSalesPerson = salesPerson?.trim() ?? '';
+    final explicitSalesPersons = salesPersons
+        ?.map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toSet();
     final scopedSalesPerson = explicitSalesPerson.isNotEmpty
         ? explicitSalesPerson
-        : (_shouldScopeSalesData ? await _salesPersonScopeName() : null);
+        : (explicitSalesPersons == null && _shouldScopeSalesData
+              ? await _salesPersonScopeName()
+              : null);
     final company = _sellingCompanyFilter.trim();
 
     final rows = await _fetchAllResourcePages(
@@ -1964,6 +1995,14 @@ class AppState with ChangeNotifier {
           document['sales_team'],
         ).any((row) => row['sales_person']?.toString() == scopedSalesPerson);
         if (!belongsToSales) continue;
+      }
+      if (explicitSalesPersons != null) {
+        final belongsToGroup = _documentChildRows(document['sales_team']).any(
+          (row) => explicitSalesPersons.contains(
+            row['sales_person']?.toString() ?? '',
+          ),
+        );
+        if (!belongsToGroup) continue;
       }
 
       final customer =
@@ -7015,6 +7054,20 @@ class AppState with ChangeNotifier {
       return descendants.toList();
     } catch (error) {
       throw Exception('Gagal membaca struktur Sales Person Tree: $error');
+    }
+  }
+
+  Future<List<String>?> resolveSalesPersonsForSalesGroup(String? group) async {
+    final selectedGroup = group?.trim() ?? '';
+    if (selectedGroup.isEmpty || selectedGroup.toLowerCase() == 'all') {
+      return null;
+    }
+    final previousFilter = _sellingCustomerTypeFilter;
+    _sellingCustomerTypeFilter = selectedGroup;
+    try {
+      return await _sellingSalesGroupSalesPersons();
+    } finally {
+      _sellingCustomerTypeFilter = previousFilter;
     }
   }
 

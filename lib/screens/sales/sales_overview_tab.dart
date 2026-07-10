@@ -33,8 +33,8 @@ class SalesOverviewTab extends StatefulWidget {
 
 class _SalesOverviewTabState extends State<SalesOverviewTab> {
   DateTime _filterDate = DateTime.now();
-  String? _selectedSalesPerson;
-  List<String> _salesPersonOptions = const [];
+  String _selectedSalesGroup = 'all';
+  List<String> _salesGroupOptions = const [];
   bool _filterLoading = true;
   _DailySalesDocType _dailyDocType = _DailySalesDocType.salesOrder;
   DailySalesReport _dailyReport = const DailySalesReport();
@@ -69,30 +69,21 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     final state = context.read<AppState>();
     try {
       if (state.mobileAccess.shouldScopeSalesData) {
-        _selectedSalesPerson = state.currentSalesPerson;
-        _salesPersonOptions = [
+        _selectedSalesGroup = state.currentSalesPerson ?? 'all';
+        _salesGroupOptions = [
           if (state.currentSalesPerson?.isNotEmpty == true)
             state.currentSalesPerson!,
         ];
       } else {
-        final rows = await state.frappeService.fetchResource(
-          'Sales Person',
-          fields: const ['name'],
-          filters: const [
-            ['is_group', '=', 0],
-            ['enabled', '=', 1],
-          ],
-          orderBy: 'name asc',
-          limit: 500,
-        );
-        _salesPersonOptions = rows
-            .map((row) => row['name']?.toString() ?? '')
-            .where((name) => name.isNotEmpty)
-            .toSet()
-            .toList();
+        await state.loadSellingFilterOptions();
+        _salesGroupOptions = state.sellingSalesGroups;
+        if (_selectedSalesGroup != 'all' &&
+            !_salesGroupOptions.contains(_selectedSalesGroup)) {
+          _selectedSalesGroup = 'all';
+        }
       }
     } catch (_) {
-      _salesPersonOptions = [
+      _salesGroupOptions = [
         if (state.currentSalesPerson?.isNotEmpty == true)
           state.currentSalesPerson!,
       ];
@@ -119,11 +110,15 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       _dailyReportError = null;
     });
     try {
+      final selectedSalesPersons = await _selectedSalesPersons(state);
       final report = await state.fetchDailySalesReport(
         doctype: _dailyDoctype,
         from: _filterDate,
         to: _filterDate,
-        salesPerson: _selectedSalesPerson,
+        salesPerson: state.mobileAccess.shouldScopeSalesData
+            ? state.currentSalesPerson
+            : null,
+        salesPersons: selectedSalesPersons,
       );
       if (mounted && requestVersion == _dailyRequestVersion) {
         setState(() => _dailyReport = report);
@@ -183,11 +178,15 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     });
     if (canViewTopCustomers) {
       try {
+        final selectedSalesPersons = await _selectedSalesPersons(state);
         final topCustomers = await state.fetchTopCustomersBySalesPerson(
           from: _filterDate,
           to: _filterDate,
           scopeToCurrentSales: state.mobileAccess.shouldScopeSalesData,
-          salesPerson: _selectedSalesPerson,
+          salesPerson: state.mobileAccess.shouldScopeSalesData
+              ? state.currentSalesPerson
+              : null,
+          salesPersons: selectedSalesPersons,
         );
         if (mounted && requestVersion == _rankingRequestVersion) {
           setState(() => _topCustomers = topCustomers);
@@ -205,10 +204,14 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 
     if (canViewRanking) {
       try {
+        final selectedSalesPersons = await _selectedSalesPersons(state);
         final ranking = await state.fetchCollectionRanking(
           from: _filterDate,
           to: _filterDate,
-          filterSalesPerson: _selectedSalesPerson,
+          filterSalesPerson: state.mobileAccess.shouldScopeSalesData
+              ? state.currentSalesPerson
+              : null,
+          filterSalesPersons: selectedSalesPersons,
         );
         if (mounted && requestVersion == _rankingRequestVersion) {
           setState(() => _ranking = ranking);
@@ -239,6 +242,18 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 
   bool _canViewTopCustomers(AppState state) {
     return state.canUseSales;
+  }
+
+  Future<List<String>?> _selectedSalesPersons(AppState state) {
+    if (state.mobileAccess.shouldScopeSalesData) return Future.value(null);
+    return state.resolveSalesPersonsForSalesGroup(_selectedSalesGroup);
+  }
+
+  String get _selectedSalesGroupLabel {
+    if (_selectedSalesGroup.trim().isEmpty || _selectedSalesGroup == 'all') {
+      return 'All';
+    }
+    return _selectedSalesGroup;
   }
 
   String _csvCell(Object? value) {
@@ -274,7 +289,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     return _shareCsv('sales_report_$_dateFileLabel.csv', [
       ['Tipe Dokumen', _dailyDoctype],
       ['Tanggal', _dateFileLabel],
-      ['Sales Person', _selectedSalesPerson ?? 'Semua'],
+      ['Sales Group', _selectedSalesGroupLabel],
       [],
       ['Item', 'Qty', 'Omzet'],
       ..._dailyReport.items.map(
@@ -346,13 +361,13 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
           SalesUi.gap(14),
           _SalesOverviewFilterCard(
             date: _filterDate,
-            selectedSalesPerson: _selectedSalesPerson,
-            salesPersons: _salesPersonOptions,
+            selectedSalesGroup: _selectedSalesGroup,
+            salesGroups: _salesGroupOptions,
             lockSalesPerson: state.mobileAccess.shouldScopeSalesData,
             loading: _filterLoading,
             onPickDate: _pickFilterDate,
-            onSalesPersonChanged: (salesPerson) {
-              setState(() => _selectedSalesPerson = salesPerson);
+            onSalesGroupChanged: (salesGroup) {
+              setState(() => _selectedSalesGroup = salesGroup);
               _reloadReports();
             },
           ),
@@ -453,21 +468,21 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 class _SalesOverviewFilterCard extends StatelessWidget {
   const _SalesOverviewFilterCard({
     required this.date,
-    required this.selectedSalesPerson,
-    required this.salesPersons,
+    required this.selectedSalesGroup,
+    required this.salesGroups,
     required this.lockSalesPerson,
     required this.loading,
     required this.onPickDate,
-    required this.onSalesPersonChanged,
+    required this.onSalesGroupChanged,
   });
 
   final DateTime date;
-  final String? selectedSalesPerson;
-  final List<String> salesPersons;
+  final String selectedSalesGroup;
+  final List<String> salesGroups;
   final bool lockSalesPerson;
   final bool loading;
   final VoidCallback onPickDate;
-  final ValueChanged<String?> onSalesPersonChanged;
+  final ValueChanged<String> onSalesGroupChanged;
 
   String _date(DateTime value) =>
       '${value.day.toString().padLeft(2, '0')}/'
@@ -519,7 +534,7 @@ class _SalesOverviewFilterCard extends StatelessWidget {
                 prefixIcon: Icon(Icons.person_rounded),
               ),
               child: Text(
-                selectedSalesPerson ?? '-',
+                selectedSalesGroup == 'all' ? '-' : selectedSalesGroup,
                 style: const TextStyle(
                   color: AppColors.navy,
                   fontWeight: FontWeight.w800,
@@ -528,32 +543,32 @@ class _SalesOverviewFilterCard extends StatelessWidget {
             )
           else
             DropdownButtonFormField<String>(
-              initialValue: salesPersons.contains(selectedSalesPerson)
-                  ? selectedSalesPerson
-                  : null,
+              initialValue:
+                  selectedSalesGroup == 'all' ||
+                      salesGroups.contains(selectedSalesGroup)
+                  ? selectedSalesGroup
+                  : 'all',
               isExpanded: true,
               decoration: const InputDecoration(
-                labelText: 'Sales Person',
-                prefixIcon: Icon(Icons.person_search_rounded),
+                labelText: 'Sales Group',
+                prefixIcon: Icon(Icons.account_tree_rounded),
               ),
-              hint: Text(loading ? 'Memuat Sales Person...' : 'Semua Sales'),
+              hint: Text(loading ? 'Memuat Sales Group...' : 'All'),
               items: [
                 const DropdownMenuItem<String>(
-                  value: '',
-                  child: Text('Semua Sales'),
+                  value: 'all',
+                  child: Text('All'),
                 ),
-                ...salesPersons.map(
-                  (salesPerson) => DropdownMenuItem<String>(
-                    value: salesPerson,
-                    child: Text(salesPerson, overflow: TextOverflow.ellipsis),
+                ...salesGroups.map(
+                  (salesGroup) => DropdownMenuItem<String>(
+                    value: salesGroup,
+                    child: Text(salesGroup, overflow: TextOverflow.ellipsis),
                   ),
                 ),
               ],
               onChanged: loading
                   ? null
-                  : (value) => onSalesPersonChanged(
-                      value?.trim().isEmpty == true ? null : value,
-                    ),
+                  : (value) => onSalesGroupChanged(value ?? 'all'),
             ),
         ],
       ),
