@@ -38,7 +38,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   bool _isLoadingCustomerInsight = false;
   String? _customerInsightError;
   Timer? _pricingDebounce;
-  int _pricingRequestVersion = 0;
   String? _selectedCurrency;
   String? _selectedPriceList;
   String? _priceListCurrency;
@@ -287,7 +286,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       _customerError = null;
       _customerInsight = null;
       _customerInsightError = null;
-      _pricingRequestVersion++;
       _itemInsights.clear();
     });
   }
@@ -307,7 +305,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     _customerError = null;
     _customerInsight = null;
     _customerInsightError = null;
-    _pricingRequestVersion++;
     _itemInsights.clear();
   }
 
@@ -552,22 +549,73 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
   void _calculateTotal() {
     setState(() {
-      final qty = double.tryParse(_qtyCtrl.text.trim()) ?? 0;
-      final rate = double.tryParse(_rateCtrl.text.trim()) ?? 0;
-      final discount = double.tryParse(_discountCtrl.text.trim()) ?? 0;
-      final subtotal =
-          (qty * (rate - discount).clamp(0, double.infinity)) +
-          _additionalItems.fold<double>(0, (total, row) {
-            final rowQty = double.tryParse(row.qtyController.text.trim()) ?? 0;
-            final rowRate =
-                double.tryParse(row.rateController.text.trim()) ?? 0;
-            final rowDiscount =
-                double.tryParse(row.discountController.text.trim()) ?? 0;
-            return total +
-                (rowQty * (rowRate - rowDiscount).clamp(0, double.infinity));
-          });
-      _totalAmount = subtotal;
+      _totalAmount =
+          _itemSubtotal(
+            qtyText: _qtyCtrl.text,
+            rateText: _rateCtrl.text,
+            discountText: _discountCtrl.text,
+          ) +
+          _additionalItems.fold<double>(
+            0,
+            (total, row) =>
+                total +
+                _itemSubtotal(
+                  qtyText: row.qtyController.text,
+                  rateText: row.rateController.text,
+                  discountText: row.discountController.text,
+                ),
+          );
     });
+  }
+
+  double _parseNumber(String value) {
+    final cleaned = value
+        .trim()
+        .replaceAll(RegExp(r'[^0-9,.-]'), '')
+        .replaceAll('.', '')
+        .replaceAll(',', '.');
+    return double.tryParse(cleaned) ?? 0;
+  }
+
+  double _itemQty(String value) => _parseNumber(value);
+
+  double _itemRate(String value) => _parseNumber(value);
+
+  double _itemDiscount(String value) => _parseNumber(value);
+
+  double _effectiveItemRate({
+    required String rateText,
+    required String discountText,
+  }) {
+    final rate = _itemRate(rateText);
+    final discount = _itemDiscount(discountText);
+    return (rate - discount).clamp(0, double.infinity);
+  }
+
+  double _itemSubtotal({
+    required String qtyText,
+    required String rateText,
+    required String discountText,
+  }) {
+    return _itemQty(qtyText) *
+        _effectiveItemRate(rateText: rateText, discountText: discountText);
+  }
+
+  String _formatRupiah(double value) {
+    return NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: '',
+      decimalDigits: 0,
+    ).format(value).trim();
+  }
+
+  void _formatMoneyController(TextEditingController controller) {
+    if (controller.text.trim().isEmpty) return;
+    final value = _parseNumber(controller.text);
+    controller.text = _formatRupiah(value);
+    controller.selection = TextSelection.collapsed(
+      offset: controller.text.length,
+    );
   }
 
   void _onPricingInputChanged() {
@@ -597,7 +645,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   }
 
   void _adjustQuantity(TextEditingController controller, double delta) {
-    final current = double.tryParse(controller.text.trim()) ?? 1;
+    final current = _parseNumber(controller.text);
     final next = (current + delta).clamp(1, double.infinity);
     controller.text = next == next.roundToDouble()
         ? next.toInt().toString()
@@ -605,7 +653,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   }
 
   void _scheduleRepriceAllItems() {
-    _pricingRequestVersion++;
     _pricingDebounce?.cancel();
     _pricingDebounce = Timer(const Duration(milliseconds: 350), () {
       if (mounted) _repriceAllItems();
@@ -644,14 +691,22 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       String? warehouse,
     }) {
       final pricing = _itemInsights[itemCode];
+      final originalRate = rate ?? 0;
+      final discount = discountAmount ?? 0;
+      final effectiveRate = (originalRate - discount).clamp(0, double.infinity);
+      final rowAmount = qty * effectiveRate;
       return {
         'item_code': itemCode,
         'qty': qty,
         'delivery_date': deliveryDate,
-        if (rate != null && rate > 0) 'rate': rate,
+        if (originalRate > 0) 'price_list_rate': originalRate,
+        if (effectiveRate > 0) 'rate': effectiveRate,
+        if (effectiveRate > 0) 'net_rate': effectiveRate,
+        if (rowAmount > 0) 'amount': rowAmount,
+        if (rowAmount > 0) 'net_amount': rowAmount,
         if (discountAmount != null && discountAmount > 0)
           'discount_amount': discountAmount,
-        if (pricing != null && pricing.priceListRate > 0)
+        if (originalRate <= 0 && pricing != null && pricing.priceListRate > 0)
           'price_list_rate': pricing.priceListRate,
         if ((discountAmount == null || discountAmount <= 0) &&
             pricing != null &&
@@ -672,16 +727,16 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       itemPayload(
         itemCode: firstItemCode,
         qty: double.parse(_qtyCtrl.text.trim()),
-        rate: double.tryParse(_rateCtrl.text.trim()),
-        discountAmount: double.tryParse(_discountCtrl.text.trim()),
+        rate: _itemRate(_rateCtrl.text),
+        discountAmount: _itemDiscount(_discountCtrl.text),
         warehouse: _selectedWarehouse,
       ),
       ..._additionalItems.map(
         (row) => itemPayload(
           itemCode: row.itemCode!,
           qty: double.parse(row.qtyController.text.trim()),
-          rate: double.tryParse(row.rateController.text.trim()),
-          discountAmount: double.tryParse(row.discountController.text.trim()),
+          rate: _itemRate(row.rateController.text),
+          discountAmount: _itemDiscount(row.discountController.text),
           warehouse: row.warehouse ?? _selectedWarehouse,
         ),
       ),
@@ -728,8 +783,21 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     _AdditionalItemRow? row,
   }) async {
     if (itemCode.isEmpty) return null;
-    final requestVersion = _pricingRequestVersion;
     final loadingKey = row == null ? 'first:$itemCode' : 'row:${row.hashCode}';
+    String pricingContextKey() {
+      final controller = row?.qtyController ?? _qtyCtrl;
+      return [
+        itemCode,
+        _customerCtrl.text.trim(),
+        _activeCompany(),
+        _selectedPriceList ?? '',
+        _selectedCurrency ?? '',
+        row?.warehouse ?? _selectedWarehouse ?? '',
+        controller.text.trim(),
+      ].join('|');
+    }
+
+    final requestContextKey = pricingContextKey();
     setState(() => _loadingItemPrices.add(loadingKey));
     try {
       final qty =
@@ -745,16 +813,21 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         qty: qty,
         ignorePricingRule: false,
       );
-      if (!mounted || requestVersion != _pricingRequestVersion) return insight;
+      if (!mounted || requestContextKey != pricingContextKey()) {
+        return insight;
+      }
       if (row == null && _selectedItemCode != itemCode) return insight;
       if (row != null && row.itemCode != itemCode) return insight;
+      final resolvedPrice = insight.price > 0
+          ? insight.price
+          : insight.priceListRate;
       setState(() {
         _itemInsights[itemCode] = insight;
-        if (applyPrice && insight.price > 0) {
+        if (applyPrice && resolvedPrice > 0) {
           if (row == null) {
-            _rateCtrl.text = insight.price.toString();
+            _rateCtrl.text = _formatRupiah(resolvedPrice);
           } else {
-            row.rateController.text = insight.price.toString();
+            row.rateController.text = _formatRupiah(resolvedPrice);
           }
         }
       });
@@ -769,66 +842,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     } finally {
       if (mounted) setState(() => _loadingItemPrices.remove(loadingKey));
     }
-  }
-
-  Future<void> _showItemInsight(String itemCode) async {
-    final insight = _itemInsights[itemCode] ?? await _loadItemInsight(itemCode);
-    if (!mounted || insight == null) return;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                insight.itemCode,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                insight.price > 0
-                    ? '${insight.priceList}: ${insight.currency} ${insight.price.toStringAsFixed(0)}'
-                    : 'Harga price list tidak ditemukan',
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Stock per Gudang',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: insight.stocks
-                      .map(
-                        (stock) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(stock.warehouse),
-                          subtitle: Text(
-                            'Reserved ${stock.reservedQty.toStringAsFixed(0)} | '
-                            'Projected ${stock.projectedQty.toStringAsFixed(0)}',
-                          ),
-                          trailing: Text(
-                            stock.actualQty.toStringAsFixed(0),
-                            style: const TextStyle(fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
@@ -1491,12 +1504,11 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     final invalidAdditionalItem = _additionalItems.any((row) {
       final qty = double.tryParse(row.qtyController.text.trim());
       final rateText = row.rateController.text.trim();
-      final rate = rateText.isEmpty ? 0 : double.tryParse(rateText);
+      final rate = rateText.isEmpty ? 0 : _itemRate(rateText);
       return row.itemCode == null ||
           row.itemCode!.isEmpty ||
           qty == null ||
           qty <= 0 ||
-          rate == null ||
           rate < 0;
     });
     if (invalidAdditionalItem) {
@@ -1917,9 +1929,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       final row = _AdditionalItemRow(
         itemCode: item.itemCode,
         qty: item.qty.toString(),
-        rate: item.rate > 0 ? item.rate.toString() : '',
+        rate: item.rate > 0 ? _formatRupiah(item.rate) : '',
         discount: item.discountAmount > 0
-            ? item.discountAmount.toString()
+            ? _formatRupiah(item.discountAmount)
             : '0',
         warehouse: item.warehouse.isNotEmpty ? item.warehouse : null,
       );
@@ -1939,7 +1951,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       _priceListCurrency = order.priceListCurrency.isNotEmpty
           ? order.priceListCurrency
           : _priceListCurrency;
-      _discountCtrl.text = firstItem?.discountAmount.toString() ?? '0';
+      _discountCtrl.text = firstItem?.discountAmount != null
+          ? _formatRupiah(firstItem!.discountAmount)
+          : '0';
       _selectedDate = DateTime.tryParse(order.date) ?? _selectedDate;
       _selectedDeliveryDate = _selectedDate;
       if (firstItem != null) {
@@ -1947,7 +1961,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
             ? firstItem.itemCode
             : firstItem.itemName;
         _qtyCtrl.text = firstItem.qty.toString();
-        _rateCtrl.text = firstItem.rate > 0 ? firstItem.rate.toString() : '';
+        _rateCtrl.text = firstItem.rate > 0
+            ? _formatRupiah(firstItem.rate)
+            : '';
         if (firstItem.warehouse.isNotEmpty) {
           _selectedWarehouse = firstItem.warehouse;
           final warehouse = _selectedWarehouseInfo(
@@ -2642,6 +2658,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                           _selectedItemCode = option.code;
                           _itemTextController?.text = option.label;
                           _itemError = null;
+                          _rateCtrl.clear();
                         });
                         _loadItemInsight(option.code, applyPrice: true);
                       },
@@ -2725,81 +2742,72 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
                     const SizedBox(height: 12),
 
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _qtyCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: 'Quantity',
-                              prefixIcon: IconButton(
-                                tooltip: 'Kurangi quantity',
-                                onPressed: () => _adjustQuantity(_qtyCtrl, -1),
-                                icon: const Icon(Icons.remove_rounded),
-                              ),
-                              suffixIcon: IconButton(
-                                tooltip: 'Tambah quantity',
-                                onPressed: () => _adjustQuantity(_qtyCtrl, 1),
-                                icon: const Icon(Icons.add_rounded),
-                              ),
-                              filled: true,
-                              fillColor: AppColors.background,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
-                            ),
-                            validator: (v) {
-                              final q = double.tryParse(v?.trim() ?? '');
-                              if (q == null || q <= 0) return 'Qty > 0';
-                              return null;
-                            },
+                    TextFormField(
+                      controller: _qtyCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Quantity',
+                        prefixIcon: IconButton(
+                          tooltip: 'Kurangi quantity',
+                          onPressed: () => _adjustQuantity(_qtyCtrl, -1),
+                          icon: const Icon(Icons.remove_rounded),
+                        ),
+                        suffixIcon: IconButton(
+                          tooltip: 'Tambah quantity',
+                          onPressed: () => _adjustQuantity(_qtyCtrl, 1),
+                          icon: const Icon(Icons.add_rounded),
+                        ),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _rateCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: 'Harga/Unit',
-                              filled: true,
-                              fillColor: AppColors.background,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
-                            ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) return null;
-                              final r = double.tryParse(v.trim());
-                              if (r == null || r < 0) return 'Harga >= 0';
-                              return null;
-                            },
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      validator: (v) {
+                        final q = double.tryParse(v?.trim() ?? '');
+                        if (q == null || q <= 0) return 'Qty > 0';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextFormField(
+                      controller: _rateCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      onEditingComplete: () =>
+                          _formatMoneyController(_rateCtrl),
+                      onTapOutside: (_) => _formatMoneyController(_rateCtrl),
+                      decoration: InputDecoration(
+                        labelText: 'Harga/Unit',
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
-                      ],
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return null;
+                        final r = _itemRate(v);
+                        if (r < 0) return 'Harga >= 0';
+                        return null;
+                      },
                     ),
                     const SizedBox(height: 10),
                     TextFormField(
@@ -2807,6 +2815,10 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
+                      onEditingComplete: () =>
+                          _formatMoneyController(_discountCtrl),
+                      onTapOutside: (_) =>
+                          _formatMoneyController(_discountCtrl),
                       decoration: InputDecoration(
                         labelText: 'Discount Amount',
                         prefixIcon: const Icon(Icons.discount_outlined),
@@ -2824,36 +2836,33 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                         ),
                       ),
                       validator: (value) {
-                        final discount = double.tryParse(value?.trim() ?? '');
-                        if (discount == null || discount < 0) {
+                        final discount = _itemDiscount(value ?? '');
+                        if (discount < 0) {
                           return 'Diskon harus 0 atau lebih';
                         }
-                        final rate =
-                            double.tryParse(_rateCtrl.text.trim()) ?? 0;
+                        final rate = _itemRate(_rateCtrl.text);
                         if (rate > 0 && discount > rate) {
                           return 'Diskon tidak boleh melebihi harga';
                         }
                         return null;
                       },
                     ),
-
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: _selectedItemCode == null
-                            ? null
-                            : () => _showItemInsight(_selectedItemCode!),
-                        icon: const Icon(Icons.inventory_2_outlined),
-                        label: const Text('Cek stok & harga'),
+                    const SizedBox(height: 10),
+                    _ItemSubtotalSummary(
+                      qty: _itemQty(_qtyCtrl.text),
+                      rate: _itemRate(_rateCtrl.text),
+                      discount: _itemDiscount(_discountCtrl.text),
+                      effectiveRate: _effectiveItemRate(
+                        rateText: _rateCtrl.text,
+                        discountText: _discountCtrl.text,
                       ),
+                      subtotal: _itemSubtotal(
+                        qtyText: _qtyCtrl.text,
+                        rateText: _rateCtrl.text,
+                        discountText: _discountCtrl.text,
+                      ),
+                      formatCurrency: _formatRupiah,
                     ),
-                    if (_selectedItemCode != null)
-                      _ItemPricingLine(
-                        insight: _itemInsights[_selectedItemCode],
-                        isLoading: _loadingItemPrices.contains(
-                          'first:$_selectedItemCode',
-                        ),
-                      ),
                     const SizedBox(height: 12),
                     ..._additionalItems.asMap().entries.map((entry) {
                       final index = entry.key;
@@ -2909,6 +2918,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                                 setState(() {
                                   row.itemCode = option.code;
                                   row.itemTextController?.text = option.label;
+                                  row.rateController.clear();
                                 });
                                 _loadItemInsight(
                                   option.code,
@@ -2971,70 +2981,57 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                                   },
                             ),
                             const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: row.qtyController,
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                    decoration: InputDecoration(
-                                      labelText: 'Quantity',
-                                      prefixIcon: IconButton(
-                                        tooltip: 'Kurangi quantity',
-                                        onPressed: () => _adjustQuantity(
-                                          row.qtyController,
-                                          -1,
-                                        ),
-                                        icon: const Icon(Icons.remove_rounded),
-                                      ),
-                                      suffixIcon: IconButton(
-                                        tooltip: 'Tambah quantity',
-                                        onPressed: () => _adjustQuantity(
-                                          row.qtyController,
-                                          1,
-                                        ),
-                                        icon: const Icon(Icons.add_rounded),
-                                      ),
-                                    ),
-                                    validator: (value) {
-                                      final qty = double.tryParse(
-                                        value?.trim() ?? '',
-                                      );
-                                      return qty == null || qty <= 0
-                                          ? 'Qty > 0'
-                                          : null;
-                                    },
+                            TextFormField(
+                              controller: row.qtyController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
                                   ),
+                              decoration: InputDecoration(
+                                labelText: 'Quantity',
+                                prefixIcon: IconButton(
+                                  tooltip: 'Kurangi quantity',
+                                  onPressed: () =>
+                                      _adjustQuantity(row.qtyController, -1),
+                                  icon: const Icon(Icons.remove_rounded),
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: row.rateController,
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Harga/Unit',
-                                    ),
-                                    validator: (value) {
-                                      if (value == null ||
-                                          value.trim().isEmpty) {
-                                        return null;
-                                      }
-                                      final rate = double.tryParse(
-                                        value.trim(),
-                                      );
-                                      return rate == null || rate < 0
-                                          ? 'Harga >= 0'
-                                          : null;
-                                    },
+                                suffixIcon: IconButton(
+                                  tooltip: 'Tambah quantity',
+                                  onPressed: () =>
+                                      _adjustQuantity(row.qtyController, 1),
+                                  icon: const Icon(Icons.add_rounded),
+                                ),
+                              ),
+                              validator: (value) {
+                                final qty = double.tryParse(
+                                  value?.trim() ?? '',
+                                );
+                                return qty == null || qty <= 0
+                                    ? 'Qty > 0'
+                                    : null;
+                              },
+                            ),
+                            const SizedBox(height: 10),
+                            TextFormField(
+                              controller: row.rateController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
                                   ),
-                                ),
-                              ],
+                              onEditingComplete: () =>
+                                  _formatMoneyController(row.rateController),
+                              onTapOutside: (_) =>
+                                  _formatMoneyController(row.rateController),
+                              decoration: const InputDecoration(
+                                labelText: 'Harga/Unit',
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return null;
+                                }
+                                final rate = _itemRate(value);
+                                return rate < 0 ? 'Harga >= 0' : null;
+                              },
                             ),
                             const SizedBox(height: 10),
                             TextFormField(
@@ -3043,22 +3040,22 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
                                   ),
+                              onEditingComplete: () => _formatMoneyController(
+                                row.discountController,
+                              ),
+                              onTapOutside: (_) => _formatMoneyController(
+                                row.discountController,
+                              ),
                               decoration: const InputDecoration(
                                 labelText: 'Discount Amount',
                                 prefixIcon: Icon(Icons.discount_outlined),
                               ),
                               validator: (value) {
-                                final discount = double.tryParse(
-                                  value?.trim() ?? '',
-                                );
-                                if (discount == null || discount < 0) {
+                                final discount = _itemDiscount(value ?? '');
+                                if (discount < 0) {
                                   return 'Diskon harus 0 atau lebih';
                                 }
-                                final rate =
-                                    double.tryParse(
-                                      row.rateController.text.trim(),
-                                    ) ??
-                                    0;
+                                final rate = _itemRate(row.rateController.text);
                                 if (rate > 0 && discount > rate) {
                                   return 'Diskon tidak boleh melebihi harga';
                                 }
@@ -3066,23 +3063,23 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                               },
                             ),
                             const SizedBox(height: 10),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: TextButton.icon(
-                                onPressed: row.itemCode == null
-                                    ? null
-                                    : () => _showItemInsight(row.itemCode!),
-                                icon: const Icon(Icons.inventory_2_outlined),
-                                label: const Text('Cek stok & harga'),
+                            _ItemSubtotalSummary(
+                              qty: _itemQty(row.qtyController.text),
+                              rate: _itemRate(row.rateController.text),
+                              discount: _itemDiscount(
+                                row.discountController.text,
                               ),
+                              effectiveRate: _effectiveItemRate(
+                                rateText: row.rateController.text,
+                                discountText: row.discountController.text,
+                              ),
+                              subtotal: _itemSubtotal(
+                                qtyText: row.qtyController.text,
+                                rateText: row.rateController.text,
+                                discountText: row.discountController.text,
+                              ),
+                              formatCurrency: _formatRupiah,
                             ),
-                            if (row.itemCode != null)
-                              _ItemPricingLine(
-                                insight: _itemInsights[row.itemCode],
-                                isLoading: _loadingItemPrices.contains(
-                                  'row:${row.hashCode}',
-                                ),
-                              ),
                           ],
                         ),
                       );
@@ -3117,7 +3114,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             ),
                           ),
                           Text(
-                            'Rp ${_totalAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => '.')}',
+                            'Rp ${_formatRupiah(_totalAmount)}',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w800,
@@ -3237,6 +3234,104 @@ class _AdditionalItemRow {
   }
 }
 
+class _ItemSubtotalSummary extends StatelessWidget {
+  final double qty;
+  final double rate;
+  final double discount;
+  final double effectiveRate;
+  final double subtotal;
+  final String Function(double value) formatCurrency;
+
+  const _ItemSubtotalSummary({
+    required this.qty,
+    required this.rate,
+    required this.discount,
+    required this.effectiveRate,
+    required this.subtotal,
+    required this.formatCurrency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final qtyLabel = qty == qty.roundToDouble()
+        ? qty.toInt().toString()
+        : qty.toStringAsFixed(2);
+    final notes = <String>[
+      'Harga asli Rp ${formatCurrency(rate)}',
+      if (discount > 0) 'Diskon per item Rp ${formatCurrency(discount)}',
+      'Harga final Rp ${formatCurrency(effectiveRate)}',
+    ];
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.softGreen.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SubtotalLine(
+            label:
+                'Sub total ($qtyLabel x Rp ${formatCurrency(effectiveRate)})',
+            value: 'Rp ${formatCurrency(subtotal)}',
+            highlight: true,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            notes.join(' • '),
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SubtotalLine extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool highlight;
+
+  const _SubtotalLine({
+    required this.label,
+    required this.value,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = highlight ? AppColors.primary : AppColors.navy;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: AppColors.navy,
+              fontSize: 12,
+              fontWeight: highlight ? FontWeight.w900 : FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: highlight ? 14 : 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _CustomerInsightCard extends StatelessWidget {
   final CustomerSalesInsight insight;
   final double orderTotal;
@@ -3330,39 +3425,6 @@ class _CustomerInsightCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ItemPricingLine extends StatelessWidget {
-  final ItemSalesInsight? insight;
-  final bool isLoading;
-
-  const _ItemPricingLine({required this.insight, required this.isLoading});
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const LinearProgressIndicator(minHeight: 2);
-    }
-    final value = insight;
-    if (value == null) return const SizedBox.shrink();
-    final detail = <String>[
-      if (value.priceList.isNotEmpty) value.priceList,
-      if (value.priceListRate > 0)
-        'List ${value.currency} ${value.priceListRate.toStringAsFixed(0)}',
-      if (value.discountPercentage > 0)
-        'Diskon ${value.discountPercentage.toStringAsFixed(1)}%',
-      if (value.pricingRule.isNotEmpty) 'Rule ${value.pricingRule}',
-    ];
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        detail.isEmpty
-            ? 'Harga manual / price list tidak ditemukan'
-            : detail.join(' | '),
-        style: const TextStyle(fontSize: 11, color: AppColors.slate),
       ),
     );
   }
