@@ -1955,7 +1955,15 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           ? _formatRupiah(firstItem!.discountAmount)
           : '0';
       _selectedDate = DateTime.tryParse(order.date) ?? _selectedDate;
-      _selectedDeliveryDate = _selectedDate;
+      final deliveryDate = order.deliveryDate.isNotEmpty
+          ? order.deliveryDate
+          : firstItem?.deliveryDate;
+      _selectedDeliveryDate =
+          DateTime.tryParse(deliveryDate ?? '') ?? _selectedDeliveryDate;
+      if (order.salesPerson.isNotEmpty &&
+          _salesPersonOptions.contains(order.salesPerson)) {
+        _selectedSalesPerson = order.salesPerson;
+      }
       if (firstItem != null) {
         _selectedItemCode = firstItem.itemCode.isNotEmpty
             ? firstItem.itemCode

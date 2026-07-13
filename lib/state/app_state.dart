@@ -3897,45 +3897,17 @@ class AppState with ChangeNotifier {
   Future<bool> _refreshSellingSummariesFromMobileAnalytics() async {
     if (_shouldScopeSalesData) return false;
 
-    if (_sellingCustomerTypeFilter.trim().isNotEmpty &&
-        _sellingCustomerTypeFilter.trim().toLowerCase() != 'all') {
-      return false;
-    }
-
     try {
-      Future<_MobileAnalyticsSection> section({
-        required String docType,
-        required String dateField,
-      }) async {
-        try {
-          final analytics = await _fetchErpNextAnalyticsSection(
-            reportName: 'Sales Analytics',
-            treeType: 'Customer',
-            docType: docType,
-            year: _sellingPeriodYear,
-            month: _sellingPeriodMonth,
-            company: _sellingCompanyFilter,
-          );
-          if (analytics != null) return analytics;
-        } catch (_) {
-          // Keep the dashboard usable when one ERPNext report section fails.
-        }
-        return _fallbackSellingAnalyticsSection(
-          doctype: docType,
-          dateField: dateField,
-        );
-      }
-
-      final salesOrder = await section(
-        docType: 'Sales Order',
+      final salesOrder = await _sellingAnalyticsBySalesPersonSection(
+        doctype: 'Sales Order',
         dateField: 'transaction_date',
       );
-      final deliveryNote = await section(
-        docType: 'Delivery Note',
+      final deliveryNote = await _sellingAnalyticsBySalesPersonSection(
+        doctype: 'Delivery Note',
         dateField: 'posting_date',
       );
-      final salesInvoice = await section(
-        docType: 'Sales Invoice',
+      final salesInvoice = await _sellingAnalyticsBySalesPersonSection(
+        doctype: 'Sales Invoice',
         dateField: 'posting_date',
       );
 
@@ -3949,6 +3921,30 @@ class AppState with ChangeNotifier {
     } catch (_) {
       return false;
     }
+  }
+
+  Future<_MobileAnalyticsSection> _sellingAnalyticsBySalesPersonSection({
+    required String doctype,
+    required String dateField,
+  }) async {
+    try {
+      final selectedSalesGroup = _selectedSellingParentSalesPerson();
+      final analytics = await _fetchSalesAnalyticsBySalesPersonSection(
+        basedOn: doctype,
+        year: _sellingPeriodYear,
+        month: _sellingPeriodMonth,
+        company: _sellingCompanyFilter,
+        salesPerson: selectedSalesGroup ?? 'All Sales Persons',
+      );
+      if (analytics != null) return analytics;
+    } catch (_) {
+      // Fall back to document API when the custom report is not installed.
+    }
+
+    return _fallbackSellingAnalyticsSection(
+      doctype: doctype,
+      dateField: dateField,
+    );
   }
 
   Future<_MobileAnalyticsSection> _fallbackSellingAnalyticsSection({
@@ -4507,6 +4503,44 @@ class AppState with ChangeNotifier {
     return _analyticsSectionFromQueryReport(response, year, reportMonth);
   }
 
+  Future<_MobileAnalyticsSection?> _fetchSalesAnalyticsBySalesPersonSection({
+    required String basedOn,
+    required int year,
+    required int month,
+    required String company,
+    required String salesPerson,
+  }) async {
+    final range = month == 0 ? 'Monthly' : 'Weekly';
+    final reportMonth = month;
+    final from = reportMonth == 0
+        ? DateTime(year)
+        : DateTime(year, reportMonth);
+    final to = reportMonth == 0
+        ? DateTime(year, 12, 31)
+        : DateTime(year, reportMonth + 1, 0);
+    final response = await _frappeService.callMethod(
+      'frappe.desk.query_report.run',
+      args: {
+        'report_name': 'Sales Analytics by Sales Person',
+        'filters': {
+          'tree_type': 'Customer',
+          if (company.trim().isNotEmpty) 'company': company.trim(),
+          'based_on': basedOn,
+          'from_date': DateRangePresets.toFrappeDate(from),
+          'to_date': DateRangePresets.toFrappeDate(to),
+          'sales_person': salesPerson.trim().isEmpty
+              ? 'All Sales Persons'
+              : salesPerson.trim(),
+          'range': range,
+          'value_quantity': 'Value',
+        },
+        'ignore_prepared_report': true,
+        'are_default_filters': false,
+      },
+    );
+    return _analyticsSectionFromQueryReport(response, year, reportMonth);
+  }
+
   _MobileAnalyticsSection? _analyticsSectionFromQueryReport(
     dynamic response,
     int year,
@@ -4534,7 +4568,9 @@ class AppState with ChangeNotifier {
       if (_isQueryReportTotalRow(mapped)) continue;
       var hasValue = false;
       for (final entry in periodColumns.entries) {
-        final value = NumParse.asDouble(mapped[entry.value]);
+        final value = NumParse.asDouble(
+          mapped[_queryReportPeriodColumnField(entry.value)],
+        );
         if (value == 0) continue;
         totalValue += value;
         hasValue = true;
@@ -4601,12 +4637,13 @@ class AppState with ChangeNotifier {
           column['label']?.toString() ??
           '';
       if (fieldname.isEmpty) continue;
-      final label = (column['label']?.toString() ?? fieldname).toLowerCase();
+      final rawLabel = column['label']?.toString() ?? fieldname;
+      final label = rawLabel.toLowerCase();
       final index = month > 0 && RegExp(r'(week|minggu)\s*\d+').hasMatch(label)
           ? result.length
           : _queryReportPeriodIndex(label, month);
       if (index == null) continue;
-      result[index] = fieldname;
+      result[index] = _queryReportPeriodColumnKey(fieldname, rawLabel);
     }
     return result;
   }
@@ -4627,11 +4664,24 @@ class AppState with ChangeNotifier {
             ? result.length
             : _queryReportPeriodIndex(label, month);
         if (index == null) continue;
-        result[index] = fieldname;
+        result[index] = _queryReportPeriodColumnKey(fieldname, fieldname);
       }
       if (result.isNotEmpty) break;
     }
     return result;
+  }
+
+  String _queryReportPeriodColumnKey(String fieldname, String label) {
+    return '$fieldname\u001f$label';
+  }
+
+  String _queryReportPeriodColumnField(String value) {
+    return value.split('\u001f').first;
+  }
+
+  String _queryReportPeriodColumnLabel(String value) {
+    final parts = value.split('\u001f');
+    return parts.length > 1 ? parts.sublist(1).join('\u001f') : value;
   }
 
   int? _queryReportPeriodIndex(String label, int month) {
@@ -4739,7 +4789,12 @@ class AppState with ChangeNotifier {
         ..sort((a, b) => a.key.compareTo(b.key));
       return [
         for (var i = 0; i < entries.length; i++)
-          DocumentTrendPoint(label: _weeklyReportLabel(entries[i].value, i)),
+          DocumentTrendPoint(
+            label: _weeklyReportLabel(
+              _queryReportPeriodColumnLabel(entries[i].value),
+              i,
+            ),
+          ),
       ];
     }
 

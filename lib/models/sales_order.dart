@@ -11,6 +11,7 @@ class SalesOrderItem {
   final double rate;
   final double discountAmount;
   final String warehouse;
+  final String deliveryDate;
 
   SalesOrderItem({
     required this.itemCode,
@@ -19,6 +20,7 @@ class SalesOrderItem {
     required this.rate,
     this.discountAmount = 0,
     this.warehouse = '',
+    this.deliveryDate = '',
   });
 
   factory SalesOrderItem.fromJson(Map<String, dynamic> json) {
@@ -33,6 +35,7 @@ class SalesOrderItem {
       rate: NumParse.asDouble(json['rate'] ?? json['net_rate']),
       discountAmount: NumParse.asDouble(json['discount_amount']),
       warehouse: json['warehouse']?.toString() ?? '',
+      deliveryDate: json['delivery_date']?.toString() ?? '',
     );
   }
 }
@@ -48,6 +51,8 @@ class SalesOrder {
   final double perDelivered;
   final double perBilled;
   final String date;
+  final String deliveryDate;
+  final String salesPerson;
   final String currency;
   final String sellingPriceList;
   final String priceListCurrency;
@@ -66,6 +71,8 @@ class SalesOrder {
     this.perDelivered = 0,
     this.perBilled = 0,
     required this.date,
+    this.deliveryDate = '',
+    this.salesPerson = '',
     this.currency = '',
     this.sellingPriceList = '',
     this.priceListCurrency = '',
@@ -109,6 +116,20 @@ class SalesOrder {
               .toList()
         : <SalesOrderItem>[];
 
+    var salesPerson = '';
+    final rawSalesTeam = json['sales_team'];
+    if (rawSalesTeam is List) {
+      for (final rawRow in rawSalesTeam) {
+        if (rawRow is! Map) continue;
+        final row = Map<String, dynamic>.from(rawRow);
+        final value = row['sales_person']?.toString().trim() ?? '';
+        if (value.isNotEmpty) {
+          salesPerson = value;
+          break;
+        }
+      }
+    }
+
     return SalesOrder(
       id: id,
       customerId: customerId,
@@ -120,6 +141,8 @@ class SalesOrder {
       perDelivered: NumParse.asDouble(json['per_delivered']),
       perBilled: NumParse.asDouble(json['per_billed']),
       date: date,
+      deliveryDate: json['delivery_date']?.toString() ?? '',
+      salesPerson: salesPerson,
       currency: json['currency']?.toString() ?? '',
       sellingPriceList: json['selling_price_list']?.toString() ?? '',
       priceListCurrency: json['price_list_currency']?.toString() ?? '',
@@ -142,6 +165,8 @@ class SalesOrder {
     double? perDelivered,
     double? perBilled,
     String? date,
+    String? deliveryDate,
+    String? salesPerson,
     String? currency,
     String? sellingPriceList,
     String? priceListCurrency,
@@ -160,6 +185,8 @@ class SalesOrder {
       perDelivered: perDelivered ?? this.perDelivered,
       perBilled: perBilled ?? this.perBilled,
       date: date ?? this.date,
+      deliveryDate: deliveryDate ?? this.deliveryDate,
+      salesPerson: salesPerson ?? this.salesPerson,
       currency: currency ?? this.currency,
       sellingPriceList: sellingPriceList ?? this.sellingPriceList,
       priceListCurrency: priceListCurrency ?? this.priceListCurrency,
