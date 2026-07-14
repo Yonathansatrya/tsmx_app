@@ -169,6 +169,68 @@ class FrappeService {
     }).toList();
   }
 
+  Future<List<Map<String, dynamic>>> fetchReportView(
+    String doctype, {
+    required List<String> fields,
+    required int limit,
+    required int limitStart,
+    String? orderBy,
+    List<List<dynamic>>? filters,
+    List<List<dynamic>>? orFilters,
+  }) async {
+    final result = await callMethod(
+      'frappe.desk.reportview.get',
+      args: {
+        'doctype': doctype,
+        'fields': fields,
+        'filters': filters ?? const [],
+        'or_filters': orFilters ?? const [],
+        'order_by': orderBy ?? 'modified desc',
+        'start': limitStart,
+        'page_length': limit,
+        'view': 'List',
+        'group_by': null,
+        'with_comment_count': 0,
+      },
+    );
+
+    final payload = result is Map ? Map<String, dynamic>.from(result) : null;
+    final rawRows =
+        payload?['values'] ?? payload?['data'] ?? payload?['result'];
+    if (rawRows is! List) return const [];
+
+    final rawKeys = payload?['keys'] ?? payload?['fields'];
+    final keys = rawKeys is List
+        ? rawKeys.map((key) => key.toString()).toList()
+        : fields;
+
+    return rawRows
+        .map((item) {
+          if (item is Map<String, dynamic>) return item;
+          if (item is Map) return Map<String, dynamic>.from(item);
+          if (item is List) {
+            final row = <String, dynamic>{};
+            for (var i = 0; i < item.length && i < keys.length; i++) {
+              final key = _normalizeReportViewKey(keys[i]);
+              if (key.isNotEmpty) row[key] = item[i];
+            }
+            return row;
+          }
+          return <String, dynamic>{};
+        })
+        .where((row) => row.isNotEmpty)
+        .toList();
+  }
+
+  String _normalizeReportViewKey(String raw) {
+    var key = raw.split(':').first.trim().replaceAll('`', '');
+    final dotIndex = key.lastIndexOf('.');
+    if (dotIndex >= 0 && dotIndex < key.length - 1) {
+      key = key.substring(dotIndex + 1);
+    }
+    return key.trim();
+  }
+
   Future<Map<String, dynamic>> fetchDocument(
     String doctype,
     String name,

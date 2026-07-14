@@ -7568,6 +7568,19 @@ class AppState with ChangeNotifier {
     var currentOrderBy = orderBy;
 
     while (remainingFields.isNotEmpty) {
+      if (_supportsSalesTeamParentFilter(doctype) &&
+          _usesParentSalesPersonFilter(filters)) {
+        return _frappeService.fetchReportView(
+          doctype,
+          fields: remainingFields,
+          limit: limit,
+          limitStart: limitStart,
+          orderBy: currentOrderBy,
+          filters: _salesTeamReportViewFilters(filters),
+          orFilters: orFilters,
+        );
+      }
+
       try {
         return await _frappeService.fetchResource(
           doctype,
@@ -7605,6 +7618,34 @@ class AppState with ChangeNotifier {
     }
 
     throw Exception('No permitted fields available for $doctype.');
+  }
+
+  bool _supportsSalesTeamParentFilter(String doctype) {
+    return doctype == 'Sales Order' ||
+        doctype == 'Delivery Note' ||
+        doctype == 'Sales Invoice';
+  }
+
+  bool _usesParentSalesPersonFilter(List<List<dynamic>>? filters) {
+    if (filters == null) return false;
+    return filters.any(
+      (filter) =>
+          filter.isNotEmpty &&
+          filter.first.toString().trim() == 'parent_sales_person',
+    );
+  }
+
+  List<List<dynamic>>? _salesTeamReportViewFilters(
+    List<List<dynamic>>? filters,
+  ) {
+    if (filters == null) return null;
+    return filters.map((filter) {
+      if (filter.length >= 3 &&
+          filter.first.toString().trim() == 'parent_sales_person') {
+        return ['Sales Team', 'parent_sales_person', filter[1], filter[2]];
+      }
+      return filter;
+    }).toList();
   }
 
   Future<Map<String, ({String name, int reorderLevel, double valuationRate})>>
