@@ -4525,6 +4525,8 @@ class AppState with ChangeNotifier {
         'filters': {
           'tree_type': 'Customer',
           if (company.trim().isNotEmpty) 'company': company.trim(),
+          'document_type': basedOn,
+          'doc_type': basedOn,
           'based_on': basedOn,
           'from_date': DateRangePresets.toFrappeDate(from),
           'to_date': DateRangePresets.toFrappeDate(to),
