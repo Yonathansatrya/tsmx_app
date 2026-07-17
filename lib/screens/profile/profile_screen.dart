@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
@@ -17,6 +18,10 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen>
     with SingleTickerProviderStateMixin {
+  static final Uri _appUpdateUri = Uri.parse(
+    'https://play.google.com/apps/internaltest/4701248966857234954',
+  );
+
   final ImagePicker _imagePicker = ImagePicker();
   final _passwordFormKey = GlobalKey<FormState>();
   final _oldPasswordController = TextEditingController();
@@ -333,6 +338,24 @@ class _ProfileScreenState extends State<ProfileScreen>
             _buildSalesMappingCard(appState),
           ],
           const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: _openAppUpdate,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.white,
+              elevation: 0,
+              minimumSize: const Size.fromHeight(50),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            icon: const Icon(Icons.system_update_alt_rounded),
+            label: const Text(
+              'Update Aplikasi',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+          const SizedBox(height: 10),
           OutlinedButton.icon(
             onPressed: () => _confirmResetLocalData(appState),
             style: OutlinedButton.styleFrom(
@@ -373,6 +396,31 @@ class _ProfileScreenState extends State<ProfileScreen>
         ],
       ),
     );
+  }
+
+  Future<void> _openAppUpdate() async {
+    try {
+      final opened = await launchUrl(
+        _appUpdateUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Link update aplikasi tidak dapat dibuka.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal membuka update aplikasi: $error'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   Widget _buildIdentityCard(AppState appState) {

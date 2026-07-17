@@ -388,6 +388,34 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 
   String get _dateFileLabel => DateRangePresets.toFrappeDate(_filterDate);
 
+  List<List<Object?>> _dailyCustomerExportRows() {
+    final rows = <List<Object?>>[];
+    for (final customer in _dailyReport.customers) {
+      final customerQty = customer.items.fold<double>(
+        0,
+        (total, item) => total + item.qty,
+      );
+      for (final item in customer.items) {
+        rows.add([
+          customer.customer,
+          item.itemLabel,
+          item.qty,
+          item.amount,
+          '',
+        ]);
+      }
+      rows.add([
+        customer.customer,
+        'TOTAL CUSTOMER',
+        customerQty,
+        '',
+        customer.totalAmount,
+      ]);
+      rows.add([]);
+    }
+    return rows;
+  }
+
   Future<void> _exportDailyReport() {
     return _shareCsv('sales_report_$_dateFileLabel.csv', [
       ['Tipe Dokumen', _dailyDoctype],
@@ -405,17 +433,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       ['TOTAL SALES', _dailyReport.totalQty, _dailyReport.totalAmount],
       [],
       ['Customer', 'Item', 'Qty', 'Omzet Item', 'Total Customer'],
-      ..._dailyReport.customers.expand(
-        (customer) => customer.items.map(
-          (item) => [
-            customer.customer,
-            item.itemLabel,
-            item.qty,
-            item.amount,
-            customer.totalAmount,
-          ],
-        ),
-      ),
+      ..._dailyCustomerExportRows(),
     ]);
   }
 

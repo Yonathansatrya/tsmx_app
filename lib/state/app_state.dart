@@ -3974,7 +3974,7 @@ class AppState with ChangeNotifier {
         year: _sellingPeriodYear,
         month: _sellingPeriodMonth,
         company: _sellingCompanyFilter,
-        salesPerson: selectedSalesGroup ?? 'All Sales Persons',
+        salesPerson: selectedSalesGroup ?? '',
       );
       if (analytics != null) return analytics;
     } catch (_) {
@@ -4570,9 +4570,7 @@ class AppState with ChangeNotifier {
           'based_on': basedOn,
           'from_date': DateRangePresets.toFrappeDate(from),
           'to_date': DateRangePresets.toFrappeDate(to),
-          'sales_person': salesPerson.trim().isEmpty
-              ? 'All Sales Persons'
-              : salesPerson.trim(),
+          if (salesPerson.trim().isNotEmpty) 'sales_person': salesPerson.trim(),
           'range': range,
           'value_quantity': 'Value',
         },
@@ -4603,27 +4601,43 @@ class AppState with ChangeNotifier {
       month,
       periodColumns: periodColumns,
     );
+    final totalRowTrend = _emptyAnalyticsTrend(
+      year,
+      month,
+      periodColumns: periodColumns,
+    );
     var totalValue = 0.0;
+    var totalRowValue = 0.0;
+    var hasTotalRowValue = false;
     var rowCount = 0;
     for (final row in rows) {
       final mapped = _queryReportRowMap(row, columns);
-      if (_isQueryReportTotalRow(mapped)) continue;
+      final isTotalRow = _isQueryReportTotalRow(mapped);
       var hasValue = false;
       for (final entry in periodColumns.entries) {
         final value = NumParse.asDouble(
           mapped[_queryReportPeriodColumnField(entry.value)],
         );
         if (value == 0) continue;
+        if (isTotalRow) {
+          totalRowValue += value;
+          hasTotalRowValue = true;
+          totalRowTrend[entry.key] = totalRowTrend[entry.key].add(value);
+          continue;
+        }
         totalValue += value;
         hasValue = true;
         trend[entry.key] = trend[entry.key].add(value);
       }
-      if (hasValue) rowCount++;
+      if (!isTotalRow && hasValue) rowCount++;
     }
 
     return _MobileAnalyticsSection(
-      summary: DocumentSummary(totalValue: totalValue, documentCount: rowCount),
-      trend: trend,
+      summary: DocumentSummary(
+        totalValue: hasTotalRowValue ? totalRowValue : totalValue,
+        documentCount: rowCount,
+      ),
+      trend: hasTotalRowValue ? totalRowTrend : trend,
     );
   }
 
@@ -4904,9 +4918,28 @@ class AppState with ChangeNotifier {
   }
 
   bool _isQueryReportTotalRow(Map<String, dynamic> row) {
-    return row.values
-        .take(3)
-        .any((value) => value?.toString().trim().toLowerCase() == 'total');
+    const knownTotalFields = {
+      'customer',
+      'customer_name',
+      'supplier',
+      'supplier_name',
+      'item',
+      'item_name',
+      'name',
+      'account',
+      'section',
+    };
+
+    for (final entry in row.entries) {
+      final key = entry.key.toString().trim().toLowerCase();
+      final value = entry.value?.toString().trim().toLowerCase();
+      if (value != 'total') continue;
+      if (knownTotalFields.contains(key)) return true;
+    }
+
+    return row.values.any(
+      (value) => value?.toString().trim().toLowerCase() == 'total',
+    );
   }
 
   Future<void> refreshAllSummaries({bool silent = false}) {
