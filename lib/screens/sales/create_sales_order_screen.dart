@@ -1551,6 +1551,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           salesPerson: _selectedSalesPerson,
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
+          refreshAfterSave: false,
         );
       } else {
         savedOrder = await appState.createSalesOrder(
@@ -1566,6 +1567,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           salesPerson: _selectedSalesPerson,
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
+          refreshAfterSave: false,
         );
       }
       var failedUploads = 0;
@@ -1631,29 +1633,39 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
     try {
       final selectorErrors = <String>[];
-      final seriesOptions = await _loadSelector<List<String>>(
+      final seriesFuture = _loadSelector<List<String>>(
         label: 'Series Sales Order',
         load: () => _fetchSalesOrderSeriesOptions(appState),
         fallback: const [],
         errors: selectorErrors,
       );
-      final costCenters = await _loadSelector<List<_CostCenterOption>>(
+      final costCentersFuture = _loadSelector<List<_CostCenterOption>>(
         label: 'Cost Center',
         load: () => _fetchCostCenterOptions(appState),
         fallback: const [],
         errors: selectorErrors,
       );
-      final customerSeriesOptions = await _fetchDocTypeSelectOptions(
-        appState,
-        doctype: 'Customer',
-        fieldname: 'naming_series',
+      final customerSeriesFuture = _loadSelector<List<String>>(
+        label: 'Customer Naming Series',
+        load: () => _fetchDocTypeSelectOptions(
+          appState,
+          doctype: 'Customer',
+          fieldname: 'naming_series',
+        ),
+        fallback: const [],
+        errors: selectorErrors,
       );
-      final customerTypeOptions = await _fetchDocTypeSelectOptions(
-        appState,
-        doctype: 'Customer',
-        fieldname: 'customer_type',
+      final customerTypeFuture = _loadSelector<List<String>>(
+        label: 'Customer Type',
+        load: () => _fetchDocTypeSelectOptions(
+          appState,
+          doctype: 'Customer',
+          fieldname: 'customer_type',
+        ),
+        fallback: const [],
+        errors: selectorErrors,
       );
-      final customerGroupOptions = await _loadSelector<List<String>>(
+      final customerGroupFuture = _loadSelector<List<String>>(
         label: 'Customer Group',
         load: () => _fetchLinkOptions(
           appState,
@@ -1665,7 +1677,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         fallback: const [],
         errors: selectorErrors,
       );
-      final territoryOptions = await _loadSelector<List<String>>(
+      final territoryFuture = _loadSelector<List<String>>(
         label: 'Territory',
         load: () => _fetchLinkOptions(
           appState,
@@ -1677,26 +1689,26 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         fallback: const [],
         errors: selectorErrors,
       );
-      final paymentTermsOptions = await _loadSelector<List<String>>(
+      final paymentTermsFuture = _loadSelector<List<String>>(
         label: 'Payment Terms Template',
         load: () =>
             _fetchLinkOptions(appState, doctype: 'Payment Terms Template'),
         fallback: const [],
         errors: selectorErrors,
       );
-      final salesPersonOptions = await _loadSelector<List<String>>(
+      final salesPersonFuture = _loadSelector<List<String>>(
         label: 'Sales Person',
         load: () => _fetchSalesPersonOptions(appState),
         fallback: const [],
         errors: selectorErrors,
       );
-      final currencyOptions = await _loadSelector<List<String>>(
+      final currencyFuture = _loadSelector<List<String>>(
         label: 'Currency',
         load: () => _fetchLinkOptions(appState, doctype: 'Currency'),
         fallback: const [],
         errors: selectorErrors,
       );
-      var priceListOptions = await _loadSelector<List<String>>(
+      final priceListFuture = _loadSelector<List<String>>(
         label: 'Price List',
         load: () => _fetchLinkOptions(
           appState,
@@ -1709,49 +1721,16 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         fallback: const [],
         errors: selectorErrors,
       );
-      if (priceListOptions.isEmpty) {
-        priceListOptions = await _loadSelector<List<String>>(
-          label: 'Price List',
-          load: () => _fetchLinkOptions(
-            appState,
-            doctype: 'Price List',
-            filters: const [
-              ['selling', '=', 1],
-            ],
-          ),
-          fallback: const [],
-          errors: selectorErrors,
-        );
-      }
-      String defaultSellingPriceList = '';
-      try {
-        final sellingSettings = await appState.frappeService.fetchDocument(
-          'Selling Settings',
-          'Selling Settings',
-        );
-        defaultSellingPriceList =
-            sellingSettings['selling_price_list']?.toString() ??
-            sellingSettings['default_price_list']?.toString() ??
-            '';
-      } catch (_) {}
-
-      final salesCustomers = await _loadSelector<List<SalesCustomerOption>>(
+      final sellingSettingsFuture = appState.frappeService
+          .fetchDocument('Selling Settings', 'Selling Settings')
+          .catchError((_) => <String, dynamic>{});
+      final salesCustomersFuture = _loadSelector<List<SalesCustomerOption>>(
         label: 'Customer / Sales Team',
         load: appState.fetchSalesCustomers,
         fallback: const [],
         errors: selectorErrors,
       );
-      final customerOptions = salesCustomers
-          .map(
-            (customer) => _CustomerOption(
-              id: customer.id,
-              name: customer.name,
-              salesTeam: customer.salesTeam,
-            ),
-          )
-          .toList();
-
-      final itemData = await _loadSelector<List<Map<String, dynamic>>>(
+      final itemDataFuture = _loadSelector<List<Map<String, dynamic>>>(
         label: 'Item',
         load: () async {
           try {
@@ -1774,7 +1753,56 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         fallback: const [],
         errors: selectorErrors,
       );
+      final warehouseFuture = appState.warehouses.isEmpty
+          ? _loadSelector<void>(
+              label: 'Warehouse',
+              load: appState.refreshWarehouses,
+              fallback: null,
+              errors: selectorErrors,
+            )
+          : Future<void>.value();
 
+      final seriesOptions = await seriesFuture;
+      final costCenters = await costCentersFuture;
+      final customerSeriesOptions = await customerSeriesFuture;
+      final customerTypeOptions = await customerTypeFuture;
+      final customerGroupOptions = await customerGroupFuture;
+      final territoryOptions = await territoryFuture;
+      final paymentTermsOptions = await paymentTermsFuture;
+      final salesPersonOptions = await salesPersonFuture;
+      final currencyOptions = await currencyFuture;
+      var priceListOptions = await priceListFuture;
+      if (priceListOptions.isEmpty) {
+        priceListOptions = await _loadSelector<List<String>>(
+          label: 'Price List',
+          load: () => _fetchLinkOptions(
+            appState,
+            doctype: 'Price List',
+            filters: const [
+              ['selling', '=', 1],
+            ],
+          ),
+          fallback: const [],
+          errors: selectorErrors,
+        );
+      }
+      final sellingSettings = await sellingSettingsFuture;
+      final defaultSellingPriceList =
+          sellingSettings['selling_price_list']?.toString() ??
+          sellingSettings['default_price_list']?.toString() ??
+          '';
+      final salesCustomers = await salesCustomersFuture;
+      final customerOptions = salesCustomers
+          .map(
+            (customer) => _CustomerOption(
+              id: customer.id,
+              name: customer.name,
+              salesTeam: customer.salesTeam,
+            ),
+          )
+          .toList();
+
+      final itemData = await itemDataFuture;
       final itemOptions = itemData
           .map((row) {
             final code = row['name']?.toString() ?? '';
@@ -1785,14 +1813,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           .whereType<_ItemOption>()
           .toList();
 
-      if (appState.warehouses.isEmpty) {
-        await _loadSelector<void>(
-          label: 'Warehouse',
-          load: appState.refreshWarehouses,
-          fallback: null,
-          errors: selectorErrors,
-        );
-      }
+      await warehouseFuture;
       final warehouseOptions = _warehouseOptions(appState);
       final companyOptions = <String>{
         ...appState.sellingCompanies,

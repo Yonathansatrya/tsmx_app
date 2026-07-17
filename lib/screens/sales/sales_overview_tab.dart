@@ -19,6 +19,13 @@ enum _DailySalesDocType { salesOrder, deliveryNote, salesInvoice }
 
 enum _DailySalesSort { itemGroup, qty, amount }
 
+class _DailyReportCacheEntry {
+  final DailySalesReport report;
+  final String? error;
+
+  const _DailyReportCacheEntry({required this.report, this.error});
+}
+
 class SalesOverviewTab extends StatefulWidget {
   final ValueChanged<int> onMenuSelected;
   final ValueChanged<int>? onOrderTabSelected;
@@ -46,6 +53,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   bool _dailyReportLoading = true;
   int _dailyRequestVersion = 0;
   String? _dailyReportError;
+  final Map<String, _DailyReportCacheEntry> _dailyReportCache = {};
   List<SalesPersonCustomerRanking> _topCustomers = const [];
   List<CollectionRanking> _ranking = const [];
   bool _topCustomersLoading = true;
@@ -68,6 +76,19 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     _DailySalesDocType.salesInvoice => 'Sales Invoice',
     _ => 'Sales Order',
   };
+
+  String _dailyCacheKey(AppState state, _DailySalesDocType type) {
+    final salesPerson = state.mobileAccess.shouldScopeSalesData
+        ? state.currentSalesPerson ?? ''
+        : '';
+    return [
+      type.name,
+      DateRangePresets.toFrappeDate(_filterDate),
+      _selectedCompany.trim(),
+      _selectedSalesGroup.trim(),
+      salesPerson,
+    ].join('|');
+  }
 
   Future<void> _loadFilterOptions() async {
     final state = context.read<AppState>();
@@ -115,6 +136,18 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       }
       return;
     }
+    final cacheKey = _dailyCacheKey(state, _dailyDocType);
+    final cached = _dailyReportCache[cacheKey];
+    if (cached != null) {
+      if (mounted) {
+        setState(() {
+          _dailyReport = cached.report;
+          _dailyReportError = cached.error;
+          _dailyReportLoading = false;
+        });
+      }
+      return;
+    }
     setState(() {
       _dailyReportLoading = true;
       _dailyReportError = null;
@@ -131,11 +164,20 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
         company: _selectedCompany,
       );
       if (mounted && requestVersion == _dailyRequestVersion) {
+        _dailyReportCache[cacheKey] = _DailyReportCacheEntry(report: report);
         setState(() => _dailyReport = report);
       }
     } catch (error) {
       if (mounted && requestVersion == _dailyRequestVersion) {
-        setState(() => _dailyReportError = error.toString());
+        final message = error.toString();
+        _dailyReportCache[cacheKey] = _DailyReportCacheEntry(
+          report: const DailySalesReport(),
+          error: message,
+        );
+        setState(() {
+          _dailyReport = const DailySalesReport();
+          _dailyReportError = message;
+        });
       }
     } finally {
       if (mounted && requestVersion == _dailyRequestVersion) {
@@ -152,7 +194,10 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       lastDate: DateTime.now(),
     );
     if (picked == null) return;
-    setState(() => _filterDate = picked);
+    setState(() {
+      _filterDate = picked;
+      _dailyReportCache.clear();
+    });
     await _reloadReports();
   }
 
@@ -186,59 +231,84 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       _topCustomersError = null;
       _rankingError = null;
     });
-    if (canViewTopCustomers) {
-      try {
-        final topCustomers = await state.fetchTopCustomersBySalesPerson(
-          from: _filterDate,
-          to: _filterDate,
-          scopeToCurrentSales: state.mobileAccess.shouldScopeSalesData,
-          salesPerson: state.mobileAccess.shouldScopeSalesData
-              ? state.currentSalesPerson
-              : null,
-          parentSalesPerson: _selectedParentSalesPerson(state),
-          company: _selectedCompany,
-        );
-        if (mounted && requestVersion == _rankingRequestVersion) {
-          setState(() => _topCustomers = topCustomers);
-        }
-      } catch (error) {
-        if (mounted && requestVersion == _rankingRequestVersion) {
-          setState(() => _topCustomersError = error.toString());
-        }
-      } finally {
-        if (mounted && requestVersion == _rankingRequestVersion) {
-          setState(() => _topCustomersLoading = false);
-        }
+    final parentSalesPerson = _selectedParentSalesPerson(state);
+    await Future.wait([
+      if (canViewTopCustomers)
+        _loadTopCustomers(
+          state: state,
+          requestVersion: requestVersion,
+          parentSalesPerson: parentSalesPerson,
+        ),
+      if (canViewRanking)
+        _loadCollectionRanking(
+          state: state,
+          requestVersion: requestVersion,
+          parentSalesPerson: parentSalesPerson,
+        ),
+    ]);
+  }
+
+  Future<void> _loadTopCustomers({
+    required AppState state,
+    required int requestVersion,
+    required String? parentSalesPerson,
+  }) async {
+    try {
+      final topCustomers = await state.fetchTopCustomersBySalesPerson(
+        from: _filterDate,
+        to: _filterDate,
+        scopeToCurrentSales: state.mobileAccess.shouldScopeSalesData,
+        salesPerson: state.mobileAccess.shouldScopeSalesData
+            ? state.currentSalesPerson
+            : null,
+        parentSalesPerson: parentSalesPerson,
+        company: _selectedCompany,
+      );
+      if (mounted && requestVersion == _rankingRequestVersion) {
+        setState(() => _topCustomers = topCustomers);
+      }
+    } catch (error) {
+      if (mounted && requestVersion == _rankingRequestVersion) {
+        setState(() => _topCustomersError = error.toString());
+      }
+    } finally {
+      if (mounted && requestVersion == _rankingRequestVersion) {
+        setState(() => _topCustomersLoading = false);
       }
     }
+  }
 
-    if (canViewRanking) {
-      try {
-        final ranking = await state.fetchCollectionRanking(
-          from: _filterDate,
-          to: _filterDate,
-          filterSalesPerson: state.mobileAccess.shouldScopeSalesData
-              ? state.currentSalesPerson
-              : null,
-          parentSalesPerson: _selectedParentSalesPerson(state),
-          company: _selectedCompany,
-        );
-        if (mounted && requestVersion == _rankingRequestVersion) {
-          setState(() => _ranking = ranking);
-        }
-      } catch (error) {
-        if (mounted && requestVersion == _rankingRequestVersion) {
-          setState(() => _rankingError = error.toString());
-        }
-      } finally {
-        if (mounted && requestVersion == _rankingRequestVersion) {
-          setState(() => _rankingLoading = false);
-        }
+  Future<void> _loadCollectionRanking({
+    required AppState state,
+    required int requestVersion,
+    required String? parentSalesPerson,
+  }) async {
+    try {
+      final ranking = await state.fetchCollectionRanking(
+        from: _filterDate,
+        to: _filterDate,
+        filterSalesPerson: state.mobileAccess.shouldScopeSalesData
+            ? state.currentSalesPerson
+            : null,
+        parentSalesPerson: parentSalesPerson,
+        company: _selectedCompany,
+      );
+      if (mounted && requestVersion == _rankingRequestVersion) {
+        setState(() => _ranking = ranking);
+      }
+    } catch (error) {
+      if (mounted && requestVersion == _rankingRequestVersion) {
+        setState(() => _rankingError = error.toString());
+      }
+    } finally {
+      if (mounted && requestVersion == _rankingRequestVersion) {
+        setState(() => _rankingLoading = false);
       }
     }
   }
 
   Future<void> _reloadReports() async {
+    _dailyReportCache.clear();
     await Future.wait([_loadDailyReport(), _loadRanking()]);
   }
 
@@ -334,13 +404,14 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       ),
       ['TOTAL SALES', _dailyReport.totalQty, _dailyReport.totalAmount],
       [],
-      ['Customer', 'Item', 'Qty', 'Omzet Customer'],
+      ['Customer', 'Item', 'Qty', 'Omzet Item', 'Total Customer'],
       ..._dailyReport.customers.expand(
         (customer) => customer.items.map(
           (item) => [
             customer.customer,
             item.itemLabel,
             item.qty,
+            item.amount,
             customer.totalAmount,
           ],
         ),

@@ -65,6 +65,16 @@ class _ResolvedFrappeSite {
   });
 }
 
+class _CachedDocument {
+  final DateTime storedAt;
+  final Map<String, dynamic> document;
+
+  const _CachedDocument({required this.storedAt, required this.document});
+
+  bool get isFresh =>
+      DateTime.now().difference(storedAt) < AppState._documentCacheTtl;
+}
+
 class AppState with ChangeNotifier {
   bool _isAuthenticated = false;
   bool get isAuthenticated => _isAuthenticated;
@@ -301,7 +311,10 @@ class AppState with ChangeNotifier {
   bool get isNotificationsLoading => _isNotificationsLoading;
 
   Timer? _notificationPollTimer;
+  Future<void>? _notificationRefreshInFlight;
   static const Duration _notificationPollInterval = Duration(seconds: 30);
+  static const Duration _documentCacheTtl = Duration(minutes: 2);
+  final Map<String, _CachedDocument> _documentCache = {};
 
   bool _isSalesOrdersLoading = false;
   bool get isSalesOrdersLoading => _isSalesOrdersLoading;
@@ -1156,6 +1169,8 @@ class AppState with ChangeNotifier {
     _purchaseApprovalTodoCount = 0;
     _summarySyncStatus = SummarySyncStatus.idle;
     _summaryProcessedRows = 0;
+    _notificationRefreshInFlight = null;
+    _documentCache.clear();
   }
 
   void setRememberDevice(bool value) {
@@ -1270,18 +1285,30 @@ class AppState with ChangeNotifier {
 
   Future<void> refreshNotifications({bool silent = false}) async {
     if (!_isAuthenticated || _currentUser == null) return;
+    final inFlight = _notificationRefreshInFlight;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
 
     if (!silent) {
       _isNotificationsLoading = true;
       notifyListeners();
     }
 
-    try {
+    final operation = () async {
       await _frappeService.ensureLoggedIn();
       _notifications = await _fetchNotificationsFromFrappe();
+    }();
+    _notificationRefreshInFlight = operation;
+    try {
+      await operation;
     } catch (_) {
       // Keep previous notifications on transient errors.
     } finally {
+      if (_notificationRefreshInFlight == operation) {
+        _notificationRefreshInFlight = null;
+      }
       if (!silent) {
         _isNotificationsLoading = false;
       }
@@ -1574,7 +1601,7 @@ class AppState with ChangeNotifier {
     final salesPerson = await _salesPersonScopeName();
     if (salesPerson == null || name.trim().isEmpty) return true;
     try {
-      final document = await _frappeService.fetchDocument(doctype, name);
+      final document = await _fetchCachedDocument(doctype, name);
       return _documentChildRows(
         document['sales_team'],
       ).any((row) => row['sales_person']?.toString().trim() == salesPerson);
@@ -2933,6 +2960,7 @@ class AppState with ChangeNotifier {
     List<Map<String, dynamic>>? salesTeam,
     DateTime? transactionDate,
     DateTime? deliveryDate,
+    bool refreshAfterSave = true,
   }) async {
     await _frappeService.ensureLoggedIn();
     final orderItems =
@@ -3000,7 +3028,11 @@ class AppState with ChangeNotifier {
     final order = await _salesOrderService.create(payload);
     _salesOrders = [order, ..._salesOrders];
     notifyListeners();
-    await refreshSalesOrders();
+    if (refreshAfterSave) {
+      await refreshSalesOrders();
+    } else {
+      unawaited(refreshSalesOrders().catchError((_) {}));
+    }
     unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return order;
   }
@@ -3053,6 +3085,7 @@ class AppState with ChangeNotifier {
     DateTime? transactionDate,
     DateTime? deliveryDate,
     String? status,
+    bool refreshAfterSave = true,
   }) async {
     await _frappeService.ensureLoggedIn();
     if (items != null &&
@@ -3121,7 +3154,11 @@ class AppState with ChangeNotifier {
         .map((o) => o.id == orderId ? updatedOrder : o)
         .toList();
     notifyListeners();
-    await refreshSalesOrders();
+    if (refreshAfterSave) {
+      await refreshSalesOrders();
+    } else {
+      unawaited(refreshSalesOrders().catchError((_) {}));
+    }
     unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return updatedOrder;
   }
@@ -6690,14 +6727,14 @@ class AppState with ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> fetchSalesOrderApprovalDetail(String name) {
-    return _frappeService.fetchDocument('Sales Order', name);
+    return _fetchCachedDocument('Sales Order', name);
   }
 
   Future<Map<String, dynamic>> fetchApprovalDocument({
     required String doctype,
     required String name,
   }) {
-    return _frappeService.fetchDocument(doctype, name);
+    return _fetchCachedDocument(doctype, name);
   }
 
   Future<void> applySalesOrderWorkflow({
@@ -7510,6 +7547,22 @@ class AppState with ChangeNotifier {
         .toList();
   }
 
+  Future<Map<String, dynamic>> _fetchCachedDocument(
+    String doctype,
+    String name,
+  ) async {
+    final key = '$doctype::$name';
+    final cached = _documentCache[key];
+    if (cached != null && cached.isFresh) return cached.document;
+
+    final document = await _frappeService.fetchDocument(doctype, name);
+    _documentCache[key] = _CachedDocument(
+      storedAt: DateTime.now(),
+      document: document,
+    );
+    return document;
+  }
+
   Future<Map<String, Map<String, dynamic>>> _fetchDocumentsInBatches(
     String doctype,
     Iterable<String> names, {
@@ -7517,11 +7570,21 @@ class AppState with ChangeNotifier {
   }) async {
     final uniqueNames = names.where((name) => name.isNotEmpty).toSet().toList();
     final documents = <String, Map<String, dynamic>>{};
-    for (var start = 0; start < uniqueNames.length; start += batchSize) {
-      final end = start + batchSize > uniqueNames.length
-          ? uniqueNames.length
+    final missingNames = <String>[];
+    for (final name in uniqueNames) {
+      final key = '$doctype::$name';
+      final cached = _documentCache[key];
+      if (cached != null && cached.isFresh) {
+        documents[name] = cached.document;
+      } else {
+        missingNames.add(name);
+      }
+    }
+    for (var start = 0; start < missingNames.length; start += batchSize) {
+      final end = start + batchSize > missingNames.length
+          ? missingNames.length
           : start + batchSize;
-      final batch = uniqueNames.sublist(start, end);
+      final batch = missingNames.sublist(start, end);
       final results = await Future.wait(
         batch.map((name) async {
           try {
@@ -7536,7 +7599,13 @@ class AppState with ChangeNotifier {
       );
       for (final result in results) {
         final document = result.document;
-        if (document != null) documents[result.name] = document;
+        if (document != null) {
+          documents[result.name] = document;
+          _documentCache['$doctype::${result.name}'] = _CachedDocument(
+            storedAt: DateTime.now(),
+            document: document,
+          );
+        }
       }
     }
     return documents;
