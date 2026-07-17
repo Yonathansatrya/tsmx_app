@@ -52,25 +52,31 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
       length: widget.showHistoryTab ? 2 : 1,
       vsync: this,
     );
-    _search.addListener(() => setState(() {}));
+    _search.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       _load();
-      _syncTimer = Timer.periodic(
-        const Duration(seconds: 30),
-        (_) => _load(silent: true),
-      );
+      _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (mounted) _load(silent: true);
+      });
     });
+  }
+
+  void _onSearchChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _syncTimer?.cancel();
+    _search.removeListener(_onSearchChanged);
     _search.dispose();
     _tabController.dispose();
-    _syncTimer?.cancel();
     super.dispose();
   }
 
   Future<void> _load({bool silent = false}) async {
+    if (!mounted) return;
     if (!silent) {
       setState(() {
         _loading = true;
@@ -105,15 +111,16 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   }
 
   Future<void> _selectApproval(ErpApprovalTodo approval) async {
-    await Navigator.push(
+    final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => _ErpApprovalDetailPage(
-          approval: approval,
-          onChanged: () => _load(silent: true),
-        ),
+        builder: (_) =>
+            _ErpApprovalDetailPage(approval: approval, onChanged: () async {}),
       ),
     );
+    if (changed == true && mounted) {
+      await _load(silent: true);
+    }
   }
 
   @override
@@ -948,7 +955,6 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
         action: action,
         reason: reason,
       );
-      await widget.onChanged();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -956,7 +962,7 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
           backgroundColor: reject ? AppColors.danger : AppColors.success,
         ),
       );
-      Navigator.pop(context);
+      Navigator.pop(context, true);
     } catch (error) {
       if (mounted) setState(() => _error = _friendlyError(error));
     } finally {
@@ -2149,7 +2155,6 @@ class _SalesOrderApprovalDetailPageState
         action: action,
         reason: decision.reason,
       );
-      await widget.onChanged();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2157,7 +2162,7 @@ class _SalesOrderApprovalDetailPageState
           backgroundColor: reject ? AppColors.danger : AppColors.success,
         ),
       );
-      Navigator.pop(context);
+      Navigator.pop(context, true);
     } catch (error) {
       if (mounted) setState(() => _error = _friendlyError(error));
     } finally {

@@ -212,10 +212,18 @@ class SellingTabState extends State<SellingTab>
                     loading: appState.isOrderSummaryLoading,
                     companyOptions: appState.sellingCompanies,
                     selectedCompany: appState.sellingCompanyFilter,
-                    selectedCustomerType: salesGroupFilter,
-                    partnerTypeLabel: 'Sales Group',
+                    selectedCustomerType:
+                        appState.mobileAccess.shouldScopeSalesData
+                        ? 'all'
+                        : salesGroupFilter,
+                    partnerTypeLabel: appState.mobileAccess.shouldScopeSalesData
+                        ? ''
+                        : 'Sales Group',
                     partnerTypeIcon: Icons.account_tree_rounded,
-                    partnerTypeOptions: salesGroupOptions,
+                    partnerTypeOptions:
+                        appState.mobileAccess.shouldScopeSalesData
+                        ? const {'all': 'All'}
+                        : salesGroupOptions,
                     onChanged: (year, month) {
                       context.read<AppState>().setSellingPeriod(
                         year: year,
@@ -229,13 +237,16 @@ class SellingTabState extends State<SellingTab>
                         company: company,
                       );
                     },
-                    onCustomerTypeChanged: (customerType) {
-                      context.read<AppState>().setSellingPeriod(
-                        year: appState.sellingPeriodYear,
-                        month: appState.sellingPeriodMonth,
-                        customerType: customerType,
-                      );
-                    },
+                    onCustomerTypeChanged:
+                        appState.mobileAccess.shouldScopeSalesData
+                        ? null
+                        : (customerType) {
+                            context.read<AppState>().setSellingPeriod(
+                              year: appState.sellingPeriodYear,
+                              month: appState.sellingPeriodMonth,
+                              customerType: customerType,
+                            );
+                          },
                   ),
 
                   const SizedBox(height: 12),

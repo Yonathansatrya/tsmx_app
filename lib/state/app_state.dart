@@ -1517,8 +1517,11 @@ class AppState with ChangeNotifier {
         ],
         maxRows: null,
       );
-    } catch (error) {
-      throw Exception('Gagal membaca struktur Sales Person Tree: $error');
+    } catch (_) {
+      // Some Sales roles can read Sales Order / DN / SI but cannot query the
+      // Sales Team child table directly. Returning null lets callers fall back
+      // to filtering by reading each document detail and inspecting sales_team.
+      return null;
     }
     final parentIds =
         rows
@@ -6596,15 +6599,22 @@ class AppState with ChangeNotifier {
 
     final todos = <ErpApprovalTodo>[];
     for (final config in configs) {
-      final rows = await _fetchAllResourcePages(
-        doctype: config.doctype,
-        fields: config.fields,
-        filters: [
-          ['docstatus', '<', 2],
-        ],
-        orderBy: 'modified desc',
-        maxRows: 200,
-      );
+      final List<Map<String, dynamic>> rows;
+      try {
+        rows = await _fetchAllResourcePages(
+          doctype: config.doctype,
+          fields: config.fields,
+          filters: [
+            ['docstatus', '<', 2],
+          ],
+          orderBy: 'modified desc',
+          maxRows: 200,
+        );
+      } catch (_) {
+        // Approval Todo is an aggregate screen. If the current role cannot read
+        // one document type, keep showing approval items from the allowed types.
+        continue;
+      }
       for (final row in rows) {
         final name = row['name']?.toString() ?? '';
         if (name.isEmpty) continue;
@@ -6881,7 +6891,7 @@ class AppState with ChangeNotifier {
       final decoded = jsonDecode(raw) as Map<String, dynamic>;
       return decoded.map((k, v) => MapEntry(k, v.toString()));
     } catch (error) {
-      throw Exception('Gagal membaca struktur Sales Person Tree: $error');
+      throw Exception('Gagal membaca konfigurasi site tersimpan: $error');
     }
   }
 
@@ -7064,6 +7074,7 @@ class AppState with ChangeNotifier {
   }
 
   String? _selectedSellingParentSalesPerson() {
+    if (_shouldScopeSalesData) return null;
     final group = _sellingCustomerTypeFilter.trim();
     if (group.isEmpty || group.toLowerCase() == 'all') return null;
     return group;

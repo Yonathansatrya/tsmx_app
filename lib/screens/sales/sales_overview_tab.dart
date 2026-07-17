@@ -619,22 +619,8 @@ class _SalesOverviewFilterCard extends StatelessWidget {
                 ? null
                 : (value) => onCompanyChanged(value ?? ''),
           ),
-          const SizedBox(height: 10),
-          if (lockSalesPerson)
-            InputDecorator(
-              decoration: const InputDecoration(
-                labelText: 'Sales Person',
-                prefixIcon: Icon(Icons.person_rounded),
-              ),
-              child: Text(
-                selectedSalesGroup == 'all' ? '-' : selectedSalesGroup,
-                style: const TextStyle(
-                  color: AppColors.navy,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            )
-          else
+          if (!lockSalesPerson) ...[
+            const SizedBox(height: 10),
             DropdownButtonFormField<String>(
               initialValue:
                   selectedSalesGroup == 'all' ||
@@ -663,6 +649,7 @@ class _SalesOverviewFilterCard extends StatelessWidget {
                   ? null
                   : (value) => onSalesGroupChanged(value ?? 'all'),
             ),
+          ],
         ],
       ),
     );

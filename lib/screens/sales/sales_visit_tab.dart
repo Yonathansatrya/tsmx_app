@@ -51,13 +51,18 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
       error = null;
     });
     final state = context.read<AppState>();
+    var nextCustomers = customers;
+    var nextVisits = visits;
+    var nextTrackingPoints = trackingPoints;
+    String? nextError;
     try {
-      final result = await Future.wait([
-        state.fetchSalesCustomers(),
-        state.fetchSalesVisits(),
-      ]);
-      customers = result[0] as List<SalesCustomerOption>;
-      visits = result[1] as List<SalesVisit>;
+      nextCustomers = await state.fetchSalesCustomers();
+    } catch (e) {
+      nextError = _friendlyError(e);
+    }
+
+    try {
+      nextVisits = await state.fetchSalesVisits();
       final active = state.activeSalesVisit;
       if (state.mobileAccess.isSalesUser && active != null) {
         try {
@@ -72,12 +77,20 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
         }
       }
       if (!state.mobileAccess.isSalesUser) {
-        trackingPoints = await state.fetchLatestSalesTrackingPoints();
+        nextTrackingPoints = await state.fetchLatestSalesTrackingPoints();
       }
     } catch (e) {
-      error = _friendlyError(e);
+      nextError ??= _friendlyError(e);
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) {
+        setState(() {
+          customers = nextCustomers;
+          visits = nextVisits;
+          trackingPoints = nextTrackingPoints;
+          error = nextError;
+          loading = false;
+        });
+      }
     }
   }
 
