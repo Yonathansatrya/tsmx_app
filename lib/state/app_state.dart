@@ -36,6 +36,7 @@ import '../services/domains/sales_invoice_service.dart';
 import '../services/domains/sales_order_service.dart';
 import '../services/erp_services.dart';
 import '../services/frappe_service.dart';
+import '../services/local_app_database.dart';
 import '../services/sales_visit_location_service.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/num_parse.dart';
@@ -448,6 +449,9 @@ class AppState with ChangeNotifier {
   }
 
   Future<void>? _orderSummaryJob;
+  Future<void>? _sellingSummaryJob;
+  String? _sellingSummaryJobKey;
+  int _sellingSummaryRequestToken = 0;
   bool _isOrderSummaryLoading = false;
   bool get isOrderSummaryLoading => _isOrderSummaryLoading;
   String? _orderSummaryError;
@@ -544,6 +548,9 @@ class AppState with ChangeNotifier {
   static const String _prefsFrappeConfigKey = 'frappe_config';
   static const String _prefsFrappeSiteHistoryKey = 'frappe_site_history';
   static const String _prefsSummaryCacheKey = 'erp_summary_cache';
+  static const String _sellingTrendCachePrefix = 'selling_trend';
+  static const Duration _sellingTrendCacheTtl = Duration(hours: 12);
+  static const Duration _sellingTrendRemoteTimeout = Duration(seconds: 45);
   static const String _prefsClearedNotificationsKey = 'cleared_notifications';
   static const String _prefsReadNotificationsKey = 'read_notifications';
 
@@ -1021,6 +1028,7 @@ class AppState with ChangeNotifier {
       final sp = await SharedPreferences.getInstance();
       await sp.remove(_summaryCachePrefsKey);
       await sp.remove(_prefsSummaryCacheKey);
+      await LocalAppDatabase.instance.deleteByPrefix(_sellingTrendCachePrefix);
     } catch (_) {}
   }
 
@@ -1051,6 +1059,7 @@ class AppState with ChangeNotifier {
         await sp.remove(key);
       }
     }
+    await LocalAppDatabase.instance.deleteByPrefix(_sellingTrendCachePrefix);
 
     if (keepSiteSelection && cfg != null) {
       await sp.setString(_prefsFrappeConfigKey, jsonEncode(cfg));
@@ -3763,14 +3772,91 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Future<void> refreshSellingSummaries() async {
+  Future<void> refreshSellingSummaries({
+    bool forceRemote = false,
+    String? documentType,
+  }) async {
+    final requestKey = _sellingSummaryRequestKey(documentType: documentType);
+    final runningJob = _sellingSummaryJob;
+    if (!forceRemote &&
+        runningJob != null &&
+        _sellingSummaryJobKey == requestKey) {
+      return runningJob;
+    }
+
+    final token = ++_sellingSummaryRequestToken;
+    final job = _refreshSellingSummaries(
+      token,
+      forceRemote: forceRemote,
+      documentType: documentType,
+    );
+    _sellingSummaryJob = job;
+    _sellingSummaryJobKey = requestKey;
+    try {
+      await job;
+    } finally {
+      if (identical(_sellingSummaryJob, job) &&
+          token == _sellingSummaryRequestToken) {
+        _sellingSummaryJob = null;
+        _sellingSummaryJobKey = null;
+      }
+    }
+  }
+
+  String _sellingSummaryRequestKey({String? documentType}) {
+    final salesScope = _shouldScopeSalesData
+        ? (_currentSalesPerson?.trim() ?? '')
+        : _sellingCustomerTypeFilter.trim();
+    return [
+      _sellingPeriodYear,
+      _sellingPeriodMonth,
+      _sellingCompanyFilter.trim(),
+      salesScope,
+      documentType?.trim() ?? 'all',
+    ].join('|');
+  }
+
+  bool _isCurrentSellingSummaryRequest(int token) {
+    return token == _sellingSummaryRequestToken;
+  }
+
+  Future<void> _refreshSellingSummaries(
+    int token, {
+    required bool forceRemote,
+    String? documentType,
+  }) async {
+    if (!forceRemote &&
+        await _tryApplyCachedSellingAnalyticsSections(token, documentType)) {
+      _isOrderSummaryLoading = false;
+      _orderSummaryError = null;
+      notifyListeners();
+      return;
+    }
+
     _isOrderSummaryLoading = true;
     _orderSummaryError = null;
     notifyListeners();
 
     try {
       await _frappeService.ensureLoggedIn();
-      if (await _refreshSellingSummariesFromMobileAnalytics()) {
+      if (!_isCurrentSellingSummaryRequest(token)) return;
+      if (await _refreshSellingSummariesFromMobileAnalytics(
+        token,
+        forceRemote: forceRemote,
+        documentType: documentType,
+      )) {
+        _orderSummaryError = null;
+        return;
+      }
+      if (!_isCurrentSellingSummaryRequest(token)) return;
+      if (documentType?.trim().isNotEmpty == true) {
+        final type = documentType!.trim();
+        final fallbackSection = await _fallbackSellingAnalyticsSection(
+          doctype: type,
+          dateField: _sellingAnalyticsDateField(type),
+        );
+        if (!_isCurrentSellingSummaryRequest(token)) return;
+        _applySellingAnalyticsSection(type, fallbackSection);
         _orderSummaryError = null;
         return;
       }
@@ -3910,6 +3996,7 @@ class AppState with ChangeNotifier {
         },
       );
 
+      if (!_isCurrentSellingSummaryRequest(token)) return;
       _salesOrderSummary = DocumentSummary(
         totalValue: salesTotal,
         documentCount: salesDocumentCount,
@@ -3927,40 +4014,214 @@ class AppState with ChangeNotifier {
       );
       _orderSummaryError = null;
     } catch (err) {
+      if (!_isCurrentSellingSummaryRequest(token)) return;
       _orderSummaryError = err.toString();
     } finally {
-      _isOrderSummaryLoading = false;
-      notifyListeners();
+      if (_isCurrentSellingSummaryRequest(token)) {
+        _isOrderSummaryLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  Future<bool> _refreshSellingSummariesFromMobileAnalytics() async {
-    if (_shouldScopeSalesData) return false;
-
+  Future<bool> _refreshSellingSummariesFromMobileAnalytics(
+    int token, {
+    required bool forceRemote,
+    String? documentType,
+  }) async {
     try {
-      final salesOrder = await _sellingAnalyticsBySalesPersonSection(
-        doctype: 'Sales Order',
-        dateField: 'transaction_date',
-      );
-      final deliveryNote = await _sellingAnalyticsBySalesPersonSection(
-        doctype: 'Delivery Note',
-        dateField: 'posting_date',
-      );
-      final salesInvoice = await _sellingAnalyticsBySalesPersonSection(
-        doctype: 'Sales Invoice',
-        dateField: 'posting_date',
+      final documentTypes = _sellingAnalyticsDocumentTypes(documentType);
+      final missingDocumentTypes = <String>[];
+
+      if (!forceRemote) {
+        for (final type in documentTypes) {
+          final cached = await _readSellingAnalyticsSectionFromDb(type);
+          if (!_isCurrentSellingSummaryRequest(token)) return true;
+          if (cached == null) {
+            missingDocumentTypes.add(type);
+            continue;
+          }
+          _applySellingAnalyticsSection(type, cached);
+        }
+        if (missingDocumentTypes.length != documentTypes.length) {
+          notifyListeners();
+        }
+        if (missingDocumentTypes.isEmpty) return true;
+      } else {
+        missingDocumentTypes.addAll(documentTypes);
+      }
+
+      final fetchedSections = await Future.wait(
+        missingDocumentTypes.map(
+          (type) =>
+              _sellingAnalyticsBySalesPersonSection(
+                doctype: type,
+                dateField: _sellingAnalyticsDateField(type),
+              ).timeout(
+                _sellingTrendRemoteTimeout,
+                onTimeout: () => throw _SellingAnalyticsTimeoutException(type),
+              ),
+        ),
       );
 
-      _salesOrderSummary = salesOrder.summary;
-      _salesOrderTrendPoints = salesOrder.trend;
-      _deliveryNoteSummary = deliveryNote.summary;
-      _deliveryNoteTrendPoints = deliveryNote.trend;
-      _salesInvoiceSummary = salesInvoice.summary;
-      _salesInvoiceTrendPoints = salesInvoice.trend;
+      if (!_isCurrentSellingSummaryRequest(token)) return true;
+      for (var index = 0; index < missingDocumentTypes.length; index++) {
+        final type = missingDocumentTypes[index];
+        final section = fetchedSections[index];
+        _applySellingAnalyticsSection(type, section);
+        await _writeSellingAnalyticsSectionToDb(type, section);
+      }
+      return true;
+    } on _SellingAnalyticsTimeoutException catch (err) {
+      if (_isCurrentSellingSummaryRequest(token)) {
+        _orderSummaryError =
+            'Sales Analytics ${err.documentType} masih berat diproses ERPNext. '
+            'Data lokal tetap digunakan jika tersedia, tarik ulang untuk coba refresh.';
+      }
       return true;
     } catch (_) {
       return false;
     }
+  }
+
+  Future<bool> _tryApplyCachedSellingAnalyticsSections(
+    int token,
+    String? documentType,
+  ) async {
+    final documentTypes = _sellingAnalyticsDocumentTypes(documentType);
+    var hasAllCached = true;
+    var appliedAny = false;
+    for (final type in documentTypes) {
+      final cached = await _readSellingAnalyticsSectionFromDb(type);
+      if (!_isCurrentSellingSummaryRequest(token)) return true;
+      if (cached == null) {
+        hasAllCached = false;
+        continue;
+      }
+      _applySellingAnalyticsSection(type, cached);
+      appliedAny = true;
+    }
+    if (appliedAny) notifyListeners();
+    return hasAllCached;
+  }
+
+  List<String> _sellingAnalyticsDocumentTypes(String? documentType) {
+    final normalized = documentType?.trim();
+    const supported = ['Sales Order', 'Delivery Note', 'Sales Invoice'];
+    if (normalized == null || normalized.isEmpty) return supported;
+    return supported.contains(normalized) ? [normalized] : supported;
+  }
+
+  String _sellingAnalyticsDateField(String documentType) {
+    return documentType == 'Sales Order' ? 'transaction_date' : 'posting_date';
+  }
+
+  void _applySellingAnalyticsSection(
+    String documentType,
+    _MobileAnalyticsSection section,
+  ) {
+    switch (documentType) {
+      case 'Delivery Note':
+        _deliveryNoteSummary = section.summary;
+        _deliveryNoteTrendPoints = section.trend;
+        break;
+      case 'Sales Invoice':
+        _salesInvoiceSummary = section.summary;
+        _salesInvoiceTrendPoints = section.trend;
+        break;
+      case 'Sales Order':
+      default:
+        _salesOrderSummary = section.summary;
+        _salesOrderTrendPoints = section.trend;
+        break;
+    }
+  }
+
+  Future<_MobileAnalyticsSection?> _readSellingAnalyticsSectionFromDb(
+    String documentType,
+  ) async {
+    final json = await LocalAppDatabase.instance.readJson(
+      _sellingAnalyticsSectionCacheKey(documentType),
+    );
+    if (json == null) return null;
+    try {
+      return _mobileAnalyticsSectionFromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeSellingAnalyticsSectionToDb(
+    String documentType,
+    _MobileAnalyticsSection section,
+  ) async {
+    await LocalAppDatabase.instance.writeJson(
+      _sellingAnalyticsSectionCacheKey(documentType),
+      _mobileAnalyticsSectionToJson(section),
+      ttl: _sellingTrendCacheTtl,
+    );
+  }
+
+  String _sellingAnalyticsSectionCacheKey(String documentType) {
+    final site = _frappeService.baseUrl.trim();
+    final user = _currentUser?.trim() ?? _frappeService.username?.trim() ?? '';
+    return [
+      _sellingTrendCachePrefix,
+      'section',
+      site,
+      user,
+      _sellingPeriodYear,
+      _sellingPeriodMonth,
+      _sellingCompanyFilter.trim(),
+      _shouldScopeSalesData
+          ? (_currentSalesPerson?.trim() ?? '')
+          : _sellingCustomerTypeFilter.trim(),
+      documentType.trim(),
+    ].join('|');
+  }
+
+  Map<String, dynamic> _mobileAnalyticsSectionToJson(
+    _MobileAnalyticsSection section,
+  ) {
+    return {
+      'summary': section.summary.toJson(),
+      'trend': section.trend
+          .map(
+            (point) => {
+              'label': point.label,
+              'value': point.value,
+              'documentCount': point.documentCount,
+            },
+          )
+          .toList(),
+    };
+  }
+
+  _MobileAnalyticsSection _mobileAnalyticsSectionFromJson(Object? value) {
+    final json = value is Map<String, dynamic>
+        ? value
+        : Map<String, dynamic>.from(value as Map);
+    final summaryRaw = json['summary'];
+    final summary = summaryRaw is Map<String, dynamic>
+        ? DocumentSummary.fromJson(summaryRaw)
+        : DocumentSummary.fromJson(
+            Map<String, dynamic>.from(summaryRaw as Map),
+          );
+    final trendRaw = json['trend'];
+    final trend = trendRaw is List
+        ? trendRaw
+              .whereType<Map>()
+              .map((raw) => Map<String, dynamic>.from(raw))
+              .map(
+                (point) => DocumentTrendPoint(
+                  label: point['label']?.toString() ?? '',
+                  value: (point['value'] as num?)?.toDouble() ?? 0,
+                  documentCount: (point['documentCount'] as num?)?.toInt() ?? 0,
+                ),
+              )
+              .toList()
+        : const <DocumentTrendPoint>[];
+    return _MobileAnalyticsSection(summary: summary, trend: trend);
   }
 
   Future<_MobileAnalyticsSection> _sellingAnalyticsBySalesPersonSection({
@@ -3969,12 +4230,15 @@ class AppState with ChangeNotifier {
   }) async {
     try {
       final selectedSalesGroup = _selectedSellingParentSalesPerson();
+      final scopedSalesPerson = _shouldScopeSalesData
+          ? await _salesPersonScopeName()
+          : null;
       final analytics = await _fetchSalesAnalyticsBySalesPersonSection(
         basedOn: doctype,
         year: _sellingPeriodYear,
         month: _sellingPeriodMonth,
         company: _sellingCompanyFilter,
-        salesPerson: selectedSalesGroup ?? '',
+        salesPerson: scopedSalesPerson ?? selectedSalesGroup ?? '',
       );
       if (analytics != null) return analytics;
     } catch (_) {
@@ -4040,6 +4304,7 @@ class AppState with ChangeNotifier {
     required int month,
     String? company,
     String? customerType,
+    String? documentType,
   }) async {
     final nextCompany = company ?? _sellingCompanyFilter;
     final nextCustomerType = customerType ?? _sellingCustomerTypeFilter;
@@ -4053,12 +4318,20 @@ class AppState with ChangeNotifier {
     _sellingPeriodMonth = month;
     _sellingCompanyFilter = nextCompany;
     _sellingCustomerTypeFilter = nextCustomerType;
+    _salesOrderSummary = const DocumentSummary();
+    _deliveryNoteSummary = const DocumentSummary();
+    _salesInvoiceSummary = const DocumentSummary();
+    _salesOrderTrendPoints = _emptySellingTrendPoints();
+    _deliveryNoteTrendPoints = _emptySellingTrendPoints();
+    _salesInvoiceTrendPoints = _emptySellingTrendPoints();
     notifyListeners();
     await Future.wait([
-      fetchSalesOrdersFromFrappe(),
-      fetchDeliveryNotesFromFrappe(),
-      fetchSalesInvoicesFromFrappe(),
-      refreshSellingSummaries(),
+      switch (documentType) {
+        'Delivery Note' => fetchDeliveryNotesFromFrappe(),
+        'Sales Invoice' => fetchSalesInvoicesFromFrappe(),
+        _ => fetchSalesOrdersFromFrappe(),
+      },
+      refreshSellingSummaries(documentType: documentType),
     ]);
   }
 
@@ -4608,7 +4881,7 @@ class AppState with ChangeNotifier {
     );
     var totalValue = 0.0;
     var totalRowValue = 0.0;
-    var hasTotalRowValue = false;
+    var hasTotalRow = false;
     var rowCount = 0;
     for (final row in rows) {
       final mapped = _queryReportRowMap(row, columns);
@@ -4618,13 +4891,17 @@ class AppState with ChangeNotifier {
         final value = NumParse.asDouble(
           mapped[_queryReportPeriodColumnField(entry.value)],
         );
-        if (value == 0) continue;
         if (isTotalRow) {
+          hasTotalRow = true;
           totalRowValue += value;
-          hasTotalRowValue = true;
-          totalRowTrend[entry.key] = totalRowTrend[entry.key].add(value);
+          totalRowTrend[entry.key] = DocumentTrendPoint(
+            label: totalRowTrend[entry.key].label,
+            value: value,
+            documentCount: value == 0 ? 0 : 1,
+          );
           continue;
         }
+        if (value == 0) continue;
         totalValue += value;
         hasValue = true;
         trend[entry.key] = trend[entry.key].add(value);
@@ -4634,10 +4911,10 @@ class AppState with ChangeNotifier {
 
     return _MobileAnalyticsSection(
       summary: DocumentSummary(
-        totalValue: hasTotalRowValue ? totalRowValue : totalValue,
+        totalValue: hasTotalRow ? totalRowValue : totalValue,
         documentCount: rowCount,
       ),
-      trend: hasTotalRowValue ? totalRowTrend : trend,
+      trend: hasTotalRow ? totalRowTrend : trend,
     );
   }
 
@@ -7985,6 +8262,12 @@ class _MobileAnalyticsSection {
   final List<DocumentTrendPoint> trend;
 
   const _MobileAnalyticsSection({required this.summary, required this.trend});
+}
+
+class _SellingAnalyticsTimeoutException implements Exception {
+  final String documentType;
+
+  const _SellingAnalyticsTimeoutException(this.documentType);
 }
 
 class _CustomerSalesTotal {

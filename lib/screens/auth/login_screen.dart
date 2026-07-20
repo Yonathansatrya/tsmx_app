@@ -456,7 +456,7 @@ class _LoginBrand extends StatelessWidget {
         SizedBox(
           width: 150,
           height: 150,
-          child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+          child: Image.asset('assets/images/logo.jpeg', fit: BoxFit.contain),
         ),
         const SizedBox(height: 6),
         const Text(

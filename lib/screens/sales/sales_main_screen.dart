@@ -132,7 +132,7 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
     if (!context.mounted) return;
     await Future.wait([
       state.refreshSalesOrders(),
-      state.refreshSellingSummaries(),
+      state.refreshSellingSummaries(documentType: 'Sales Order'),
     ]);
   }
 

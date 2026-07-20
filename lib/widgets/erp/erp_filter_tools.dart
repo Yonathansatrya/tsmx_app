@@ -17,6 +17,7 @@ class ErpPeriodFilterCard extends StatelessWidget {
   final String partnerTypeLabel;
   final IconData partnerTypeIcon;
   final Map<String, String> partnerTypeOptions;
+  final bool showLoadingIndicator;
 
   const ErpPeriodFilterCard({
     super.key,
@@ -39,6 +40,7 @@ class ErpPeriodFilterCard extends StatelessWidget {
       'external': 'External',
       'internal': 'Internal',
     },
+    this.showLoadingIndicator = false,
   });
 
   static const monthLabels = [
@@ -124,7 +126,7 @@ class ErpPeriodFilterCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (loading)
+              if (loading || showLoadingIndicator)
                 const SizedBox(
                   width: 18,
                   height: 18,

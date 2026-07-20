@@ -13,6 +13,7 @@ class DocumentTrendCard extends StatelessWidget {
   final String valuePrefix;
   final String valueSuffix;
   final String sourceLabel;
+  final bool isLoading;
 
   const DocumentTrendCard({
     super.key,
@@ -24,6 +25,7 @@ class DocumentTrendCard extends StatelessWidget {
     this.valuePrefix = 'Rp ',
     this.valueSuffix = '',
     this.sourceLabel = '',
+    this.isLoading = false,
   });
 
   @override
@@ -94,11 +96,20 @@ class DocumentTrendCard extends StatelessWidget {
                   ],
                 ),
               ),
-              _DocumentTrendBadge(value: delta),
+              if (isLoading)
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                _DocumentTrendBadge(value: delta),
             ],
           ),
           const SizedBox(height: 12),
-          if (total <= 0)
+          if (isLoading && total <= 0)
+            const _DocumentLoadingTrend()
+          else if (total <= 0)
             _DocumentEmptyTrend(message: emptyMessage)
           else
             _DocumentTrendLineChart(
@@ -112,6 +123,32 @@ class DocumentTrendCard extends StatelessWidget {
               valueSuffix: valueSuffix,
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _DocumentLoadingTrend extends StatelessWidget {
+  const _DocumentLoadingTrend();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 96,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: const Text(
+        'Memuat data Sales Analytics...',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: AppColors.slate,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

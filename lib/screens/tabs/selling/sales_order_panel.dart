@@ -436,6 +436,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
           selectedYear: appState.sellingPeriodYear,
           selectedMonth: appState.sellingPeriodMonth,
           sourceLabel: 'Sumber: Sales Analytics ERPNext',
+          isLoading: appState.isOrderSummaryLoading,
         ),
 
         const SizedBox(height: 12),

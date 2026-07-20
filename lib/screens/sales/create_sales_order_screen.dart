@@ -2573,42 +2573,61 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              labelText: 'Currency',
-                              prefixIcon: Icon(Icons.lock_outline_rounded),
-                            ),
-                            child: Text(
-                              _selectedCurrency ?? '-',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.navy,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'Currency',
+                        prefixIcon: const Icon(Icons.lock_outline_rounded),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              labelText: 'Selling Price List',
-                              prefixIcon: Icon(Icons.lock_outline_rounded),
-                            ),
-                            child: Text(
-                              _selectedPriceList ?? '-',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.navy,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: Text(
+                        _selectedCurrency ?? '-',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: 'Selling Price List',
+                        prefixIcon: const Icon(Icons.lock_outline_rounded),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
-                      ],
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: Text(
+                        _selectedPriceList ??
+                            (_priceListOptions.isEmpty
+                                ? 'Price List tidak tersedia'
+                                : '-'),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                     if (_priceListCurrency != null) ...[
                       const SizedBox(height: 8),
@@ -2810,6 +2829,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                     const SizedBox(height: 10),
                     TextFormField(
                       controller: _rateCtrl,
+                      readOnly: true,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
@@ -2818,6 +2838,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                       onTapOutside: (_) => _formatMoneyController(_rateCtrl),
                       decoration: InputDecoration(
                         labelText: 'Harga/Unit',
+                        prefixIcon: const Icon(Icons.lock_outline_rounded),
                         filled: true,
                         fillColor: AppColors.background,
                         border: OutlineInputBorder(
@@ -3043,6 +3064,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             const SizedBox(height: 10),
                             TextFormField(
                               controller: row.rateController,
+                              readOnly: true,
                               keyboardType:
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
@@ -3053,6 +3075,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                                   _formatMoneyController(row.rateController),
                               decoration: const InputDecoration(
                                 labelText: 'Harga/Unit',
+                                prefixIcon: Icon(Icons.lock_outline_rounded),
                               ),
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {

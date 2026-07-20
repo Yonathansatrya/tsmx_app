@@ -28,6 +28,16 @@ class SellingTabState extends State<SellingTab>
 
   static const _segmentIds = ['so', 'dn', 'si'];
 
+  String get _activeDocumentType {
+    final controller = _tabController;
+    final index = controller?.index ?? _initialIndex;
+    return switch (_segmentIds[index]) {
+      'dn' => 'Delivery Note',
+      'si' => 'Sales Invoice',
+      _ => 'Sales Order',
+    };
+  }
+
   int get _initialIndex {
     final index = _segmentIds.indexOf(widget.selectedSegment);
     return index < 0 ? 0 : index;
@@ -49,7 +59,7 @@ class SellingTabState extends State<SellingTab>
       final appState = context.read<AppState>();
 
       appState.loadSellingFilterOptions();
-      appState.refreshSellingSummaries();
+      appState.refreshSellingSummaries(documentType: _activeDocumentType);
 
       if (appState.salesOrders.isEmpty) {
         appState.refreshSalesOrders();
@@ -103,12 +113,14 @@ class SellingTabState extends State<SellingTab>
 
     switch (id) {
       case 'dn':
+        appState.refreshSellingSummaries(documentType: 'Delivery Note');
         if (appState.deliveryNotes.isEmpty) {
           appState.refreshDeliveryNotes();
         }
         break;
 
       case 'si':
+        appState.refreshSellingSummaries(documentType: 'Sales Invoice');
         if (appState.salesInvoices.isEmpty) {
           appState.refreshSalesInvoices();
         }
@@ -116,6 +128,7 @@ class SellingTabState extends State<SellingTab>
 
       case 'so':
       default:
+        appState.refreshSellingSummaries(documentType: 'Sales Order');
         if (appState.salesOrders.isEmpty) {
           appState.refreshSalesOrders();
         }
@@ -130,7 +143,10 @@ class SellingTabState extends State<SellingTab>
     final appState = context.read<AppState>();
 
     await Future.wait([
-      appState.refreshSellingSummaries(),
+      appState.refreshSellingSummaries(
+        forceRemote: true,
+        documentType: _activeDocumentType,
+      ),
       switch (_segmentIds[controller.index]) {
         'dn' => appState.refreshDeliveryNotes(),
         'si' => appState.refreshSalesInvoices(),
@@ -209,7 +225,8 @@ class SellingTabState extends State<SellingTab>
                     icon: Icons.point_of_sale_rounded,
                     selectedYear: appState.sellingPeriodYear,
                     selectedMonth: appState.sellingPeriodMonth,
-                    loading: appState.isOrderSummaryLoading,
+                    loading: false,
+                    showLoadingIndicator: appState.isOrderSummaryLoading,
                     companyOptions: appState.sellingCompanies,
                     selectedCompany: appState.sellingCompanyFilter,
                     selectedCustomerType:
@@ -228,6 +245,7 @@ class SellingTabState extends State<SellingTab>
                       context.read<AppState>().setSellingPeriod(
                         year: year,
                         month: month,
+                        documentType: _activeDocumentType,
                       );
                     },
                     onCompanyChanged: (company) {
@@ -235,6 +253,7 @@ class SellingTabState extends State<SellingTab>
                         year: appState.sellingPeriodYear,
                         month: appState.sellingPeriodMonth,
                         company: company,
+                        documentType: _activeDocumentType,
                       );
                     },
                     onCustomerTypeChanged:
@@ -245,6 +264,7 @@ class SellingTabState extends State<SellingTab>
                               year: appState.sellingPeriodYear,
                               month: appState.sellingPeriodMonth,
                               customerType: customerType,
+                              documentType: _activeDocumentType,
                             );
                           },
                   ),
