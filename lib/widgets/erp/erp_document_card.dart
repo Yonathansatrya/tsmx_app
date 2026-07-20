@@ -12,6 +12,7 @@ class ErpDocumentCard extends StatelessWidget {
   final String? trailing;
   final VoidCallback? onTap;
   final VoidCallback? onEdit;
+  final VoidCallback? onDuplicate;
   final VoidCallback? onDelete;
 
   const ErpDocumentCard({
@@ -24,6 +25,7 @@ class ErpDocumentCard extends StatelessWidget {
     this.trailing,
     this.onTap,
     this.onEdit,
+    this.onDuplicate,
     this.onDelete,
   });
 
@@ -104,7 +106,9 @@ class ErpDocumentCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       ErpStatusBadge(statusText: statusText),
-                      if (onEdit != null || onDelete != null) ...[
+                      if (onEdit != null ||
+                          onDuplicate != null ||
+                          onDelete != null) ...[
                         const SizedBox(height: 4),
                         SizedBox(
                           width: 34,
@@ -119,6 +123,7 @@ class ErpDocumentCard extends StatelessWidget {
                             ),
                             onSelected: (value) {
                               if (value == 'edit') onEdit?.call();
+                              if (value == 'duplicate') onDuplicate?.call();
                               if (value == 'delete') onDelete?.call();
                             },
                             itemBuilder: (context) => [
@@ -130,6 +135,17 @@ class ErpDocumentCard extends StatelessWidget {
                                       Icon(Icons.edit_outlined, size: 18),
                                       SizedBox(width: 8),
                                       Text('Edit'),
+                                    ],
+                                  ),
+                                ),
+                              if (onDuplicate != null)
+                                const PopupMenuItem(
+                                  value: 'duplicate',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.copy_rounded, size: 18),
+                                      SizedBox(width: 8),
+                                      Text('Duplicate'),
                                     ],
                                   ),
                                 ),

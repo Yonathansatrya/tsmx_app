@@ -40,6 +40,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
   DateTime? _advancedTo;
   _DocStatusFilter _advancedDocStatus = _DocStatusFilter.all;
   Timer? _searchDebounce;
+  bool _isOpeningDetail = false;
 
   static final _chips = <ErpStatusChip<SalesOrderStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
@@ -220,114 +221,130 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
   }
 
   Future<void> _openDetail(SalesOrder order) async {
+    if (_isOpeningDetail) return;
+    setState(() => _isOpeningDetail = true);
     final appState = context.read<AppState>();
-    final detail = await appState.loadSalesOrderDetail(order.id);
-    if (!mounted) return;
+    late final SalesOrder detail;
+    try {
+      detail = await appState.loadSalesOrderDetail(order.id);
+      if (!mounted) return;
 
-    final relatedDn = await appState.fetchDeliveryNotesForSalesOrder(order.id);
-    final relatedSi = await appState.fetchSalesInvoicesForSalesOrder(order.id);
-    if (!mounted) return;
+      final relatedDn = await appState.fetchDeliveryNotesForSalesOrder(
+        order.id,
+      );
+      final relatedSi = await appState.fetchSalesInvoicesForSalesOrder(
+        order.id,
+      );
+      if (!mounted) return;
 
-    final canSubmit = isDocDraft(detail.docStatus);
-    final canEdit = isDocDraft(detail.docStatus);
+      final canSubmit = isDocDraft(detail.docStatus);
+      final canEdit = isDocDraft(detail.docStatus);
 
-    showSellingDocumentDetailSheet(
-      context: context,
-      title: detail.id,
-      subtitle: detail.customer,
-      statusText: detail.statusText,
-      icon: Icons.point_of_sale_rounded,
-      metrics: [
-        SellingDetailMetric(
-          label: 'Total',
-          value: 'Rp ${formatErpCurrency(detail.value)}',
-          icon: Icons.payments_outlined,
-        ),
-        SellingDetailMetric(
-          label: 'Items',
-          value: '${detail.itemsCount}',
-          icon: Icons.inventory_2_outlined,
-        ),
-        SellingDetailMetric(
-          label: 'Delivered',
-          value: '${detail.perDelivered.toStringAsFixed(1)}%',
-          icon: Icons.local_shipping_outlined,
-        ),
-        SellingDetailMetric(
-          label: 'Billed',
-          value: '${detail.perBilled.toStringAsFixed(1)}%',
-          icon: Icons.receipt_long_outlined,
-        ),
-      ],
-      infos: [
-        SellingDetailInfo(
-          label: 'Doc Status',
-          value: docStatusLabel(detail.docStatus),
-        ),
-        SellingDetailInfo(label: 'Date', value: detail.date),
-        if (detail.sellingPriceList.isNotEmpty)
-          SellingDetailInfo(
-            label: 'Price List',
-            value: detail.sellingPriceList,
+      showSellingDocumentDetailSheet(
+        context: context,
+        title: detail.id,
+        subtitle: detail.customer,
+        statusText: detail.statusText,
+        icon: Icons.point_of_sale_rounded,
+        metrics: [
+          SellingDetailMetric(
+            label: 'Total',
+            value: 'Rp ${formatErpCurrency(detail.value)}',
+            icon: Icons.payments_outlined,
           ),
-        if (detail.currency.isNotEmpty)
-          SellingDetailInfo(label: 'Currency', value: detail.currency),
-      ],
-      items: detail.items
-          .map(
-            (i) => SellingDetailItem(
-              title: i.itemName,
-              subtitle: i.itemCode,
-              qty: '${i.qty}',
-              rate: 'Rp ${formatErpCurrency(i.rate)}',
-              amount: 'Rp ${formatErpCurrency(i.qty * i.rate)}',
-              note: i.warehouse,
-            ),
-          )
-          .toList(),
-      footer: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (relatedDn.isNotEmpty)
-            erpWorkflowSection(
-              title: 'Delivery Notes',
-              children: erpRelatedDocChips(
-                docIds: relatedDn.map((d) => d.id).toList(),
-                onTap: (_) {},
-              ),
-            ),
-          if (relatedSi.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            erpWorkflowSection(
-              title: 'Sales Invoices',
-              children: erpRelatedDocChips(
-                docIds: relatedSi.map((d) => d.id).toList(),
-                onTap: (_) {},
-              ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          if (canEdit)
-            erpActionButton(
-              label: 'Edit Sales Order',
-              icon: Icons.edit_outlined,
-              onPressed: () => _editSo(detail.id, closeSheet: true),
-            ),
-          if (canSubmit)
-            erpActionButton(
-              label: 'Submit Sales Order',
-              icon: Icons.check_circle_outline_rounded,
-              filled: true,
-              onPressed: () => _submitSo(detail.id),
-            ),
-          if (!canSubmit && !canEdit)
-            const Text(
-              'No workflow actions available for this document.',
-              style: TextStyle(fontSize: 12, color: AppColors.slate),
-            ),
+          SellingDetailMetric(
+            label: 'Items',
+            value: '${detail.itemsCount}',
+            icon: Icons.inventory_2_outlined,
+          ),
+          SellingDetailMetric(
+            label: 'Delivered',
+            value: '${detail.perDelivered.toStringAsFixed(1)}%',
+            icon: Icons.local_shipping_outlined,
+          ),
+          SellingDetailMetric(
+            label: 'Billed',
+            value: '${detail.perBilled.toStringAsFixed(1)}%',
+            icon: Icons.receipt_long_outlined,
+          ),
         ],
-      ),
-    );
+        infos: [
+          SellingDetailInfo(
+            label: 'Doc Status',
+            value: docStatusLabel(detail.docStatus),
+          ),
+          SellingDetailInfo(label: 'Date', value: detail.date),
+          if (detail.sellingPriceList.isNotEmpty)
+            SellingDetailInfo(
+              label: 'Price List',
+              value: detail.sellingPriceList,
+            ),
+          if (detail.currency.isNotEmpty)
+            SellingDetailInfo(label: 'Currency', value: detail.currency),
+        ],
+        items: detail.items
+            .map(
+              (i) => SellingDetailItem(
+                title: i.itemName,
+                subtitle: i.itemCode,
+                qty: '${i.qty}',
+                rate: 'Rp ${formatErpCurrency(i.rate)}',
+                amount: 'Rp ${formatErpCurrency(i.qty * i.rate)}',
+                note: i.warehouse,
+              ),
+            )
+            .toList(),
+        footer: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (relatedDn.isNotEmpty)
+              erpWorkflowSection(
+                title: 'Delivery Notes',
+                children: erpRelatedDocChips(
+                  docIds: relatedDn.map((d) => d.id).toList(),
+                  onTap: (_) {},
+                ),
+              ),
+            if (relatedSi.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              erpWorkflowSection(
+                title: 'Sales Invoices',
+                children: erpRelatedDocChips(
+                  docIds: relatedSi.map((d) => d.id).toList(),
+                  onTap: (_) {},
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            erpActionButton(
+              label: 'Duplicate Sales Order',
+              icon: Icons.copy_rounded,
+              onPressed: () => _duplicateSo(detail, closeSheet: true),
+            ),
+            if (canEdit)
+              erpActionButton(
+                label: 'Edit Sales Order',
+                icon: Icons.edit_outlined,
+                onPressed: () => _editSo(detail.id, closeSheet: true),
+              ),
+            if (canSubmit)
+              erpActionButton(
+                label: 'Submit Sales Order',
+                icon: Icons.check_circle_outline_rounded,
+                filled: true,
+                onPressed: () => _submitSo(detail.id),
+              ),
+            if (!canSubmit && !canEdit)
+              const Text(
+                'No workflow actions available for this document.',
+                style: TextStyle(fontSize: 12, color: AppColors.slate),
+              ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isOpeningDetail = false);
+    }
   }
 
   bool _matchesAdvancedFilters(SalesOrder order) {
@@ -401,6 +418,32 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     );
     if (mounted) {
       await context.read<AppState>().refreshSalesOrders();
+    }
+  }
+
+  Future<void> _duplicateSo(SalesOrder order, {bool closeSheet = false}) async {
+    if (closeSheet) Navigator.pop(context);
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CreateSalesOrderScreen(duplicateFrom: order),
+      ),
+    );
+    if (mounted) {
+      await context.read<AppState>().refreshSalesOrders();
+    }
+  }
+
+  Future<void> _duplicateSoFromList(SalesOrder order) async {
+    if (_isOpeningDetail) return;
+    setState(() => _isOpeningDetail = true);
+    try {
+      final detail = await context.read<AppState>().loadSalesOrderDetail(
+        order.id,
+      );
+      if (!mounted) return;
+      await _duplicateSo(detail);
+    } finally {
+      if (mounted) setState(() => _isOpeningDetail = false);
     }
   }
 
@@ -520,6 +563,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
               value: o.value,
               onTap: () => _openDetail(o),
               onEdit: isDocDraft(o.docStatus) ? () => _editSo(o.id) : null,
+              onDuplicate: () => _duplicateSoFromList(o),
             ),
           ),
         if (appState.hasMoreSalesOrders ||

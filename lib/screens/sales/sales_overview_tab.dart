@@ -6,10 +6,12 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../models/sales_workspace.dart';
+import '../../services/local_app_database.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/date_range_presets.dart';
 import '../../utils/erp_format.dart';
+import '../../utils/num_parse.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_error_box.dart';
 import 'collection/collection_widgets.dart';
@@ -18,13 +20,6 @@ import 'sales_ui.dart';
 enum _DailySalesDocType { salesOrder, deliveryNote, salesInvoice }
 
 enum _DailySalesSort { itemGroup, qty, amount }
-
-class _DailyReportCacheEntry {
-  final DailySalesReport report;
-  final String? error;
-
-  const _DailyReportCacheEntry({required this.report, this.error});
-}
 
 class SalesOverviewTab extends StatefulWidget {
   final ValueChanged<int> onMenuSelected;
@@ -53,7 +48,6 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   bool _dailyReportLoading = true;
   int _dailyRequestVersion = 0;
   String? _dailyReportError;
-  final Map<String, _DailyReportCacheEntry> _dailyReportCache = {};
   List<SalesPersonCustomerRanking> _topCustomers = const [];
   List<CollectionRanking> _ranking = const [];
   bool _topCustomersLoading = true;
@@ -77,16 +71,47 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     _ => 'Sales Order',
   };
 
-  String _dailyCacheKey(AppState state, _DailySalesDocType type) {
+  static const Duration _salesOverviewCacheTtl = Duration(hours: 12);
+  static const String _salesOverviewCachePrefix = 'sales_overview';
+
+  String _scopeKey(AppState state) {
     final salesPerson = state.mobileAccess.shouldScopeSalesData
         ? state.currentSalesPerson ?? ''
         : '';
     return [
-      type.name,
-      DateRangePresets.toFrappeDate(_filterDate),
+      state.selectedSiteBaseUrl.trim(),
+      state.currentUser?.trim() ?? '',
       _selectedCompany.trim(),
       _selectedSalesGroup.trim(),
       salesPerson,
+    ].join('|');
+  }
+
+  String _dailyCacheKey(AppState state, _DailySalesDocType type) {
+    return [
+      _salesOverviewCachePrefix,
+      'daily',
+      _scopeKey(state),
+      type.name,
+      DateRangePresets.toFrappeDate(_filterDate),
+    ].join('|');
+  }
+
+  String _topCustomersCacheKey(AppState state) {
+    return [
+      _salesOverviewCachePrefix,
+      'top_customers',
+      _scopeKey(state),
+      DateRangePresets.toFrappeDate(_filterDate),
+    ].join('|');
+  }
+
+  String _rankingCacheKey(AppState state) {
+    return [
+      _salesOverviewCachePrefix,
+      'collection_ranking',
+      _scopeKey(state),
+      DateRangePresets.toFrappeDate(_filterDate),
     ].join('|');
   }
 
@@ -123,7 +148,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     }
   }
 
-  Future<void> _loadDailyReport() async {
+  Future<void> _loadDailyReport({bool forceRemote = false}) async {
     final requestVersion = ++_dailyRequestVersion;
     final state = context.read<AppState>();
     if (!state.canUseSales) {
@@ -137,16 +162,16 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       return;
     }
     final cacheKey = _dailyCacheKey(state, _dailyDocType);
-    final cached = _dailyReportCache[cacheKey];
-    if (cached != null) {
-      if (mounted) {
+    if (!forceRemote) {
+      final cached = await _readDailyReport(cacheKey);
+      if (cached != null && mounted && requestVersion == _dailyRequestVersion) {
         setState(() {
-          _dailyReport = cached.report;
-          _dailyReportError = cached.error;
+          _dailyReport = cached;
+          _dailyReportError = null;
           _dailyReportLoading = false;
         });
+        return;
       }
-      return;
     }
     setState(() {
       _dailyReportLoading = true;
@@ -164,16 +189,12 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
         company: _selectedCompany,
       );
       if (mounted && requestVersion == _dailyRequestVersion) {
-        _dailyReportCache[cacheKey] = _DailyReportCacheEntry(report: report);
+        await _writeDailyReport(cacheKey, report);
         setState(() => _dailyReport = report);
       }
     } catch (error) {
       if (mounted && requestVersion == _dailyRequestVersion) {
         final message = error.toString();
-        _dailyReportCache[cacheKey] = _DailyReportCacheEntry(
-          report: const DailySalesReport(),
-          error: message,
-        );
         setState(() {
           _dailyReport = const DailySalesReport();
           _dailyReportError = message;
@@ -194,10 +215,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       lastDate: DateTime.now(),
     );
     if (picked == null) return;
-    setState(() {
-      _filterDate = picked;
-      _dailyReportCache.clear();
-    });
+    setState(() => _filterDate = picked);
     await _reloadReports();
   }
 
@@ -207,7 +225,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     _loadDailyReport();
   }
 
-  Future<void> _loadRanking() async {
+  Future<void> _loadRanking({bool forceRemote = false}) async {
     final requestVersion = ++_rankingRequestVersion;
     final state = context.read<AppState>();
     final canViewTopCustomers = _canViewTopCustomers(state);
@@ -238,12 +256,14 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
           state: state,
           requestVersion: requestVersion,
           parentSalesPerson: parentSalesPerson,
+          forceRemote: forceRemote,
         ),
       if (canViewRanking)
         _loadCollectionRanking(
           state: state,
           requestVersion: requestVersion,
           parentSalesPerson: parentSalesPerson,
+          forceRemote: forceRemote,
         ),
     ]);
   }
@@ -252,7 +272,22 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     required AppState state,
     required int requestVersion,
     required String? parentSalesPerson,
+    bool forceRemote = false,
   }) async {
+    final cacheKey = _topCustomersCacheKey(state);
+    if (!forceRemote) {
+      final cached = await _readTopCustomers(cacheKey);
+      if (cached != null &&
+          mounted &&
+          requestVersion == _rankingRequestVersion) {
+        setState(() {
+          _topCustomers = cached;
+          _topCustomersError = null;
+          _topCustomersLoading = false;
+        });
+        return;
+      }
+    }
     try {
       final topCustomers = await state.fetchTopCustomersBySalesPerson(
         from: _filterDate,
@@ -265,6 +300,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
         company: _selectedCompany,
       );
       if (mounted && requestVersion == _rankingRequestVersion) {
+        await _writeTopCustomers(cacheKey, topCustomers);
         setState(() => _topCustomers = topCustomers);
       }
     } catch (error) {
@@ -282,7 +318,22 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     required AppState state,
     required int requestVersion,
     required String? parentSalesPerson,
+    bool forceRemote = false,
   }) async {
+    final cacheKey = _rankingCacheKey(state);
+    if (!forceRemote) {
+      final cached = await _readCollectionRanking(cacheKey);
+      if (cached != null &&
+          mounted &&
+          requestVersion == _rankingRequestVersion) {
+        setState(() {
+          _ranking = cached;
+          _rankingError = null;
+          _rankingLoading = false;
+        });
+        return;
+      }
+    }
     try {
       final ranking = await state.fetchCollectionRanking(
         from: _filterDate,
@@ -294,6 +345,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
         company: _selectedCompany,
       );
       if (mounted && requestVersion == _rankingRequestVersion) {
+        await _writeCollectionRanking(cacheKey, ranking);
         setState(() => _ranking = ranking);
       }
     } catch (error) {
@@ -307,9 +359,196 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     }
   }
 
-  Future<void> _reloadReports() async {
-    _dailyReportCache.clear();
-    await Future.wait([_loadDailyReport(), _loadRanking()]);
+  Future<void> _reloadReports({bool forceRemote = false}) async {
+    await Future.wait([
+      _loadDailyReport(forceRemote: forceRemote),
+      _loadRanking(forceRemote: forceRemote),
+    ]);
+  }
+
+  Future<DailySalesReport?> _readDailyReport(String key) async {
+    final json = await LocalAppDatabase.instance.readJson(key);
+    if (json == null) return null;
+    try {
+      return _dailyReportFromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeDailyReport(String key, DailySalesReport report) {
+    return LocalAppDatabase.instance.writeJson(
+      key,
+      _dailyReportToJson(report),
+      ttl: _salesOverviewCacheTtl,
+    );
+  }
+
+  Future<List<SalesPersonCustomerRanking>?> _readTopCustomers(
+    String key,
+  ) async {
+    final json = await LocalAppDatabase.instance.readJson(key);
+    final rows = json?['rows'];
+    if (rows is! List) return null;
+    try {
+      return rows
+          .whereType<Map>()
+          .map((row) => _topCustomerFromJson(Map<String, dynamic>.from(row)))
+          .toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeTopCustomers(
+    String key,
+    List<SalesPersonCustomerRanking> rows,
+  ) {
+    return LocalAppDatabase.instance.writeJson(key, {
+      'rows': rows.map(_topCustomerToJson).toList(),
+    }, ttl: _salesOverviewCacheTtl);
+  }
+
+  Future<List<CollectionRanking>?> _readCollectionRanking(String key) async {
+    final json = await LocalAppDatabase.instance.readJson(key);
+    final rows = json?['rows'];
+    if (rows is! List) return null;
+    try {
+      return rows
+          .whereType<Map>()
+          .map(
+            (row) => _collectionRankingFromJson(Map<String, dynamic>.from(row)),
+          )
+          .toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeCollectionRanking(
+    String key,
+    List<CollectionRanking> rows,
+  ) {
+    return LocalAppDatabase.instance.writeJson(key, {
+      'rows': rows.map(_collectionRankingToJson).toList(),
+    }, ttl: _salesOverviewCacheTtl);
+  }
+
+  DailySalesReport _dailyReportFromJson(Map<String, dynamic> json) {
+    final itemRows = json['items'];
+    final customerRows = json['customers'];
+    return DailySalesReport(
+      items: itemRows is List
+          ? itemRows
+                .whereType<Map>()
+                .map(
+                  (row) => _dailyItemFromJson(Map<String, dynamic>.from(row)),
+                )
+                .toList()
+          : const [],
+      customers: customerRows is List
+          ? customerRows
+                .whereType<Map>()
+                .map(
+                  (row) =>
+                      _dailyCustomerFromJson(Map<String, dynamic>.from(row)),
+                )
+                .toList()
+          : const [],
+      totalQty: NumParse.asDouble(json['total_qty']),
+      totalAmount: NumParse.asDouble(json['total_amount']),
+    );
+  }
+
+  Map<String, dynamic> _dailyReportToJson(DailySalesReport report) {
+    return {
+      'items': report.items.map(_dailyItemToJson).toList(),
+      'customers': report.customers.map(_dailyCustomerToJson).toList(),
+      'total_qty': report.totalQty,
+      'total_amount': report.totalAmount,
+    };
+  }
+
+  DailySalesItemSummary _dailyItemFromJson(Map<String, dynamic> json) {
+    return DailySalesItemSummary(
+      itemLabel: json['item_label']?.toString() ?? '',
+      itemGroup: json['item_group']?.toString() ?? '',
+      qty: NumParse.asDouble(json['qty']),
+      amount: NumParse.asDouble(json['amount']),
+    );
+  }
+
+  Map<String, dynamic> _dailyItemToJson(DailySalesItemSummary item) {
+    return {
+      'item_label': item.itemLabel,
+      'item_group': item.itemGroup,
+      'qty': item.qty,
+      'amount': item.amount,
+    };
+  }
+
+  DailySalesCustomerSummary _dailyCustomerFromJson(Map<String, dynamic> json) {
+    final itemRows = json['items'];
+    return DailySalesCustomerSummary(
+      customer: json['customer']?.toString() ?? '',
+      items: itemRows is List
+          ? itemRows
+                .whereType<Map>()
+                .map(
+                  (row) => _dailyItemFromJson(Map<String, dynamic>.from(row)),
+                )
+                .toList()
+          : const [],
+      totalAmount: NumParse.asDouble(json['total_amount']),
+    );
+  }
+
+  Map<String, dynamic> _dailyCustomerToJson(
+    DailySalesCustomerSummary customer,
+  ) {
+    return {
+      'customer': customer.customer,
+      'items': customer.items.map(_dailyItemToJson).toList(),
+      'total_amount': customer.totalAmount,
+    };
+  }
+
+  SalesPersonCustomerRanking _topCustomerFromJson(Map<String, dynamic> json) {
+    return SalesPersonCustomerRanking(
+      salesPerson: json['sales_person']?.toString() ?? '',
+      customer: json['customer']?.toString() ?? '',
+      customerName: json['customer_name']?.toString() ?? '',
+      amount: NumParse.asDouble(json['amount']),
+      orderCount: NumParse.asInt(json['order_count']),
+      rank: NumParse.asInt(json['rank']),
+    );
+  }
+
+  Map<String, dynamic> _topCustomerToJson(SalesPersonCustomerRanking row) {
+    return {
+      'sales_person': row.salesPerson,
+      'customer': row.customer,
+      'customer_name': row.customerName,
+      'amount': row.amount,
+      'order_count': row.orderCount,
+      'rank': row.rank,
+    };
+  }
+
+  CollectionRanking _collectionRankingFromJson(Map<String, dynamic> json) {
+    return CollectionRanking(
+      salesPerson: json['sales_person']?.toString() ?? '',
+      amount: NumParse.asDouble(json['amount']),
+      rank: NumParse.asInt(json['rank']),
+    );
+  }
+
+  Map<String, dynamic> _collectionRankingToJson(CollectionRanking row) {
+    return {
+      'sales_person': row.salesPerson,
+      'amount': row.amount,
+      'rank': row.rank,
+    };
   }
 
   bool _canViewRanking(AppState state) {
@@ -486,8 +725,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     return RefreshIndicator(
       onRefresh: () async {
         await state.refreshDataForCurrentRole();
-        await _loadDailyReport();
-        await _loadRanking();
+        await _reloadReports(forceRemote: true);
       },
       child: ListView(
         padding: SalesUi.screenPadding,

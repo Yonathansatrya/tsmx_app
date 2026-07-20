@@ -14,10 +14,16 @@ import '../../widgets/erp/erp_item_autocomplete_field.dart';
 
 class CreateSalesOrderScreen extends StatefulWidget {
   final String? editOrderId;
+  final SalesOrder? duplicateFrom;
 
-  const CreateSalesOrderScreen({super.key, this.editOrderId});
+  const CreateSalesOrderScreen({
+    super.key,
+    this.editOrderId,
+    this.duplicateFrom,
+  });
 
   bool get isEditMode => editOrderId != null;
+  bool get isDuplicateMode => duplicateFrom != null && editOrderId == null;
 
   @override
   State<CreateSalesOrderScreen> createState() => _CreateSalesOrderScreenState();
@@ -61,6 +67,20 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   String? _customerError;
   String? _itemError;
   double _totalAmount = 0.0;
+
+  bool get _isCustomerLocked => widget.isDuplicateMode;
+
+  String get _screenTitle {
+    if (widget.isEditMode) return 'Edit Sales Order';
+    if (widget.isDuplicateMode) return 'Duplicate Sales Order';
+    return 'New Sales Order';
+  }
+
+  String get _saveButtonLabel {
+    if (widget.isEditMode) return 'Update Sales Order';
+    if (widget.isDuplicateMode) return 'Create Duplicate SO';
+    return 'Save Sales Order';
+  }
 
   List<String> _seriesOptions = [];
   List<String> _customerSeriesOptions = [];
@@ -1924,7 +1944,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           widget.editOrderId!,
         );
         if (!mounted) return;
-        _applyEditingOrder(editingOrder);
+        _applyOrderToForm(editingOrder, keepCurrentDates: false);
+      } else if (widget.isDuplicateMode) {
+        _applyOrderToForm(widget.duplicateFrom!, keepCurrentDates: true);
       }
     } catch (error) {
       if (!mounted) return;
@@ -1940,7 +1962,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }
   }
 
-  void _applyEditingOrder(SalesOrder order) {
+  void _applyOrderToForm(SalesOrder order, {required bool keepCurrentDates}) {
     final firstItem = order.items.isNotEmpty ? order.items.first : null;
     for (final row in _additionalItems) {
       row.dispose();
@@ -1975,12 +1997,14 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       _discountCtrl.text = firstItem?.discountAmount != null
           ? _formatRupiah(firstItem!.discountAmount)
           : '0';
-      _selectedDate = DateTime.tryParse(order.date) ?? _selectedDate;
-      final deliveryDate = order.deliveryDate.isNotEmpty
-          ? order.deliveryDate
-          : firstItem?.deliveryDate;
-      _selectedDeliveryDate =
-          DateTime.tryParse(deliveryDate ?? '') ?? _selectedDeliveryDate;
+      if (!keepCurrentDates) {
+        _selectedDate = DateTime.tryParse(order.date) ?? _selectedDate;
+        final deliveryDate = order.deliveryDate.isNotEmpty
+            ? order.deliveryDate
+            : firstItem?.deliveryDate;
+        _selectedDeliveryDate =
+            DateTime.tryParse(deliveryDate ?? '') ?? _selectedDeliveryDate;
+      }
       if (order.salesPerson.isNotEmpty &&
           _salesPersonOptions.contains(order.salesPerson)) {
         _selectedSalesPerson = order.salesPerson;
@@ -2029,7 +2053,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         centerTitle: false,
         titleSpacing: 16,
         title: Text(
-          widget.isEditMode ? 'Edit Sales Order' : 'New Sales Order',
+          _screenTitle,
           style: TextStyle(
             color: AppColors.primary,
             fontSize: 18,
@@ -2400,12 +2424,16 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                     TextFormField(
                       controller: _customerCtrl,
                       readOnly: true,
-                      onTap: _showCustomerSelectSheet,
+                      onTap: _isCustomerLocked
+                          ? null
+                          : _showCustomerSelectSheet,
                       decoration: InputDecoration(
                         labelText: 'Nama Customer',
                         hintText: _isLoadingSelectors
                             ? 'Loading customer...'
-                            : 'Pilih atau search customer',
+                            : (_isCustomerLocked
+                                  ? 'Customer dikunci dari dokumen asal'
+                                  : 'Pilih atau search customer'),
                         filled: true,
                         fillColor: AppColors.background,
                         border: OutlineInputBorder(
@@ -2418,7 +2446,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                           horizontal: 12,
                           vertical: 12,
                         ),
-                        suffixIcon: _customerCtrl.text.isNotEmpty
+                        suffixIcon: _isCustomerLocked
+                            ? const Icon(Icons.lock_outline_rounded)
+                            : _customerCtrl.text.isNotEmpty
                             ? IconButton(
                                 tooltip: 'Bersihkan Customer',
                                 onPressed: _clearCustomer,
@@ -3224,7 +3254,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                   ),
                 )
               : Text(
-                  widget.isEditMode ? 'Update Sales Order' : 'Save Sales Order',
+                  _saveButtonLabel,
                   style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                 ),
         ),
