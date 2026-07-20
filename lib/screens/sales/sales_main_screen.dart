@@ -5,8 +5,8 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../shared/role_main_screen.dart';
 import '../tabs/selling_tab.dart';
-import '../todo/todo_list.dart';
 import 'create_sales_order_screen.dart';
+import 'inactive_customer_tab.dart';
 import 'sales_collection_tab.dart';
 import 'sales_overview_tab.dart';
 import 'sales_visit_tab.dart';
@@ -40,10 +40,6 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.watch<AppState>();
-    final showTodo = appState.isSalesManagerRole;
-    final todoCount = appState.salesOrderApprovalTodoCount;
-
     return RoleMainScreen(
       title: 'Sales',
       fallbackUsername: 'Salesman',
@@ -68,12 +64,8 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
           },
         ),
         const SalesCollectionTab(),
+        const InactiveCustomerTab(),
         const SalesVisitTab(),
-        if (showTodo)
-          const SalesOrderApprovalScreen(
-            embedded: true,
-            title: 'Approval Sales Order',
-          ),
       ],
       floatingActionButtonBuilder: _buildSalesFab,
       destinations: [
@@ -93,16 +85,15 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
           label: 'Koleksi',
         ),
         const NavigationDestination(
+          icon: Icon(Icons.person_off_outlined),
+          selectedIcon: Icon(Icons.person_off_rounded),
+          label: 'Inactive',
+        ),
+        const NavigationDestination(
           icon: Icon(Icons.location_on_outlined),
           selectedIcon: Icon(Icons.location_on_rounded),
           label: 'Kunjungan',
         ),
-        if (showTodo)
-          NavigationDestination(
-            icon: _todoIcon(Icons.fact_check_outlined, todoCount),
-            selectedIcon: _todoIcon(Icons.fact_check_rounded, todoCount),
-            label: 'Todo',
-          ),
       ],
     );
   }
@@ -134,15 +125,5 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
       state.refreshSalesOrders(),
       state.refreshSellingSummaries(documentType: 'Sales Order'),
     ]);
-  }
-
-  Widget _todoIcon(IconData icon, int count) {
-    if (count <= 0) return Icon(icon);
-    return Badge.count(
-      count: count,
-      backgroundColor: Colors.redAccent,
-      textColor: Colors.white,
-      child: Icon(icon),
-    );
   }
 }

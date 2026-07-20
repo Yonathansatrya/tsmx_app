@@ -21,6 +21,7 @@ import '../models/supplier_price_comparison.dart';
 import '../models/stock_entry.dart';
 import '../models/stock_ledger_movement.dart';
 import '../models/inventory_item.dart';
+import '../models/inactive_customer.dart';
 import '../utils/date_range_presets.dart';
 import '../models/warehouse_info.dart';
 import '../models/warehouse_tracking_record.dart';
@@ -338,12 +339,24 @@ class AppState with ChangeNotifier {
   String _sellingCustomerTypeFilter = 'all';
   List<String> _sellingCompanies = const [];
   List<String> _sellingSalesGroups = const [];
+  List<InactiveCustomer> _inactiveCustomers = const [];
+  bool _isInactiveCustomersLoading = false;
+  String? _inactiveCustomersError;
+  int _inactiveCustomersDays = 60;
+  List<String> _inactiveCustomerDoctypes = const ['Sales Order'];
   int get sellingPeriodYear => _sellingPeriodYear;
   int get sellingPeriodMonth => _sellingPeriodMonth;
   String get sellingCompanyFilter => _sellingCompanyFilter;
   String get sellingCustomerTypeFilter => _sellingCustomerTypeFilter;
   List<String> get sellingCompanies => _scopedCompanyNames(_sellingCompanies);
   List<String> get sellingSalesGroups => List.unmodifiable(_sellingSalesGroups);
+  List<InactiveCustomer> get inactiveCustomers =>
+      List.unmodifiable(_inactiveCustomers);
+  bool get isInactiveCustomersLoading => _isInactiveCustomersLoading;
+  String? get inactiveCustomersError => _inactiveCustomersError;
+  int get inactiveCustomersDays => _inactiveCustomersDays;
+  List<String> get inactiveCustomerDoctypes =>
+      List.unmodifiable(_inactiveCustomerDoctypes);
   DateTime get sellingPeriodFrom => _sellingPeriodMonth == 0
       ? DateTime(_sellingPeriodYear, 1, 1)
       : DateTime(_sellingPeriodYear, _sellingPeriodMonth, 1);
@@ -1169,6 +1182,11 @@ class AppState with ChangeNotifier {
     _buyingCompanyFilter = '';
     _sellingCompanies = const [];
     _sellingSalesGroups = const [];
+    _inactiveCustomers = const [];
+    _inactiveCustomersError = null;
+    _inactiveCustomersDays = 60;
+    _inactiveCustomerDoctypes = const ['Sales Order'];
+    _isInactiveCustomersLoading = false;
     _buyingCompanies = const [];
     _sellingCustomerTypeFilter = 'all';
     _buyingSupplierTypeFilter = 'all';
@@ -4852,6 +4870,90 @@ class AppState with ChangeNotifier {
       },
     );
     return _analyticsSectionFromQueryReport(response, year, reportMonth);
+  }
+
+  Future<void> refreshInactiveCustomers({
+    int daysSinceLastOrder = 60,
+    List<String> doctypes = const ['Sales Order'],
+    bool forceRemote = false,
+  }) async {
+    if (_isInactiveCustomersLoading && !forceRemote) return;
+    final selectedDoctypes = doctypes
+        .map((doctype) => doctype.trim())
+        .where(
+          (doctype) => doctype == 'Sales Order' || doctype == 'Sales Invoice',
+        )
+        .toSet()
+        .toList();
+    if (selectedDoctypes.isEmpty) {
+      selectedDoctypes.add('Sales Order');
+    }
+    _inactiveCustomersDays = daysSinceLastOrder;
+    _inactiveCustomerDoctypes = List.unmodifiable(selectedDoctypes);
+    _isInactiveCustomersLoading = true;
+    _inactiveCustomersError = null;
+    notifyListeners();
+
+    try {
+      final customers = <InactiveCustomer>[];
+      for (final doctype in selectedDoctypes) {
+        final response = await _frappeService.callMethod(
+          'frappe.desk.query_report.run',
+          args: {
+            'report_name': 'Inactive Customers',
+            'filters': {
+              'days_since_last_order': daysSinceLastOrder,
+              'doctype': doctype,
+            },
+            'ignore_prepared_report': true,
+            'are_default_filters': false,
+          },
+        );
+        final report = _queryReportPayload(response);
+        if (report == null) {
+          throw Exception('Response report Inactive Customers tidak valid.');
+        }
+        final columns = _queryReportColumns(report['columns']);
+        final rows = _queryReportRows(report['result'] ?? report['data']);
+        customers.addAll(
+          rows
+              .map((row) => _queryReportRowMap(row, columns))
+              .where((row) => row.isNotEmpty && !_isQueryReportTotalRow(row))
+              .map(
+                (row) =>
+                    InactiveCustomer.fromReportRow(row, documentType: doctype),
+              )
+              .where(
+                (customer) =>
+                    customer.customer.isNotEmpty ||
+                    customer.customerName.isNotEmpty,
+              ),
+        );
+      }
+
+      customers.sort((a, b) {
+        final daysCompare = b.daysSinceLastOrder.compareTo(
+          a.daysSinceLastOrder,
+        );
+        if (daysCompare != 0) return daysCompare;
+        return a.displayName.compareTo(b.displayName);
+      });
+
+      _inactiveCustomers = customers;
+    } catch (error, stackTrace) {
+      developer.log(
+        'Failed to load inactive customers',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      _inactiveCustomersError = error.toString().replaceFirst(
+        'Exception: ',
+        '',
+      );
+    } finally {
+      _isInactiveCustomersLoading = false;
+      notifyListeners();
+    }
   }
 
   _MobileAnalyticsSection? _analyticsSectionFromQueryReport(
