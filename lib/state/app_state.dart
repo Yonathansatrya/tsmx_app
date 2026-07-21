@@ -5019,6 +5019,14 @@ class AppState with ChangeNotifier {
     notifyListeners();
 
     try {
+      if (_shouldScopeSalesData) {
+        _inactiveCustomers = await _fetchScopedInactiveCustomers(
+          daysSinceLastOrder: daysSinceLastOrder,
+          doctypes: selectedDoctypes,
+        );
+        return;
+      }
+
       final customers = <InactiveCustomer>[];
       for (final doctype in selectedDoctypes) {
         final response = await _frappeService.callMethod(
@@ -5078,6 +5086,130 @@ class AppState with ChangeNotifier {
       _isInactiveCustomersLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<List<InactiveCustomer>> _fetchScopedInactiveCustomers({
+    required int daysSinceLastOrder,
+    required List<String> doctypes,
+  }) async {
+    if (_currentSalesPerson == null || _currentSalesPerson!.isEmpty) {
+      await resolveCurrentSalesIdentity();
+    }
+    final scopedCustomers = await fetchSalesCustomers();
+    final customerIds = scopedCustomers
+        .map((customer) => customer.id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    if (customerIds.isEmpty) return const [];
+
+    final customerMeta = {
+      for (final customer in scopedCustomers)
+        customer.id.trim(): (
+          name: customer.name.trim().isNotEmpty
+              ? customer.name.trim()
+              : customer.id.trim(),
+          address: customer.address.trim(),
+        ),
+    };
+    final today = DateTime.now();
+    final results = <InactiveCustomer>[];
+
+    for (final doctype in doctypes) {
+      final spec = _inactiveDocumentSpec(doctype);
+      final buckets = {
+        for (final customerId in customerIds)
+          customerId: _InactiveCustomerAccumulator(
+            doctype: spec.doctype,
+            customer: customerId,
+            customerName: customerMeta[customerId]?.name ?? customerId,
+          ),
+      };
+
+      for (var start = 0; start < customerIds.length; start += 80) {
+        final end = start + 80 > customerIds.length
+            ? customerIds.length
+            : start + 80;
+        final chunk = customerIds.sublist(start, end);
+        try {
+          final rows = await _fetchAllResourcePages(
+            doctype: spec.doctype,
+            fields: [
+              'name',
+              'customer',
+              'customer_name',
+              'grand_total',
+              spec.dateField,
+            ],
+            filters: [
+              ['docstatus', '!=', 2],
+              ['customer', 'in', chunk],
+            ],
+            orderBy: '${spec.dateField} desc, modified desc',
+            maxRows: null,
+          );
+          for (final row in rows) {
+            final customer = row['customer']?.toString().trim() ?? '';
+            final bucket = buckets[customer];
+            if (bucket == null) continue;
+            bucket.addDocument(
+              name: row['name']?.toString().trim() ?? '',
+              date: _parseFrappeDate(row[spec.dateField]),
+              amount: NumParse.asDouble(row['grand_total']),
+              customerName: row['customer_name']?.toString().trim() ?? '',
+            );
+          }
+        } catch (error, stackTrace) {
+          developer.log(
+            'Failed to load scoped inactive ${spec.doctype} rows',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+
+      results.addAll(
+        buckets.values.map((bucket) {
+          final lastDate = bucket.lastOrderDate;
+          final days = lastDate == null
+              ? daysSinceLastOrder
+              : _daysSince(lastDate, today);
+          if (lastDate != null && days < daysSinceLastOrder) return null;
+          return bucket.toInactiveCustomer(daysSinceLastOrder: days);
+        }).whereType<InactiveCustomer>(),
+      );
+    }
+
+    results.sort((a, b) {
+      final daysCompare = b.daysSinceLastOrder.compareTo(a.daysSinceLastOrder);
+      if (daysCompare != 0) return daysCompare;
+      return a.displayName.compareTo(b.displayName);
+    });
+    return results;
+  }
+
+  _InactiveDocumentSpec _inactiveDocumentSpec(String doctype) {
+    return doctype == 'Sales Invoice'
+        ? const _InactiveDocumentSpec(
+            doctype: 'Sales Invoice',
+            dateField: 'posting_date',
+          )
+        : const _InactiveDocumentSpec(
+            doctype: 'Sales Order',
+            dateField: 'transaction_date',
+          );
+  }
+
+  DateTime? _parseFrappeDate(dynamic raw) {
+    final text = raw?.toString().trim() ?? '';
+    if (text.isEmpty || text.toLowerCase() == 'null') return null;
+    return DateTime.tryParse(text.length > 10 ? text.substring(0, 10) : text);
+  }
+
+  int _daysSince(DateTime date, DateTime today) {
+    final start = DateTime(date.year, date.month, date.day);
+    final end = DateTime(today.year, today.month, today.day);
+    return end.difference(start).inDays;
   }
 
   _MobileAnalyticsSection? _analyticsSectionFromQueryReport(
@@ -8491,6 +8623,62 @@ class _SalesCustomerDocumentSpec {
     required this.doctype,
     required this.dateField,
   });
+}
+
+class _InactiveDocumentSpec {
+  final String doctype;
+  final String dateField;
+
+  const _InactiveDocumentSpec({required this.doctype, required this.dateField});
+}
+
+class _InactiveCustomerAccumulator {
+  final String doctype;
+  final String customer;
+  String customerName;
+  String lastOrder = '';
+  DateTime? lastOrderDate;
+  double totalOrderValue = 0;
+
+  _InactiveCustomerAccumulator({
+    required this.doctype,
+    required this.customer,
+    required this.customerName,
+  });
+
+  void addDocument({
+    required String name,
+    required DateTime? date,
+    required double amount,
+    required String customerName,
+  }) {
+    if (customerName.trim().isNotEmpty) {
+      this.customerName = customerName.trim();
+    }
+    totalOrderValue += amount;
+    if (date == null) return;
+    final current = lastOrderDate;
+    if (current == null || date.isAfter(current)) {
+      lastOrderDate = date;
+      lastOrder = name;
+    }
+  }
+
+  InactiveCustomer toInactiveCustomer({required int daysSinceLastOrder}) {
+    return InactiveCustomer(
+      documentType: doctype,
+      customer: customer,
+      customerName: customerName,
+      customerGroup: '',
+      territory: '',
+      lastOrder: lastOrder,
+      lastOrderDate: lastOrderDate == null
+          ? ''
+          : DateRangePresets.toFrappeDate(lastOrderDate!),
+      daysSinceLastOrder: daysSinceLastOrder,
+      totalOrderValue: totalOrderValue,
+    );
+  }
 }
 
 class _MobileAnalyticsSection {
