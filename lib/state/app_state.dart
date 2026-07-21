@@ -139,6 +139,48 @@ class AppState with ChangeNotifier {
   bool get canUseAccounting => mobileAccess.canUse(MobileModule.accounting);
   bool get canUsePlantation => mobileAccess.canUse(MobileModule.plantation);
 
+  Future<bool> canSubmitDoctype(String doctype) async {
+    final normalizedDoctype = doctype.trim();
+    if (normalizedDoctype.isEmpty || !_isAuthenticated) return false;
+
+    final site = _frappeService.baseUrl.trim();
+    final user = _currentUser?.trim() ?? _frappeService.username?.trim() ?? '';
+    final cacheKey = '$site::$user::$normalizedDoctype::submit';
+    final cached = _doctypeSubmitPermissionCache[cacheKey];
+    if (cached != null) return cached;
+
+    try {
+      final result = await _frappeService.callMethod(
+        'frappe.client.has_permission',
+        args: {'doctype': normalizedDoctype, 'perm_type': 'submit'},
+      );
+      final allowed = _permissionResultToBool(result);
+      _doctypeSubmitPermissionCache[cacheKey] = allowed;
+      return allowed;
+    } catch (_) {
+      _doctypeSubmitPermissionCache[cacheKey] = false;
+      return false;
+    }
+  }
+
+  bool _permissionResultToBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is Map) {
+      if (value.containsKey('message')) {
+        return _permissionResultToBool(value['message']);
+      }
+      if (value.containsKey('has_permission')) {
+        return _permissionResultToBool(value['has_permission']);
+      }
+      if (value.containsKey('allowed')) {
+        return _permissionResultToBool(value['allowed']);
+      }
+    }
+    final text = value?.toString().trim().toLowerCase() ?? '';
+    return text == '1' || text == 'true' || text == 'yes' || text == 'allowed';
+  }
+
   static const purchaseApprovalDoctypes = {
     'Purchase Order',
     'Purchase Invoice',
@@ -317,6 +359,7 @@ class AppState with ChangeNotifier {
   static const Duration _notificationPollInterval = Duration(seconds: 30);
   static const Duration _documentCacheTtl = Duration(minutes: 2);
   final Map<String, _CachedDocument> _documentCache = {};
+  final Map<String, bool> _doctypeSubmitPermissionCache = {};
 
   bool _isSalesOrdersLoading = false;
   bool get isSalesOrdersLoading => _isSalesOrdersLoading;
@@ -1197,6 +1240,7 @@ class AppState with ChangeNotifier {
     _summarySyncStatus = SummarySyncStatus.idle;
     _summaryProcessedRows = 0;
     _notificationRefreshInFlight = null;
+    _doctypeSubmitPermissionCache.clear();
     _documentCache.clear();
   }
 
@@ -1648,9 +1692,89 @@ class AppState with ChangeNotifier {
         _salesIdentityError ?? 'Sales Person user login belum tersedia.',
       );
     }
-    return _customerService.fetchSalesCustomers(
+    final customers = await _customerService.fetchSalesCustomers(
       salesPerson: _shouldScopeSalesData ? _currentSalesPerson : null,
     );
+    if (!_shouldScopeSalesData || customers.isNotEmpty) return customers;
+    return _fetchSalesCustomersFromSalesDocuments(_currentSalesPerson!.trim());
+  }
+
+  Future<List<SalesCustomerOption>> _fetchSalesCustomersFromSalesDocuments(
+    String salesPerson,
+  ) async {
+    final customerRows = <String, Map<String, dynamic>>{};
+    for (final spec in const [
+      _SalesCustomerDocumentSpec(
+        doctype: 'Sales Order',
+        dateField: 'transaction_date',
+      ),
+      _SalesCustomerDocumentSpec(
+        doctype: 'Delivery Note',
+        dateField: 'posting_date',
+      ),
+      _SalesCustomerDocumentSpec(
+        doctype: 'Sales Invoice',
+        dateField: 'posting_date',
+      ),
+    ]) {
+      final rows = await _tryFetchSalesCustomerRowsFromDocumentType(
+        spec,
+        salesPerson,
+      );
+      for (final row in rows) {
+        final customer = row['customer']?.toString().trim() ?? '';
+        if (customer.isEmpty || customerRows.containsKey(customer)) continue;
+        customerRows[customer] = row;
+      }
+    }
+    final result =
+        customerRows.values
+            .map(
+              (row) => SalesCustomerOption(
+                id: row['customer']?.toString().trim() ?? '',
+                name: row['customer_name']?.toString().trim().isNotEmpty == true
+                    ? row['customer_name']!.toString()
+                    : row['customer']?.toString().trim() ?? '',
+                salesTeam: [
+                  {'sales_person': salesPerson, 'allocated_percentage': 100},
+                ],
+              ),
+            )
+            .where((customer) => customer.id.isNotEmpty)
+            .toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
+    return result;
+  }
+
+  Future<List<Map<String, dynamic>>> _tryFetchSalesCustomerRowsFromDocumentType(
+    _SalesCustomerDocumentSpec spec,
+    String salesPerson,
+  ) async {
+    try {
+      final rows = await _fetchAllResourcePages(
+        doctype: spec.doctype,
+        fields: const ['name', 'customer', 'customer_name'],
+        filters: const [
+          ['docstatus', '!=', 2],
+        ],
+        orderBy: '${spec.dateField} desc, modified desc',
+        maxRows: 80,
+      );
+      final documents = await _fetchDocumentsInBatches(
+        spec.doctype,
+        rows.map((row) => row['name']?.toString().trim() ?? ''),
+      );
+      return rows.where((row) {
+        final name = row['name']?.toString().trim() ?? '';
+        final document = documents[name];
+        if (document == null) return false;
+        return _documentChildRows(
+          document['sales_team'],
+        ).any((team) => team['sales_person']?.toString().trim() == salesPerson);
+      }).toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   Future<List<SalesInvoice>> fetchCollectionOutstandingInvoices() async {
@@ -8357,6 +8481,16 @@ class AppState with ChangeNotifier {
     if (type == WarehouseType.inbound) return 2000;
     return 900;
   }
+}
+
+class _SalesCustomerDocumentSpec {
+  final String doctype;
+  final String dateField;
+
+  const _SalesCustomerDocumentSpec({
+    required this.doctype,
+    required this.dateField,
+  });
 }
 
 class _MobileAnalyticsSection {

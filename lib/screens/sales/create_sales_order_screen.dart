@@ -984,12 +984,27 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   }
 
   List<_CustomerOption> _filteredCustomers(String query) {
+    final customers = _salesScopedCustomerOptions();
     final normalized = query.trim().toLowerCase();
-    if (normalized.isEmpty) return _customerOptions.take(30).toList();
+    if (normalized.isEmpty) return customers.take(30).toList();
 
-    return _customerOptions.where((customer) {
+    return customers.where((customer) {
       return customer.id.toLowerCase().contains(normalized) ||
           customer.name.toLowerCase().contains(normalized);
+    }).toList();
+  }
+
+  List<_CustomerOption> _salesScopedCustomerOptions() {
+    final appState = context.read<AppState>();
+    if (!appState.mobileAccess.isSalesUser) return _customerOptions;
+
+    final salesPerson = appState.currentSalesPerson?.trim() ?? '';
+    if (salesPerson.isEmpty) return const [];
+
+    return _customerOptions.where((customer) {
+      return customer.salesTeam.any(
+        (row) => row['sales_person']?.toString().trim() == salesPerson,
+      );
     }).toList();
   }
 
@@ -1812,7 +1827,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           sellingSettings['default_price_list']?.toString() ??
           '';
       final salesCustomers = await salesCustomersFuture;
-      final customerOptions = salesCustomers
+      var customerOptions = salesCustomers
           .map(
             (customer) => _CustomerOption(
               id: customer.id,
@@ -1821,6 +1836,15 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
             ),
           )
           .toList();
+      if (appState.mobileAccess.isSalesUser) {
+        final salesPerson = appState.currentSalesPerson?.trim() ?? '';
+        customerOptions = customerOptions.where((customer) {
+          return salesPerson.isNotEmpty &&
+              customer.salesTeam.any(
+                (row) => row['sales_person']?.toString().trim() == salesPerson,
+              );
+        }).toList();
+      }
 
       final itemData = await itemDataFuture;
       final itemOptions = itemData
@@ -3467,6 +3491,10 @@ class _CustomerInsightCard extends StatelessWidget {
                 warning: overLimit,
               ),
               _InsightMetric(
+                label: 'Deposit',
+                value: 'Rp ${insight.depositBalance.toStringAsFixed(0)}',
+              ),
+              _InsightMetric(
                 label: 'Sisa Kredit',
                 value: insight.creditLimit > 0
                     ? 'Rp ${insight.availableCredit.toStringAsFixed(0)}'
@@ -3498,6 +3526,39 @@ class _CustomerInsightCard extends StatelessWidget {
               ),
             ],
           ),
+          if (insight.depositBalance > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.18),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.account_balance_wallet_rounded,
+                    color: AppColors.primary,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Deposit customer tersedia Rp ${insight.depositBalance.toStringAsFixed(0)} dari AR minus.',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(

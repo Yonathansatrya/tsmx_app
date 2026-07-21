@@ -237,8 +237,11 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
       );
       if (!mounted) return;
 
-      final canSubmit = isDocDraft(detail.docStatus);
+      final canSubmit = isDocDraft(detail.docStatus)
+          ? await appState.canSubmitDoctype('Sales Order')
+          : false;
       final canEdit = isDocDraft(detail.docStatus);
+      if (!mounted) return;
 
       showSellingDocumentDetailSheet(
         context: context,

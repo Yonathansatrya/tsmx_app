@@ -106,79 +106,96 @@ class CustomerService {
   Future<List<SalesCustomerOption>> fetchSalesCustomers({
     String? salesPerson,
   }) async {
-    List<Map<String, dynamic>> assignedTeam = const [];
-    if (salesPerson?.isNotEmpty == true) {
-      try {
-        assignedTeam = await _frappe.fetchResource(
-          'Sales Team',
-          fields: const [
-            'parent',
-            'parenttype',
-            'sales_person',
-            'allocated_percentage',
-            'commission_rate',
-          ],
-          filters: [
-            ['parenttype', '=', 'Customer'],
-            ['sales_person', '=', salesPerson],
-          ],
-        );
-      } catch (_) {
-        final customers = await _fetchPermittedCustomers();
-        return customers
-            .map(
-              (customer) => customer.copyWithSalesTeam([
-                {'sales_person': salesPerson, 'allocated_percentage': 100},
-              ]),
-            )
-            .toList();
-      }
+    if (salesPerson?.trim().isNotEmpty == true) {
+      final fromSalesTeamRows = await _fetchCustomersBySalesTeamRows(
+        salesPerson!.trim(),
+      );
+      if (fromSalesTeamRows.isNotEmpty) return fromSalesTeamRows;
+      final scoped = await _fetchCustomersByChildTableFilter(
+        salesPerson.trim(),
+      );
+      if (scoped.isNotEmpty) return scoped;
+      return _fetchCustomersByDetailSalesTeam(salesPerson.trim());
     }
-    final customerIds = assignedTeam
-        .map((row) => row['parent']?.toString() ?? '')
-        .where((id) => id.isNotEmpty)
-        .toSet();
-    if (salesPerson?.isNotEmpty == true && customerIds.isEmpty) return const [];
+    return _fetchPermittedCustomers();
+  }
 
-    var teamRows = assignedTeam;
-    if (customerIds.isNotEmpty) {
-      teamRows = await _frappe.fetchResource(
+  Future<List<SalesCustomerOption>> _fetchCustomersBySalesTeamRows(
+    String salesPerson,
+  ) async {
+    try {
+      final rows = await _frappe.fetchResource(
         'Sales Team',
         fields: const [
           'parent',
-          'parenttype',
           'sales_person',
           'allocated_percentage',
           'commission_rate',
         ],
         filters: [
           ['parenttype', '=', 'Customer'],
-          ['parent', 'in', customerIds.toList()],
+          ['sales_person', '=', salesPerson],
         ],
+        orderBy: 'parent asc',
+        limit: 2000,
       );
-    }
-    final customers = await _fetchPermittedCustomers(customerIds: customerIds);
-    if (salesPerson?.isNotEmpty != true) return customers;
+      final teamByCustomer = <String, List<Map<String, dynamic>>>{};
+      for (final rawRow in rows) {
+        final customer = rawRow['parent']?.toString().trim() ?? '';
+        if (customer.isEmpty) continue;
+        teamByCustomer.putIfAbsent(customer, () => []).add({
+          'sales_person': salesPerson,
+          'allocated_percentage':
+              NumParse.asDouble(rawRow['allocated_percentage']) > 0
+              ? NumParse.asDouble(rawRow['allocated_percentage'])
+              : 100,
+          if (rawRow['commission_rate'] != null)
+            'commission_rate': rawRow['commission_rate'],
+        });
+      }
+      if (teamByCustomer.isEmpty) return const [];
 
-    final grouped = <String, List<Map<String, dynamic>>>{};
-    for (final row in teamRows) {
-      final parent = row['parent']?.toString() ?? '';
-      if (parent.isEmpty) continue;
-      grouped.putIfAbsent(parent, () => []).add({
-        'sales_person': row['sales_person'],
-        'allocated_percentage':
-            NumParse.asDouble(row['allocated_percentage']) > 0
-            ? NumParse.asDouble(row['allocated_percentage'])
-            : 100,
-        if (row['commission_rate'] != null)
-          'commission_rate': row['commission_rate'],
-      });
+      final customers = await _fetchPermittedCustomers(
+        customerIds: teamByCustomer.keys.toSet(),
+      );
+      return customers
+          .map(
+            (customer) => customer.copyWithSalesTeam(
+              teamByCustomer[customer.id] ?? const [],
+            ),
+          )
+          .where((customer) => customer.salesTeam.isNotEmpty)
+          .toList();
+    } catch (_) {
+      return const [];
     }
-    return customers
-        .map(
-          (customer) => customer.copyWithSalesTeam(grouped[customer.id] ?? []),
-        )
-        .toList();
+  }
+
+  Future<List<SalesCustomerOption>> _fetchCustomersByChildTableFilter(
+    String salesPerson,
+  ) async {
+    try {
+      final rows = await _frappe.fetchResource(
+        'Customer',
+        fields: const ['name', 'customer_name', 'primary_address'],
+        filters: [
+          ['Sales Team', 'sales_person', '=', salesPerson],
+        ],
+        orderBy: 'customer_name asc',
+        limit: 500,
+      );
+      return rows
+          .map(SalesCustomerOption.fromJson)
+          .where((customer) => customer.id.isNotEmpty)
+          .map(
+            (customer) => customer.copyWithSalesTeam([
+              {'sales_person': salesPerson, 'allocated_percentage': 100},
+            ]),
+          )
+          .toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   Future<List<SalesCustomerOption>> _fetchPermittedCustomers({
@@ -198,6 +215,39 @@ class CustomerService {
         .map(SalesCustomerOption.fromJson)
         .where((customer) => customer.id.isNotEmpty)
         .toList();
+  }
+
+  Future<List<SalesCustomerOption>> _fetchCustomersByDetailSalesTeam(
+    String salesPerson,
+  ) async {
+    final customers = await _fetchPermittedCustomers();
+    final scoped = <SalesCustomerOption>[];
+    for (final customer in customers) {
+      try {
+        final doc = await _frappe.fetchDocument('Customer', customer.id);
+        final salesTeam = doc['sales_team'];
+        if (salesTeam is! List) continue;
+        final rows = <Map<String, dynamic>>[];
+        for (final raw in salesTeam) {
+          if (raw is! Map) continue;
+          final row = Map<String, dynamic>.from(raw);
+          if (row['sales_person']?.toString().trim() != salesPerson) continue;
+          rows.add({
+            'sales_person': row['sales_person'],
+            'allocated_percentage':
+                NumParse.asDouble(row['allocated_percentage']) > 0
+                ? NumParse.asDouble(row['allocated_percentage'])
+                : 100,
+            if (row['commission_rate'] != null)
+              'commission_rate': row['commission_rate'],
+          });
+        }
+        if (rows.isNotEmpty) scoped.add(customer.copyWithSalesTeam(rows));
+      } catch (_) {
+        continue;
+      }
+    }
+    return scoped;
   }
 
   Future<CustomerSalesInsight> fetchSalesInsight(
@@ -245,6 +295,10 @@ class CustomerService {
         ['outstanding_amount', '>', 0],
       ],
     );
+    final depositBalance = await _fetchCustomerDepositBalance(
+      customer,
+      company: company,
+    );
 
     return CustomerSalesInsight(
       creditLimit: creditLimit,
@@ -252,11 +306,156 @@ class CustomerService {
         0,
         (sum, row) => sum + NumParse.asDouble(row['outstanding_amount']),
       ),
+      depositBalance: depositBalance,
       company: company ?? '',
       currency: companyCurrency,
       priceList: priceList,
       priceListCurrency: priceListCurrency,
     );
+  }
+
+  Future<double> _fetchCustomerDepositBalance(
+    String customer, {
+    String? company,
+  }) async {
+    try {
+      final response = await _frappe.callMethod(
+        'frappe.desk.query_report.run',
+        args: {
+          'report_name': 'Accounts Receivable',
+          'filters': {
+            'report_date': DateTime.now().toIso8601String().split('T').first,
+            'ageing_based_on': 'Due Date',
+            'range1': 30,
+            'range2': 60,
+            'range3': 90,
+            'range4': 120,
+            'customer': customer,
+            if (company?.trim().isNotEmpty == true) 'company': company!.trim(),
+          },
+          'ignore_prepared_report': true,
+          'are_default_filters': false,
+        },
+      );
+      final report = _queryReportPayload(response);
+      final columns = _queryReportColumns(report?['columns']);
+      final rows = _queryReportRows(report?['result'] ?? report?['data']);
+      var total = 0.0;
+      for (final row in rows) {
+        final mapped = _queryReportRowMap(row, columns);
+        if (_isQueryReportTotalRow(mapped)) continue;
+        final rowCustomer = _firstText(mapped, const [
+          'customer',
+          'party',
+          'customer_name',
+          'Customer',
+          'Party',
+        ]);
+        if (rowCustomer.isNotEmpty &&
+            rowCustomer != customer &&
+            !rowCustomer.toLowerCase().contains(customer.toLowerCase())) {
+          continue;
+        }
+        final outstanding = _firstNumber(mapped, const [
+          'outstanding',
+          'outstanding_amount',
+          'Outstanding Amount',
+          'Outstanding',
+        ]);
+        if (outstanding < 0) total += outstanding.abs();
+      }
+      return total;
+    } catch (_) {
+      return _fetchCustomerNegativeInvoiceBalance(customer, company: company);
+    }
+  }
+
+  Future<double> _fetchCustomerNegativeInvoiceBalance(
+    String customer, {
+    String? company,
+  }) async {
+    try {
+      final invoices = await _frappe.fetchResource(
+        'Sales Invoice',
+        fields: const ['name', 'outstanding_amount'],
+        filters: [
+          ['customer', '=', customer],
+          if (company?.trim().isNotEmpty == true) ['company', '=', company],
+          ['docstatus', '=', 1],
+          ['outstanding_amount', '<', 0],
+        ],
+      );
+      return invoices.fold<double>(
+        0,
+        (sum, row) => sum + NumParse.asDouble(row['outstanding_amount']).abs(),
+      );
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Map<String, dynamic>? _queryReportPayload(dynamic response) {
+    if (response is! Map) return null;
+    final map = Map<String, dynamic>.from(response);
+    final message = map['message'];
+    if (message is Map) return Map<String, dynamic>.from(message);
+    return map;
+  }
+
+  List<Map<String, dynamic>> _queryReportColumns(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw.map((column) {
+      if (column is String) return {'label': column, 'fieldname': column};
+      if (column is Map) return Map<String, dynamic>.from(column);
+      return <String, dynamic>{};
+    }).toList();
+  }
+
+  List<dynamic> _queryReportRows(dynamic raw) => raw is List ? raw : const [];
+
+  Map<String, dynamic> _queryReportRowMap(
+    dynamic row,
+    List<Map<String, dynamic>> columns,
+  ) {
+    if (row is Map<String, dynamic>) return row;
+    if (row is Map) return Map<String, dynamic>.from(row);
+    if (row is! List) return const {};
+    final mapped = <String, dynamic>{};
+    for (var i = 0; i < row.length && i < columns.length; i++) {
+      final fieldname =
+          columns[i]['fieldname']?.toString() ??
+          columns[i]['field']?.toString() ??
+          columns[i]['label']?.toString() ??
+          '';
+      final label = columns[i]['label']?.toString() ?? '';
+      if (fieldname.isNotEmpty) mapped[fieldname] = row[i];
+      if (label.isNotEmpty) mapped[label] = row[i];
+    }
+    return mapped;
+  }
+
+  bool _isQueryReportTotalRow(Map<String, dynamic> row) {
+    return row.values.any((value) {
+      final text = value?.toString().trim().toLowerCase() ?? '';
+      return text == 'total' || text == 'grand total';
+    });
+  }
+
+  String _firstText(Map<String, dynamic> row, List<String> keys) {
+    for (final key in keys) {
+      final value = row[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty && value != 'null') return value;
+    }
+    return '';
+  }
+
+  double _firstNumber(Map<String, dynamic> row, List<String> keys) {
+    for (final key in keys) {
+      if (!row.containsKey(key)) continue;
+      final value = NumParse.asDouble(row[key]);
+      if (value != 0) return value;
+    }
+    return 0;
   }
 
   Future<List<CustomerPurchaseHistory>> fetchPurchaseHistory({

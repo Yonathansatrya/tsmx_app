@@ -1,6 +1,7 @@
 class CustomerSalesInsight {
   final double creditLimit;
   final double outstanding;
+  final double depositBalance;
   final String company;
   final String currency;
   final String priceList;
@@ -10,6 +11,7 @@ class CustomerSalesInsight {
   const CustomerSalesInsight({
     this.creditLimit = 0,
     this.outstanding = 0,
+    this.depositBalance = 0,
     this.company = '',
     this.currency = '',
     this.priceList = '',
