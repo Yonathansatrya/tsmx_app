@@ -394,6 +394,7 @@ class FrappeService {
     String? warehouse,
     String? priceList,
     String? currency,
+    String? customerGroup,
     bool ignorePricingRule = false,
   }) async {
     final pricingArgs = <String, dynamic>{
@@ -417,6 +418,8 @@ class FrappeService {
         'selling_price_list': priceList.trim(),
       if (currency != null && currency.trim().isNotEmpty)
         'currency': currency.trim(),
+      if (customerGroup != null && customerGroup.trim().isNotEmpty)
+        'customer_group': customerGroup.trim(),
     };
 
     final result = await callMethod(
@@ -429,6 +432,7 @@ class FrappeService {
           'company': company,
           'transaction_date': transactionDate,
           'currency': currency,
+          'customer_group': customerGroup,
           'selling_price_list': priceList,
           'ignore_pricing_rule': ignorePricingRule ? 1 : 0,
         }),

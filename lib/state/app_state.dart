@@ -2603,6 +2603,7 @@ class AppState with ChangeNotifier {
     String? priceList,
     String? currency,
     String? warehouse,
+    String? customerGroup,
     DateTime? transactionDate,
     double qty = 1,
     bool ignorePricingRule = false,
@@ -2626,6 +2627,7 @@ class AppState with ChangeNotifier {
           warehouse: warehouse,
           priceList: priceList,
           currency: currency,
+          customerGroup: customerGroup,
           ignorePricingRule: ignorePricingRule,
         );
       } catch (_) {}
@@ -2665,6 +2667,27 @@ class AppState with ChangeNotifier {
     final resolvedRate = NumParse.asDouble(
       pricing['rate'] ?? pricing['net_rate'] ?? resolvedPriceListRate,
     );
+    var discountAmount = NumParse.asDouble(pricing['discount_amount']);
+    var discountPercentage = NumParse.asDouble(pricing['discount_percentage']);
+    var pricingRule = pricing['pricing_rule']?.toString() ?? '';
+
+    if (discountAmount <= 0 && discountPercentage <= 0) {
+      final promoPricing = await _fetchPromotionalSchemeItemPricing(
+        itemCode: itemCode,
+        company: company,
+        currency: currency,
+        customerGroup: customerGroup,
+        transactionDate: transactionDate ?? DateTime.now(),
+        priceListRate: resolvedPriceListRate,
+      );
+      if (promoPricing != null) {
+        discountAmount = NumParse.asDouble(promoPricing['discount_amount']);
+        discountPercentage = NumParse.asDouble(
+          promoPricing['discount_percentage'],
+        );
+        pricingRule = promoPricing['pricing_rule']?.toString() ?? pricingRule;
+      }
+    }
 
     final bins = await _fetchAllResourcePages(
       doctype: 'Bin',
@@ -2711,10 +2734,211 @@ class AppState with ChangeNotifier {
           price['currency']?.toString() ??
           currency ??
           '',
-      discountPercentage: NumParse.asDouble(pricing['discount_percentage']),
-      pricingRule: pricing['pricing_rule']?.toString() ?? '',
+      discountAmount: discountAmount,
+      discountPercentage: discountPercentage,
+      pricingRule: pricingRule,
       stocks: stocks,
     );
+  }
+
+  Future<Map<String, dynamic>?> _fetchPromotionalSchemeItemPricing({
+    required String itemCode,
+    required String? company,
+    required String? currency,
+    required String? customerGroup,
+    required DateTime transactionDate,
+    required double priceListRate,
+  }) async {
+    if (priceListRate <= 0) return null;
+    try {
+      final schemes = await _fetchResourceWithFieldFallback(
+        doctype: 'Promotional Scheme',
+        fields: const [
+          'name',
+          'disable',
+          'selling',
+          'company',
+          'currency',
+          'valid_from',
+          'valid_upto',
+        ],
+        filters: const [
+          ['selling', '=', 1],
+          ['disable', '=', 0],
+        ],
+        orderBy: 'modified desc',
+        limit: 50,
+      );
+
+      for (final scheme in schemes) {
+        final name = scheme['name']?.toString() ?? '';
+        if (name.isEmpty) continue;
+        if (!_isActiveSellingPromotion(
+          scheme,
+          company: company,
+          currency: currency,
+          transactionDate: transactionDate,
+        )) {
+          continue;
+        }
+        final doc = await _frappeService.fetchDocument(
+          'Promotional Scheme',
+          name,
+        );
+        if (!_isActiveSellingPromotion(
+          doc,
+          company: company,
+          currency: currency,
+          transactionDate: transactionDate,
+        )) {
+          continue;
+        }
+        if (!_promotionMatchesCustomerGroup(doc, customerGroup)) continue;
+        if (!_promotionMatchesItem(doc, itemCode)) continue;
+
+        final discount = _promotionalSchemeDiscount(doc, priceListRate);
+        if (discount > 0) {
+          return {'discount_amount': discount, 'pricing_rule': name};
+        }
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
+
+  bool _isActiveSellingPromotion(
+    Map<String, dynamic> doc, {
+    required String? company,
+    required String? currency,
+    required DateTime transactionDate,
+  }) {
+    if (_truthy(doc['disable'])) return false;
+    if (doc.containsKey('selling') && !_truthy(doc['selling'])) return false;
+    final promoCompany = doc['company']?.toString().trim() ?? '';
+    if (promoCompany.isNotEmpty &&
+        company?.trim().isNotEmpty == true &&
+        promoCompany != company!.trim()) {
+      return false;
+    }
+    final promoCurrency = doc['currency']?.toString().trim() ?? '';
+    if (promoCurrency.isNotEmpty &&
+        currency?.trim().isNotEmpty == true &&
+        promoCurrency != currency!.trim()) {
+      return false;
+    }
+    final validFrom = _parseFrappeDate(doc['valid_from']);
+    if (validFrom != null &&
+        DateTime(
+          transactionDate.year,
+          transactionDate.month,
+          transactionDate.day,
+        ).isBefore(DateTime(validFrom.year, validFrom.month, validFrom.day))) {
+      return false;
+    }
+    final validUpto = _parseFrappeDate(doc['valid_upto']);
+    if (validUpto != null &&
+        DateTime(
+          transactionDate.year,
+          transactionDate.month,
+          transactionDate.day,
+        ).isAfter(DateTime(validUpto.year, validUpto.month, validUpto.day))) {
+      return false;
+    }
+    return true;
+  }
+
+  bool _promotionMatchesCustomerGroup(
+    Map<String, dynamic> doc,
+    String? customerGroup,
+  ) {
+    final group = customerGroup?.trim() ?? '';
+    final applicableFor = doc['applicable_for']?.toString().trim() ?? '';
+    if (applicableFor.isEmpty || applicableFor == 'Customer') return true;
+    if (applicableFor != 'Customer Group') return true;
+    if (group.isEmpty) return false;
+
+    final rows = _childRows(doc);
+    final groupRows = rows.where((row) {
+      final rowGroup =
+          row['customer_group']?.toString().trim() ??
+          row['party']?.toString().trim() ??
+          row['customer_group_name']?.toString().trim() ??
+          '';
+      return rowGroup.isNotEmpty;
+    }).toList();
+    if (groupRows.isEmpty) return true;
+    return groupRows.any((row) {
+      final rowGroup =
+          row['customer_group']?.toString().trim() ??
+          row['party']?.toString().trim() ??
+          row['customer_group_name']?.toString().trim() ??
+          '';
+      return rowGroup == group;
+    });
+  }
+
+  bool _promotionMatchesItem(Map<String, dynamic> doc, String itemCode) {
+    final rows = _childRows(doc);
+    final itemRows = rows.where((row) {
+      final code =
+          row['item_code']?.toString().trim() ??
+          row['pricing_rule_item_code']?.toString().trim() ??
+          '';
+      return code.isNotEmpty;
+    }).toList();
+    if (itemRows.isEmpty) return true;
+    return itemRows.any((row) {
+      final code =
+          row['item_code']?.toString().trim() ??
+          row['pricing_rule_item_code']?.toString().trim() ??
+          '';
+      return code == itemCode;
+    });
+  }
+
+  double _promotionalSchemeDiscount(
+    Map<String, dynamic> doc,
+    double priceListRate,
+  ) {
+    for (final row in _childRows(doc)) {
+      final discountType = row['discount_type']?.toString().trim() ?? '';
+      if (discountType == 'Discount Amount') {
+        final discount = NumParse.asDouble(row['discount_amount']);
+        if (discount > 0) return discount;
+      }
+      if (discountType == 'Rate') {
+        final promoRate = NumParse.asDouble(row['rate']);
+        if (promoRate > 0 && promoRate < priceListRate) {
+          return priceListRate - promoRate;
+        }
+      }
+      if (discountType == 'Discount Percentage') {
+        final percent = NumParse.asDouble(
+          row['discount_percentage'] ?? row['discount'],
+        );
+        if (percent > 0) return priceListRate * percent / 100;
+      }
+    }
+    return 0;
+  }
+
+  List<Map<String, dynamic>> _childRows(Map<String, dynamic> doc) {
+    final rows = <Map<String, dynamic>>[];
+    for (final value in doc.values) {
+      if (value is! List) continue;
+      for (final raw in value) {
+        if (raw is Map) rows.add(Map<String, dynamic>.from(raw));
+      }
+    }
+    return rows;
+  }
+
+  bool _truthy(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final text = value?.toString().trim().toLowerCase() ?? '';
+    return text == '1' || text == 'true' || text == 'yes';
   }
 
   Future<SupplierPriceComparison> fetchSupplierPriceComparison({

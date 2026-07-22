@@ -829,6 +829,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         priceList: _selectedPriceList,
         currency: _selectedCurrency,
         warehouse: row?.warehouse ?? _selectedWarehouse,
+        customerGroup: _customerInsight?.customerGroup,
         transactionDate: _selectedDate,
         qty: qty,
         ignorePricingRule: false,
@@ -838,16 +839,24 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       }
       if (row == null && _selectedItemCode != itemCode) return insight;
       if (row != null && row.itemCode != itemCode) return insight;
-      final resolvedPrice = insight.price > 0
-          ? insight.price
-          : insight.priceListRate;
+      final resolvedPrice = insight.priceListRate > 0
+          ? insight.priceListRate
+          : insight.price;
       setState(() {
         _itemInsights[itemCode] = insight;
         if (applyPrice && resolvedPrice > 0) {
           if (row == null) {
             _rateCtrl.text = _formatRupiah(resolvedPrice);
+            if (insight.discountAmount > 0) {
+              _discountCtrl.text = _formatRupiah(insight.discountAmount);
+            }
           } else {
             row.rateController.text = _formatRupiah(resolvedPrice);
+            if (insight.discountAmount > 0) {
+              row.discountController.text = _formatRupiah(
+                insight.discountAmount,
+              );
+            }
           }
         }
       });

@@ -256,6 +256,7 @@ class CustomerService {
   }) async {
     final customerDoc = await _frappe.fetchDocument('Customer', customer);
     final priceList = customerDoc['default_price_list']?.toString() ?? '';
+    final customerGroup = customerDoc['customer_group']?.toString() ?? '';
     var companyCurrency = '';
     var priceListCurrency = '';
     if (company?.isNotEmpty == true) {
@@ -311,6 +312,7 @@ class CustomerService {
       currency: companyCurrency,
       priceList: priceList,
       priceListCurrency: priceListCurrency,
+      customerGroup: customerGroup,
     );
   }
 
