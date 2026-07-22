@@ -6,7 +6,7 @@ import '../../theme/app_colors.dart';
 import '../shared/role_main_screen.dart';
 import '../tabs/selling_tab.dart';
 import 'create_sales_order_screen.dart';
-import 'inactive_customer_tab.dart';
+import 'customer_request_tab.dart';
 import 'sales_collection_tab.dart';
 import 'sales_overview_tab.dart';
 import 'sales_visit_tab.dart';
@@ -64,7 +64,7 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
           },
         ),
         const SalesCollectionTab(),
-        const InactiveCustomerTab(),
+        const CustomerRequestTab(),
         const SalesVisitTab(),
       ],
       floatingActionButtonBuilder: _buildSalesFab,
@@ -85,9 +85,9 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
           label: 'Koleksi',
         ),
         const NavigationDestination(
-          icon: Icon(Icons.person_off_outlined),
-          selectedIcon: Icon(Icons.person_off_rounded),
-          label: 'Inactive',
+          icon: Icon(Icons.groups_2_outlined),
+          selectedIcon: Icon(Icons.groups_2_rounded),
+          label: 'Customer',
         ),
         const NavigationDestination(
           icon: Icon(Icons.location_on_outlined),
