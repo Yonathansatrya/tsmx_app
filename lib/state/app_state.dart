@@ -1615,7 +1615,16 @@ class AppState with ChangeNotifier {
   }
 
   Future<SalesOrder> loadSalesOrderDetail(String orderId) async {
-    return _salesOrderService.load(orderId);
+    final order = await _salesOrderService.load(orderId);
+    _replaceSalesOrderSnapshot(order);
+    return order;
+  }
+
+  void _replaceSalesOrderSnapshot(SalesOrder order) {
+    final index = _salesOrders.indexWhere((item) => item.id == order.id);
+    if (index < 0) return;
+    _salesOrders = List<SalesOrder>.from(_salesOrders)..[index] = order;
+    notifyListeners();
   }
 
   Future<String?> _salesPersonScopeName() async {
@@ -3331,11 +3340,32 @@ class AppState with ChangeNotifier {
   Future<DeliveryNote> loadDeliveryNoteDetail(String id) async {
     await _frappeService.ensureLoggedIn();
     final doc = await _frappeService.fetchDocument('Delivery Note', id);
-    return DeliveryNote.fromJson(doc);
+    final deliveryNote = DeliveryNote.fromJson(doc);
+    _replaceDeliveryNoteSnapshot(deliveryNote);
+    return deliveryNote;
   }
 
   Future<SalesInvoice> loadSalesInvoiceDetail(String id) async {
-    return _salesInvoiceService.load(id);
+    final invoice = await _salesInvoiceService.load(id);
+    _replaceSalesInvoiceSnapshot(invoice);
+    return invoice;
+  }
+
+  void _replaceDeliveryNoteSnapshot(DeliveryNote deliveryNote) {
+    final index = _deliveryNotes.indexWhere(
+      (item) => item.id == deliveryNote.id,
+    );
+    if (index < 0) return;
+    _deliveryNotes = List<DeliveryNote>.from(_deliveryNotes)
+      ..[index] = deliveryNote;
+    notifyListeners();
+  }
+
+  void _replaceSalesInvoiceSnapshot(SalesInvoice invoice) {
+    final index = _salesInvoices.indexWhere((item) => item.id == invoice.id);
+    if (index < 0) return;
+    _salesInvoices = List<SalesInvoice>.from(_salesInvoices)..[index] = invoice;
+    notifyListeners();
   }
 
   Future<PurchaseReceipt> loadPurchaseReceiptDetail(String id) async {

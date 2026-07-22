@@ -414,6 +414,28 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
 
   Future<void> _editSo(String id, {bool closeSheet = false}) async {
     if (closeSheet) Navigator.pop(context);
+    final appState = context.read<AppState>();
+    late final SalesOrder latest;
+    try {
+      latest = await appState.loadSalesOrderDetail(id);
+    } catch (err) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal cek status terbaru $id: $err')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (!isDocDraft(latest.docStatus)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '$id sudah ${docStatusLabel(latest.docStatus).toLowerCase()} di ERPNext, tidak bisa diedit.',
+          ),
+        ),
+      );
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => CreateSalesOrderScreen(editOrderId: id),
@@ -464,7 +486,10 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
       action: () => context.read<AppState>().submitDocument('Sales Order', id),
       successMessage: 'Sales Order submitted',
     );
-    if (ok && mounted) Navigator.pop(context);
+    if (ok && mounted) {
+      await context.read<AppState>().refreshSalesOrders();
+      if (mounted) Navigator.pop(context);
+    }
   }
 
   @override
