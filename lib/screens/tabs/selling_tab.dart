@@ -60,18 +60,7 @@ class SellingTabState extends State<SellingTab>
 
       appState.loadSellingFilterOptions();
       appState.refreshSellingSummaries(documentType: _activeDocumentType);
-
-      if (appState.salesOrders.isEmpty) {
-        appState.refreshSalesOrders();
-      }
-
-      if (appState.deliveryNotes.isEmpty) {
-        appState.refreshDeliveryNotes();
-      }
-
-      if (appState.salesInvoices.isEmpty) {
-        appState.refreshSalesInvoices();
-      }
+      _ensureActiveDocumentLoaded(appState);
     });
   }
 
@@ -110,17 +99,21 @@ class SellingTabState extends State<SellingTab>
     widget.onSegmentChanged?.call(id);
 
     final appState = context.read<AppState>();
+    appState.refreshSellingSummaries(documentType: _activeDocumentType);
+    _ensureActiveDocumentLoaded(appState);
+  }
 
+  void _ensureActiveDocumentLoaded(AppState appState) {
+    final controller = _tabController;
+    final id = _segmentIds[controller?.index ?? _initialIndex];
     switch (id) {
       case 'dn':
-        appState.refreshSellingSummaries(documentType: 'Delivery Note');
         if (appState.deliveryNotes.isEmpty) {
           appState.refreshDeliveryNotes();
         }
         break;
 
       case 'si':
-        appState.refreshSellingSummaries(documentType: 'Sales Invoice');
         if (appState.salesInvoices.isEmpty) {
           appState.refreshSalesInvoices();
         }
@@ -128,7 +121,6 @@ class SellingTabState extends State<SellingTab>
 
       case 'so':
       default:
-        appState.refreshSellingSummaries(documentType: 'Sales Order');
         if (appState.salesOrders.isEmpty) {
           appState.refreshSalesOrders();
         }

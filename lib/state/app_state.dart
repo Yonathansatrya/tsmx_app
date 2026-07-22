@@ -89,6 +89,8 @@ class AppState with ChangeNotifier {
   Map<String, dynamic> get currentEmployeeProfile => _currentEmployeeProfile;
   String? _currentSalesPerson;
   String? get currentSalesPerson => _currentSalesPerson;
+  String? _salesIdentityUser;
+  Future<String?>? _salesIdentityRequest;
   String? _salesIdentityError;
   String? get salesIdentityError => _salesIdentityError;
 
@@ -195,10 +197,8 @@ class AppState with ChangeNotifier {
     if (!_isAuthenticated) return;
     if (isSalesUserRole) {
       await resolveCurrentSalesIdentity();
-      await fetchWarehousesFromFrappe();
       await Future.wait([
-        fetchSalesOrdersFromFrappe(),
-        fetchSalesInvoicesFromFrappe(),
+        fetchWarehousesFromFrappe(),
         fetchInventoryFromFrappe(
           filters: _inventoryScopeFiltersForCurrentRole(),
         ),
@@ -255,17 +255,49 @@ class AppState with ChangeNotifier {
   }
 
   Future<String?> resolveCurrentSalesIdentity() async {
-    _currentEmployee = null;
-    _currentEmployeeProfile = const {};
-    _currentSalesPerson = null;
-    _salesIdentityError = null;
-    if (_currentUser == null || _currentUser!.isEmpty) {
+    final user = _currentUser?.trim() ?? '';
+    if (user.isEmpty) {
+      _currentEmployee = null;
+      _currentEmployeeProfile = const {};
+      _currentSalesPerson = null;
+      _salesIdentityUser = null;
+      _salesIdentityRequest = null;
       _salesIdentityError = 'User login ERPNext tidak tersedia.';
       notifyListeners();
       return null;
     }
+
+    final hasResolvedValue =
+        _currentSalesPerson?.trim().isNotEmpty == true ||
+        _salesIdentityError?.trim().isNotEmpty == true;
+    if (_salesIdentityUser == user && hasResolvedValue) {
+      return _currentSalesPerson;
+    }
+
+    final existingRequest = _salesIdentityRequest;
+    if (_salesIdentityUser == user && existingRequest != null) {
+      return existingRequest;
+    }
+
+    _salesIdentityUser = user;
+    final request = _resolveCurrentSalesIdentityForUser(user);
+    _salesIdentityRequest = request;
     try {
-      final identity = await _authService.resolveSalesIdentity(_currentUser!);
+      return await request;
+    } finally {
+      if (_salesIdentityRequest == request) {
+        _salesIdentityRequest = null;
+      }
+    }
+  }
+
+  Future<String?> _resolveCurrentSalesIdentityForUser(String user) async {
+    _currentEmployee = null;
+    _currentEmployeeProfile = const {};
+    _currentSalesPerson = null;
+    _salesIdentityError = null;
+    try {
+      final identity = await _authService.resolveSalesIdentity(user);
       _currentEmployee = identity.employee;
       _currentEmployeeProfile = identity.employeeProfile;
       _currentSalesPerson = identity.salesPerson;
@@ -1132,6 +1164,8 @@ class AppState with ChangeNotifier {
     _currentEmployee = null;
     _currentEmployeeProfile = const {};
     _currentSalesPerson = null;
+    _salesIdentityUser = null;
+    _salesIdentityRequest = null;
     _salesIdentityError = null;
     _userRole = 'Unassigned';
     _isAuthenticated = false;
@@ -1598,48 +1632,15 @@ class AppState with ChangeNotifier {
     return salesPerson;
   }
 
-  Future<List<List<dynamic>>?> _salesDocumentScopeFilters(
-    String doctype,
-  ) async {
+  Future<List<List<dynamic>>?> _salesDocumentScopeFilters(String _) async {
     final salesPerson = await _salesPersonScopeName();
     if (salesPerson == null) return const [];
 
-    List<Map<String, dynamic>> rows;
-    try {
-      rows = await _fetchAllResourcePages(
-        doctype: 'Sales Team',
-        fields: const ['parent'],
-        filters: [
-          ['parenttype', '=', doctype],
-          ['sales_person', '=', salesPerson],
-        ],
-        maxRows: null,
-      );
-    } catch (_) {
-      // Some Sales roles can read Sales Order / DN / SI but cannot query the
-      // Sales Team child table directly. Returning null lets callers fall back
-      // to filtering by reading each document detail and inspecting sales_team.
-      return null;
-    }
-    final parentIds =
-        rows
-            .map((row) => row['parent']?.toString().trim() ?? '')
-            .where((id) => id.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
-    if (parentIds.isEmpty) {
-      return const [
-        ['name', '=', '__unmapped_sales_document__'],
-      ];
-    }
-    if (parentIds.length == 1) {
-      return [
-        ['name', '=', parentIds.first],
-      ];
-    }
+    // Avoid scanning Sales Team rows and then querying parent documents by a
+    // large name list. ERPNext Report View can filter SO/DN/SI through the
+    // Sales Team child table directly, which is much faster for Sales User.
     return [
-      ['name', 'in', parentIds],
+      ['Sales Team', 'sales_person', '=', salesPerson],
     ];
   }
 
@@ -8319,7 +8320,7 @@ class AppState with ChangeNotifier {
 
     while (remainingFields.isNotEmpty) {
       if (_supportsSalesTeamParentFilter(doctype) &&
-          _usesParentSalesPersonFilter(filters)) {
+          _usesSalesTeamChildFilter(filters)) {
         return _frappeService.fetchReportView(
           doctype,
           fields: remainingFields,
@@ -8376,13 +8377,20 @@ class AppState with ChangeNotifier {
         doctype == 'Sales Invoice';
   }
 
-  bool _usesParentSalesPersonFilter(List<List<dynamic>>? filters) {
+  bool _usesSalesTeamChildFilter(List<List<dynamic>>? filters) {
     if (filters == null) return false;
-    return filters.any(
-      (filter) =>
-          filter.isNotEmpty &&
-          filter.first.toString().trim() == 'parent_sales_person',
-    );
+    return filters.any((filter) {
+      if (filter.isEmpty) return false;
+      final first = filter.first.toString().trim();
+      if (first == 'parent_sales_person' || first == 'sales_person') {
+        return true;
+      }
+      if (filter.length >= 4 && first == 'Sales Team') {
+        final field = filter[1].toString().trim();
+        return field == 'parent_sales_person' || field == 'sales_person';
+      }
+      return false;
+    });
   }
 
   List<List<dynamic>>? _salesTeamReportViewFilters(
@@ -8390,9 +8398,15 @@ class AppState with ChangeNotifier {
   ) {
     if (filters == null) return null;
     return filters.map((filter) {
-      if (filter.length >= 3 &&
-          filter.first.toString().trim() == 'parent_sales_person') {
-        return ['Sales Team', 'parent_sales_person', filter[1], filter[2]];
+      if (filter.length >= 4 &&
+          filter.first.toString().trim() == 'Sales Team') {
+        return filter;
+      }
+      if (filter.length >= 3) {
+        final field = filter.first.toString().trim();
+        if (field == 'parent_sales_person' || field == 'sales_person') {
+          return ['Sales Team', field, filter[1], filter[2]];
+        }
       }
       return filter;
     }).toList();
