@@ -2494,43 +2494,13 @@ class AppState with ChangeNotifier {
       _activeSalesVisit = null;
       for (final visit in visits) {
         final status = visit.status.toLowerCase();
-        if (status == 'traveling' || status == 'checked in') {
+        if (status == 'checked in') {
           _activeSalesVisit = visit;
-          if (status == 'traveling') {
-            await _resumeSalesVisitTracking(visit);
-          }
           break;
         }
       }
     }
     return visits;
-  }
-
-  Future<List<SalesTrackingPoint>> fetchLatestSalesTrackingPoints() async {
-    final rows = await _fetchAllResourcePages(
-      doctype: 'Sales Tracking Point',
-      fields: const [
-        'name',
-        'sales_visit',
-        'sales_person',
-        'customer',
-        'captured_at',
-        'latitude',
-        'longitude',
-        'accuracy',
-      ],
-      orderBy: 'captured_at desc, name desc',
-      maxRows: 200,
-    );
-    final latest = <String, SalesTrackingPoint>{};
-    for (final row in rows) {
-      final point = SalesTrackingPoint.fromJson(row);
-      final key = point.salesPerson.isNotEmpty
-          ? point.salesPerson
-          : point.salesVisit;
-      if (key.isNotEmpty) latest.putIfAbsent(key, () => point);
-    }
-    return latest.values.toList();
   }
 
   Future<CustomerVisitLocation> fetchCustomerVisitLocation(String customer) {
@@ -2556,66 +2526,15 @@ class AppState with ChangeNotifier {
     );
   }
 
-  Future<SalesVisit> startSalesVisitJourney({
+  Future<SalesVisit> checkInSalesCustomer({
     required String customer,
-    required CustomerVisitLocation target,
-  }) async {
-    if (_activeSalesVisit != null) {
-      throw Exception('Selesaikan perjalanan aktif sebelum memulai yang baru.');
-    }
-    final point = await getCurrentVisitLocation();
-    final created = await _frappeService.createDocument('Sales Visit', {
-      'customer': customer,
-      'address': target.addressId,
-      if (_currentSalesPerson?.isNotEmpty == true)
-        'sales_person': _currentSalesPerson,
-      'status': 'Traveling',
-      'journey_start_time': DateTime.now().toIso8601String(),
-      'target_latitude': target.latitude,
-      'target_longitude': target.longitude,
-    });
-    final visit = SalesVisit.fromJson(created);
-    _activeSalesVisit = visit;
-    await _saveTrackingPoint(visit, point);
-    await _resumeSalesVisitTracking(visit);
-    notifyListeners();
-    return visit;
-  }
-
-  Future<void> _resumeSalesVisitTracking(SalesVisit visit) async {
-    final startedAt = DateTime.tryParse(visit.journeyStartTime);
-    if (startedAt != null &&
-        DateTime.now().difference(startedAt) >= const Duration(hours: 4)) {
-      await cancelSalesVisitJourney(visit.id);
-      return;
-    }
-    await _visitLocationService.startTracking(
-      (next) async {
-        final journeyStart = DateTime.tryParse(visit.journeyStartTime);
-        if (journeyStart != null &&
-            DateTime.now().difference(journeyStart) >=
-                const Duration(hours: 4)) {
-          await cancelSalesVisitJourney(visit.id);
-          return;
-        }
-        _latestVisitLocation = next;
-        notifyListeners();
-        await _saveTrackingPoint(visit, next);
-        await _flushTrackingQueue(visit);
-      },
-      notificationText:
-          '$appDisplayName mencatat lokasi tiap 5 menit sampai check-in.',
-    );
-  }
-
-  Future<SalesVisit> checkInSalesVisit({
-    required SalesVisit visit,
     required CustomerVisitLocation target,
     required String photoPath,
     String? notes,
-    List<Map<String, dynamic>> competitors = const [],
-    List<Map<String, dynamic>> potentialOrders = const [],
   }) async {
+    if (_activeSalesVisit != null) {
+      throw Exception('Selesaikan check-in aktif sebelum memulai yang baru.');
+    }
     final point = await getCurrentVisitLocation();
     final distance = visitDistanceTo(target, point);
     if (point.accuracy > 50) {
@@ -2629,23 +2548,28 @@ class AppState with ChangeNotifier {
         'Check-in maksimal ${target.geofenceRadius.toStringAsFixed(0)} meter.',
       );
     }
+    final now = DateTime.now().toIso8601String();
+    final created = await _frappeService.createDocument('Sales Visit', {
+      'customer': customer,
+      'address': target.addressId,
+      if (_currentSalesPerson?.isNotEmpty == true)
+        'sales_person': _currentSalesPerson,
+      'status': 'Checked In',
+      'journey_start_time': now,
+      'check_in_time': now,
+      'target_latitude': target.latitude,
+      'target_longitude': target.longitude,
+      'check_in_latitude': point.latitude,
+      'check_in_longitude': point.longitude,
+      'check_in_distance': distance,
+      if (notes?.trim().isNotEmpty == true) 'notes': notes!.trim(),
+    });
+    final visit = SalesVisit.fromJson(created);
     await uploadAttachment(
       doctype: 'Sales Visit',
       documentName: visit.id,
       filePath: photoPath,
     );
-    await _frappeService.updateDocument('Sales Visit', visit.id, {
-      'status': 'Checked In',
-      'check_in_time': DateTime.now().toIso8601String(),
-      'check_in_latitude': point.latitude,
-      'check_in_longitude': point.longitude,
-      'check_in_distance': distance,
-      if (notes?.trim().isNotEmpty == true) 'notes': notes!.trim(),
-      if (competitors.isNotEmpty) 'competitors': competitors,
-      if (potentialOrders.isNotEmpty) 'potential_orders': potentialOrders,
-    });
-    await _visitLocationService.stopTracking();
-    await _flushTrackingQueue(visit);
     final updated = SalesVisit.fromJson(
       await _frappeService.fetchDocument('Sales Visit', visit.id),
     );
@@ -2665,44 +2589,6 @@ class AppState with ChangeNotifier {
     await _visitLocationService.stopTracking();
     _activeSalesVisit = null;
     notifyListeners();
-  }
-
-  Future<void> cancelSalesVisitJourney(String visitId) async {
-    await _frappeService.updateDocument('Sales Visit', visitId, {
-      'status': 'Cancelled',
-    });
-    await _visitLocationService.stopTracking();
-    _activeSalesVisit = null;
-    notifyListeners();
-  }
-
-  Future<void> _saveTrackingPoint(
-    SalesVisit visit,
-    VisitLocationPoint point,
-  ) async {
-    await _frappeService.createDocument('Sales Tracking Point', {
-      'sales_visit': visit.id,
-      if (_currentSalesPerson?.isNotEmpty == true)
-        'sales_person': _currentSalesPerson,
-      'customer': visit.customer,
-      'captured_at': point.capturedAt.toIso8601String(),
-      'latitude': point.latitude,
-      'longitude': point.longitude,
-      'accuracy': point.accuracy,
-    });
-  }
-
-  Future<void> _flushTrackingQueue(SalesVisit visit) async {
-    final queued = await _visitLocationService.queuedPoints();
-    if (queued.isEmpty) return;
-    for (final point in queued) {
-      try {
-        await _saveTrackingPoint(visit, point);
-      } catch (_) {
-        return;
-      }
-    }
-    await _visitLocationService.clearQueue();
   }
 
   Future<CustomerSalesInsight> fetchCustomerSalesInsight(
@@ -2986,9 +2872,7 @@ class AppState with ChangeNotifier {
     DeliveryNote deliveryNote,
   ) async {
     if (_activeSalesVisit != null) {
-      throw Exception(
-        'Selesaikan tracking sales visit sebelum tracking driver.',
-      );
+      throw Exception('Selesaikan check-in customer sebelum tracking driver.');
     }
     if (_activeDeliveryTrackingNote != null &&
         _activeDeliveryTrackingNote != deliveryNote.id) {

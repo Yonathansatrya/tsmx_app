@@ -24,7 +24,6 @@ fixtures = [
                     "Sales Visit",
                     "Sales Visit Competitor",
                     "Sales Visit Potential Order",
-                    "Sales Tracking Point",
                     "Delivery Tracking Point",
                     "Delivery Activity Log",
                 ],

@@ -80,13 +80,12 @@ The app installs these TMSX doctypes:
 - `Sales Visit`
 - `Sales Visit Competitor`
 - `Sales Visit Potential Order`
-- `Sales Tracking Point`
 - `Delivery Tracking Point`
 - `Delivery Activity Log`
 
-The sales and delivery tracking doctypes are intentionally custom because
-ERPNext does not provide a mobile GPS point log that matches this app's sales
-visit and delivery driver workflow.
+Sales visits use the mobile check-in/check-out flow. The delivery tracking
+doctypes are intentionally custom because ERPNext does not provide a mobile GPS
+point log that matches this app's delivery driver workflow.
 
 During install, the app also creates missing mobile roles using the
 `User/Admin/Manager` naming pattern, for example `Sales User`, `Sales Admin`,

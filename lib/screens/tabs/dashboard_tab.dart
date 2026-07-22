@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/sales_workspace.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard/dashboard_module_launcher.dart';
-import '../../widgets/dashboard/live_operations_tracking_card.dart';
 
 class DashboardTab extends StatefulWidget {
   const DashboardTab({super.key});
@@ -15,10 +13,6 @@ class DashboardTab extends StatefulWidget {
 }
 
 class _DashboardTabState extends State<DashboardTab> {
-  List<SalesTrackingPoint> _salesTrackingPoints = const [];
-  bool _isTrackingLoading = false;
-  String? _trackingError;
-
   @override
   void initState() {
     super.initState();
@@ -52,39 +46,7 @@ class _DashboardTabState extends State<DashboardTab> {
       if (appState.canUseApprovals) {
         appState.fetchSalesOrderApprovals();
       }
-      if (appState.canUseSales) {
-        _loadSalesTracking();
-      }
     });
-  }
-
-  Future<void> _loadSalesTracking() async {
-    if (!mounted || _isTrackingLoading) return;
-    setState(() {
-      _isTrackingLoading = true;
-      _trackingError = null;
-    });
-    try {
-      final appState = context.read<AppState>();
-      if (!appState.canUseSales) {
-        if (!mounted) return;
-        setState(() => _salesTrackingPoints = const []);
-        return;
-      }
-      final rows = await context
-          .read<AppState>()
-          .fetchLatestSalesTrackingPoints();
-      if (!mounted) return;
-      setState(() => _salesTrackingPoints = rows);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _salesTrackingPoints = const [];
-        _trackingError = _visibleTrackingError(error);
-      });
-    } finally {
-      if (mounted) setState(() => _isTrackingLoading = false);
-    }
   }
 
   @override
@@ -99,7 +61,6 @@ class _DashboardTabState extends State<DashboardTab> {
     final showSalesKpi = appState.canUseSales;
     final showPurchaseKpi = appState.canUsePurchase;
     final showStockKpi = appState.canUseStock || appState.canUseWarehouse;
-    final showTrackingWidget = appState.canUseSales || appState.canUseLogistics;
     final summaryError = _visibleSummaryError(appState.orderSummaryError);
 
     return RefreshIndicator(
@@ -113,7 +74,6 @@ class _DashboardTabState extends State<DashboardTab> {
           if (showStockKpi) appState.refreshInventory(),
           appState.refreshDashboardSummaryForCurrentAccess(),
           if (appState.canUseApprovals) appState.fetchSalesOrderApprovals(),
-          if (appState.canUseSales) _loadSalesTracking(),
         ]);
       },
       child: SingleChildScrollView(
@@ -150,16 +110,6 @@ class _DashboardTabState extends State<DashboardTab> {
             const SizedBox(height: 18),
 
             const DashboardModuleLauncher(),
-
-            if (showTrackingWidget) ...[
-              const SizedBox(height: 18),
-              LiveOperationsTrackingCard(
-                points: _trackingPoints(appState),
-                loading: _isTrackingLoading,
-                error: _trackingError,
-                onRefresh: _loadSalesTracking,
-              ),
-            ],
           ],
         ),
       ),
@@ -177,59 +127,6 @@ class _DashboardTabState extends State<DashboardTab> {
       return null;
     }
     return error;
-  }
-
-  String? _visibleTrackingError(Object error) {
-    final raw = error.toString();
-    final lower = raw.toLowerCase();
-    if (lower.contains('doctype sales tracking point') ||
-        lower.contains('sales tracking point') && lower.contains('not found') ||
-        lower.contains('does not exist') ||
-        lower.contains('permissionerror') ||
-        lower.contains('not permitted') ||
-        lower.contains('permission') ||
-        lower.contains('tidak diizinkan') ||
-        lower.contains('akses erpnext')) {
-      return null;
-    }
-    return raw;
-  }
-
-  List<LiveTrackingPoint> _trackingPoints(AppState appState) {
-    final salesPoints = appState.canUseSales
-        ? _salesTrackingPoints.map(
-            (point) => LiveTrackingPoint(
-              type: LiveTrackingType.sales,
-              title: point.salesPerson.isEmpty
-                  ? 'Salesman belum dipetakan'
-                  : point.salesPerson,
-              subtitle: point.customer.isEmpty
-                  ? 'Customer belum tersedia'
-                  : point.customer,
-              capturedAt: point.capturedAt,
-              latitude: point.latitude,
-              longitude: point.longitude,
-            ),
-          )
-        : const Iterable<LiveTrackingPoint>.empty();
-    final driverPoint = appState.latestDeliveryDriverLocation;
-    final activeDeliveryNote = appState.activeDeliveryTrackingNote;
-    final fleetPoints =
-        !appState.canUseLogistics ||
-            driverPoint == null ||
-            activeDeliveryNote == null
-        ? const <LiveTrackingPoint>[]
-        : [
-            LiveTrackingPoint(
-              type: LiveTrackingType.fleet,
-              title: 'Armada aktif',
-              subtitle: activeDeliveryNote,
-              capturedAt: driverPoint.capturedAt,
-              latitude: driverPoint.latitude,
-              longitude: driverPoint.longitude,
-            ),
-          ];
-    return [...salesPoints, ...fleetPoints];
   }
 }
 

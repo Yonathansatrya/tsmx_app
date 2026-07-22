@@ -9,7 +9,6 @@ import '../../theme/app_colors.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_error_box.dart';
 import 'collection/collection_widgets.dart';
-import 'sales_ui.dart';
 
 class SalesVisitTab extends StatefulWidget {
   const SalesVisitTab({super.key});
@@ -23,9 +22,6 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
   final notes = TextEditingController();
   List<SalesCustomerOption> customers = const [];
   List<SalesVisit> visits = const [];
-  List<SalesTrackingPoint> trackingPoints = const [];
-  final competitors = <Map<String, dynamic>>[];
-  final potentialOrders = <Map<String, dynamic>>[];
   SalesCustomerOption? customer;
   CustomerVisitLocation? target;
   XFile? photo;
@@ -53,7 +49,6 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     final state = context.read<AppState>();
     var nextCustomers = customers;
     var nextVisits = visits;
-    var nextTrackingPoints = trackingPoints;
     String? nextError;
     try {
       nextCustomers = await state.fetchSalesCustomers();
@@ -76,9 +71,6 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
           );
         }
       }
-      if (!state.mobileAccess.isSalesUser) {
-        nextTrackingPoints = await state.fetchLatestSalesTrackingPoints();
-      }
     } catch (e) {
       nextError ??= _friendlyError(e);
     } finally {
@@ -86,7 +78,6 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
         setState(() {
           customers = nextCustomers;
           visits = nextVisits;
-          trackingPoints = nextTrackingPoints;
           error = nextError;
           loading = false;
         });
@@ -113,45 +104,21 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     }
   }
 
-  Future<void> _startJourney() async {
+  Future<void> _checkInSelectedCustomer() async {
     if (customer == null || target == null) return;
-    await _runAction(() async {
-      await context.read<AppState>().startSalesVisitJourney(
-        customer: customer!.id,
-        target: target!,
-      );
-      await _load();
-    });
-  }
-
-  Future<void> _checkIn(SalesVisit visit) async {
     if (photo == null) {
-      setState(
-        () => error = 'Foto toko/customer wajib diambil sebelum check-in.',
-      );
+      setState(() => error = 'Selfie wajib diambil sebelum check-in.');
       return;
     }
-    final visitTarget =
-        target ??
-        CustomerVisitLocation(
-          addressId: visit.address,
-          displayAddress: visit.address,
-          latitude: visit.targetLatitude,
-          longitude: visit.targetLongitude,
-        );
     await _runAction(() async {
-      await context.read<AppState>().checkInSalesVisit(
-        visit: visit,
-        target: visitTarget,
+      await context.read<AppState>().checkInSalesCustomer(
+        customer: customer!.id,
+        target: target!,
         photoPath: photo!.path,
         notes: notes.text,
-        competitors: competitors,
-        potentialOrders: potentialOrders,
       );
       photo = null;
       notes.clear();
-      competitors.clear();
-      potentialOrders.clear();
       await _load();
     });
   }
@@ -171,37 +138,33 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
   }
 
   @override
-  Widget build(BuildContext context) => DefaultTabController(
-    length: 3,
-    child: Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: SalesPillTabBar(
-            tabs: const [
-              Tab(icon: Icon(Icons.route_rounded), text: 'Perjalanan'),
-              Tab(icon: Icon(Icons.storefront_rounded), text: 'Aktivitas'),
-              Tab(icon: Icon(Icons.history_rounded), text: 'Riwayat'),
-            ],
-          ),
-        ),
-        Expanded(
-          child: TabBarView(
-            children: [_journeyTab(), _activityTab(), _historyTab()],
-          ),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) => _checkInTab();
 
-  Widget _journeyTab() {
+  Widget _checkInTab() {
     final state = context.watch<AppState>();
-    if (!state.mobileAccess.isSalesUser) return _managerJourneyTab();
     final active = state.activeSalesVisit;
     final point = state.latestVisitLocation;
-    final distance = active == null || point == null
+    final selectedDistance = target == null || point == null
+        ? null
+        : state.visitDistanceTo(target!, point);
+    final activeDistance = active == null || point == null
         ? null
         : _distanceToVisit(state, active, point);
+    final selectedRadius = target?.geofenceRadius ?? 50;
+    final canCheckIn =
+        active == null &&
+        customer != null &&
+        target != null &&
+        photo != null &&
+        point != null &&
+        point.accuracy <= 50 &&
+        selectedDistance != null &&
+        selectedDistance <= selectedRadius;
+    final completed = visits
+        .where((visit) => visit.status.toLowerCase() == 'checked out')
+        .take(8)
+        .toList();
+
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -209,19 +172,69 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
         children: [
           const CollectionSectionHeader(
-            title: 'Perjalanan Customer',
-            subtitle: 'Lokasi dicatat tiap 5 menit sampai check-in berhasil',
-            icon: Icons.route_rounded,
+            title: 'Check-in Customer',
+            subtitle: 'Pilih customer, validasi radius, selfie, lalu check-in',
+            icon: Icons.location_on_outlined,
           ),
+          const SizedBox(height: 12),
           _stepPanel(active),
           const SizedBox(height: 12),
-          if (active == null) ...[
+          if (active == null)
+            _checkInForm(
+              state: state,
+              point: point,
+              distance: selectedDistance,
+              canCheckIn: canCheckIn,
+            )
+          else
+            _activeCheckInCard(active, point, activeDistance),
+          if (loading) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(),
+          ],
+          if (error != null) ...[
+            const SizedBox(height: 12),
+            ErpErrorBox(message: error!),
+          ],
+          const SizedBox(height: 18),
+          CollectionSectionHeader(
+            title: active == null ? 'Riwayat Check-in' : 'Check-in Aktif',
+            subtitle: active == null
+                ? 'Kunjungan yang selesai terakhir'
+                : 'Checkout setelah aktivitas di customer selesai',
+            icon: Icons.history_rounded,
+          ),
+          const SizedBox(height: 8),
+          if (active != null)
+            _visitTile(active)
+          else if (completed.isEmpty)
+            const ErpEmptyState(title: 'Belum ada riwayat check-in')
+          else
+            ...completed.map(_visitTile),
+        ],
+      ),
+    );
+  }
+
+  Widget _checkInForm({
+    required AppState state,
+    required VisitLocationPoint? point,
+    required double? distance,
+    required bool canCheckIn,
+  }) {
+    final allowedRadius = target?.geofenceRadius ?? 50;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             InkWell(
               onTap: loadingLocation ? null : _showCustomerSelectSheet,
               borderRadius: BorderRadius.circular(12),
               child: InputDecorator(
                 decoration: const InputDecoration(
-                  labelText: 'Customer tujuan',
+                  labelText: 'Customer',
                   prefixIcon: Icon(Icons.storefront_outlined),
                   suffixIcon: Icon(Icons.search_rounded),
                 ),
@@ -232,9 +245,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: customer == null ? AppColors.slate : AppColors.navy,
-                    fontWeight: customer == null
-                        ? FontWeight.w500
-                        : FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
@@ -245,47 +256,84 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
               CollectionInfoPanel(
                 title: target!.displayAddress,
                 message:
-                    'Check-in tersedia dalam radius ${target!.geofenceRadius.toStringAsFixed(0)} meter.',
-                icon: Icons.location_on_outlined,
+                    'Radius check-in ${allowedRadius.toStringAsFixed(0)} meter.',
+                icon: Icons.map_outlined,
               ),
             ],
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: loading || target == null ? null : _startJourney,
-              icon: const Icon(Icons.navigation_rounded),
-              label: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('Mulai Perjalanan'),
-              ),
-            ),
-          ] else ...[
-            _activeJourneyCard(active, point, distance),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: loading ? null : () => _confirmCancelJourney(active),
-              icon: const Icon(Icons.close_rounded),
-              label: const Text('Batalkan Perjalanan'),
+              onPressed: loading
+                  ? null
+                  : () => _runAction(
+                      () => context.read<AppState>().getCurrentVisitLocation(),
+                    ),
+              icon: const Icon(Icons.my_location_rounded),
+              label: const Text('Ambil Lokasi Sekarang'),
+            ),
+            if (point != null) ...[
+              const SizedBox(height: 10),
+              CollectionInfoPanel(
+                title: canCheckIn ? 'Lokasi valid' : 'Validasi radius',
+                message: _checkInHint(
+                  point: point,
+                  distance: distance,
+                  allowedRadius: allowedRadius,
+                ),
+                icon: canCheckIn
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.location_searching_rounded,
+                color: canCheckIn ? AppColors.success : AppColors.warning,
+              ),
+            ],
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: loading
+                  ? null
+                  : () async {
+                      final image = await picker.pickImage(
+                        source: ImageSource.camera,
+                        imageQuality: 70,
+                        maxWidth: 1280,
+                      );
+                      if (image != null && mounted) {
+                        setState(() => photo = image);
+                      }
+                    },
+              icon: const Icon(Icons.camera_alt_rounded),
+              label: Text(photo == null ? 'Ambil Selfie' : 'Selfie siap'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: notes,
+              minLines: 2,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Catatan opsional',
+                prefixIcon: Icon(Icons.notes_rounded),
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: loading || !canCheckIn
+                  ? null
+                  : _checkInSelectedCustomer,
+              icon: const Icon(Icons.login_rounded),
+              label: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 11),
+                child: Text('Check-in'),
+              ),
             ),
           ],
-          if (loading) ...[
-            const SizedBox(height: 12),
-            const LinearProgressIndicator(),
-          ],
-          if (error != null) ...[
-            const SizedBox(height: 12),
-            ErpErrorBox(message: error!),
-          ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _activeJourneyCard(
+  Widget _activeCheckInCard(
     SalesVisit visit,
     VisitLocationPoint? point,
     double? distance,
   ) {
-    final traveling = visit.status.toLowerCase() == 'traveling';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -298,180 +346,21 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
             ),
             const SizedBox(height: 8),
             CollectionInfoPanel(
-              title: traveling ? 'Perjalanan aktif' : 'Sudah check-in',
+              title: 'Sedang check-in',
               message: point == null
-                  ? 'Menunggu lokasi GPS...'
+                  ? 'Tekan checkout saat aktivitas selesai.'
                   : 'Akurasi ${point.accuracy.toStringAsFixed(0)} m'
-                        '${distance == null ? '' : ' • Jarak ${distance.toStringAsFixed(0)} m'}',
-              icon: traveling
-                  ? Icons.navigation_rounded
-                  : Icons.check_circle_outline_rounded,
-              color: traveling ? AppColors.warning : AppColors.success,
+                        '${distance == null ? '' : ' | Jarak ${distance.toStringAsFixed(0)} m'}',
+              icon: Icons.storefront_rounded,
+              color: AppColors.success,
             ),
-            if (traveling) ...[
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
-                onPressed: loading
-                    ? null
-                    : () => _runAction(
-                        () =>
-                            context.read<AppState>().getCurrentVisitLocation(),
-                      ),
-                icon: const Icon(Icons.my_location_rounded),
-                label: const Text('Perbarui Lokasi'),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _activityTab() {
-    final state = context.watch<AppState>();
-    if (!state.mobileAccess.isSalesUser) return _managerActivityTab();
-    final active = state.activeSalesVisit;
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-      children: [
-        const CollectionSectionHeader(
-          title: 'Aktivitas Kunjungan',
-          subtitle: 'Isi setelah tiba di lokasi customer',
-          icon: Icons.assignment_turned_in_outlined,
-        ),
-        if (active == null || active.status.toLowerCase() != 'traveling')
-          CollectionInfoPanel(
-            title: active == null
-                ? 'Belum ada perjalanan aktif'
-                : 'Kunjungan aktif',
-            message: active == null
-                ? 'Mulai perjalanan dari tab Perjalanan terlebih dahulu.'
-                : 'Anda sudah check-in. Selesaikan kunjungan melalui tombol check-out.',
-            icon: Icons.info_outline_rounded,
-          ),
-        if (active != null && active.status.toLowerCase() == 'traveling') ...[
-          _visitForm(active, state),
-        ],
-        if (active != null && active.status.toLowerCase() == 'checked in') ...[
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: loading ? null : () => _confirmCheckOut(active),
-            icon: const Icon(Icons.logout_rounded),
-            label: const Text('Check-out dan Selesaikan Kunjungan'),
-          ),
-        ],
-        if (loading) const LinearProgressIndicator(),
-        if (error != null) ErpErrorBox(message: error!),
-      ],
-    );
-  }
-
-  Widget _visitForm(SalesVisit visit, AppState state) {
-    final point = state.latestVisitLocation;
-    final distance = point == null
-        ? null
-        : _distanceToVisit(state, visit, point);
-    final allowedRadius = target?.geofenceRadius ?? 50;
-    final canCheckIn =
-        point != null &&
-        point.accuracy <= 50 &&
-        distance != null &&
-        distance <= allowedRadius;
-    final checkInHint = _checkInHint(
-      point: point,
-      distance: distance,
-      allowedRadius: allowedRadius,
-    );
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: notes,
-              minLines: 2,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Catatan kunjungan',
-                prefixIcon: Icon(Icons.notes_rounded),
-              ),
-            ),
-            const SizedBox(height: 12),
-            _rowEditor(
-              title: 'Monitoring Kompetitor',
-              rows: competitors,
-              icon: Icons.compare_arrows_rounded,
-              onAdd: () => _showCompetitorDialog(),
-            ),
-            const SizedBox(height: 12),
-            _rowEditor(
-              title: 'Order Potensial',
-              rows: potentialOrders,
-              icon: Icons.lightbulb_outline_rounded,
-              onAdd: () => _showPotentialOrderDialog(),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () async {
-                final image = await picker.pickImage(
-                  source: ImageSource.camera,
-                  imageQuality: 75,
-                  maxWidth: 1600,
-                );
-                if (image != null && mounted) setState(() => photo = image);
-              },
-              icon: const Icon(Icons.camera_alt_rounded),
-              label: Text(
-                photo == null
-                    ? 'Ambil Foto Toko/Customer'
-                    : 'Foto siap digunakan',
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                photo == null
-                    ? 'Foto wajib sebelum check-in.'
-                    : 'Foto sudah siap dilampirkan ke kunjungan.',
-                style: TextStyle(
-                  color: photo == null ? AppColors.warning : AppColors.success,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            CollectionInfoPanel(
-              title: canCheckIn ? 'Lokasi siap check-in' : 'Validasi lokasi',
-              message: checkInHint,
-              icon: canCheckIn
-                  ? Icons.check_circle_outline_rounded
-                  : Icons.my_location_rounded,
-              color: canCheckIn ? AppColors.success : AppColors.warning,
-            ),
-            if (!canCheckIn) ...[
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: loading
-                    ? null
-                    : () => _runAction(
-                        () =>
-                            context.read<AppState>().getCurrentVisitLocation(),
-                      ),
-                icon: const Icon(Icons.my_location_rounded),
-                label: const Text('Perbarui Lokasi Sekarang'),
-              ),
-            ],
             const SizedBox(height: 12),
             FilledButton.icon(
-              onPressed: loading || photo == null || !canCheckIn
-                  ? null
-                  : () => _checkIn(visit),
-              icon: const Icon(Icons.location_on_rounded),
+              onPressed: loading ? null : () => _confirmCheckOut(visit),
+              icon: const Icon(Icons.logout_rounded),
               label: const Padding(
                 padding: EdgeInsets.symmetric(vertical: 11),
-                child: Text('Validasi Lokasi dan Check-in'),
+                child: Text('Check-out'),
               ),
             ),
           ],
@@ -480,96 +369,32 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     );
   }
 
-  Widget _rowEditor({
-    required String title,
-    required List<Map<String, dynamic>> rows,
-    required IconData icon,
-    required VoidCallback onAdd,
-  }) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Row(
-        children: [
-          Icon(icon, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-          ),
-          IconButton.filledTonal(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add_rounded),
-          ),
-        ],
+  Widget _visitTile(SalesVisit visit) => Card(
+    child: ListTile(
+      leading: const CircleAvatar(
+        backgroundColor: AppColors.softGreen,
+        foregroundColor: AppColors.primary,
+        child: Icon(Icons.storefront_outlined),
       ),
-      if (rows.isEmpty)
-        const Text('Opsional', style: TextStyle(color: AppColors.slate))
-      else
-        ...rows.indexed.map(
-          (entry) => ListTile(
-            dense: true,
-            title: Text(entry.$2.values.first.toString()),
-            subtitle: Text(entry.$2.values.skip(1).join(' • ')),
-            trailing: IconButton(
-              onPressed: () => setState(() => rows.removeAt(entry.$1)),
-              icon: const Icon(Icons.delete_outline_rounded),
-            ),
-          ),
+      title: Text(
+        visit.customer,
+        style: const TextStyle(fontWeight: FontWeight.w900),
+      ),
+      subtitle: Text(
+        '${visit.checkInTime.isEmpty ? '-' : visit.checkInTime}'
+        '${visit.checkOutTime.isEmpty ? '' : '\nCheckout: ${visit.checkOutTime}'}'
+        '${visit.salesPerson.isEmpty ? '' : '\n${visit.salesPerson}'}',
+      ),
+      isThreeLine: true,
+      trailing: Text(
+        visit.status,
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontWeight: FontWeight.w900,
         ),
-    ],
-  );
-
-  Widget _historyTab() {
-    final completed = visits
-        .where(
-          (visit) =>
-              visit.status.toLowerCase() == 'checked out' ||
-              visit.status.toLowerCase() == 'cancelled',
-        )
-        .toList();
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-        children: [
-          const CollectionSectionHeader(
-            title: 'Riwayat Kunjungan',
-            subtitle: 'Aktivitas salesman yang sudah selesai',
-            icon: Icons.history_rounded,
-          ),
-          if (completed.isEmpty)
-            const ErpEmptyState(title: 'Belum ada riwayat kunjungan')
-          else
-            ...completed.map(
-              (visit) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: AppColors.softGreen,
-                      foregroundColor: AppColors.primary,
-                      child: Icon(Icons.storefront_outlined),
-                    ),
-                    title: Text(
-                      visit.customer,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    subtitle: Text(
-                      '${visit.checkInTime}\n${visit.status}'
-                      '${visit.salesPerson.isEmpty ? '' : ' • ${visit.salesPerson}'}',
-                    ),
-                    isThreeLine: true,
-                  ),
-                ),
-              ),
-            ),
-        ],
       ),
-    );
-  }
+    ),
+  );
 
   Widget _stepPanel(SalesVisit? active) {
     final status = active?.status.toLowerCase();
@@ -655,21 +480,6 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
         'sudah masuk radius kunjungan.';
   }
 
-  Future<void> _confirmCancelJourney(SalesVisit visit) async {
-    final confirmed = await _confirmAction(
-      title: 'Batalkan perjalanan?',
-      message:
-          'Perjalanan ke ${visit.customer} akan dihentikan dan ditandai Cancelled.',
-      actionLabel: 'Batalkan Perjalanan',
-      destructive: true,
-    );
-    if (!confirmed || !mounted) return;
-    await _runAction(() async {
-      await context.read<AppState>().cancelSalesVisitJourney(visit.id);
-      await _load();
-    });
-  }
-
   Future<void> _confirmCheckOut(SalesVisit visit) async {
     final confirmed = await _confirmAction(
       title: 'Selesaikan kunjungan?',
@@ -734,99 +544,6 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     return message;
   }
 
-  Widget _managerJourneyTab() => RefreshIndicator(
-    onRefresh: _load,
-    child: ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-      children: [
-        const CollectionSectionHeader(
-          title: 'Lokasi Terakhir Salesman',
-          subtitle: 'Satu lokasi terbaru per salesman, update tiap 5 menit',
-          icon: Icons.location_searching_rounded,
-        ),
-        if (trackingPoints.isEmpty)
-          const ErpEmptyState(title: 'Belum ada lokasi perjalanan')
-        else
-          ...trackingPoints.map(
-            (point) => Card(
-              child: ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: AppColors.softGreen,
-                  foregroundColor: AppColors.primary,
-                  child: Icon(Icons.person_pin_circle_outlined),
-                ),
-                title: Text(
-                  point.salesPerson.isEmpty
-                      ? 'Salesman belum dipetakan'
-                      : point.salesPerson,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-                subtitle: Text(
-                  '${point.customer}\n'
-                  '${point.capturedAt?.toLocal().toString() ?? '-'} | '
-                  'akurasi ${point.accuracy.toStringAsFixed(0)} m',
-                ),
-                isThreeLine: true,
-              ),
-            ),
-          ),
-        if (loading) const LinearProgressIndicator(),
-        if (error != null) ErpErrorBox(message: error!),
-      ],
-    ),
-  );
-
-  Widget _managerActivityTab() {
-    final active = visits.where((visit) {
-      final status = visit.status.toLowerCase();
-      return status == 'traveling' || status == 'checked in';
-    }).toList();
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-        children: [
-          const CollectionSectionHeader(
-            title: 'Aktivitas Kunjungan Aktif',
-            subtitle: 'Manager/Admin memantau tanpa mengubah kunjungan',
-            icon: Icons.monitor_heart_outlined,
-          ),
-          if (active.isEmpty)
-            const ErpEmptyState(title: 'Tidak ada kunjungan aktif')
-          else
-            ...active.map(
-              (visit) => Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppColors.softGreen,
-                    foregroundColor: visit.status.toLowerCase() == 'traveling'
-                        ? AppColors.warning
-                        : AppColors.primary,
-                    child: Icon(
-                      visit.status.toLowerCase() == 'traveling'
-                          ? Icons.navigation_rounded
-                          : Icons.storefront_rounded,
-                    ),
-                  ),
-                  title: Text(
-                    visit.customer,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  subtitle: Text(
-                    '${visit.salesPerson.isEmpty ? 'Salesman belum dipetakan' : visit.salesPerson}\n'
-                    '${visit.status} | ${visit.journeyStartTime}',
-                  ),
-                  isThreeLine: true,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   double? _distanceToVisit(
     AppState state,
     SalesVisit visit,
@@ -841,22 +558,6 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
         longitude: visit.targetLongitude,
       ),
       point,
-    );
-  }
-
-  Future<void> _showCompetitorDialog() async {
-    final values = await _showRowDialog(
-      title: 'Tambah Kompetitor',
-      labels: const ['Nama kompetitor', 'Produk', 'Harga', 'Catatan'],
-    );
-    if (values == null || values.first.isEmpty) return;
-    setState(
-      () => competitors.add({
-        'competitor_name': values[0],
-        'product': values[1],
-        'price': double.tryParse(values[2]) ?? 0,
-        'notes': values[3],
-      }),
     );
   }
 
@@ -1030,69 +731,5 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
       },
     );
     if (selected != null) await _selectCustomer(selected);
-  }
-
-  Future<void> _showPotentialOrderDialog() async {
-    final values = await _showRowDialog(
-      title: 'Tambah Order Potensial',
-      labels: const ['Item', 'Qty', 'Catatan'],
-    );
-    if (values == null || values.first.isEmpty) return;
-    setState(
-      () => potentialOrders.add({
-        'item': values[0],
-        'qty': double.tryParse(values[1]) ?? 0,
-        'notes': values[2],
-      }),
-    );
-  }
-
-  Future<List<String>?> _showRowDialog({
-    required String title,
-    required List<String> labels,
-  }) async {
-    final controllers = labels.map((_) => TextEditingController()).toList();
-    final result = await showDialog<List<String>>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var index = 0; index < labels.length; index++)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: TextField(
-                    controller: controllers[index],
-                    keyboardType:
-                        labels[index] == 'Harga' || labels[index] == 'Qty'
-                        ? TextInputType.number
-                        : TextInputType.text,
-                    decoration: InputDecoration(labelText: labels[index]),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(
-              context,
-              controllers.map((controller) => controller.text.trim()).toList(),
-            ),
-            child: const Text('Tambahkan'),
-          ),
-        ],
-      ),
-    );
-    for (final controller in controllers) {
-      controller.dispose();
-    }
-    return result;
   }
 }

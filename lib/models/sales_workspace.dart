@@ -51,41 +51,6 @@ class CustomerVisitLocation {
   bool get isConfigured => latitude != 0 || longitude != 0;
 }
 
-class SalesTrackingPoint {
-  final String id;
-  final String salesVisit;
-  final String salesPerson;
-  final String customer;
-  final DateTime? capturedAt;
-  final double latitude;
-  final double longitude;
-  final double accuracy;
-
-  const SalesTrackingPoint({
-    required this.id,
-    required this.salesVisit,
-    required this.salesPerson,
-    required this.customer,
-    required this.capturedAt,
-    required this.latitude,
-    required this.longitude,
-    required this.accuracy,
-  });
-
-  factory SalesTrackingPoint.fromJson(Map<String, dynamic> json) {
-    return SalesTrackingPoint(
-      id: json['name']?.toString() ?? '',
-      salesVisit: json['sales_visit']?.toString() ?? '',
-      salesPerson: json['sales_person']?.toString() ?? '',
-      customer: json['customer']?.toString() ?? '',
-      capturedAt: DateTime.tryParse(json['captured_at']?.toString() ?? ''),
-      latitude: NumParse.asDouble(json['latitude']),
-      longitude: NumParse.asDouble(json['longitude']),
-      accuracy: NumParse.asDouble(json['accuracy']),
-    );
-  }
-}
-
 class CollectionRanking {
   final String salesPerson;
   final double amount;
