@@ -1,0 +1,255 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "format:NOO-.YYYY.-.#####",
+  "creation": "2026-07-22 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "request_date",
+    "company",
+    "sales_person",
+    "status",
+    "customer_section",
+    "customer_name",
+    "customer_type",
+    "customer_group",
+    "territory",
+    "tax_id",
+    "contact_section",
+    "contact_person",
+    "mobile_no",
+    "email_id",
+    "address_section",
+    "address_line1",
+    "city",
+    "province",
+    "pincode",
+    "location_section",
+    "latitude",
+    "longitude",
+    "supporting_section",
+    "photo",
+    "notes",
+    "result_section",
+    "created_customer",
+    "rejection_reason"
+  ],
+  "fields": [
+    {
+      "default": "Today",
+      "fieldname": "request_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Request Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "sales_person",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Sales Person",
+      "options": "Sales Person"
+    },
+    {
+      "default": "Pending Approval",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Status",
+      "options": "Draft\nPending Approval\nApproved\nRejected\nCreated Customer"
+    },
+    {
+      "fieldname": "customer_section",
+      "fieldtype": "Section Break",
+      "label": "Customer"
+    },
+    {
+      "fieldname": "customer_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Customer Name",
+      "reqd": 1
+    },
+    {
+      "default": "Company",
+      "fieldname": "customer_type",
+      "fieldtype": "Select",
+      "label": "Customer Type",
+      "options": "Company\nIndividual"
+    },
+    {
+      "fieldname": "customer_group",
+      "fieldtype": "Link",
+      "label": "Customer Group",
+      "options": "Customer Group"
+    },
+    {
+      "fieldname": "territory",
+      "fieldtype": "Link",
+      "label": "Territory",
+      "options": "Territory"
+    },
+    {
+      "fieldname": "tax_id",
+      "fieldtype": "Data",
+      "label": "NPWP / NIK"
+    },
+    {
+      "fieldname": "contact_section",
+      "fieldtype": "Section Break",
+      "label": "Contact"
+    },
+    {
+      "fieldname": "contact_person",
+      "fieldtype": "Data",
+      "label": "Contact Person"
+    },
+    {
+      "fieldname": "mobile_no",
+      "fieldtype": "Data",
+      "label": "Mobile No"
+    },
+    {
+      "fieldname": "email_id",
+      "fieldtype": "Data",
+      "label": "Email"
+    },
+    {
+      "fieldname": "address_section",
+      "fieldtype": "Section Break",
+      "label": "Address"
+    },
+    {
+      "fieldname": "address_line1",
+      "fieldtype": "Small Text",
+      "label": "Address Line 1",
+      "reqd": 1
+    },
+    {
+      "fieldname": "city",
+      "fieldtype": "Data",
+      "label": "City"
+    },
+    {
+      "fieldname": "province",
+      "fieldtype": "Data",
+      "label": "Province"
+    },
+    {
+      "fieldname": "pincode",
+      "fieldtype": "Data",
+      "label": "Postal Code"
+    },
+    {
+      "fieldname": "location_section",
+      "fieldtype": "Section Break",
+      "label": "Location"
+    },
+    {
+      "fieldname": "latitude",
+      "fieldtype": "Float",
+      "label": "Latitude"
+    },
+    {
+      "fieldname": "longitude",
+      "fieldtype": "Float",
+      "label": "Longitude"
+    },
+    {
+      "fieldname": "supporting_section",
+      "fieldtype": "Section Break",
+      "label": "Supporting"
+    },
+    {
+      "fieldname": "photo",
+      "fieldtype": "Attach Image",
+      "label": "Photo"
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "Notes"
+    },
+    {
+      "fieldname": "result_section",
+      "fieldtype": "Section Break",
+      "label": "Result"
+    },
+    {
+      "fieldname": "created_customer",
+      "fieldtype": "Link",
+      "label": "Created Customer",
+      "options": "Customer",
+      "read_only": 1
+    },
+    {
+      "fieldname": "rejection_reason",
+      "fieldtype": "Small Text",
+      "label": "Rejection Reason"
+    }
+  ],
+  "links": [],
+  "modified": "2026-07-22 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "TMSX Mobile",
+  "name": "NOO Request",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "role": "Sales User",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "role": "Sales",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Sales Manager",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Sales Admin",
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "title_field": "customer_name"
+}

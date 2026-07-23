@@ -22,6 +22,7 @@ import '../models/stock_entry.dart';
 import '../models/stock_ledger_movement.dart';
 import '../models/inventory_item.dart';
 import '../models/inactive_customer.dart';
+import '../models/noo_request.dart';
 import '../utils/date_range_presets.dart';
 import '../models/warehouse_info.dart';
 import '../models/warehouse_tracking_record.dart';
@@ -2595,6 +2596,17 @@ class AppState with ChangeNotifier {
     String customer, {
     String? company,
   }) => _customerService.fetchSalesInsight(customer, company: company);
+
+  Future<Map<String, dynamic>> createNooRequest(NooRequestDraft draft) {
+    final payload = draft.toFrappeJson();
+    final salesPerson = _currentSalesPerson?.trim();
+    if (salesPerson != null &&
+        salesPerson.isNotEmpty &&
+        (payload['sales_person'] as String?)?.trim().isNotEmpty != true) {
+      payload['sales_person'] = salesPerson;
+    }
+    return _frappeService.createDocument('NOO Request', payload);
+  }
 
   Future<ItemSalesInsight> fetchItemSalesInsight(
     String itemCode, {
