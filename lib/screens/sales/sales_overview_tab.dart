@@ -16,6 +16,7 @@ import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_error_box.dart';
 import 'collection/collection_widgets.dart';
 import 'sales_ui.dart';
+import 'sales_visit_tab.dart';
 
 enum _DailySalesDocType { salesOrder, deliveryNote, salesInvoice }
 
@@ -52,16 +53,23 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   List<CollectionRanking> _ranking = const [];
   bool _topCustomersLoading = true;
   bool _rankingLoading = true;
+  bool _visitLoading = true;
   int _rankingRequestVersion = 0;
   String? _topCustomersError;
   String? _rankingError;
+  String? _visitError;
+  List<SalesVisit> _recentVisits = const [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadFilterOptions();
-      await Future.wait([_loadDailyReport(), _loadRanking()]);
+      await Future.wait([
+        _loadDailyReport(),
+        _loadRanking(),
+        _loadVisitSnapshot(),
+      ]);
     });
   }
 
@@ -363,7 +371,94 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     await Future.wait([
       _loadDailyReport(forceRemote: forceRemote),
       _loadRanking(forceRemote: forceRemote),
+      _loadVisitSnapshot(),
     ]);
+  }
+
+  Future<void> _loadVisitSnapshot() async {
+    final state = context.read<AppState>();
+    if (!state.canUseSales) {
+      if (mounted) {
+        setState(() {
+          _recentVisits = const [];
+          _visitLoading = false;
+          _visitError = null;
+        });
+      }
+      return;
+    }
+    setState(() {
+      _visitLoading = true;
+      _visitError = null;
+    });
+    try {
+      final rows = await state.fetchSalesVisits();
+      if (!mounted) return;
+      setState(() => _recentVisits = rows.take(5).toList());
+    } catch (error) {
+      if (!mounted) return;
+      if (_isSalesVisitPermissionError(error)) {
+        setState(() {
+          _recentVisits = const [];
+          _visitError = null;
+        });
+      } else {
+        setState(() => _visitError = error.toString());
+      }
+    } finally {
+      if (mounted) setState(() => _visitLoading = false);
+    }
+  }
+
+  bool _isSalesVisitPermissionError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('akses erpnext tidak diizinkan') ||
+        message.contains('permissionerror') ||
+        message.contains('not permitted') ||
+        message.contains('insufficient permission');
+  }
+
+  Future<void> _openVisitCheckIn() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SalesVisitCheckInScreen()));
+    if (!mounted) return;
+    await _loadVisitSnapshot();
+  }
+
+  Future<void> _checkOutActiveVisit(SalesVisit visit) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Selesaikan kunjungan?'),
+        content: Text('Checkout dari ${visit.customer}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Kembali'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Check-out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _visitLoading = true;
+      _visitError = null;
+    });
+    try {
+      await context.read<AppState>().checkOutSalesVisit(visit.id);
+      await _loadVisitSnapshot();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _visitError = error.toString();
+        _visitLoading = false;
+      });
+    }
   }
 
   Future<DailySalesReport?> _readDailyReport(String key) async {
@@ -758,6 +853,21 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 
           if (state.canUseSales) ...[
             SalesUi.gap(18),
+            _SalesVisitActionCard(
+              active: state.activeSalesVisit,
+              recentVisits: _recentVisits,
+              loading: _visitLoading,
+              error: _visitError,
+              onCheckIn: _openVisitCheckIn,
+              onCheckOut: state.activeSalesVisit == null
+                  ? null
+                  : () => _checkOutActiveVisit(state.activeSalesVisit!),
+              onOpenHistory: () => widget.onMenuSelected(4),
+            ),
+          ],
+
+          if (state.canUseSales) ...[
+            SalesUi.gap(18),
             _DailySalesReportCard(
               report: _dailyReport,
               loading: _dailyReportLoading,
@@ -845,6 +955,176 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SalesVisitActionCard extends StatelessWidget {
+  const _SalesVisitActionCard({
+    required this.active,
+    required this.recentVisits,
+    required this.loading,
+    required this.error,
+    required this.onCheckIn,
+    required this.onCheckOut,
+    required this.onOpenHistory,
+  });
+
+  final SalesVisit? active;
+  final List<SalesVisit> recentVisits;
+  final bool loading;
+  final String? error;
+  final VoidCallback onCheckIn;
+  final VoidCallback? onCheckOut;
+  final VoidCallback onOpenHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeVisit = active;
+    return SalesInfoCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          CollectionSectionHeader(
+            title: 'Check-in Kunjungan',
+            subtitle: activeVisit == null
+                ? 'Mulai kunjungan customer dari dashboard'
+                : 'Sedang aktif di ${activeVisit.customer}',
+            icon: Icons.location_on_rounded,
+            trailing: IconButton.filledTonal(
+              tooltip: 'Data Kunjungan',
+              onPressed: onOpenHistory,
+              icon: const Icon(Icons.history_rounded),
+            ),
+          ),
+          SalesUi.gap(12),
+          if (loading)
+            const LinearProgressIndicator()
+          else ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: activeVisit == null
+                    ? AppColors.background
+                    : AppColors.softGreen,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: activeVisit == null
+                        ? AppColors.surfaceMuted
+                        : AppColors.primary,
+                    foregroundColor: activeVisit == null
+                        ? AppColors.slate
+                        : AppColors.white,
+                    child: Icon(
+                      activeVisit == null
+                          ? Icons.storefront_outlined
+                          : Icons.near_me_rounded,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          activeVisit?.customer ?? 'Belum ada check-in aktif',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.navy,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          activeVisit == null
+                              ? 'Tekan Check-in untuk mulai kunjungan.'
+                              : 'Check-in: ${activeVisit.checkInTime.isEmpty ? '-' : activeVisit.checkInTime}',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SalesUi.gap(12),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: activeVisit == null ? onCheckIn : null,
+                    icon: const Icon(Icons.login_rounded),
+                    label: const Text('Check-in'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: activeVisit == null ? null : onCheckOut,
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text('Check-out'),
+                  ),
+                ),
+              ],
+            ),
+            if (recentVisits.isNotEmpty) ...[
+              SalesUi.gap(12),
+              const Divider(height: 1),
+              SalesUi.gap(8),
+              ...recentVisits.take(3).map(_recentVisitRow),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _recentVisitRow(SalesVisit visit) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.storefront_outlined,
+            size: 16,
+            color: AppColors.slate,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              visit.customer.isEmpty ? visit.id : visit.customer,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.navy,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            visit.status,
+            style: const TextStyle(
+              color: AppColors.primary,
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );

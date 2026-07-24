@@ -65,7 +65,7 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
         ),
         const SalesCollectionTab(),
         const CustomerRequestTab(),
-        const SalesVisitTab(),
+        const SalesVisitTab(showCheckIn: false),
       ],
       floatingActionButtonBuilder: _buildSalesFab,
       destinations: [

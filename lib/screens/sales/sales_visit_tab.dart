@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -11,10 +13,37 @@ import '../../widgets/erp/erp_error_box.dart';
 import 'collection/collection_widgets.dart';
 
 class SalesVisitTab extends StatefulWidget {
-  const SalesVisitTab({super.key});
+  const SalesVisitTab({
+    super.key,
+    this.showCheckIn = true,
+    this.showHistory = true,
+  });
+
+  final bool? showCheckIn;
+  final bool? showHistory;
+
+  bool get shouldShowCheckIn => showCheckIn ?? true;
+  bool get shouldShowHistory => showHistory ?? true;
 
   @override
   State<SalesVisitTab> createState() => _SalesVisitTabState();
+}
+
+class SalesVisitCheckInScreen extends StatelessWidget {
+  const SalesVisitCheckInScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Check-in Kunjungan'),
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.navy,
+      ),
+      body: const SalesVisitTab(showCheckIn: true, showHistory: false),
+    );
+  }
 }
 
 class _SalesVisitTabState extends State<SalesVisitTab> {
@@ -25,6 +54,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
   SalesCustomerOption? customer;
   CustomerVisitLocation? target;
   XFile? photo;
+  int historyLimit = 20;
   bool loading = true;
   bool loadingLocation = false;
   String? error;
@@ -72,7 +102,9 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
         }
       }
     } catch (e) {
-      nextError ??= _friendlyError(e);
+      if (widget.shouldShowHistory) {
+        nextError ??= _friendlyError(e);
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -123,6 +155,18 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     });
   }
 
+  Future<void> _pickVisitPhoto(CameraDevice cameraDevice) async {
+    final image = await picker.pickImage(
+      source: ImageSource.camera,
+      preferredCameraDevice: cameraDevice,
+      imageQuality: 70,
+      maxWidth: 1280,
+    );
+    if (image != null && mounted) {
+      setState(() => photo = image);
+    }
+  }
+
   Future<void> _runAction(Future<void> Function() action) async {
     setState(() {
       loading = true;
@@ -160,60 +204,105 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
         point.accuracy <= 50 &&
         selectedDistance != null &&
         selectedDistance <= selectedRadius;
-    final completed = visits
-        .where((visit) => visit.status.toLowerCase() == 'checked out')
-        .take(8)
+    final history = visits
+        .where((visit) => widget.shouldShowCheckIn || visit.id != active?.id)
+        .take(historyLimit)
         .toList();
+    final hasMoreHistory = visits.length > history.length;
 
-    return RefreshIndicator(
+    final content = RefreshIndicator(
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
         children: [
-          const CollectionSectionHeader(
-            title: 'Check-in Customer',
-            subtitle: 'Pilih customer, validasi radius, selfie, lalu check-in',
-            icon: Icons.location_on_outlined,
-          ),
-          const SizedBox(height: 12),
-          _stepPanel(active),
-          const SizedBox(height: 12),
-          if (active == null)
-            _checkInForm(
-              state: state,
-              point: point,
-              distance: selectedDistance,
-              canCheckIn: canCheckIn,
-            )
-          else
-            _activeCheckInCard(active, point, activeDistance),
+          if (widget.shouldShowCheckIn) ...[
+            const CollectionSectionHeader(
+              title: 'Check-in Customer',
+              subtitle:
+                  'Pilih customer, validasi radius, selfie, lalu check-in',
+              icon: Icons.location_on_outlined,
+            ),
+            const SizedBox(height: 12),
+            _stepPanel(active),
+            const SizedBox(height: 12),
+            if (active == null)
+              _checkInForm(
+                state: state,
+                point: point,
+                distance: selectedDistance,
+                canCheckIn: canCheckIn,
+              )
+            else
+              _activeCheckInCard(active, point, activeDistance),
+          ],
           if (loading) ...[
             const SizedBox(height: 12),
             const LinearProgressIndicator(),
           ],
-          if (error != null) ...[
+          if (error != null &&
+              (widget.shouldShowHistory || widget.shouldShowCheckIn)) ...[
             const SizedBox(height: 12),
             ErpErrorBox(message: error!),
           ],
-          const SizedBox(height: 18),
-          CollectionSectionHeader(
-            title: active == null ? 'Riwayat Check-in' : 'Check-in Aktif',
-            subtitle: active == null
-                ? 'Kunjungan yang selesai terakhir'
-                : 'Checkout setelah aktivitas di customer selesai',
-            icon: Icons.history_rounded,
-          ),
-          const SizedBox(height: 8),
-          if (active != null)
-            _visitTile(active)
-          else if (completed.isEmpty)
-            const ErpEmptyState(title: 'Belum ada riwayat check-in')
-          else
-            ...completed.map(_visitTile),
+          if (widget.shouldShowHistory) ...[
+            const SizedBox(height: 18),
+            CollectionSectionHeader(
+              title: widget.shouldShowCheckIn
+                  ? 'Riwayat Check-in'
+                  : 'Data Kunjungan',
+              subtitle: widget.shouldShowCheckIn
+                  ? 'Kunjungan yang selesai terakhir'
+                  : 'Ketuk baris untuk melihat detail waktu dan lokasi',
+              icon: Icons.history_rounded,
+            ),
+            const SizedBox(height: 8),
+            if (!widget.shouldShowCheckIn && active != null) ...[
+              _activeSummaryTile(active),
+              const SizedBox(height: 8),
+            ],
+            if (history.isEmpty)
+              const ErpEmptyState(title: 'Belum ada riwayat check-in')
+            else
+              ...history.map(_visitTile),
+            if (hasMoreHistory) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => setState(() => historyLimit += 20),
+                icon: const Icon(Icons.expand_more_rounded),
+                label: const Text('Load more'),
+              ),
+            ],
+          ],
         ],
       ),
     );
+
+    if (widget.shouldShowCheckIn) return content;
+    return Stack(
+      children: [
+        content,
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton.extended(
+            heroTag: 'create-sales-visit',
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.white,
+            onPressed: _openCreateVisit,
+            icon: const Icon(Icons.add_location_alt_rounded),
+            label: const Text('+ Kunjungan'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openCreateVisit() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SalesVisitCheckInScreen()));
+    if (mounted) await _load();
   }
 
   Widget _checkInForm({
@@ -286,22 +375,61 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
               ),
             ],
             const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: loading
-                  ? null
-                  : () async {
-                      final image = await picker.pickImage(
-                        source: ImageSource.camera,
-                        imageQuality: 70,
-                        maxWidth: 1280,
-                      );
-                      if (image != null && mounted) {
-                        setState(() => photo = image);
-                      }
-                    },
-              icon: const Icon(Icons.camera_alt_rounded),
-              label: Text(photo == null ? 'Ambil Selfie' : 'Selfie siap'),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: loading
+                        ? null
+                        : () => _pickVisitPhoto(CameraDevice.front),
+                    icon: const Icon(Icons.photo_camera_front_rounded),
+                    label: const Text('Selfie'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: loading
+                        ? null
+                        : () => _pickVisitPhoto(CameraDevice.rear),
+                    icon: const Icon(Icons.camera_alt_rounded),
+                    label: const Text('Kamera'),
+                  ),
+                ),
+              ],
             ),
+            if (photo != null) ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Stack(
+                  children: [
+                    Image.file(
+                      File(photo!.path),
+                      width: double.infinity,
+                      height: 180,
+                      fit: BoxFit.cover,
+                    ),
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Material(
+                        color: AppColors.navy.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(999),
+                        child: IconButton(
+                          tooltip: 'Hapus foto',
+                          onPressed: () => setState(() => photo = null),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: AppColors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: notes,
@@ -369,6 +497,27 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     );
   }
 
+  Widget _activeSummaryTile(SalesVisit visit) => Card(
+    color: AppColors.softGreen,
+    child: ListTile(
+      leading: const CircleAvatar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.white,
+        child: Icon(Icons.location_on_rounded),
+      ),
+      title: Text(
+        visit.customer,
+        style: const TextStyle(fontWeight: FontWeight.w900),
+      ),
+      subtitle: const Text('Kunjungan aktif. Selesaikan dari dashboard Sales.'),
+      trailing: const Text(
+        'ACTIVE',
+        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900),
+      ),
+      onTap: () => _showVisitDetail(visit),
+    ),
+  );
+
   Widget _visitTile(SalesVisit visit) => Card(
     child: ListTile(
       leading: const CircleAvatar(
@@ -393,8 +542,128 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
           fontWeight: FontWeight.w900,
         ),
       ),
+      onTap: () => _showVisitDetail(visit),
     ),
   );
+
+  void _showVisitDetail(SalesVisit visit) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.62,
+          minChildSize: 0.38,
+          maxChildSize: 0.9,
+          builder: (context, controller) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 42,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppColors.border,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  CollectionSectionHeader(
+                    title: visit.customer.isEmpty ? visit.id : visit.customer,
+                    subtitle: visit.id,
+                    icon: Icons.storefront_outlined,
+                  ),
+                  const SizedBox(height: 12),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        children: [
+                          _detailRow('Status', visit.status),
+                          _detailRow('Sales Person', visit.salesPerson),
+                          _detailRow('Check-in', visit.checkInTime),
+                          _detailRow('Check-out', visit.checkOutTime),
+                          _detailRow('Alamat', visit.address),
+                          _detailRow(
+                            'Jarak Check-in',
+                            visit.checkInDistance <= 0
+                                ? ''
+                                : '${visit.checkInDistance.toStringAsFixed(0)} m',
+                          ),
+                          _detailRow(
+                            'Koordinat Check-in',
+                            _coordinate(
+                              visit.checkInLatitude,
+                              visit.checkInLongitude,
+                            ),
+                          ),
+                          _detailRow(
+                            'Koordinat Check-out',
+                            _coordinate(
+                              visit.checkOutLatitude,
+                              visit.checkOutLongitude,
+                            ),
+                          ),
+                          _detailRow('Catatan', visit.notes),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 118,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.slate,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.trim().isEmpty ? '-' : value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: AppColors.navy,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _coordinate(double latitude, double longitude) {
+    if (latitude == 0 && longitude == 0) return '';
+    return '${latitude.toStringAsFixed(6)}, ${longitude.toStringAsFixed(6)}';
+  }
 
   Widget _stepPanel(SalesVisit? active) {
     final status = active?.status.toLowerCase();
