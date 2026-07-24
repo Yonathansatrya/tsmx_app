@@ -127,13 +127,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
     });
     try {
       final state = context.read<AppState>();
-      final salesPerson =
-          (state.currentSalesPerson ??
-                  await state.resolveCurrentSalesIdentity())
-              ?.trim() ??
-          '';
-      final rows = await _fetchNooRequests(
-        state,
+      final rows = await state.fetchNooRequestRows(
         fields: const [
           'name',
           'request_date',
@@ -148,11 +142,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
           'modified',
         ],
         filters: null,
-        scopedFilters: salesPerson.isEmpty
-            ? null
-            : [
-                ['sales_person', '=', salesPerson],
-              ],
+        orderBy: 'modified desc',
       );
       if (!mounted) return;
       setState(() => _requests = rows);
@@ -162,154 +152,6 @@ class _NooRequestTabState extends State<NooRequestTab> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchNooRequests(
-    AppState state, {
-    required List<String> fields,
-    List<List<dynamic>>? filters,
-    List<List<dynamic>>? scopedFilters,
-  }) async {
-    Object? resourceError;
-    Object? reportError;
-    const baseFields = [
-      'name',
-      'request_date',
-      'company',
-      'sales_person',
-      'customer_name',
-      'customer_type',
-      'customer_group',
-      'status',
-      'modified',
-    ];
-
-    try {
-      return await state.frappeService.fetchResource(
-        'NOO Request',
-        fields: fields,
-        filters: filters,
-        orderBy: 'modified desc',
-        limit: 50,
-        limitStart: 0,
-      );
-    } catch (error) {
-      resourceError = error;
-    }
-
-    if (filters == null && scopedFilters != null) {
-      try {
-        return await state.frappeService.fetchResource(
-          'NOO Request',
-          fields: fields,
-          filters: scopedFilters,
-          orderBy: 'modified desc',
-          limit: 50,
-          limitStart: 0,
-        );
-      } catch (_) {
-        // Keep the original unscoped error for the fallback checks below.
-      }
-    }
-
-    if (_isFieldShapeError(resourceError)) {
-      try {
-        return await state.frappeService.fetchResource(
-          'NOO Request',
-          fields: baseFields,
-          filters: filters,
-          orderBy: 'modified desc',
-          limit: 50,
-          limitStart: 0,
-        );
-      } catch (error) {
-        resourceError = error;
-      }
-    }
-
-    try {
-      return await state.frappeService.fetchReportView(
-        'NOO Request',
-        fields: fields,
-        filters: filters,
-        orderBy: 'modified desc',
-        limit: 50,
-        limitStart: 0,
-      );
-    } catch (error) {
-      reportError = error;
-    }
-
-    if (filters == null && scopedFilters != null) {
-      try {
-        return await state.frappeService.fetchReportView(
-          'NOO Request',
-          fields: fields,
-          filters: scopedFilters,
-          orderBy: 'modified desc',
-          limit: 50,
-          limitStart: 0,
-        );
-      } catch (_) {
-        // Keep the report error from the same filter shape used by the page.
-      }
-    }
-
-    if (_isFieldShapeError(reportError)) {
-      try {
-        return await state.frappeService.fetchReportView(
-          'NOO Request',
-          fields: baseFields,
-          filters: filters,
-          orderBy: 'modified desc',
-          limit: 50,
-          limitStart: 0,
-        );
-      } catch (error) {
-        reportError = error;
-      }
-    }
-
-    throw Exception(_nooAccessDiagnostic(state, resourceError, reportError));
-  }
-
-  bool _isFieldShapeError(Object? error) {
-    final message = error.toString().toLowerCase();
-    return message.contains('field') ||
-        message.contains('unknown column') ||
-        message.contains('status') ||
-        message.contains('mobile_no') ||
-        message.contains('address_line1') ||
-        message.contains('request_date');
-  }
-
-  String _nooAccessDiagnostic(
-    AppState state,
-    Object? resourceError,
-    Object? reportError,
-  ) {
-    final user = state.currentUser?.trim();
-    final site = state.selectedSiteName.trim().isNotEmpty
-        ? state.selectedSiteName.trim()
-        : state.selectedSiteBaseUrl.trim();
-    final identity = [
-      if (site.isNotEmpty) 'site: $site',
-      if (user?.isNotEmpty == true) 'user: $user',
-      'role: ${state.userRole}',
-      if (state.currentSalesPerson?.trim().isNotEmpty == true)
-        'sales person: ${state.currentSalesPerson!.trim()}',
-    ].join(', ');
-
-    return 'Gagal membaca NOO Request ($identity). '
-        'Pastikan role user punya Read/Create/Write untuk NOO Request dan User terhubung ke Sales Person. '
-        'Resource: ${_cleanNooError(resourceError)}. '
-        'ReportView: ${_cleanNooError(reportError)}.';
-  }
-
-  String _cleanNooError(Object? error) {
-    if (error == null) return '-';
-    final text = error.toString().replaceFirst('Exception: ', '').trim();
-    return text.length > 180 ? '${text.substring(0, 180)}...' : text;
   }
 
   Widget _loadingCard() {

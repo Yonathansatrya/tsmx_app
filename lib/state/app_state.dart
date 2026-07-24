@@ -2622,6 +2622,56 @@ class AppState with ChangeNotifier {
     return _frappeService.updateDocument('NOO Request', name, payload);
   }
 
+  Future<List<Map<String, dynamic>>> fetchNooRequestRows({
+    required List<String> fields,
+    List<List<dynamic>>? filters,
+    int limit = 50,
+    int limitStart = 0,
+    String? orderBy = 'modified desc',
+  }) async {
+    Object? lastError;
+    for (final fieldSet in <List<String>>[
+      fields,
+      const [
+        'name',
+        'request_date',
+        'company',
+        'sales_person',
+        'customer_name',
+        'customer_type',
+        'customer_group',
+        'status',
+        'modified',
+      ],
+      const ['name', 'customer_name', 'status', 'modified'],
+      const ['name', 'status', 'modified'],
+    ]) {
+      try {
+        return await _fetchResourceWithFieldFallback(
+          doctype: 'NOO Request',
+          fields: fieldSet,
+          limit: limit,
+          limitStart: limitStart,
+          orderBy: orderBy,
+          filters: filters,
+        );
+      } catch (error) {
+        lastError = error;
+        if (!_looksLikeNooListPermissionIssue(error)) rethrow;
+      }
+    }
+    throw lastError ?? Exception('Gagal membaca NOO Request.');
+  }
+
+  bool _looksLikeNooListPermissionIssue(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('akses erpnext tidak diizinkan') ||
+        message.contains('permissionerror') ||
+        message.contains('not permitted') ||
+        message.contains('field not permitted') ||
+        message.contains('no permitted fields');
+  }
+
   Future<Map<String, dynamic>> createPromoRequest(PromoRequestDraft draft) {
     final payload = draft.toFrappeJson();
     final salesPerson = _currentSalesPerson?.trim();
