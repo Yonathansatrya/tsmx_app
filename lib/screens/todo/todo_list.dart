@@ -12,7 +12,12 @@ import '../../utils/erp_format.dart';
 import '../../utils/num_parse.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_status_badge.dart';
+import '../../widgets/erp/erp_status_chip_bar.dart';
 import '../../widgets/erp/erp_workflow_helper.dart';
+
+enum _ApprovalTodoSortOption { newest, oldest, amountHigh, amountLow }
+
+const _allDoctypesFilterValue = '__all_doctypes__';
 
 class SalesOrderApprovalScreen extends StatefulWidget {
   final bool embedded;
@@ -44,6 +49,8 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   String? _error;
   String? _historyError;
   String? _doctypeQuickFilter;
+  String? _statusQuickFilter;
+  _ApprovalTodoSortOption _sortOption = _ApprovalTodoSortOption.newest;
 
   @override
   void initState() {
@@ -182,9 +189,15 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
 
   Widget _todoTab() {
     final query = _search.text.trim().toLowerCase();
+    final statusOptions = _approvalStatusOptions(_rows);
+    final doctypeOptions = _approvalDoctypeOptions(_rows);
     final rows = _rows.where((row) {
       final matchType =
           _doctypeQuickFilter == null || row.doctype == _doctypeQuickFilter;
+      final matchStatus =
+          _statusQuickFilter == null ||
+          _approvalStatus(row).toLowerCase() ==
+              _statusQuickFilter!.toLowerCase();
       final matchSearch =
           query.isEmpty ||
           row.name.toLowerCase().contains(query) ||
@@ -192,8 +205,9 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
           row.party.toLowerCase().contains(query) ||
           row.partyName.toLowerCase().contains(query) ||
           row.workflowState.toLowerCase().contains(query);
-      return matchType && matchSearch;
+      return matchType && matchStatus && matchSearch;
     }).toList();
+    rows.sort(_compareApprovalTodos);
     final summary = _ApprovalTodoSummary.from(_rows);
     return RefreshIndicator(
       onRefresh: _load,
@@ -214,6 +228,8 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
           _approvalSearchBox(
             visibleCount: rows.length,
             totalCount: _rows.length,
+            statusOptions: statusOptions,
+            doctypeOptions: doctypeOptions,
           ),
           if (_loading) ...[
             const SizedBox(height: 12),
@@ -240,21 +256,21 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   Widget _approvalSearchBox({
     required int visibleCount,
     required int totalCount,
-  }) => Container(
-    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-    decoration: BoxDecoration(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.border),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    required List<String> statusOptions,
+    required List<String> doctypeOptions,
+  }) {
+    final hasActiveFilter =
+        _search.text.trim().isNotEmpty ||
+        _doctypeQuickFilter != null ||
+        _statusQuickFilter != null ||
+        _sortOption != _ApprovalTodoSortOption.newest;
+    return Column(
       children: [
         TextField(
           controller: _search,
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
-            hintText: 'Cari nomor, customer, supplier, atau status',
+            hintText: 'Search SO or customer...',
             prefixIcon: const Icon(Icons.search_rounded),
             suffixIcon: _search.text.trim().isEmpty
                 ? null
@@ -264,23 +280,120 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                     icon: const Icon(Icons.close_rounded),
                   ),
             filled: true,
-            fillColor: AppColors.softGreen.withValues(alpha: 0.35),
+            fillColor: AppColors.white,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.border),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.border),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: AppColors.primary),
             ),
             isDense: true,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 390;
+              final sortField =
+                  DropdownButtonFormField<_ApprovalTodoSortOption>(
+                    initialValue: _sortOption,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: 'Urutkan',
+                      prefixIcon: const Icon(Icons.sort_rounded, size: 18),
+                      filled: true,
+                      fillColor: AppColors.background,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary),
+                      ),
+                      isDense: true,
+                    ),
+                    items: _ApprovalTodoSortOption.values.map((option) {
+                      return DropdownMenuItem<_ApprovalTodoSortOption>(
+                        value: option,
+                        child: Text(
+                          _approvalSortLabel(option),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (option) {
+                      if (option != null) setState(() => _sortOption = option);
+                    },
+                  );
+              final actions = Row(
+                children: [
+                  Expanded(
+                    child: _ApprovalFilterButton(
+                      icon: Icons.tune_rounded,
+                      label: _doctypeQuickFilter == null
+                          ? 'Filter'
+                          : 'Filter 1',
+                      onTap: () => _openDoctypeFilter(doctypeOptions),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _ApprovalFilterButton(
+                      icon: Icons.restart_alt_rounded,
+                      label: 'Reset',
+                      onTap: hasActiveFilter ? _resetApprovalFilters : null,
+                    ),
+                  ),
+                ],
+              );
+
+              if (compact) {
+                return Column(
+                  children: [sortField, const SizedBox(height: 10), actions],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(child: sortField),
+                  const SizedBox(width: 10),
+                  SizedBox(width: 150, child: actions),
+                ],
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        ErpStatusChipBar<String?>(
+          selected: _statusQuickFilter,
+          onSelected: (status) => setState(() => _statusQuickFilter = status),
+          chips: [
+            const ErpStatusChip<String?>(label: 'All', value: null),
+            ...statusOptions.map(
+              (status) => ErpStatusChip<String?>(label: status, value: status),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
         Row(
           children: [
             const Icon(
@@ -299,21 +412,78 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                 ),
               ),
             ),
-            if (_doctypeQuickFilter != null)
-              TextButton.icon(
-                onPressed: () => setState(() => _doctypeQuickFilter = null),
-                icon: const Icon(Icons.close_rounded, size: 16),
-                label: const Text('Filter'),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  foregroundColor: AppColors.primary,
-                ),
-              ),
           ],
         ),
       ],
-    ),
-  );
+    );
+  }
+
+  void _resetApprovalFilters() {
+    setState(() {
+      _search.clear();
+      _doctypeQuickFilter = null;
+      _statusQuickFilter = null;
+      _sortOption = _ApprovalTodoSortOption.newest;
+    });
+  }
+
+  Future<void> _openDoctypeFilter(List<String> doctypeOptions) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Filter tipe dokumen',
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.list_alt_rounded),
+                title: const Text('Semua dokumen'),
+                trailing: _doctypeQuickFilter == null
+                    ? const Icon(Icons.check_rounded, color: AppColors.primary)
+                    : null,
+                onTap: () => Navigator.pop(context, _allDoctypesFilterValue),
+              ),
+              ...doctypeOptions.map(
+                (doctype) => ListTile(
+                  leading: Icon(_approvalIcon(doctype)),
+                  title: Text(doctype),
+                  trailing: _doctypeQuickFilter == doctype
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: AppColors.primary,
+                        )
+                      : null,
+                  onTap: () => Navigator.pop(context, doctype),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (selected == null) return;
+    setState(() {
+      _doctypeQuickFilter = selected == _allDoctypesFilterValue
+          ? null
+          : selected;
+    });
+  }
 
   Widget _historyTab() => RefreshIndicator(
     onRefresh: _load,
@@ -544,6 +714,61 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     return 'Rp ${formatErpCurrency(row.amount)}';
   }
 
+  int _compareApprovalTodos(ErpApprovalTodo a, ErpApprovalTodo b) {
+    return switch (_sortOption) {
+      _ApprovalTodoSortOption.newest => _compareDateDesc(a.date, b.date),
+      _ApprovalTodoSortOption.oldest => _compareDateAsc(a.date, b.date),
+      _ApprovalTodoSortOption.amountHigh => b.amount.compareTo(a.amount),
+      _ApprovalTodoSortOption.amountLow => a.amount.compareTo(b.amount),
+    };
+  }
+
+  int _compareDateDesc(String a, String b) {
+    final left = DateTime.tryParse(a.trim());
+    final right = DateTime.tryParse(b.trim());
+    if (left == null && right == null) return b.compareTo(a);
+    if (left == null) return 1;
+    if (right == null) return -1;
+    return right.compareTo(left);
+  }
+
+  int _compareDateAsc(String a, String b) {
+    final left = DateTime.tryParse(a.trim());
+    final right = DateTime.tryParse(b.trim());
+    if (left == null && right == null) return a.compareTo(b);
+    if (left == null) return 1;
+    if (right == null) return -1;
+    return left.compareTo(right);
+  }
+
+  String _approvalSortLabel(_ApprovalTodoSortOption option) {
+    return switch (option) {
+      _ApprovalTodoSortOption.newest => 'Newest',
+      _ApprovalTodoSortOption.oldest => 'Oldest',
+      _ApprovalTodoSortOption.amountHigh => 'Nilai tertinggi',
+      _ApprovalTodoSortOption.amountLow => 'Nilai terendah',
+    };
+  }
+
+  String _approvalStatus(ErpApprovalTodo row) {
+    final workflowState = row.workflowState.trim();
+    if (workflowState.isNotEmpty) return workflowState;
+    final status = row.status.trim();
+    return status.isEmpty ? 'Tanpa status' : status;
+  }
+
+  List<String> _approvalStatusOptions(List<ErpApprovalTodo> rows) {
+    final statuses = rows.map(_approvalStatus).toSet().toList();
+    statuses.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return statuses;
+  }
+
+  List<String> _approvalDoctypeOptions(List<ErpApprovalTodo> rows) {
+    final doctypes = rows.map((row) => row.doctype).toSet().toList();
+    doctypes.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return doctypes;
+  }
+
   Widget _historyGroupCard(_ApprovalHistoryGroup group) {
     final latest = group.latest;
     final rejected = latest.content.toLowerCase().contains('reject');
@@ -701,6 +926,57 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _ApprovalFilterButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  const _ApprovalFilterButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Material(
+      color: enabled
+          ? AppColors.softGreen
+          : AppColors.background.withValues(alpha: 0.8),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          height: 48,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                color: enabled ? AppColors.primary : AppColors.slate,
+                size: 18,
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: enabled ? AppColors.primary : AppColors.slate,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _SalesOrderApprovalDetailPage extends StatefulWidget {
