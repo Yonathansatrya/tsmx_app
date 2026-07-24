@@ -6,6 +6,7 @@ MOBILE_ROLES = [
     "Company Administrator",
     "Director",
     "Sales",
+    "Admin Sales",
     "Sales Admin",
     "Sales Manager",
     "Sales User",
@@ -42,6 +43,7 @@ DEFAULT_ROLE_MODULES = {
     "Administrator": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
     "System Manager": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
     "Developer": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
+    "Admin Sales": ["dashboard", "sales", "approvals"],
     "Sales Admin": ["dashboard", "sales", "approvals"],
     "Sales Manager": ["dashboard", "sales", "approvals"],
     "Sales User": ["dashboard", "sales"],
@@ -218,6 +220,7 @@ WORKSPACE_LINK_GROUPS = [
 def after_install():
     setup_mobile_roles()
     setup_mobile_custom_fields()
+    setup_noo_request_doctype()
     setup_mobile_permissions()
     setup_mobile_settings()
     setup_mobile_workspace()
@@ -309,6 +312,36 @@ def _ensure_custom_field(doctype, values):
     doc.insert(ignore_permissions=True)
 
 
+def setup_noo_request_doctype():
+    """Keep NOO Request focused on the fields needed before Customer creation."""
+    if not frappe.db.exists("DocType", "NOO Request"):
+        return
+
+    allowed_fields = {
+        "naming_series",
+        "request_date",
+        "status",
+        "company",
+        "sales_person",
+        "customer_section",
+        "customer_name",
+        "customer_type",
+        "customer_group",
+        "mobile_no",
+        "address_line1",
+    }
+    doc = frappe.get_doc("DocType", "NOO Request")
+    original_count = len(doc.fields or [])
+    doc.set(
+        "fields",
+        [field for field in doc.fields if field.fieldname in allowed_fields],
+    )
+    if len(doc.fields or []) != original_count:
+        doc.save(ignore_permissions=True)
+        frappe.clear_cache(doctype="NOO Request")
+        frappe.db.commit()
+
+
 MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
     "Sales": {
         "Company": {"read": 1, "select": 1},
@@ -374,6 +407,23 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
     },
     "Sales Admin": {
+        "Company": {"read": 1, "select": 1},
+        "Customer": {"read": 1, "select": 1},
+        "Customer Group": {"read": 1, "select": 1},
+        "Territory": {"read": 1, "select": 1},
+        "Employee": {"read": 1, "select": 1},
+        "Sales Person": {"read": 1, "select": 1},
+        "Sales Team": {"read": 1, "select": 1},
+        "Item": {"read": 1, "select": 1},
+        "Warehouse": {"read": 1, "select": 1},
+        "Sales Order": {"read": 1, "select": 1, "create": 1, "write": 1, "submit": 1, "cancel": 1},
+        "Delivery Note": {"read": 1, "select": 1},
+        "Sales Invoice": {"read": 1, "select": 1},
+        "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+        "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+    },
+    "Admin Sales": {
         "Company": {"read": 1, "select": 1},
         "Customer": {"read": 1, "select": 1},
         "Customer Group": {"read": 1, "select": 1},
@@ -555,10 +605,10 @@ for _role in ("Developer", "System Manager", "Administrator", "Company Administr
     )
 
 MOBILE_REPORT_ROLES = {
-    "Sales Analytics": ["Sales", "Sales User", "Sales Manager", "Sales Admin"],
-    "Sales Order Analysis": ["Sales", "Sales User", "Sales Manager", "Sales Admin"],
-    "Item-wise Sales Register": ["Sales", "Sales User", "Sales Manager", "Sales Admin"],
-    "Accounts Receivable": ["Sales Manager", "Sales Admin", "Collection User", "Collection Manager", "Collection Admin"],
+    "Sales Analytics": ["Sales", "Sales User", "Sales Manager", "Sales Admin", "Admin Sales"],
+    "Sales Order Analysis": ["Sales", "Sales User", "Sales Manager", "Sales Admin", "Admin Sales"],
+    "Item-wise Sales Register": ["Sales", "Sales User", "Sales Manager", "Sales Admin", "Admin Sales"],
+    "Accounts Receivable": ["Sales Manager", "Sales Admin", "Admin Sales", "Collection User", "Collection Manager", "Collection Admin"],
     "Purchase Analytics": ["Purchase User", "Purchase Manager", "Purchase Admin", "Buying User", "Buying Manager"],
     "Purchase Order Analysis": ["Purchase User", "Purchase Manager", "Purchase Admin", "Buying User", "Buying Manager"],
     "Supplier Quotation Comparison": ["Purchase User", "Purchase Manager", "Purchase Admin", "Buying User", "Buying Manager"],

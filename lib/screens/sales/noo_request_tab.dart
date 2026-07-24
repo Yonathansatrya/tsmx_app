@@ -14,8 +14,17 @@ class NooRequestTab extends StatefulWidget {
 }
 
 class _NooRequestTabState extends State<NooRequestTab> {
+  static const _statusOptions = [
+    'Draft',
+    'Pending Approval',
+    'Approved',
+    'Rejected',
+    'Created Customer',
+  ];
+
   bool _isLoading = true;
   String? _error;
+  String? _statusFilter;
   List<Map<String, dynamic>> _requests = const [];
 
   @override
@@ -26,6 +35,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
 
   @override
   Widget build(BuildContext context) {
+    final visibleRequests = _filteredRequests();
     return Stack(
       children: [
         RefreshIndicator(
@@ -51,14 +61,16 @@ class _NooRequestTabState extends State<NooRequestTab> {
                 ),
               ),
               SalesUi.gap(),
+              _statusFilterBar(),
+              SalesUi.gap(),
               if (_error != null)
                 _errorCard(_error!)
               else if (_isLoading)
                 _loadingCard()
-              else if (_requests.isEmpty)
+              else if (visibleRequests.isEmpty)
                 _emptyCard()
               else
-                ..._requests.map(_requestCard),
+                ...visibleRequests.map(_requestCard),
               const SizedBox(height: 84),
             ],
           ),
@@ -94,6 +106,19 @@ class _NooRequestTabState extends State<NooRequestTab> {
     );
   }
 
+  Future<void> _openEdit(Map<String, dynamic> row) async {
+    Navigator.of(context).pop();
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => CreateNooRequestScreen(initial: row)),
+    );
+    if (updated != true || !mounted) return;
+    await _loadRequests();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Pengajuan NOO berhasil diperbarui.')),
+    );
+  }
+
   Future<void> _loadRequests() async {
     if (!mounted) return;
     setState(() {
@@ -102,15 +127,13 @@ class _NooRequestTabState extends State<NooRequestTab> {
     });
     try {
       final state = context.read<AppState>();
-      final filters = <List<dynamic>>[];
-      if (state.isSalesUserRole) {
-        final salesPerson = state.currentSalesPerson?.trim() ?? '';
-        if (salesPerson.isNotEmpty) {
-          filters.add(['sales_person', '=', salesPerson]);
-        }
-      }
-      final rows = await state.frappeService.fetchResource(
-        'NOO Request',
+      final salesPerson =
+          (state.currentSalesPerson ??
+                  await state.resolveCurrentSalesIdentity())
+              ?.trim() ??
+          '';
+      final rows = await _fetchNooRequests(
+        state,
         fields: const [
           'name',
           'request_date',
@@ -119,13 +142,17 @@ class _NooRequestTabState extends State<NooRequestTab> {
           'customer_name',
           'customer_type',
           'customer_group',
-          'territory',
           'mobile_no',
+          'address_line1',
           'status',
           'modified',
         ],
-        filters: filters.isEmpty ? null : filters,
-        orderBy: 'modified desc',
+        filters: null,
+        scopedFilters: salesPerson.isEmpty
+            ? null
+            : [
+                ['sales_person', '=', salesPerson],
+              ],
       );
       if (!mounted) return;
       setState(() => _requests = rows);
@@ -135,6 +162,154 @@ class _NooRequestTabState extends State<NooRequestTab> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchNooRequests(
+    AppState state, {
+    required List<String> fields,
+    List<List<dynamic>>? filters,
+    List<List<dynamic>>? scopedFilters,
+  }) async {
+    Object? resourceError;
+    Object? reportError;
+    const baseFields = [
+      'name',
+      'request_date',
+      'company',
+      'sales_person',
+      'customer_name',
+      'customer_type',
+      'customer_group',
+      'status',
+      'modified',
+    ];
+
+    try {
+      return await state.frappeService.fetchResource(
+        'NOO Request',
+        fields: fields,
+        filters: filters,
+        orderBy: 'modified desc',
+        limit: 50,
+        limitStart: 0,
+      );
+    } catch (error) {
+      resourceError = error;
+    }
+
+    if (filters == null && scopedFilters != null) {
+      try {
+        return await state.frappeService.fetchResource(
+          'NOO Request',
+          fields: fields,
+          filters: scopedFilters,
+          orderBy: 'modified desc',
+          limit: 50,
+          limitStart: 0,
+        );
+      } catch (_) {
+        // Keep the original unscoped error for the fallback checks below.
+      }
+    }
+
+    if (_isFieldShapeError(resourceError)) {
+      try {
+        return await state.frappeService.fetchResource(
+          'NOO Request',
+          fields: baseFields,
+          filters: filters,
+          orderBy: 'modified desc',
+          limit: 50,
+          limitStart: 0,
+        );
+      } catch (error) {
+        resourceError = error;
+      }
+    }
+
+    try {
+      return await state.frappeService.fetchReportView(
+        'NOO Request',
+        fields: fields,
+        filters: filters,
+        orderBy: 'modified desc',
+        limit: 50,
+        limitStart: 0,
+      );
+    } catch (error) {
+      reportError = error;
+    }
+
+    if (filters == null && scopedFilters != null) {
+      try {
+        return await state.frappeService.fetchReportView(
+          'NOO Request',
+          fields: fields,
+          filters: scopedFilters,
+          orderBy: 'modified desc',
+          limit: 50,
+          limitStart: 0,
+        );
+      } catch (_) {
+        // Keep the report error from the same filter shape used by the page.
+      }
+    }
+
+    if (_isFieldShapeError(reportError)) {
+      try {
+        return await state.frappeService.fetchReportView(
+          'NOO Request',
+          fields: baseFields,
+          filters: filters,
+          orderBy: 'modified desc',
+          limit: 50,
+          limitStart: 0,
+        );
+      } catch (error) {
+        reportError = error;
+      }
+    }
+
+    throw Exception(_nooAccessDiagnostic(state, resourceError, reportError));
+  }
+
+  bool _isFieldShapeError(Object? error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('field') ||
+        message.contains('unknown column') ||
+        message.contains('status') ||
+        message.contains('mobile_no') ||
+        message.contains('address_line1') ||
+        message.contains('request_date');
+  }
+
+  String _nooAccessDiagnostic(
+    AppState state,
+    Object? resourceError,
+    Object? reportError,
+  ) {
+    final user = state.currentUser?.trim();
+    final site = state.selectedSiteName.trim().isNotEmpty
+        ? state.selectedSiteName.trim()
+        : state.selectedSiteBaseUrl.trim();
+    final identity = [
+      if (site.isNotEmpty) 'site: $site',
+      if (user?.isNotEmpty == true) 'user: $user',
+      'role: ${state.userRole}',
+      if (state.currentSalesPerson?.trim().isNotEmpty == true)
+        'sales person: ${state.currentSalesPerson!.trim()}',
+    ].join(', ');
+
+    return 'Gagal membaca NOO Request ($identity). '
+        'Pastikan role user punya Read/Create/Write untuk NOO Request dan User terhubung ke Sales Person. '
+        'Resource: ${_cleanNooError(resourceError)}. '
+        'ReportView: ${_cleanNooError(reportError)}.';
+  }
+
+  String _cleanNooError(Object? error) {
+    if (error == null) return '-';
+    final text = error.toString().replaceFirst('Exception: ', '').trim();
+    return text.length > 180 ? '${text.substring(0, 180)}...' : text;
   }
 
   Widget _loadingCard() {
@@ -147,6 +322,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
   }
 
   Widget _emptyCard() {
+    final hasFilter = _statusFilter != null;
     return SalesInfoCard(
       child: SizedBox(
         height: 170,
@@ -166,16 +342,20 @@ class _NooRequestTabState extends State<NooRequestTab> {
               ),
             ),
             const SizedBox(height: 14),
-            const Text(
-              'Belum ada pengajuan NOO',
+            Text(
+              hasFilter
+                  ? 'Tidak ada NOO ${_statusFilter!}'
+                  : 'Belum ada pengajuan NOO',
               style: TextStyle(
                 color: AppColors.navy,
                 fontWeight: FontWeight.w900,
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'Tekan tombol Buat NOO untuk membuat pengajuan baru.',
+            Text(
+              hasFilter
+                  ? 'Pilih status lain atau reset ke All.'
+                  : 'Tekan tombol Buat NOO untuk membuat pengajuan baru.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.slate,
@@ -241,6 +421,47 @@ class _NooRequestTabState extends State<NooRequestTab> {
     );
   }
 
+  Widget _statusFilterBar() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _statusFilterChip(label: 'All', value: null),
+          ..._statusOptions.map(
+            (status) => _statusFilterChip(label: status, value: status),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusFilterChip({required String label, required String? value}) {
+    final selected = _statusFilter == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        label: Text(label),
+        selected: selected,
+        showCheckmark: false,
+        onSelected: (_) => setState(() => _statusFilter = value),
+        visualDensity: VisualDensity.compact,
+        labelStyle: TextStyle(
+          color: selected ? AppColors.white : AppColors.primary,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
+        selectedColor: AppColors.primary,
+        backgroundColor: AppColors.softGreen,
+        side: BorderSide(
+          color: selected
+              ? AppColors.primary
+              : AppColors.primary.withValues(alpha: 0.12),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+    );
+  }
+
   Widget _requestCard(Map<String, dynamic> row) {
     final name = _text(row['name']);
     final customer = _text(row['customer_name'], fallback: name);
@@ -248,8 +469,9 @@ class _NooRequestTabState extends State<NooRequestTab> {
     final salesPerson = _text(row['sales_person'], fallback: '-');
     final company = _text(row['company'], fallback: '-');
     final date = _formatDate(row['request_date']);
-    final territory = _text(row['territory']);
     final mobileNo = _text(row['mobile_no']);
+    final customerType = _text(row['customer_type']);
+    final customerGroup = _text(row['customer_group']);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -314,14 +536,18 @@ class _NooRequestTabState extends State<NooRequestTab> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (territory.isNotEmpty || mobileNo.isNotEmpty) ...[
+                  if (customerType.isNotEmpty ||
+                      customerGroup.isNotEmpty ||
+                      mobileNo.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        if (territory.isNotEmpty)
-                          _miniBadge(Icons.map_rounded, territory),
+                        if (customerType.isNotEmpty)
+                          _miniBadge(Icons.badge_rounded, customerType),
+                        if (customerGroup.isNotEmpty)
+                          _miniBadge(Icons.group_work_rounded, customerGroup),
                         if (mobileNo.isNotEmpty)
                           _miniBadge(Icons.phone_rounded, mobileNo),
                       ],
@@ -394,7 +620,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
       backgroundColor: Colors.transparent,
       builder: (context) {
         return DraggableScrollableSheet(
-          initialChildSize: 0.56,
+          initialChildSize: 0.64,
           minChildSize: 0.36,
           maxChildSize: 0.9,
           builder: (context, controller) {
@@ -427,6 +653,22 @@ class _NooRequestTabState extends State<NooRequestTab> {
                     ),
                   ),
                   SalesUi.gap(),
+                  if (_canEdit(row)) ...[
+                    FilledButton.icon(
+                      onPressed: () => _openEdit(row),
+                      icon: const Icon(Icons.edit_rounded),
+                      label: const Text('Edit Pengajuan'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.white,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                    SalesUi.gap(),
+                  ],
                   SalesInfoCard(
                     child: Column(
                       children: [
@@ -441,8 +683,8 @@ class _NooRequestTabState extends State<NooRequestTab> {
                           'Customer Group',
                           _text(row['customer_group']),
                         ),
-                        _detailRow('Territory', _text(row['territory'])),
                         _detailRow('No. HP', _text(row['mobile_no'])),
+                        _detailRow('Alamat Utama', _text(row['address_line1'])),
                       ],
                     ),
                   ),
@@ -499,5 +741,25 @@ class _NooRequestTabState extends State<NooRequestTab> {
     final parts = raw.split('-');
     if (parts.length == 3) return '${parts[2]}/${parts[1]}/${parts[0]}';
     return raw;
+  }
+
+  List<Map<String, dynamic>> _filteredRequests() {
+    final status = _statusFilter?.trim().toLowerCase();
+    if (status == null || status.isEmpty) return _requests;
+    return _requests.where((row) {
+      final rowStatus = _text(
+        row['status'],
+        fallback: 'Pending Approval',
+      ).toLowerCase();
+      return rowStatus == status;
+    }).toList();
+  }
+
+  bool _canEdit(Map<String, dynamic> row) {
+    final status = _text(
+      row['status'],
+      fallback: 'Pending Approval',
+    ).toLowerCase();
+    return status == 'draft' || status == 'pending approval';
   }
 }

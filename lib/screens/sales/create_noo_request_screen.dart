@@ -7,7 +7,11 @@ import '../../theme/app_colors.dart';
 import 'sales_ui.dart';
 
 class CreateNooRequestScreen extends StatefulWidget {
-  const CreateNooRequestScreen({super.key});
+  final Map<String, dynamic>? initial;
+
+  const CreateNooRequestScreen({super.key, this.initial});
+
+  bool get isEditMode => initial != null;
 
   @override
   State<CreateNooRequestScreen> createState() => _CreateNooRequestScreenState();
@@ -16,26 +20,20 @@ class CreateNooRequestScreen extends StatefulWidget {
 class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
   final _formKey = GlobalKey<FormState>();
   final _customerNameController = TextEditingController();
-  final _customerGroupController = TextEditingController();
-  final _territoryController = TextEditingController();
-  final _taxIdController = TextEditingController();
-  final _contactPersonController = TextEditingController();
   final _mobileNoController = TextEditingController();
-  final _emailController = TextEditingController();
   final _addressController = TextEditingController();
-  final _cityController = TextEditingController();
-  final _provinceController = TextEditingController();
-  final _pincodeController = TextEditingController();
-  final _latitudeController = TextEditingController();
-  final _longitudeController = TextEditingController();
-  final _notesController = TextEditingController();
 
   String? _selectedCompany;
   String? _selectedSalesPerson;
+  String? _selectedCustomerGroup;
   List<String> _salesPersonOptions = const [];
   bool _salesPersonOptionsRequested = false;
   bool _isLoadingSalesPersons = false;
   String? _salesPersonLoadError;
+  List<String> _customerGroupOptions = const [];
+  bool _customerGroupOptionsRequested = false;
+  bool _isLoadingCustomerGroups = false;
+  String? _customerGroupLoadError;
   List<String> _customerTypeOptions = const [];
   bool _customerTypeOptionsRequested = false;
   bool _isLoadingCustomerTypes = false;
@@ -44,21 +42,24 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
   bool _isSubmitting = false;
 
   @override
+  void initState() {
+    super.initState();
+    final initial = widget.initial;
+    if (initial == null) return;
+    _selectedCompany = _text(initial['company']);
+    _selectedSalesPerson = _text(initial['sales_person']);
+    _selectedCustomerGroup = _text(initial['customer_group']);
+    _customerType = _text(initial['customer_type']);
+    _customerNameController.text = _text(initial['customer_name']);
+    _mobileNoController.text = _text(initial['mobile_no']);
+    _addressController.text = _text(initial['address_line1']);
+  }
+
+  @override
   void dispose() {
     _customerNameController.dispose();
-    _customerGroupController.dispose();
-    _territoryController.dispose();
-    _taxIdController.dispose();
-    _contactPersonController.dispose();
     _mobileNoController.dispose();
-    _emailController.dispose();
     _addressController.dispose();
-    _cityController.dispose();
-    _provinceController.dispose();
-    _pincodeController.dispose();
-    _latitudeController.dispose();
-    _longitudeController.dispose();
-    _notesController.dispose();
     super.dispose();
   }
 
@@ -86,6 +87,12 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
         if (mounted) _loadCustomerTypeOptions(context.read<AppState>());
       });
     }
+    if (!_customerGroupOptionsRequested) {
+      _customerGroupOptionsRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadCustomerGroupOptions(context.read<AppState>());
+      });
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -95,7 +102,7 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
         elevation: 0,
         titleSpacing: 0,
         title: const Text(
-          'Buat NOO',
+          'Pengajuan NOO',
           style: TextStyle(
             color: AppColors.navy,
             fontWeight: FontWeight.w900,
@@ -109,8 +116,10 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
           padding: SalesUi.compactScreenPadding,
           children: [
             SalesHeroCard(
-              title: 'Pengajuan NOO',
-              subtitle: 'Ajukan outlet baru sebelum dibuatkan master Customer.',
+              title: widget.isEditMode ? 'Edit NOO' : 'Pengajuan NOO',
+              subtitle: widget.isEditMode
+                  ? 'Perbarui data pengajuan outlet sebelum diproses.'
+                  : 'Ajukan outlet baru sebelum dibuatkan master Customer.',
               icon: Icons.person_add_alt_1_rounded,
               trailing: _statusChip(),
             ),
@@ -157,7 +166,7 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
                 children: [
                   const SalesSectionTitle(
                     title: 'Data Customer',
-                    subtitle: 'Nama outlet, group, territory, dan identitas.',
+                    subtitle: 'Nama outlet, tipe, group, nomor HP, dan alamat.',
                   ),
                   SalesUi.gap(),
                   _textField(
@@ -212,55 +221,25 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
                     ),
                   ],
                   SalesUi.gap(),
-                  _textField(
-                    controller: _customerGroupController,
-                    label: 'Customer Group',
-                    icon: Icons.group_work_rounded,
-                  ),
-                  SalesUi.gap(),
-                  _textField(
-                    controller: _territoryController,
-                    label: 'Territory / Area',
-                    icon: Icons.map_rounded,
-                  ),
-                  SalesUi.gap(),
-                  _textField(
-                    controller: _taxIdController,
-                    label: 'NPWP / NIK',
-                    icon: Icons.credit_card_rounded,
-                    keyboardType: TextInputType.text,
-                  ),
-                ],
-              ),
-            ),
-            SalesUi.gap(),
-            SalesInfoCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SalesSectionTitle(
-                    title: 'Kontak & Alamat',
-                    subtitle: 'Alamat utama wajib agar bisa dibuat master.',
-                  ),
-                  SalesUi.gap(),
-                  _textField(
-                    controller: _contactPersonController,
-                    label: 'PIC / Contact Person',
-                    icon: Icons.account_circle_rounded,
-                  ),
+                  _customerGroupField(),
+                  if (_customerGroupLoadError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _customerGroupLoadError!,
+                      style: const TextStyle(
+                        color: AppColors.danger,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                   SalesUi.gap(),
                   _textField(
                     controller: _mobileNoController,
                     label: 'No. HP',
                     icon: Icons.phone_rounded,
                     keyboardType: TextInputType.phone,
-                  ),
-                  SalesUi.gap(),
-                  _textField(
-                    controller: _emailController,
-                    label: 'Email',
-                    icon: Icons.alternate_email_rounded,
-                    keyboardType: TextInputType.emailAddress,
+                    isRequired: true,
                   ),
                   SalesUi.gap(),
                   _textField(
@@ -268,67 +247,6 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
                     label: 'Alamat Utama',
                     icon: Icons.location_on_rounded,
                     isRequired: true,
-                    maxLines: 3,
-                  ),
-                  SalesUi.gap(),
-                  _textField(
-                    controller: _cityController,
-                    label: 'Kota',
-                    icon: Icons.location_city_rounded,
-                  ),
-                  SalesUi.gap(),
-                  _textField(
-                    controller: _provinceController,
-                    label: 'Provinsi',
-                    icon: Icons.public_rounded,
-                  ),
-                  SalesUi.gap(),
-                  _textField(
-                    controller: _pincodeController,
-                    label: 'Kode Pos',
-                    icon: Icons.markunread_mailbox_rounded,
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
-              ),
-            ),
-            SalesUi.gap(),
-            SalesInfoCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SalesSectionTitle(
-                    title: 'Lokasi & Catatan',
-                    subtitle:
-                        'Koordinat boleh dikosongkan jika belum tersedia.',
-                  ),
-                  SalesUi.gap(),
-                  _textField(
-                    controller: _latitudeController,
-                    label: 'Latitude',
-                    icon: Icons.my_location_rounded,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                      signed: true,
-                    ),
-                    validator: _optionalDoubleValidator,
-                  ),
-                  SalesUi.gap(),
-                  _textField(
-                    controller: _longitudeController,
-                    label: 'Longitude',
-                    icon: Icons.explore_rounded,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                      signed: true,
-                    ),
-                    validator: _optionalDoubleValidator,
-                  ),
-                  SalesUi.gap(),
-                  _textField(
-                    controller: _notesController,
-                    label: 'Catatan',
-                    icon: Icons.notes_rounded,
                     maxLines: 3,
                   ),
                 ],
@@ -359,7 +277,11 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
                     )
                   : const Icon(Icons.send_rounded),
               label: Text(
-                _isSubmitting ? 'Mengirim...' : 'Kirim Pengajuan NOO',
+                _isSubmitting
+                    ? (widget.isEditMode ? 'Menyimpan...' : 'Mengirim...')
+                    : (widget.isEditMode
+                          ? 'Simpan Perubahan'
+                          : 'Kirim Pengajuan NOO'),
               ),
             ),
           ],
@@ -376,7 +298,7 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
         borderRadius: BorderRadius.circular(999),
       ),
       child: const Text(
-        'Pending',
+        'Pending Approval',
         style: TextStyle(
           color: AppColors.primary,
           fontSize: 11,
@@ -457,6 +379,48 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
     );
   }
 
+  Widget _customerGroupField() {
+    final selected = _customerGroupOptions.contains(_selectedCustomerGroup)
+        ? _selectedCustomerGroup
+        : null;
+    return DropdownButtonFormField<String>(
+      initialValue: selected,
+      decoration: _decoration('Customer Group', Icons.group_work_rounded)
+          .copyWith(
+            suffixIcon: _isLoadingCustomerGroups
+                ? const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : null,
+          ),
+      isExpanded: true,
+      items: _customerGroupOptions
+          .map(
+            (group) => DropdownMenuItem(
+              value: group,
+              child: Text(group, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+          )
+          .toList(),
+      hint: Text(
+        _isLoadingCustomerGroups
+            ? 'Memuat Customer Group...'
+            : 'Pilih Customer Group',
+      ),
+      onChanged: _isLoadingCustomerGroups
+          ? null
+          : (value) => setState(() => _selectedCustomerGroup = value),
+      validator: (value) => value == null || value.trim().isEmpty
+          ? 'Customer Group wajib dipilih'
+          : null,
+    );
+  }
+
   Widget _readonlyValue({
     required String label,
     required String value,
@@ -526,14 +490,6 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
     );
   }
 
-  String? _optionalDoubleValidator(String? value) {
-    final raw = value?.trim();
-    if (raw == null || raw.isEmpty) return null;
-    return double.tryParse(raw.replaceAll(',', '.')) == null
-        ? 'Format angka tidak valid'
-        : null;
-  }
-
   Future<void> _submit() async {
     final form = _formKey.currentState;
     if (form == null || !form.validate()) return;
@@ -555,28 +511,22 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
 
     setState(() => _isSubmitting = true);
     try {
-      await state.createNooRequest(
-        NooRequestDraft(
-          requestDate: DateTime.now(),
-          company: company,
-          salesPerson: salesPerson,
-          customerName: _customerNameController.text,
-          customerType: _customerType ?? '',
-          customerGroup: _customerGroupController.text,
-          territory: _territoryController.text,
-          taxId: _taxIdController.text,
-          contactPerson: _contactPersonController.text,
-          mobileNo: _mobileNoController.text,
-          emailId: _emailController.text,
-          addressLine1: _addressController.text,
-          city: _cityController.text,
-          province: _provinceController.text,
-          pincode: _pincodeController.text,
-          latitude: _parseDouble(_latitudeController.text),
-          longitude: _parseDouble(_longitudeController.text),
-          notes: _notesController.text,
-        ),
+      final draft = NooRequestDraft(
+        requestDate: DateTime.now(),
+        company: company,
+        salesPerson: salesPerson,
+        customerName: _customerNameController.text,
+        customerType: _customerType ?? '',
+        customerGroup: _selectedCustomerGroup,
+        mobileNo: _mobileNoController.text,
+        addressLine1: _addressController.text,
       );
+      final name = _text(widget.initial?['name']);
+      if (widget.isEditMode && name.isNotEmpty) {
+        await state.updateNooRequest(name, draft);
+      } else {
+        await state.createNooRequest(draft);
+      }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -587,12 +537,6 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
-  }
-
-  double? _parseDouble(String value) {
-    final raw = value.trim();
-    if (raw.isEmpty) return null;
-    return double.tryParse(raw.replaceAll(',', '.'));
   }
 
   Future<void> _loadSalesPersonOptions(AppState state) async {
@@ -648,6 +592,64 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
     }
   }
 
+  Future<void> _loadCustomerGroupOptions(AppState state) async {
+    setState(() {
+      _isLoadingCustomerGroups = true;
+      _customerGroupLoadError = null;
+    });
+    try {
+      Future<List<Map<String, dynamic>>> fetch({List<List<dynamic>>? filters}) {
+        return state.frappeService.fetchResource(
+          'Customer Group',
+          fields: const ['name'],
+          filters: filters,
+          orderBy: 'name asc',
+          limit: 200,
+        );
+      }
+
+      List<Map<String, dynamic>> rows;
+      try {
+        rows = await fetch(
+          filters: const [
+            ['is_group', '=', 0],
+          ],
+        );
+      } catch (_) {
+        rows = await fetch();
+      }
+
+      final options =
+          rows
+              .map((row) => row['name']?.toString().trim() ?? '')
+              .where((name) => name.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+      if (!mounted) return;
+      setState(() {
+        _customerGroupOptions = options;
+        _selectedCustomerGroup = options.contains(_selectedCustomerGroup)
+            ? _selectedCustomerGroup
+            : null;
+        if (options.isEmpty) {
+          _customerGroupLoadError =
+              'Customer Group belum tersedia di site aktif.';
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _customerGroupOptions = const [];
+        _selectedCustomerGroup = null;
+        _customerGroupLoadError =
+            'Customer Group gagal dimuat. Pastikan role punya Read Customer Group.';
+      });
+    } finally {
+      if (mounted) setState(() => _isLoadingCustomerGroups = false);
+    }
+  }
+
   Future<void> _loadCustomerTypeOptions(AppState state) async {
     setState(() {
       _isLoadingCustomerTypes = true;
@@ -690,4 +692,6 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
       if (mounted) setState(() => _isLoadingCustomerTypes = false);
     }
   }
+
+  String _text(Object? value) => value?.toString().trim() ?? '';
 }

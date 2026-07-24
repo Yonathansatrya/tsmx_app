@@ -2609,6 +2609,19 @@ class AppState with ChangeNotifier {
     return _frappeService.createDocument('NOO Request', payload);
   }
 
+  Future<void> updateNooRequest(String name, NooRequestDraft draft) {
+    final payload = draft.toFrappeJson();
+    payload.remove('request_date');
+    payload.remove('status');
+    final salesPerson = _currentSalesPerson?.trim();
+    if (salesPerson != null &&
+        salesPerson.isNotEmpty &&
+        (payload['sales_person'] as String?)?.trim().isNotEmpty != true) {
+      payload['sales_person'] = salesPerson;
+    }
+    return _frappeService.updateDocument('NOO Request', name, payload);
+  }
+
   Future<Map<String, dynamic>> createPromoRequest(PromoRequestDraft draft) {
     final payload = draft.toFrappeJson();
     final salesPerson = _currentSalesPerson?.trim();

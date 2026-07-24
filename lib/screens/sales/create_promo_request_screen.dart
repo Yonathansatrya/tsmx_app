@@ -676,6 +676,16 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
   Future<void> _submit() async {
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
+    final state = context.read<AppState>();
+    final salesPerson =
+        (state.isSalesUserRole
+                ? state.currentSalesPerson
+                : _selectedSalesPerson)
+            ?.trim();
+    if (salesPerson == null || salesPerson.isEmpty) {
+      _showError('Sales Person wajib dipilih.');
+      return;
+    }
     final hasTarget =
         _customerGroupController.text.trim().isNotEmpty ||
         _customerController.text.trim().isNotEmpty;
@@ -717,7 +727,7 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
       final draft = PromoRequestDraft(
         requestDate: _requestDate,
         company: _selectedCompany ?? '',
-        salesPerson: _selectedSalesPerson,
+        salesPerson: salesPerson,
         customerGroup: _customerGroupController.text,
         customer: _customerController.text,
         validFrom: _validFrom,

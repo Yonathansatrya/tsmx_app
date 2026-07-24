@@ -1,32 +1,29 @@
 {
   "actions": [],
   "allow_rename": 0,
-  "autoname": "naming_series:",
-  "creation": "2026-07-22 00:00:00.000000",
+  "autoname": "format:PRMO-.YYYY.-.#####",
+  "creation": "2026-07-24 00:00:00.000000",
   "doctype": "DocType",
   "engine": "InnoDB",
   "field_order": [
-    "naming_series",
     "request_date",
-    "status",
     "company",
     "sales_person",
-    "customer_section",
-    "customer_name",
-    "customer_type",
+    "status",
+    "target_section",
     "customer_group",
-    "mobile_no",
-    "address_line1"
+    "customer",
+    "valid_from",
+    "valid_upto",
+    "items_section",
+    "items",
+    "notes_section",
+    "promo_note",
+    "result_section",
+    "promotional_scheme",
+    "rejection_reason"
   ],
   "fields": [
-    {
-      "default": "NOO-.YYYY.-.#####",
-      "fieldname": "naming_series",
-      "fieldtype": "Select",
-      "label": "Series",
-      "options": "NOO-.YYYY.-.#####",
-      "reqd": 1
-    },
     {
       "default": "Today",
       "fieldname": "request_date",
@@ -35,15 +32,6 @@
       "in_standard_filter": 1,
       "label": "Request Date",
       "reqd": 1
-    },
-    {
-      "default": "Pending Approval",
-      "fieldname": "status",
-      "fieldtype": "Select",
-      "in_list_view": 1,
-      "in_standard_filter": 1,
-      "label": "Status",
-      "options": "Draft\nPending Approval\nApproved\nRejected\nCreated Customer"
     },
     {
       "fieldname": "company",
@@ -60,54 +48,97 @@
       "in_list_view": 1,
       "in_standard_filter": 1,
       "label": "Sales Person",
-      "options": "Sales Person",
-      "reqd": 1
+      "options": "Sales Person"
     },
     {
-      "fieldname": "customer_section",
-      "fieldtype": "Section Break",
-      "label": "Data Customer"
-    },
-    {
-      "fieldname": "customer_name",
-      "fieldtype": "Data",
-      "in_list_view": 1,
-      "label": "Customer Name",
-      "reqd": 1
-    },
-    {
-      "default": "Company",
-      "fieldname": "customer_type",
+      "default": "Pending Approval",
+      "fieldname": "status",
       "fieldtype": "Select",
-      "label": "Customer Type",
-      "options": "Company\nIndividual",
-      "reqd": 1
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Status",
+      "options": "Draft\nPending Approval\nApproved\nRejected\nCreated Promotional Scheme"
+    },
+    {
+      "fieldname": "target_section",
+      "fieldtype": "Section Break",
+      "label": "Target Promo"
     },
     {
       "fieldname": "customer_group",
       "fieldtype": "Link",
+      "in_list_view": 1,
       "label": "Customer Group",
-      "options": "Customer Group",
+      "options": "Customer Group"
+    },
+    {
+      "fieldname": "customer",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Customer",
+      "options": "Customer"
+    },
+    {
+      "fieldname": "valid_from",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Valid From",
       "reqd": 1
     },
     {
-      "fieldname": "mobile_no",
-      "fieldtype": "Data",
-      "label": "Mobile No",
+      "fieldname": "valid_upto",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Valid Upto",
       "reqd": 1
     },
     {
-      "fieldname": "address_line1",
+      "fieldname": "items_section",
+      "fieldtype": "Section Break",
+      "label": "Items"
+    },
+    {
+      "fieldname": "items",
+      "fieldtype": "Table",
+      "label": "Items",
+      "options": "Promo Request Item",
+      "reqd": 1
+    },
+    {
+      "fieldname": "notes_section",
+      "fieldtype": "Section Break",
+      "label": "Notes"
+    },
+    {
+      "fieldname": "promo_note",
       "fieldtype": "Small Text",
-      "label": "Address Line 1",
-      "reqd": 1
+      "label": "Promo Note"
+    },
+    {
+      "fieldname": "result_section",
+      "fieldtype": "Section Break",
+      "label": "Result"
+    },
+    {
+      "fieldname": "promotional_scheme",
+      "fieldtype": "Link",
+      "label": "Promotional Scheme",
+      "options": "Promotional Scheme",
+      "read_only": 1
+    },
+    {
+      "fieldname": "rejection_reason",
+      "fieldtype": "Small Text",
+      "label": "Rejection Reason"
     }
   ],
   "links": [],
   "modified": "2026-07-24 00:00:00.000000",
   "modified_by": "Administrator",
   "module": "TMSX Mobile",
-  "name": "NOO Request",
+  "name": "Promo Request",
   "owner": "Administrator",
   "permissions": [
     {
@@ -177,5 +208,5 @@
   "sort_field": "modified",
   "sort_order": "DESC",
   "states": [],
-  "title_field": "customer_name"
+  "title_field": "customer"
 }
