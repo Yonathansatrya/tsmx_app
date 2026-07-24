@@ -326,6 +326,52 @@ class FrappeService {
     throw Exception('Invalid upload response.');
   }
 
+  Future<List<int>> downloadPrintPdf({
+    required String doctype,
+    required String name,
+    String? printFormat,
+    bool noLetterhead = false,
+  }) async {
+    await ensureLoggedIn();
+
+    final uri =
+        Uri.parse(
+          '$baseUrl/api/method/frappe.utils.print_format.download_pdf',
+        ).replace(
+          queryParameters: {
+            'doctype': doctype,
+            'name': name,
+            if (printFormat?.trim().isNotEmpty == true)
+              'format': printFormat!.trim(),
+            'no_letterhead': noLetterhead ? '1' : '0',
+          },
+        );
+
+    final response = await _getBytes(uri);
+    if (response.statusCode != 200) {
+      dynamic decoded;
+      try {
+        decoded = await _decodeJson(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        decoded = null;
+      }
+      throw Exception(_extractFrappeError(decoded, response.statusCode));
+    }
+    if (response.bodyBytes.isEmpty) {
+      throw Exception('ERPNext tidak mengembalikan file PDF.');
+    }
+    final header = utf8.decode(
+      response.bodyBytes.take(5).toList(),
+      allowMalformed: true,
+    );
+    if (!header.startsWith('%PDF')) {
+      throw Exception(
+        'ERPNext tidak mengembalikan PDF. Pastikan Print Format Sales Order tersedia.',
+      );
+    }
+    return response.bodyBytes;
+  }
+
   Future<void> updateDocument(
     String doctype,
     String name,
@@ -701,6 +747,60 @@ class FrappeService {
       }
       return http.Response(
         responseBody,
+        response.statusCode,
+        headers: responseHeaders,
+        reasonPhrase: response.reasonPhrase,
+      );
+    } finally {
+      httpClient.close(force: true);
+    }
+  }
+
+  Future<http.Response> _getBytes(
+    Uri uri, {
+    Map<String, String>? headers,
+  }) async {
+    final httpClient = HttpClient();
+    try {
+      final request = await httpClient.getUrl(uri);
+      request.headers.set(HttpHeaders.acceptHeader, 'application/pdf');
+      if (headers != null) {
+        headers.forEach((key, value) {
+          if (key.toLowerCase() == HttpHeaders.expectHeader.toLowerCase()) {
+            return;
+          }
+          request.headers.set(key, value);
+        });
+      }
+      if (_cookies.isNotEmpty) {
+        request.headers.set(HttpHeaders.cookieHeader, _cookieHeader());
+      }
+      request.headers.removeAll(HttpHeaders.expectHeader);
+
+      final sentRequestHeaders = <String, String>{};
+      request.headers.forEach((name, values) {
+        sentRequestHeaders[name] = values.join(',');
+      });
+
+      final response = await request.close();
+      final responseBytes = await consolidateHttpClientResponseBytes(response);
+      _updateCookiesFromHeaders(response.headers);
+      final responseHeaders = <String, String>{};
+      response.headers.forEach((name, values) {
+        responseHeaders[name] = values.join(',');
+      });
+      if (response.statusCode >= 400) {
+        _logHttpError(
+          method: 'GET',
+          uri: uri,
+          requestHeaders: sentRequestHeaders,
+          statusCode: response.statusCode,
+          responseHeaders: responseHeaders,
+          responseBody: utf8.decode(responseBytes, allowMalformed: true),
+        );
+      }
+      return http.Response.bytes(
+        responseBytes,
         response.statusCode,
         headers: responseHeaders,
         reasonPhrase: response.reasonPhrase,

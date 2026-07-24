@@ -6770,6 +6770,10 @@ class AppState with ChangeNotifier {
     await _refreshAfterDocChange(doctype);
   }
 
+  Future<List<int>> downloadSalesOrderPdf(String name) {
+    return _frappeService.downloadPrintPdf(doctype: 'Sales Order', name: name);
+  }
+
   Future<List<String>> fetchNamingSeries(String doctype) {
     return _frappeService.fetchNamingSeries(doctype);
   }

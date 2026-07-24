@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../models/sales_order.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
@@ -324,6 +327,11 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
               icon: Icons.copy_rounded,
               onPressed: () => _duplicateSo(detail, closeSheet: true),
             ),
+            erpActionButton(
+              label: 'Download PDF / Share',
+              icon: Icons.picture_as_pdf_outlined,
+              onPressed: () => _downloadAndShareSoPdf(detail.id),
+            ),
             if (canEdit)
               erpActionButton(
                 label: 'Edit Sales Order',
@@ -348,6 +356,47 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     } finally {
       if (mounted) setState(() => _isOpeningDetail = false);
     }
+  }
+
+  Future<void> _downloadAndShareSoPdf(String id) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(content: Text('Mengunduh PDF Sales Order $id...')),
+    );
+    try {
+      final bytes = await context.read<AppState>().downloadSalesOrderPdf(id);
+      final directory = await getApplicationDocumentsDirectory();
+      final folder = Directory('${directory.path}/sales_order_pdf');
+      if (!await folder.exists()) {
+        await folder.create(recursive: true);
+      }
+      final fileName = '${_safeFileName(id)}.pdf';
+      final file = File('${folder.path}/$fileName');
+      await file.writeAsBytes(bytes, flush: true);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('PDF tersimpan: $fileName')),
+      );
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path, mimeType: 'application/pdf')],
+          subject: 'Sales Order $id',
+          text: 'Sales Order $id',
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text('Gagal download PDF $id: $error')),
+      );
+    }
+  }
+
+  String _safeFileName(String value) {
+    return value
+        .trim()
+        .replaceAll(RegExp(r'[\\/:*?"<>|]+'), '-')
+        .replaceAll(RegExp(r'\s+'), '_');
   }
 
   bool _matchesAdvancedFilters(SalesOrder order) {
@@ -592,6 +641,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
               onTap: () => _openDetail(o),
               onEdit: isDocDraft(o.docStatus) ? () => _editSo(o.id) : null,
               onDuplicate: () => _duplicateSoFromList(o),
+              onDownload: () => _downloadAndShareSoPdf(o.id),
             ),
           ),
         if (appState.hasMoreSalesOrders ||

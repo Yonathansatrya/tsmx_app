@@ -13,6 +13,7 @@ class ErpDocumentCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onEdit;
   final VoidCallback? onDuplicate;
+  final VoidCallback? onDownload;
   final VoidCallback? onDelete;
 
   const ErpDocumentCard({
@@ -26,6 +27,7 @@ class ErpDocumentCard extends StatelessWidget {
     this.onTap,
     this.onEdit,
     this.onDuplicate,
+    this.onDownload,
     this.onDelete,
   });
 
@@ -108,6 +110,7 @@ class ErpDocumentCard extends StatelessWidget {
                       ErpStatusBadge(statusText: statusText),
                       if (onEdit != null ||
                           onDuplicate != null ||
+                          onDownload != null ||
                           onDelete != null) ...[
                         const SizedBox(height: 4),
                         SizedBox(
@@ -124,6 +127,7 @@ class ErpDocumentCard extends StatelessWidget {
                             onSelected: (value) {
                               if (value == 'edit') onEdit?.call();
                               if (value == 'duplicate') onDuplicate?.call();
+                              if (value == 'download') onDownload?.call();
                               if (value == 'delete') onDelete?.call();
                             },
                             itemBuilder: (context) => [
@@ -146,6 +150,20 @@ class ErpDocumentCard extends StatelessWidget {
                                       Icon(Icons.copy_rounded, size: 18),
                                       SizedBox(width: 8),
                                       Text('Duplicate'),
+                                    ],
+                                  ),
+                                ),
+                              if (onDownload != null)
+                                const PopupMenuItem(
+                                  value: 'download',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.picture_as_pdf_outlined,
+                                        size: 18,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text('Download PDF'),
                                     ],
                                   ),
                                 ),
