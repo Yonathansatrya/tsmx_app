@@ -2674,13 +2674,105 @@ class AppState with ChangeNotifier {
 
   Future<Map<String, dynamic>> createPromoRequest(PromoRequestDraft draft) {
     final payload = draft.toFrappeJson();
-    final salesPerson = _currentSalesPerson?.trim();
-    if (salesPerson != null &&
-        salesPerson.isNotEmpty &&
-        (payload['sales_person'] as String?)?.trim().isNotEmpty != true) {
-      payload['sales_person'] = salesPerson;
-    }
     return _frappeService.createDocument('Promo Request', payload);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchPromoRequestRows({
+    required List<String> fields,
+    List<List<dynamic>>? filters,
+    int limit = 50,
+    int limitStart = 0,
+    String? orderBy = 'modified desc',
+  }) async {
+    Object? lastError;
+    for (final fieldSet in <List<String>>[
+      fields,
+      const [
+        'name',
+        'request_date',
+        'company',
+        'customer_group',
+        'customer',
+        'valid_from',
+        'valid_upto',
+        'status',
+        'modified',
+      ],
+      const ['name', 'customer_group', 'customer', 'status', 'modified'],
+      const ['name', 'status', 'modified'],
+      const ['name', 'modified'],
+      const ['name'],
+    ]) {
+      try {
+        return await _fetchPromoRequestRowsWithFallback(
+          fieldSet,
+          filters: filters,
+          limit: limit,
+          limitStart: limitStart,
+          orderBy: orderBy,
+        );
+      } catch (error) {
+        lastError = error;
+        if (!_looksLikePromoListPermissionIssue(error)) rethrow;
+      }
+    }
+    throw lastError ?? Exception('Gagal membaca Promo Request.');
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchPromoRequestRowsWithFallback(
+    List<String> fields, {
+    List<List<dynamic>>? filters,
+    required int limit,
+    required int limitStart,
+    String? orderBy,
+  }) async {
+    Object? resourceError;
+    try {
+      return await _fetchResourceWithFieldFallback(
+        doctype: 'Promo Request',
+        fields: fields,
+        limit: limit,
+        limitStart: limitStart,
+        orderBy: orderBy,
+        filters: filters,
+      );
+    } catch (error) {
+      resourceError = error;
+      if (!_looksLikePromoListPermissionIssue(error)) rethrow;
+    }
+
+    try {
+      return await _frappeService.fetchReportView(
+        'Promo Request',
+        fields: fields,
+        limit: limit,
+        limitStart: limitStart,
+        orderBy: orderBy,
+        filters: filters,
+      );
+    } catch (reportError) {
+      throw Exception(
+        'Resource: ${_cleanShortFrappeError(resourceError)}. '
+        'ReportView: ${_cleanShortFrappeError(reportError)}',
+      );
+    }
+  }
+
+  String _cleanShortFrappeError(Object? error) {
+    if (error == null) return '-';
+    final text = error.toString().replaceFirst('Exception: ', '').trim();
+    return text.length > 140 ? '${text.substring(0, 140)}...' : text;
+  }
+
+  bool _looksLikePromoListPermissionIssue(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('akses erpnext tidak diizinkan') ||
+        message.contains('permissionerror') ||
+        message.contains('not permitted') ||
+        message.contains('field not permitted') ||
+        message.contains('no permitted fields') ||
+        message.contains('unknown column') ||
+        message.contains('does not exist');
   }
 
   Future<ItemSalesInsight> fetchItemSalesInsight(

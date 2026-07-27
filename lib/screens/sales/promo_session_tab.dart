@@ -102,28 +102,11 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
     });
     try {
       final state = context.read<AppState>();
-      final filters = <List<dynamic>>[];
-      final salesPerson =
-          (state.currentSalesPerson ??
-                  await state.resolveCurrentSalesIdentity())
-              ?.trim() ??
-          '';
-      if (state.isSalesUserRole && salesPerson.isNotEmpty) {
-        filters.add(['sales_person', '=', salesPerson]);
-      }
-      final rows = await _fetchPromoRequests(
-        state,
-        filters: filters.isEmpty ? null : filters,
-        scopedFilters: salesPerson.isEmpty
-            ? null
-            : [
-                ['sales_person', '=', salesPerson],
-              ],
+      final rows = await state.fetchPromoRequestRows(
         fields: const [
           'name',
           'request_date',
           'company',
-          'sales_person',
           'customer_group',
           'customer',
           'valid_from',
@@ -132,6 +115,7 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
           'promo_note',
           'modified',
         ],
+        filters: null,
       );
       if (!mounted) return;
       setState(() => _requests = rows);
@@ -141,141 +125,6 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchPromoRequests(
-    AppState state, {
-    required List<String> fields,
-    List<List<dynamic>>? filters,
-    List<List<dynamic>>? scopedFilters,
-  }) async {
-    Object? resourceError;
-    Object? reportError;
-    const baseFields = [
-      'name',
-      'request_date',
-      'company',
-      'sales_person',
-      'customer_group',
-      'customer',
-      'valid_from',
-      'valid_upto',
-      'modified',
-    ];
-
-    try {
-      return await state.frappeService.fetchResource(
-        'Promo Request',
-        fields: fields,
-        filters: filters,
-        orderBy: 'modified desc',
-        limit: 50,
-        limitStart: 0,
-      );
-    } catch (error) {
-      resourceError = error;
-    }
-
-    if (filters == null && scopedFilters != null) {
-      try {
-        return await state.frappeService.fetchResource(
-          'Promo Request',
-          fields: fields,
-          filters: scopedFilters,
-          orderBy: 'modified desc',
-          limit: 50,
-          limitStart: 0,
-        );
-      } catch (_) {
-        // Keep the original unscoped error for diagnostics below.
-      }
-    }
-
-    if (_isFieldShapeError(resourceError)) {
-      try {
-        return await state.frappeService.fetchResource(
-          'Promo Request',
-          fields: baseFields,
-          filters: filters,
-          orderBy: 'modified desc',
-          limit: 50,
-          limitStart: 0,
-        );
-      } catch (error) {
-        resourceError = error;
-      }
-    }
-
-    if (!state.isSalesUserRole) {
-      try {
-        return await state.frappeService.fetchReportView(
-          'Promo Request',
-          fields: fields,
-          filters: filters,
-          orderBy: 'modified desc',
-          limit: 50,
-          limitStart: 0,
-        );
-      } catch (error) {
-        reportError = error;
-      }
-    }
-
-    if (!state.isSalesUserRole && _isFieldShapeError(reportError)) {
-      try {
-        return await state.frappeService.fetchReportView(
-          'Promo Request',
-          fields: baseFields,
-          filters: filters,
-          orderBy: 'modified desc',
-          limit: 50,
-          limitStart: 0,
-        );
-      } catch (error) {
-        reportError = error;
-      }
-    }
-
-    throw Exception(_promoAccessDiagnostic(state, resourceError, reportError));
-  }
-
-  String _promoAccessDiagnostic(
-    AppState state,
-    Object? resourceError,
-    Object? reportError,
-  ) {
-    final user = state.currentUser?.trim();
-    final site = state.selectedSiteName.trim().isNotEmpty
-        ? state.selectedSiteName.trim()
-        : state.selectedSiteBaseUrl.trim();
-    final identity = [
-      if (site.isNotEmpty) 'site: $site',
-      if (user?.isNotEmpty == true) 'user: $user',
-      'role: ${state.userRole}',
-      if (state.currentSalesPerson?.trim().isNotEmpty == true)
-        'sales person: ${state.currentSalesPerson!.trim()}',
-    ].join(', ');
-
-    return 'Gagal membaca Promo Request ($identity). '
-        'Pastikan DocType Promo Request sudah migrate di site aktif, role user punya Read/Create/Write, dan User terhubung ke Sales Person. '
-        'Resource: ${_cleanPromoError(resourceError)}. '
-        'ReportView: ${_cleanPromoError(reportError)}.';
-  }
-
-  bool _isFieldShapeError(Object? error) {
-    final message = error.toString().toLowerCase();
-    return message.contains('field') ||
-        message.contains('unknown column') ||
-        message.contains('status') ||
-        message.contains('promo_note') ||
-        message.contains('valid_upto') ||
-        message.contains('request_date');
-  }
-
-  String _cleanPromoError(Object? error) {
-    if (error == null) return '-';
-    final text = error.toString().replaceFirst('Exception: ', '').trim();
-    return text.length > 180 ? '${text.substring(0, 180)}...' : text;
   }
 
   Widget _loadingCard() {
@@ -374,7 +223,6 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
   Widget _requestCard(Map<String, dynamic> row) {
     final name = _text(row['name']);
     final status = _text(row['status'], fallback: 'Pending Approval');
-    final salesPerson = _text(row['sales_person'], fallback: '-');
     final company = _text(row['company'], fallback: '-');
     final target = _target(row, fallback: name);
     final period =
@@ -421,7 +269,6 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
                     children: [
                       _miniChip(Icons.date_range_rounded, period),
                       _miniChip(Icons.business_rounded, company),
-                      _miniChip(Icons.person_rounded, salesPerson),
                     ],
                   ),
                   if (note.isNotEmpty) ...[
@@ -553,7 +400,6 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
                           '${_formatDate(row['valid_from'])} s/d ${_formatDate(row['valid_upto'])}',
                         ),
                         _detailRow('Company', _text(row['company'])),
-                        _detailRow('Sales Person', _text(row['sales_person'])),
                         _detailRow(
                           'Customer Group',
                           _text(row['customer_group'], fallback: '-'),

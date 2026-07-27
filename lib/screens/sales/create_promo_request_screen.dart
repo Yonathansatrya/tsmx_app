@@ -26,10 +26,7 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
   DateTime _validUpto = DateTime.now().add(const Duration(days: 7));
   String? _selectedCompany;
   String? _selectedSalesPerson;
-  List<String> _salesPersonOptions = const [];
-  bool _salesPersonOptionsRequested = false;
-  bool _isLoadingSalesPersons = false;
-  String? _salesPersonLoadError;
+  String? _selectedPriceList;
   bool _isSubmitting = false;
 
   @override
@@ -52,14 +49,11 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
       _selectedCompany = preferredCompany;
     }
     final currentSalesPerson = state.currentSalesPerson?.trim() ?? '';
-    if (state.isSalesUserRole && currentSalesPerson.isNotEmpty) {
+    if (_selectedSalesPerson == null && currentSalesPerson.isNotEmpty) {
       _selectedSalesPerson = currentSalesPerson;
     }
-    if (!state.isSalesUserRole && !_salesPersonOptionsRequested) {
-      _salesPersonOptionsRequested = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _loadSalesPersonOptions(context.read<AppState>());
-      });
+    if (state.isSalesUserRole && currentSalesPerson.isNotEmpty) {
+      _selectedSalesPerson = currentSalesPerson;
     }
 
     return Scaffold(
@@ -111,29 +105,30 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
                               : '-',
                           icon: Icons.person_rounded,
                         )
-                      : _salesPersonField(),
-                  if (_salesPersonLoadError != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _salesPersonLoadError!,
-                      style: const TextStyle(
-                        color: AppColors.danger,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                      : _valuePickerField(
+                          label: 'Sales Person',
+                          value: _selectedSalesPerson,
+                          placeholder: 'Pilih sales person',
+                          icon: Icons.person_rounded,
+                          onTap: _pickSalesPerson,
+                          onClear: () =>
+                              setState(() => _selectedSalesPerson = null),
+                        ),
                   SalesUi.gap(),
-                  _textField(
+                  _linkPickerField(
                     controller: _customerGroupController,
                     label: 'Customer Group',
+                    placeholder: 'Pilih customer group',
                     icon: Icons.groups_rounded,
+                    onTap: _pickCustomerGroup,
                   ),
                   SalesUi.gap(),
-                  _textField(
+                  _linkPickerField(
                     controller: _customerController,
                     label: 'Customer',
+                    placeholder: 'Pilih customer',
                     icon: Icons.storefront_rounded,
+                    onTap: _pickCustomer,
                   ),
                   const SizedBox(height: 8),
                   const Text(
@@ -324,6 +319,7 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
             label: 'Discount Amount',
             icon: Icons.discount_rounded,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            onChanged: (_) => setState(() => _syncPromoRateFromDiscount(item)),
           ),
           SalesUi.gap(),
           _textField(
@@ -432,37 +428,6 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
     );
   }
 
-  Widget _salesPersonField() {
-    return DropdownButtonFormField<String>(
-      initialValue: _salesPersonOptions.contains(_selectedSalesPerson)
-          ? _selectedSalesPerson
-          : null,
-      decoration: _decoration('Sales Person', Icons.person_rounded),
-      isExpanded: true,
-      items: _salesPersonOptions
-          .map(
-            (salesPerson) => DropdownMenuItem(
-              value: salesPerson,
-              child: Text(
-                salesPerson,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          )
-          .toList(),
-      hint: Text(
-        _isLoadingSalesPersons ? 'Memuat sales...' : 'Pilih Sales Person',
-      ),
-      onChanged: _isLoadingSalesPersons
-          ? null
-          : (value) => setState(() => _selectedSalesPerson = value),
-      validator: (value) => value == null || value.trim().isEmpty
-          ? 'Sales Person wajib dipilih'
-          : null,
-    );
-  }
-
   Widget _textField({
     required TextEditingController controller,
     required String label,
@@ -470,12 +435,14 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
     bool isRequired = false,
     TextInputType? keyboardType,
     int maxLines = 1,
+    ValueChanged<String>? onChanged,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
       decoration: _decoration(label, icon),
+      onChanged: onChanged,
       validator: isRequired
           ? (value) => value == null || value.trim().isEmpty
                 ? '$label wajib diisi'
@@ -493,9 +460,80 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
       decoration: _decoration(label, icon),
       child: Text(
         value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           color: AppColors.navy,
           fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _valuePickerField({
+    required String label,
+    required String? value,
+    required String placeholder,
+    required IconData icon,
+    required VoidCallback onTap,
+    required VoidCallback onClear,
+  }) {
+    final text = value?.trim() ?? '';
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: _decoration(label, icon).copyWith(
+          suffixIcon: text.isEmpty
+              ? const Icon(Icons.search_rounded)
+              : IconButton(
+                  tooltip: 'Hapus pilihan',
+                  onPressed: onClear,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+        ),
+        child: Text(
+          text.isEmpty ? placeholder : text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: text.isEmpty ? AppColors.slate : AppColors.navy,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _linkPickerField({
+    required TextEditingController controller,
+    required String label,
+    required String placeholder,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final value = controller.text.trim();
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: _decoration(label, icon).copyWith(
+          suffixIcon: value.isEmpty
+              ? const Icon(Icons.search_rounded)
+              : IconButton(
+                  tooltip: 'Hapus pilihan',
+                  onPressed: () => setState(controller.clear),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+        ),
+        child: Text(
+          value.isEmpty ? placeholder : value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: value.isEmpty ? AppColors.slate : AppColors.navy,
+            fontWeight: FontWeight.w800,
+          ),
         ),
       ),
     );
@@ -600,7 +638,128 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
     setState(() {
       currentItem.priceListName = price?.priceList;
       currentItem.priceListRate = price?.rate;
+      _syncPromoRateFromDiscount(currentItem);
     });
+  }
+
+  Future<void> _pickSalesPerson() async {
+    final picked = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _LinkSearchSheet(
+        state: context.read<AppState>(),
+        title: 'Pilih Sales Person',
+        searchHint: 'Cari sales person',
+        emptyText: 'Sales Person tidak ditemukan',
+        doctype: 'Sales Person',
+        fields: const ['name', 'sales_person_name', 'enabled', 'is_group'],
+        baseFilters: const [
+          ['is_group', '=', 0],
+          ['enabled', '=', 1],
+        ],
+        searchFields: const ['name', 'sales_person_name'],
+        orderBy: 'sales_person_name asc',
+        icon: Icons.person_rounded,
+        titleBuilder: (row) =>
+            _text(row['sales_person_name'], fallback: _text(row['name'])),
+        subtitleBuilder: (row) => _text(row['name']),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _selectedSalesPerson = _text(picked['name']));
+  }
+
+  Future<void> _pickCustomerGroup() async {
+    final picked = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _LinkSearchSheet(
+        state: context.read<AppState>(),
+        title: 'Pilih Customer Group',
+        searchHint: 'Cari customer group',
+        emptyText: 'Customer Group tidak ditemukan',
+        doctype: 'Customer Group',
+        fields: const ['name', 'is_group'],
+        baseFilters: const [
+          ['is_group', '=', 0],
+        ],
+        orderBy: 'name asc',
+        icon: Icons.groups_rounded,
+        titleBuilder: (row) => _text(row['name']),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _customerGroupController.text = _text(picked['name']));
+  }
+
+  Future<void> _pickCustomer() async {
+    final picked = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => _LinkSearchSheet(
+        state: context.read<AppState>(),
+        title: 'Pilih Customer',
+        searchHint: 'Cari nama atau kode customer',
+        emptyText: 'Customer tidak ditemukan',
+        doctype: 'Customer',
+        fields: const ['name', 'customer_name', 'customer_group', 'disabled'],
+        baseFilters: const [
+          ['disabled', '=', 0],
+        ],
+        orderBy: 'customer_name asc',
+        icon: Icons.storefront_rounded,
+        searchFields: const ['name', 'customer_name'],
+        titleBuilder: (row) =>
+            _text(row['customer_name'], fallback: _text(row['name'])),
+        subtitleBuilder: (row) => [
+          _text(row['name']),
+          _text(row['customer_group']),
+        ].where((value) => value.isNotEmpty).join(' - '),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _customerController.text = _text(picked['name']);
+      final group = _text(picked['customer_group']);
+      if (group.isNotEmpty) _customerGroupController.text = group;
+      _selectedPriceList = null;
+    });
+    await _loadCustomerPricingDefaults(_text(picked['name']));
+  }
+
+  Future<void> _loadCustomerPricingDefaults(String customer) async {
+    final normalizedCustomer = customer.trim();
+    if (normalizedCustomer.isEmpty) return;
+    try {
+      final insight = await context.read<AppState>().fetchCustomerSalesInsight(
+        normalizedCustomer,
+        company: _selectedCompany?.trim(),
+      );
+      if (!mounted || _customerController.text.trim() != normalizedCustomer) {
+        return;
+      }
+      setState(() {
+        if (insight.priceList.trim().isNotEmpty) {
+          _selectedPriceList = insight.priceList.trim();
+        }
+        if (insight.customerGroup.trim().isNotEmpty &&
+            _customerGroupController.text.trim().isEmpty) {
+          _customerGroupController.text = insight.customerGroup.trim();
+        }
+      });
+    } catch (_) {}
   }
 
   Future<_ItemPriceResult?> _loadItemPrice(
@@ -609,16 +768,64 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
     required String uom,
   }) async {
     if (itemCode.trim().isEmpty) return null;
+    final customer = _customerController.text.trim();
+    final company = _selectedCompany?.trim() ?? '';
+    final customerGroup = _customerGroupController.text.trim();
+
+    try {
+      final insight = await state.fetchItemSalesInsight(
+        itemCode,
+        customer: customer,
+        company: company,
+        priceList: _selectedPriceList,
+        customerGroup: customerGroup.isNotEmpty ? customerGroup : null,
+        transactionDate: _requestDate,
+      );
+      final rate = insight.priceListRate > 0
+          ? insight.priceListRate
+          : insight.price;
+      if (rate > 0) {
+        _selectedPriceList = insight.priceList.trim().isNotEmpty
+            ? insight.priceList.trim()
+            : _selectedPriceList;
+        return _ItemPriceResult(rate: rate, priceList: insight.priceList);
+      }
+    } catch (_) {
+      // Fallback to Item Price below when pricing API cannot resolve context.
+    }
+
     final rows = await state.frappeService.fetchResource(
       'Item Price',
       fields: const ['price_list_rate', 'price_list', 'uom', 'currency'],
       filters: [
         ['item_code', '=', itemCode],
         ['selling', '=', 1],
+        if (_selectedPriceList?.trim().isNotEmpty == true)
+          ['price_list', '=', _selectedPriceList!.trim()],
       ],
-      orderBy: 'modified desc',
+      orderBy: 'valid_from desc, modified desc',
       limit: 20,
     );
+    if (rows.isEmpty && _selectedPriceList?.trim().isNotEmpty == true) {
+      final fallbackRows = await state.frappeService.fetchResource(
+        'Item Price',
+        fields: const ['price_list_rate', 'price_list', 'uom', 'currency'],
+        filters: [
+          ['item_code', '=', itemCode],
+          ['selling', '=', 1],
+        ],
+        orderBy: 'valid_from desc, modified desc',
+        limit: 20,
+      );
+      return _itemPriceResultFromRows(fallbackRows, uom);
+    }
+    return _itemPriceResultFromRows(rows, uom);
+  }
+
+  _ItemPriceResult? _itemPriceResultFromRows(
+    List<Map<String, dynamic>> rows,
+    String uom,
+  ) {
     if (rows.isEmpty) return null;
     var row = rows.first;
     if (uom.trim().isNotEmpty) {
@@ -629,60 +836,29 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
     }
     final rate = _parseApiNumber(row['price_list_rate']);
     if (rate == null) return null;
-    return _ItemPriceResult(rate: rate, priceList: _text(row['price_list']));
+    final priceList = _text(row['price_list']);
+    if (priceList.isNotEmpty) _selectedPriceList = priceList;
+    return _ItemPriceResult(rate: rate, priceList: priceList);
   }
 
-  Future<void> _loadSalesPersonOptions(AppState state) async {
-    setState(() {
-      _isLoadingSalesPersons = true;
-      _salesPersonLoadError = null;
-    });
-    try {
-      final rows = await state.frappeService.fetchResource(
-        'Sales Person',
-        fields: const ['name', 'sales_person_name', 'enabled'],
-        filters: const [
-          ['enabled', '=', 1],
-          ['is_group', '=', 0],
-        ],
-        orderBy: 'sales_person_name asc',
-        limit: 200,
-      );
-      final values =
-          rows
-              .map((row) => _text(row['name']))
-              .where((name) => name.isNotEmpty)
-              .toSet()
-              .toList()
-            ..sort();
-      if (!mounted) return;
-      setState(() {
-        _salesPersonOptions = values;
-        if (!_salesPersonOptions.contains(_selectedSalesPerson)) {
-          _selectedSalesPerson = null;
-        }
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _salesPersonLoadError =
-            'Gagal memuat Sales Person: ${error.toString().replaceFirst('Exception: ', '')}';
-      });
-    } finally {
-      if (mounted) setState(() => _isLoadingSalesPersons = false);
-    }
+  void _syncPromoRateFromDiscount(_PromoItemForm item) {
+    final priceListRate = item.priceListRate;
+    if (priceListRate == null || priceListRate <= 0) return;
+
+    final discount = _parseNumber(item.discountController.text);
+    if (discount == null || discount <= 0) return;
+
+    final promoRate = priceListRate - discount;
+    item.rateController.text = _formatAmountInput(
+      promoRate > 0 ? promoRate : 0,
+    );
   }
 
   Future<void> _submit() async {
     final valid = _formKey.currentState?.validate() ?? false;
     if (!valid) return;
-    final state = context.read<AppState>();
-    final salesPerson =
-        (state.isSalesUserRole
-                ? state.currentSalesPerson
-                : _selectedSalesPerson)
-            ?.trim();
-    if (salesPerson == null || salesPerson.isEmpty) {
+    final salesPerson = _selectedSalesPerson?.trim() ?? '';
+    if (salesPerson.isEmpty) {
       _showError('Sales Person wajib dipilih.');
       return;
     }
@@ -703,7 +879,16 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
       if (itemCode.isEmpty) continue;
       final discount = _parseNumber(item.discountController.text);
       final rate = _parseNumber(item.rateController.text);
-      if ((discount == null || discount <= 0) && (rate == null || rate <= 0)) {
+      final priceListRate = item.priceListRate;
+      final double? resolvedRate =
+          rate ??
+          (priceListRate == null
+              ? null
+              : (priceListRate - (discount ?? 0) > 0
+                    ? priceListRate - (discount ?? 0)
+                    : 0));
+      if ((discount == null || discount <= 0) &&
+          (resolvedRate == null || resolvedRate <= 0)) {
         _showError('Isi Discount Amount atau Harga Promo untuk setiap item.');
         return;
       }
@@ -711,9 +896,9 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
         PromoRequestItemDraft(
           itemCode: itemCode,
           uom: item.uomController.text,
-          priceListRate: item.priceListRate,
+          priceListRate: priceListRate,
           requestedDiscount: discount,
-          requestedRate: rate,
+          requestedRate: resolvedRate,
         ),
       );
     }
@@ -788,6 +973,11 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
     return 'Rp ${buffer.toString()}';
   }
 
+  String _formatAmountInput(num value) {
+    if (value % 1 == 0) return value.round().toString();
+    return value.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
+  }
+
   String _formatDate(DateTime date) {
     final month = date.month.toString().padLeft(2, '0');
     final day = date.day.toString().padLeft(2, '0');
@@ -821,6 +1011,242 @@ class _ItemPriceResult {
 
   final double rate;
   final String priceList;
+}
+
+class _LinkSearchSheet extends StatefulWidget {
+  const _LinkSearchSheet({
+    required this.state,
+    required this.title,
+    required this.searchHint,
+    required this.emptyText,
+    required this.doctype,
+    required this.fields,
+    required this.icon,
+    required this.titleBuilder,
+    this.subtitleBuilder,
+    this.baseFilters = const [],
+    this.searchFields = const ['name'],
+    this.orderBy = 'modified desc',
+  });
+
+  final AppState state;
+  final String title;
+  final String searchHint;
+  final String emptyText;
+  final String doctype;
+  final List<String> fields;
+  final List<List<dynamic>> baseFilters;
+  final List<String> searchFields;
+  final String orderBy;
+  final IconData icon;
+  final String Function(Map<String, dynamic> row) titleBuilder;
+  final String Function(Map<String, dynamic> row)? subtitleBuilder;
+
+  @override
+  State<_LinkSearchSheet> createState() => _LinkSearchSheetState();
+}
+
+class _LinkSearchSheetState extends State<_LinkSearchSheet> {
+  final _searchController = TextEditingController();
+  bool _isLoading = true;
+  String? _error;
+  List<Map<String, dynamic>> _rows = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRows();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 10,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.72,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: const TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: widget.searchHint,
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  filled: true,
+                  fillColor: AppColors.surfaceMuted,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (_) => _loadRows(),
+              ),
+              const SizedBox(height: 12),
+              Expanded(child: _content()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _content() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+    if (_error != null) {
+      return Center(
+        child: Text(
+          _error!,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: AppColors.danger,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+    if (_rows.isEmpty) {
+      return Center(
+        child: Text(
+          widget.emptyText,
+          style: const TextStyle(
+            color: AppColors.slate,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
+    }
+    return ListView.separated(
+      itemCount: _rows.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final row = _rows[index];
+        final title = widget.titleBuilder(row);
+        final subtitle = widget.subtitleBuilder?.call(row) ?? '';
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: AppColors.softGreen,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(widget.icon, color: AppColors.primary),
+          ),
+          title: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          subtitle: subtitle.isEmpty
+              ? null
+              : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+          onTap: () => Navigator.of(context).pop(row),
+        );
+      },
+    );
+  }
+
+  Future<void> _loadRows() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final query = _searchController.text.trim();
+      final filters = <List<dynamic>>[
+        ...widget.baseFilters,
+        if (query.isNotEmpty && widget.searchFields.length == 1)
+          [widget.searchFields.first, 'like', '%$query%'],
+      ];
+      final orFilters = query.isEmpty || widget.searchFields.length <= 1
+          ? null
+          : widget.searchFields
+                .map<List<dynamic>>((field) => [field, 'like', '%$query%'])
+                .toList();
+      final rows = await widget.state.frappeService.fetchResource(
+        widget.doctype,
+        fields: widget.fields,
+        filters: filters,
+        orFilters: orFilters,
+        orderBy: widget.orderBy,
+        limit: 50,
+      );
+      if (!mounted) return;
+      setState(() => _rows = rows);
+    } catch (error) {
+      try {
+        final query = _searchController.text.trim();
+        final rows = await widget.state.frappeService.fetchResource(
+          widget.doctype,
+          fields: const ['name'],
+          filters: query.isEmpty
+              ? null
+              : [
+                  ['name', 'like', '%$query%'],
+                ],
+          orderBy: 'name asc',
+          limit: 50,
+        );
+        if (!mounted) return;
+        setState(() => _rows = rows);
+      } catch (_) {
+        if (!mounted) return;
+        setState(
+          () => _error = error.toString().replaceFirst('Exception: ', ''),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 }
 
 class _ItemSearchSheet extends StatefulWidget {
@@ -992,15 +1418,46 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
       final query = _searchController.text.trim();
       final filters = <List<dynamic>>[
         ['disabled', '=', 0],
-        if (query.isNotEmpty) ['name', 'like', '%$query%'],
       ];
-      final rows = await widget.state.frappeService.fetchResource(
-        'Item',
-        fields: const ['name', 'item_name', 'stock_uom'],
-        filters: filters,
-        orderBy: 'modified desc',
-        limit: 50,
-      );
+      Future<List<Map<String, dynamic>>> fetch({
+        List<List<dynamic>>? orFilters,
+        List<List<dynamic>>? extraFilters,
+      }) {
+        return widget.state.frappeService.fetchResource(
+          'Item',
+          fields: const [
+            'name',
+            'item_name',
+            'stock_uom',
+            'description',
+            'item_group',
+          ],
+          filters: [...filters, ...?extraFilters],
+          orFilters: orFilters,
+          orderBy: 'item_name asc',
+          limit: 50,
+        );
+      }
+
+      List<Map<String, dynamic>> rows;
+      if (query.isEmpty) {
+        rows = await fetch();
+      } else {
+        try {
+          rows = await fetch(
+            orFilters: [
+              ['name', 'like', '%$query%'],
+              ['item_name', 'like', '%$query%'],
+            ],
+          );
+        } catch (_) {
+          rows = await fetch(
+            extraFilters: [
+              ['name', 'like', '%$query%'],
+            ],
+          );
+        }
+      }
       if (!mounted) return;
       setState(() => _items = rows);
     } catch (error) {

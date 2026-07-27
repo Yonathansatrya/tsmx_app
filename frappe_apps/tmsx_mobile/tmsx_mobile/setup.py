@@ -221,6 +221,7 @@ def after_install():
     setup_mobile_roles()
     setup_mobile_custom_fields()
     setup_noo_request_doctype()
+    setup_promo_request_doctype()
     setup_mobile_permissions()
     setup_mobile_settings()
     setup_mobile_workspace()
@@ -342,6 +343,35 @@ def setup_noo_request_doctype():
         frappe.db.commit()
 
 
+def setup_promo_request_doctype():
+    """Keep Promo Request compatible with the mobile create flow."""
+    changed = False
+
+    if frappe.db.exists("DocType", "Promo Request"):
+        doc = frappe.get_doc("DocType", "Promo Request")
+        for field in doc.fields or []:
+            if field.fieldname in {"sales_person", "amended_from"} and getattr(field, "reqd", 0):
+                field.reqd = 0
+                changed = True
+        if changed:
+            doc.save(ignore_permissions=True)
+            frappe.clear_cache(doctype="Promo Request")
+
+    item_changed = False
+    if frappe.db.exists("DocType", "Promo Request Item"):
+        item_doc = frappe.get_doc("DocType", "Promo Request Item")
+        for field in item_doc.fields or []:
+            if field.fieldname == "requested_rate" and getattr(field, "reqd", 0):
+                field.reqd = 0
+                item_changed = True
+        if item_changed:
+            item_doc.save(ignore_permissions=True)
+            frappe.clear_cache(doctype="Promo Request Item")
+
+    if changed or item_changed:
+        frappe.db.commit()
+
+
 MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
     "Sales": {
         "Company": {"read": 1, "select": 1},
@@ -365,6 +395,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
         "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1},
         "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Promo Request Item": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
     "Sales User": {
         "Company": {"read": 1, "select": 1},
@@ -388,6 +420,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
         "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1},
         "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Promo Request Item": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
     "Sales Manager": {
         "Company": {"read": 1, "select": 1},
@@ -405,6 +439,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
         "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
         "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
+        "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
+        "Promo Request Item": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
     "Sales Admin": {
         "Company": {"read": 1, "select": 1},
@@ -422,6 +458,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
         "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
         "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+        "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+        "Promo Request Item": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
     },
     "Admin Sales": {
         "Company": {"read": 1, "select": 1},
@@ -439,6 +477,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
         "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
         "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+        "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+        "Promo Request Item": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
     },
     "Purchase User": {
         "Company": {"read": 1, "select": 1},
@@ -592,6 +632,8 @@ _PRIVILEGED_FINANCE_PERMISSIONS = {
 _PRIVILEGED_OPERATION_PERMISSIONS = {
     "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
     "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+    "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+    "Promo Request Item": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
     "Delivery Activity Log": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
     "Delivery Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
 }

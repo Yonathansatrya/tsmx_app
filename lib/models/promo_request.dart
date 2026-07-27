@@ -64,8 +64,16 @@ class PromoRequestItemDraft {
     if (_hasValue(uom)) 'uom': uom!.trim(),
     if (priceListRate != null) 'price_list_rate': priceListRate,
     if (requestedDiscount != null) 'requested_discount': requestedDiscount,
-    if (requestedRate != null) 'requested_rate': requestedRate,
+    'requested_rate': requestedRate ?? _rateAfterDiscount(),
   };
+
+  double _rateAfterDiscount() {
+    final baseRate = priceListRate ?? 0;
+    final discount = requestedDiscount ?? 0;
+    if (baseRate <= 0) return 0;
+    final rate = baseRate - discount;
+    return rate > 0 ? rate : 0;
+  }
 
   static bool _hasValue(String? value) =>
       value != null && value.trim().isNotEmpty;
