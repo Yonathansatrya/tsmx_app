@@ -83,7 +83,9 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     try {
       nextCustomers = await state.fetchSalesCustomers();
     } catch (e) {
-      nextError = _friendlyError(e);
+      if (widget.shouldShowCheckIn) {
+        nextError = _friendlyError(e);
+      }
     }
 
     try {
@@ -469,7 +471,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              visit.customer,
+              _visitCustomerLabel(visit),
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 8),
@@ -506,7 +508,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
         child: Icon(Icons.location_on_rounded),
       ),
       title: Text(
-        visit.customer,
+        _visitCustomerLabel(visit),
         style: const TextStyle(fontWeight: FontWeight.w900),
       ),
       subtitle: const Text('Kunjungan aktif. Selesaikan dari dashboard Sales.'),
@@ -518,35 +520,161 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     ),
   );
 
-  Widget _visitTile(SalesVisit visit) => Card(
-    child: ListTile(
-      leading: const CircleAvatar(
-        backgroundColor: AppColors.softGreen,
-        foregroundColor: AppColors.primary,
-        child: Icon(Icons.storefront_outlined),
+  Widget _visitTile(SalesVisit visit) {
+    final customerLabel = _visitCustomerLabel(visit);
+    final customerCode = visit.customer.trim();
+    final timeText = _visitTimeText(visit);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _showVisitDetail(visit),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const CircleAvatar(
+                radius: 22,
+                backgroundColor: AppColors.softGreen,
+                foregroundColor: AppColors.primary,
+                child: Icon(Icons.storefront_outlined),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      customerLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (customerCode.isNotEmpty &&
+                        customerCode != customerLabel) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        customerCode,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    if (visit.salesPerson.trim().isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        visit.salesPerson,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    if (timeText.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        timeText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _visitStatusPill(visit.status),
+                  const SizedBox(height: 8),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.slate,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
-      title: Text(
-        visit.customer,
-        style: const TextStyle(fontWeight: FontWeight.w900),
+    );
+  }
+
+  String _visitCustomerLabel(SalesVisit visit) {
+    final directName = visit.customerName.trim();
+    final customerCode = visit.customer.trim();
+    if (directName.isNotEmpty && directName != customerCode) {
+      return directName;
+    }
+    for (final option in customers) {
+      if (option.id == customerCode && option.name.trim().isNotEmpty) {
+        return option.name.trim();
+      }
+    }
+    if (directName.isNotEmpty) return directName;
+    if (customerCode.isNotEmpty) return customerCode;
+    return visit.id;
+  }
+
+  String _visitTimeText(SalesVisit visit) {
+    final checkIn = visit.checkInTime.trim();
+    final checkOut = visit.checkOutTime.trim();
+    if (checkIn.isEmpty && checkOut.isEmpty) return '';
+    if (checkOut.isEmpty) return 'Check-in $checkIn';
+    if (checkIn.isEmpty) return 'Check-out $checkOut';
+    return '$checkIn - $checkOut';
+  }
+
+  Widget _visitStatusPill(String status) {
+    final normalized = status.trim().toLowerCase();
+    final color = normalized.contains('cancel')
+        ? AppColors.danger
+        : normalized.contains('out') || normalized.contains('complete')
+        ? AppColors.success
+        : normalized.contains('travel')
+        ? AppColors.warning
+        : AppColors.primary;
+    final label = status.trim().isEmpty ? 'Draft' : status.trim();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
       ),
-      subtitle: Text(
-        '${visit.checkInTime.isEmpty ? '-' : visit.checkInTime}'
-        '${visit.checkOutTime.isEmpty ? '' : '\nCheckout: ${visit.checkOutTime}'}'
-        '${visit.salesPerson.isEmpty ? '' : '\n${visit.salesPerson}'}',
-      ),
-      isThreeLine: true,
-      trailing: Text(
-        visit.status,
-        style: const TextStyle(
-          color: AppColors.primary,
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
           fontWeight: FontWeight.w900,
         ),
       ),
-      onTap: () => _showVisitDetail(visit),
-    ),
-  );
+    );
+  }
 
   void _showVisitDetail(SalesVisit visit) {
+    final customerLabel = _visitCustomerLabel(visit);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -578,7 +706,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
                   ),
                   const SizedBox(height: 16),
                   CollectionSectionHeader(
-                    title: visit.customer.isEmpty ? visit.id : visit.customer,
+                    title: customerLabel,
                     subtitle: visit.id,
                     icon: Icons.storefront_outlined,
                   ),
@@ -589,6 +717,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
                       child: Column(
                         children: [
                           _detailRow('Status', visit.status),
+                          _detailRow('Customer ID', visit.customer),
                           _detailRow('Sales Person', visit.salesPerson),
                           _detailRow('Check-in', visit.checkInTime),
                           _detailRow('Check-out', visit.checkOutTime),

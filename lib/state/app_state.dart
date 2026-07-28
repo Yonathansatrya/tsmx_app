@@ -2463,11 +2463,41 @@ class AppState with ChangeNotifier {
   }
 
   Future<List<SalesVisit>> fetchSalesVisits() async {
-    final rows = await _fetchAllResourcePages(
-      doctype: 'Sales Visit',
-      fields: const [
+    final filters = _shouldScopeSalesData
+        ? [
+            ['owner', '=', _currentUser ?? '__unmapped_sales_user__'],
+          ]
+        : null;
+    final rows = await _fetchSalesVisitRows(
+      filters: filters,
+      limit: 300,
+      orderBy: 'check_in_time desc, name desc',
+    );
+    final visits = rows.map(SalesVisit.fromJson).toList();
+    if (_shouldScopeSalesData) {
+      _activeSalesVisit = null;
+      for (final visit in visits) {
+        final status = visit.status.toLowerCase();
+        if (status == 'checked in') {
+          _activeSalesVisit = visit;
+          break;
+        }
+      }
+    }
+    return visits;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchSalesVisitRows({
+    required List<List<dynamic>>? filters,
+    required int limit,
+    required String orderBy,
+  }) async {
+    Object? lastError;
+    for (final fieldSet in <List<String>>[
+      const [
         'name',
         'customer',
+        'customer_name',
         'check_in_time',
         'check_out_time',
         'status',
@@ -2483,26 +2513,83 @@ class AppState with ChangeNotifier {
         'check_out_longitude',
         'check_in_distance',
       ],
-      filters: _shouldScopeSalesData
-          ? [
-              ['owner', '=', _currentUser ?? '__unmapped_sales_user__'],
-            ]
-          : null,
-      orderBy: 'check_in_time desc, name desc',
-      maxRows: 300,
-    );
-    final visits = rows.map(SalesVisit.fromJson).toList();
-    if (_shouldScopeSalesData) {
-      _activeSalesVisit = null;
-      for (final visit in visits) {
-        final status = visit.status.toLowerCase();
-        if (status == 'checked in') {
-          _activeSalesVisit = visit;
-          break;
+      const [
+        'name',
+        'customer',
+        'customer_name',
+        'check_in_time',
+        'check_out_time',
+        'status',
+        'sales_person',
+      ],
+      const ['name', 'customer', 'customer_name', 'status', 'modified'],
+      const ['name', 'modified'],
+      const ['name'],
+    ]) {
+      for (final scopedFilters in <List<List<dynamic>>?>[filters, null]) {
+        try {
+          return await _fetchSalesVisitRowsWithFallback(
+            fieldSet,
+            filters: scopedFilters,
+            limit: limit,
+            orderBy: orderBy,
+          );
+        } catch (error) {
+          lastError = error;
+          if (!_looksLikeVisitListIssue(error)) rethrow;
         }
       }
     }
-    return visits;
+    throw lastError ?? Exception('Gagal membaca Sales Visit.');
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchSalesVisitRowsWithFallback(
+    List<String> fields, {
+    required List<List<dynamic>>? filters,
+    required int limit,
+    required String orderBy,
+  }) async {
+    Object? resourceError;
+    try {
+      return await _fetchAllResourcePages(
+        doctype: 'Sales Visit',
+        fields: fields,
+        filters: filters,
+        orderBy: orderBy,
+        maxRows: limit,
+      );
+    } catch (error) {
+      resourceError = error;
+      if (!_looksLikeVisitListIssue(error)) rethrow;
+    }
+
+    try {
+      return await _frappeService.fetchReportView(
+        'Sales Visit',
+        fields: fields,
+        filters: filters,
+        orderBy: orderBy,
+        limit: limit,
+        limitStart: 0,
+      );
+    } catch (reportError) {
+      throw Exception(
+        'Resource: ${_cleanShortFrappeError(resourceError)}. '
+        'ReportView: ${_cleanShortFrappeError(reportError)}',
+      );
+    }
+  }
+
+  bool _looksLikeVisitListIssue(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('akses erpnext tidak diizinkan') ||
+        message.contains('permissionerror') ||
+        message.contains('not permitted') ||
+        message.contains('field not permitted') ||
+        message.contains('no permitted fields') ||
+        message.contains('unknown column') ||
+        message.contains('order_by') ||
+        message.contains('does not exist');
   }
 
   Future<CustomerVisitLocation> fetchCustomerVisitLocation(String customer) {

@@ -264,6 +264,7 @@ class SalesInvoicePaymentAllocation {
 class SalesVisit {
   final String id;
   final String customer;
+  final String customerName;
   final String salesPerson;
   final String checkInTime;
   final String checkOutTime;
@@ -284,6 +285,7 @@ class SalesVisit {
   const SalesVisit({
     required this.id,
     required this.customer,
+    this.customerName = '',
     required this.salesPerson,
     required this.checkInTime,
     this.checkOutTime = '',
@@ -303,9 +305,11 @@ class SalesVisit {
   });
 
   factory SalesVisit.fromJson(Map<String, dynamic> json) {
+    final customer = json['customer']?.toString() ?? '';
     return SalesVisit(
       id: json['name']?.toString() ?? '',
-      customer: json['customer']?.toString() ?? '',
+      customer: customer,
+      customerName: json['customer_name']?.toString() ?? customer,
       salesPerson: json['sales_person']?.toString() ?? '',
       checkInTime: json['check_in_time']?.toString() ?? '',
       checkOutTime: json['check_out_time']?.toString() ?? '',
