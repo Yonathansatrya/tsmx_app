@@ -40,6 +40,7 @@ import '../services/domains/sales_order_service.dart';
 import '../services/erp_services.dart';
 import '../services/frappe_service.dart';
 import '../services/local_app_database.dart';
+import '../services/native_notification_service.dart';
 import '../services/sales_visit_location_service.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/num_parse.dart';
@@ -644,6 +645,8 @@ class AppState with ChangeNotifier {
   static const Duration _sellingTrendRemoteTimeout = Duration(seconds: 45);
   static const String _prefsClearedNotificationsKey = 'cleared_notifications';
   static const String _prefsReadNotificationsKey = 'read_notifications';
+  static const String _prefsApprovalNotificationCountKey =
+      'approval_notification_count';
 
   static final Map<String, _LocalFrappeSite> _localSiteCodes = {
     for (final site in AppConfig.localFrappeSites)
@@ -1346,13 +1349,40 @@ class AppState with ChangeNotifier {
     _notificationPollTimer?.cancel();
     _notificationPollTimer = Timer.periodic(
       _notificationPollInterval,
-      (_) => refreshNotifications(silent: true),
+      (_) => _refreshNotificationTick(),
     );
+    unawaited(_refreshNotificationTick());
   }
 
   void _stopNotificationPolling() {
     _notificationPollTimer?.cancel();
     _notificationPollTimer = null;
+  }
+
+  Future<void> _refreshNotificationTick() async {
+    await refreshNotifications(silent: true);
+    await _refreshApprovalTodoSystemNotification();
+  }
+
+  Future<void> _refreshApprovalTodoSystemNotification() async {
+    if (!_isAuthenticated || _currentUser == null || !canUseApprovals) return;
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final previous = sp.getInt(_approvalNotificationCountPrefsKey);
+      final todos = await fetchApprovalTodos();
+      final count = todos.length;
+      await sp.setInt(_approvalNotificationCountPrefsKey, count);
+      if (count <= 0) return;
+      if (previous != null && count <= previous) return;
+
+      await NativeNotificationService.instance.requestPermission();
+      await NativeNotificationService.instance.showApprovalTodoNotification(
+        count: count,
+        siteName: selectedSiteName,
+      );
+    } catch (_) {
+      // System notifications are best-effort and must not break polling.
+    }
   }
 
   Future<void> refreshNotifications({bool silent = false}) async {
@@ -1557,6 +1587,12 @@ class AppState with ChangeNotifier {
     final site = _frappeService.baseUrl.trim();
     final user = _currentUser?.trim() ?? '';
     return '$_prefsReadNotificationsKey::$site::$user';
+  }
+
+  String get _approvalNotificationCountPrefsKey {
+    final site = _frappeService.baseUrl.trim();
+    final user = _currentUser?.trim() ?? '';
+    return '$_prefsApprovalNotificationCountKey::$site::$user';
   }
 
   Future<Set<String>> _loadClearedNotificationIds([
