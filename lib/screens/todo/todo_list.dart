@@ -126,7 +126,15 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
       ),
     );
     if (changed == true && mounted) {
-      await _load(silent: true);
+      setState(() {
+        _rows = _rows
+            .where(
+              (row) =>
+                  row.doctype != approval.doctype || row.name != approval.name,
+            )
+            .toList();
+      });
+      unawaited(_load(silent: true));
     }
   }
 
@@ -1230,6 +1238,7 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
         name: widget.approval.name,
         action: action,
         reason: reason,
+        refreshAfterApply: false,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2430,6 +2439,7 @@ class _SalesOrderApprovalDetailPageState
         approval: widget.approval,
         action: action,
         reason: decision.reason,
+        refreshAfterApply: false,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

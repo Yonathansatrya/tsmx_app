@@ -91,6 +91,11 @@ class LocalAppDatabase {
     );
   }
 
+  Future<void> delete(String key) async {
+    final db = await _db;
+    await db.delete(_cacheTable, where: 'cache_key = ?', whereArgs: [key]);
+  }
+
   Future<void> clear() async {
     final db = await _db;
     await db.delete(_cacheTable);

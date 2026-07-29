@@ -16,13 +16,13 @@ void main() {
         Provider.value(value: services),
         ChangeNotifierProvider(create: (_) => AppState(services: services)),
       ],
-      child: const TMSXLogisticsApp(),
+      child: const TmsxHubApp(),
     ),
   );
 }
 
-class TMSXLogisticsApp extends StatelessWidget {
-  const TMSXLogisticsApp({super.key});
+class TmsxHubApp extends StatelessWidget {
+  const TmsxHubApp({super.key});
 
   @override
   Widget build(BuildContext context) {

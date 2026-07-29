@@ -639,52 +639,15 @@ class AppState with ChangeNotifier {
   static const String _prefsFrappeSiteHistoryKey = 'frappe_site_history';
   static const String _prefsSummaryCacheKey = 'erp_summary_cache';
   static const String _sellingTrendCachePrefix = 'selling_trend';
+  static const String _documentDbCachePrefix = 'document_cache';
   static const Duration _sellingTrendCacheTtl = Duration(hours: 12);
   static const Duration _sellingTrendRemoteTimeout = Duration(seconds: 45);
   static const String _prefsClearedNotificationsKey = 'cleared_notifications';
   static const String _prefsReadNotificationsKey = 'read_notifications';
 
-  static const Map<String, _LocalFrappeSite> _hardcodedSiteCodes = {
-    'TABI': _LocalFrappeSite(
-      name: 'Tabi',
-      baseUrl: 'http://103.27.206.41:8003',
-    ),
-    'ATIS': _LocalFrappeSite(
-      name: 'ATIS',
-      baseUrl: 'http://103.27.206.41:8011',
-    ),
-    'PAJAK': _LocalFrappeSite(
-      name: 'Pajak',
-      baseUrl: 'http://103.27.206.41:8010',
-    ),
-    'PLANTATION': _LocalFrappeSite(
-      name: 'Plantation',
-      baseUrl: 'http://103.27.206.41:8013',
-    ),
-    'TMSX': _LocalFrappeSite(
-      name: 'TMSX',
-      baseUrl: 'https://jakarta.willshine.id',
-    ),
-    'SMS': _LocalFrappeSite(
-      name: 'SABANG MAKMUR SENTOSA',
-      baseUrl: 'http://103.27.206.41:8001',
-    ),
-    'GREENHOUSE': _LocalFrappeSite(
-      name: 'Greenhouse Cisauk',
-      baseUrl: 'https://ghcisauk.willshine.id',
-    ),
-    'LAHATTS': _LocalFrappeSite(
-      name: 'Lahat Tani Sejahtera',
-      baseUrl: 'http://103.27.206.41:8015',
-    ),
-    'HOLTI': _LocalFrappeSite(
-      name: 'Holti',
-      baseUrl: 'http://103.27.206.41:8016',
-    ),
-    'EXAMPLE': _LocalFrappeSite(
-      name: 'Example Site',
-      baseUrl: 'http://172.30.218.103:8000',
-    ),
+  static final Map<String, _LocalFrappeSite> _localSiteCodes = {
+    for (final site in AppConfig.localFrappeSites)
+      site.code: _LocalFrappeSite(name: site.name, baseUrl: site.baseUrl),
   };
 
   final ErpServices services;
@@ -716,7 +679,7 @@ class AppState with ChangeNotifier {
   FrappeService get frappeService => _frappeService;
 
   Map<String, _LocalFrappeSite> get _siteCatalog {
-    final sites = <String, _LocalFrappeSite>{..._hardcodedSiteCodes};
+    final sites = <String, _LocalFrappeSite>{..._localSiteCodes};
     final defaultUrl = AppConfig.optionalFrappeBaseUrl;
     if (defaultUrl.isNotEmpty) {
       sites.putIfAbsent(
@@ -1119,6 +1082,7 @@ class AppState with ChangeNotifier {
       await sp.remove(_summaryCachePrefsKey);
       await sp.remove(_prefsSummaryCacheKey);
       await LocalAppDatabase.instance.deleteByPrefix(_sellingTrendCachePrefix);
+      await LocalAppDatabase.instance.deleteByPrefix(_documentDbCachePrefix);
     } catch (_) {}
   }
 
@@ -1150,6 +1114,7 @@ class AppState with ChangeNotifier {
       }
     }
     await LocalAppDatabase.instance.deleteByPrefix(_sellingTrendCachePrefix);
+    await LocalAppDatabase.instance.deleteByPrefix(_documentDbCachePrefix);
 
     if (keepSiteSelection && cfg != null) {
       await sp.setString(_prefsFrappeConfigKey, jsonEncode(cfg));
@@ -3384,6 +3349,7 @@ class AppState with ChangeNotifier {
       notificationTitle: 'Tracking driver aktif',
       notificationText: '$appDisplayName mencatat lokasi driver tiap 5 menit.',
       queueFailedPoints: false,
+      queueScope: '${_frappeService.baseUrl.trim()}::${_currentUser ?? ''}',
     );
     return firstPoint;
   }
@@ -7601,29 +7567,15 @@ class AppState with ChangeNotifier {
       maxRows: 200,
     );
     final approvals = <SalesOrderApproval>[];
+    final actionsByName = await _fetchWorkflowActionsForRows(
+      doctype: 'Sales Order',
+      rows: rows,
+    );
     for (final row in rows) {
-      try {
-        final doc = await _frappeService.fetchDocument(
-          'Sales Order',
-          row['name']?.toString() ?? '',
-        );
-        final rawTransitions = await _frappeService.callMethod(
-          'frappe.model.workflow.get_transitions',
-          args: {'doc': doc},
-        );
-        final actions = rawTransitions is List
-            ? rawTransitions
-                  .whereType<Map>()
-                  .map((transition) => transition['action']?.toString() ?? '')
-                  .where((action) => action.isNotEmpty)
-                  .toSet()
-                  .toList()
-            : <String>[];
-        if (actions.isNotEmpty) {
-          approvals.add(SalesOrderApproval.fromJson(row, actions: actions));
-        }
-      } catch (_) {
-        // A document without an action for the current role is not a todo.
+      final name = row['name']?.toString() ?? '';
+      final actions = actionsByName[name] ?? const <String>[];
+      if (actions.isNotEmpty) {
+        approvals.add(SalesOrderApproval.fromJson(row, actions: actions));
       }
     }
     if (_salesOrderApprovalTodoCount != approvals.length) {
@@ -7729,21 +7681,18 @@ class AppState with ChangeNotifier {
         // one document type, keep showing approval items from the allowed types.
         continue;
       }
+      final actionsByName = await _fetchWorkflowActionsForRows(
+        doctype: config.doctype,
+        rows: rows,
+      );
       for (final row in rows) {
         final name = row['name']?.toString() ?? '';
         if (name.isEmpty) continue;
-        try {
-          final actions = await fetchDocumentWorkflowActions(
-            doctype: config.doctype,
-            name: name,
-          );
-          if (actions.isEmpty) continue;
-          todos.add(
-            ErpApprovalTodo.fromJson(config.doctype, row, actions: actions),
-          );
-        } catch (_) {
-          // Documents without workflow action for the current role are ignored.
-        }
+        final actions = actionsByName[name] ?? const <String>[];
+        if (actions.isEmpty) continue;
+        todos.add(
+          ErpApprovalTodo.fromJson(config.doctype, row, actions: actions),
+        );
       }
     }
 
@@ -7818,6 +7767,7 @@ class AppState with ChangeNotifier {
     required SalesOrderApproval approval,
     required String action,
     String reason = '',
+    bool refreshAfterApply = true,
   }) async {
     await _frappeService.ensureLoggedIn();
     final normalizedAction = action.trim();
@@ -7853,10 +7803,16 @@ class AppState with ChangeNotifier {
         'comment_by': _currentUser ?? '',
       },
     );
-    await Future.wait([
+    await _deleteCachedDocument('Sales Order', approval.name);
+    final refresh = Future.wait([
       refreshSalesOrders(),
       refreshNotifications(silent: true),
     ]);
+    if (refreshAfterApply) {
+      await refresh;
+    } else {
+      unawaited(refresh.then<void>((_) {}).catchError((_) {}));
+    }
   }
 
   Future<List<String>> fetchDocumentWorkflowActions({
@@ -7864,11 +7820,63 @@ class AppState with ChangeNotifier {
     required String name,
   }) async {
     await _frappeService.ensureLoggedIn();
-    final doc = await _frappeService.fetchDocument(doctype, name);
+    final doc = await _fetchCachedDocument(doctype, name);
+    return _fetchWorkflowActionsForDocument(doc);
+  }
+
+  Future<Map<String, List<String>>> _fetchWorkflowActionsForRows({
+    required String doctype,
+    required List<Map<String, dynamic>> rows,
+    int batchSize = 8,
+  }) async {
+    final names = rows
+        .map((row) => row['name']?.toString() ?? '')
+        .where((name) => name.isNotEmpty)
+        .toList();
+    final documents = await _fetchDocumentsInBatches(
+      doctype,
+      names,
+      batchSize: batchSize,
+    );
+    final entries = documents.entries.toList();
+    final actionsByName = <String, List<String>>{};
+    for (var start = 0; start < entries.length; start += batchSize) {
+      final end = start + batchSize > entries.length
+          ? entries.length
+          : start + batchSize;
+      final batch = entries.sublist(start, end);
+      final results = await Future.wait(
+        batch.map((entry) async {
+          try {
+            return (
+              name: entry.key,
+              actions: await _fetchWorkflowActionsForDocument(entry.value),
+            );
+          } catch (_) {
+            return (name: entry.key, actions: const <String>[]);
+          }
+        }),
+      );
+      for (final result in results) {
+        if (result.actions.isNotEmpty) {
+          actionsByName[result.name] = result.actions;
+        }
+      }
+    }
+    return actionsByName;
+  }
+
+  Future<List<String>> _fetchWorkflowActionsForDocument(
+    Map<String, dynamic> doc,
+  ) async {
     final rawTransitions = await _frappeService.callMethod(
       'frappe.model.workflow.get_transitions',
       args: {'doc': doc},
     );
+    return _parseWorkflowActions(rawTransitions);
+  }
+
+  static List<String> _parseWorkflowActions(dynamic rawTransitions) {
     return rawTransitions is List
         ? rawTransitions
               .whereType<Map>()
@@ -7884,6 +7892,7 @@ class AppState with ChangeNotifier {
     required String name,
     required String action,
     String reason = '',
+    bool refreshAfterApply = true,
   }) async {
     await _frappeService.ensureLoggedIn();
     final normalizedAction = action.trim();
@@ -7917,7 +7926,8 @@ class AppState with ChangeNotifier {
         'comment_by': _currentUser ?? '',
       },
     );
-    await Future.wait([
+    await _deleteCachedDocument(doctype, name);
+    final refresh = Future.wait([
       switch (doctype) {
         'Purchase Order' => refreshPurchaseOrders(),
         'Purchase Receipt' => refreshPurchaseReceipts(),
@@ -7928,6 +7938,11 @@ class AppState with ChangeNotifier {
       },
       refreshNotifications(silent: true),
     ]);
+    if (refreshAfterApply) {
+      await refresh;
+    } else {
+      unawaited(refresh.then<void>((_) {}).catchError((_) {}));
+    }
   }
 
   Future<void> refreshSalesOrders() => fetchSalesOrdersFromFrappe();
@@ -8628,15 +8643,21 @@ class AppState with ChangeNotifier {
     String doctype,
     String name,
   ) async {
-    final key = '$doctype::$name';
+    final key = _documentCacheKey(doctype, name);
     final cached = _documentCache[key];
     if (cached != null && cached.isFresh) return cached.document;
 
+    final stored = await LocalAppDatabase.instance.readJson(key);
+    if (stored != null) {
+      _documentCache[key] = _CachedDocument(
+        storedAt: DateTime.now(),
+        document: stored,
+      );
+      return stored;
+    }
+
     final document = await _frappeService.fetchDocument(doctype, name);
-    _documentCache[key] = _CachedDocument(
-      storedAt: DateTime.now(),
-      document: document,
-    );
+    await _storeCachedDocument(doctype, name, document);
     return document;
   }
 
@@ -8649,12 +8670,21 @@ class AppState with ChangeNotifier {
     final documents = <String, Map<String, dynamic>>{};
     final missingNames = <String>[];
     for (final name in uniqueNames) {
-      final key = '$doctype::$name';
+      final key = _documentCacheKey(doctype, name);
       final cached = _documentCache[key];
       if (cached != null && cached.isFresh) {
         documents[name] = cached.document;
       } else {
-        missingNames.add(name);
+        final stored = await LocalAppDatabase.instance.readJson(key);
+        if (stored != null) {
+          documents[name] = stored;
+          _documentCache[key] = _CachedDocument(
+            storedAt: DateTime.now(),
+            document: stored,
+          );
+        } else {
+          missingNames.add(name);
+        }
       }
     }
     for (var start = 0; start < missingNames.length; start += batchSize) {
@@ -8678,14 +8708,46 @@ class AppState with ChangeNotifier {
         final document = result.document;
         if (document != null) {
           documents[result.name] = document;
-          _documentCache['$doctype::${result.name}'] = _CachedDocument(
-            storedAt: DateTime.now(),
-            document: document,
-          );
+          await _storeCachedDocument(doctype, result.name, document);
         }
       }
     }
     return documents;
+  }
+
+  Future<void> _storeCachedDocument(
+    String doctype,
+    String name,
+    Map<String, dynamic> document,
+  ) async {
+    final key = _documentCacheKey(doctype, name);
+    _documentCache[key] = _CachedDocument(
+      storedAt: DateTime.now(),
+      document: document,
+    );
+    await LocalAppDatabase.instance.writeJson(
+      key,
+      document,
+      ttl: _documentCacheTtl,
+    );
+  }
+
+  Future<void> _deleteCachedDocument(String doctype, String name) async {
+    final key = _documentCacheKey(doctype, name);
+    _documentCache.remove(key);
+    await LocalAppDatabase.instance.delete(key);
+  }
+
+  String _documentCacheKey(String doctype, String name) {
+    final site = _frappeService.baseUrl.trim();
+    final user = _currentUser?.trim() ?? _frappeService.username?.trim() ?? '';
+    return [
+      _documentDbCachePrefix,
+      site,
+      user,
+      doctype.trim(),
+      name.trim(),
+    ].join('|');
   }
 
   Future<void> _forEachResourcePage({

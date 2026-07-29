@@ -47,6 +47,7 @@ class VisitLocationPoint {
 class SalesVisitLocationService {
   static const _queueKey = 'sales_visit_tracking_queue';
   static const trackingInterval = Duration(minutes: 5);
+  final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
   StreamSubscription<Position>? _subscription;
 
   Future<VisitLocationPoint> currentPosition() async {
@@ -95,6 +96,7 @@ class SalesVisitLocationService {
     String notificationText =
         'Aplikasi mencatat lokasi tiap 5 menit sampai check-in.',
     bool queueFailedPoints = true,
+    String? queueScope,
   }) async {
     await stopTracking();
     await currentPosition();
@@ -121,7 +123,7 @@ class SalesVisitLocationService {
           try {
             await onPoint(point);
           } catch (_) {
-            if (queueFailedPoints) await enqueue(point);
+            if (queueFailedPoints) await enqueue(point, scope: queueScope);
           }
         });
   }
@@ -131,24 +133,31 @@ class SalesVisitLocationService {
     _subscription = null;
   }
 
-  Future<void> enqueue(VisitLocationPoint point) async {
-    final prefs = await SharedPreferences.getInstance();
-    final queue = prefs.getStringList(_queueKey) ?? <String>[];
+  Future<void> enqueue(VisitLocationPoint point, {String? scope}) async {
+    final prefs = await _prefs;
+    final queueKey = _queueKeyFor(scope);
+    final queue = prefs.getStringList(queueKey) ?? <String>[];
     queue.add(jsonEncode(point.toJson()));
-    await prefs.setStringList(_queueKey, queue.takeLast(500).toList());
+    await prefs.setStringList(queueKey, queue.takeLast(500).toList());
   }
 
-  Future<List<VisitLocationPoint>> queuedPoints() async {
-    final prefs = await SharedPreferences.getInstance();
-    final queue = prefs.getStringList(_queueKey) ?? const [];
+  Future<List<VisitLocationPoint>> queuedPoints({String? scope}) async {
+    final prefs = await _prefs;
+    final queue = prefs.getStringList(_queueKeyFor(scope)) ?? const [];
     return queue
         .map((row) => VisitLocationPoint.fromJson(jsonDecode(row)))
         .toList();
   }
 
-  Future<void> clearQueue() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_queueKey);
+  Future<void> clearQueue({String? scope}) async {
+    final prefs = await _prefs;
+    await prefs.remove(_queueKeyFor(scope));
+  }
+
+  String _queueKeyFor(String? scope) {
+    final normalized = scope?.trim();
+    if (normalized == null || normalized.isEmpty) return _queueKey;
+    return '$_queueKey::$normalized';
   }
 }
 

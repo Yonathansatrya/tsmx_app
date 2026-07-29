@@ -46,11 +46,13 @@ class DashboardModuleLauncher extends StatelessWidget {
               entry: entry,
               screen: _screenForEntry(appState, entry),
               order: bootMenuOrder[entry.moduleKey] ?? entry.meta.menuOrder,
-              title: MobileRoleRegistry.moduleLabel(
-                entry.moduleKey,
-                bootMenus: bootMenus,
-                fallback: entry.title,
-              ),
+              title: entry.routeKey == entry.moduleKey
+                  ? MobileRoleRegistry.moduleLabel(
+                      entry.moduleKey,
+                      bootMenus: bootMenus,
+                      fallback: entry.title,
+                    )
+                  : entry.title,
               subtitle: entry.subtitle,
               badgeLabel: _badgeForEntry(appState, entry),
               badgeColor: _badgeColorForEntry(appState, entry),
