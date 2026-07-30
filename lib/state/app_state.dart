@@ -83,6 +83,8 @@ class _CachedDocument {
 class AppState with ChangeNotifier {
   bool _isAuthenticated = false;
   bool get isAuthenticated => _isAuthenticated;
+  bool _isSampleMode = false;
+  bool get isSampleMode => _isSampleMode;
 
   String? _currentUser;
   String? get currentUser => _currentUser;
@@ -385,6 +387,7 @@ class AppState with ChangeNotifier {
 
   int get purchaseApprovalTodoCount => _purchaseApprovalTodoCount;
   int _purchaseApprovalTodoCount = 0;
+  List<ErpApprovalTodo> _sampleApprovalTodos = const [];
 
   bool _isNotificationsLoading = false;
   bool get isNotificationsLoading => _isNotificationsLoading;
@@ -1260,6 +1263,7 @@ class AppState with ChangeNotifier {
   }) async {
     try {
       _lastAuthError = null;
+      _isSampleMode = false;
       if (baseUrl != null && baseUrl.trim().isNotEmpty) {
         final nextBaseUrl = _normalizeBaseUrl(baseUrl);
         if (_normalizeBaseUrl(_frappeService.baseUrl) != nextBaseUrl) {
@@ -1295,6 +1299,266 @@ class AppState with ChangeNotifier {
     }
   }
 
+  void loginSample() {
+    _stopNotificationPolling();
+    _resetRuntimeDataForTenantSwitch();
+
+    _isSampleMode = true;
+    _isAuthenticated = true;
+    _currentUser = 'example@gmail.com';
+    _currentEmployee = 'EMP-SAMPLE-001';
+    _currentEmployeeProfile = const {
+      'employee_name': 'Example User',
+      'designation': 'Sales Reviewer',
+      'company': 'Sample Company',
+    };
+    _currentSalesPerson = 'Example Sales';
+    _salesIdentityUser = _currentUser;
+    _salesIdentityError = null;
+    _userRole = MobileRole.developer;
+    _selectedSiteName = 'Sample Offline';
+    _frappeService.baseUrl = '';
+
+    _loadSampleData();
+    notifyListeners();
+  }
+
+  void _loadSampleData() {
+    final today = DateTime.now();
+    String date(int daysAgo) => today
+        .subtract(Duration(days: daysAgo))
+        .toIso8601String()
+        .split('T')
+        .first;
+
+    _warehouses = [
+      WarehouseInfo(
+        name: 'Sample Warehouse - SC',
+        displayName: 'Sample Warehouse',
+        company: 'Sample Company',
+      ),
+      WarehouseInfo(
+        name: 'Transit Sample - SC',
+        displayName: 'Transit Sample',
+        company: 'Sample Company',
+      ),
+    ];
+
+    _inventory = [
+      InventoryItem.fromJson({
+        'item_code': 'ITEM-SAMPLE-001',
+        'item_name': 'Pisang Cavendish CL',
+        'warehouse': 'Sample Warehouse - SC',
+        'actual_qty': 128,
+        'reorder_level': 40,
+        'valuation_rate': 246500,
+        'item_group': 'Fresh Produce',
+      }),
+      InventoryItem.fromJson({
+        'item_code': 'ITEM-SAMPLE-002',
+        'item_name': 'Fresh Pack 1 Kg',
+        'warehouse': 'Sample Warehouse - SC',
+        'actual_qty': 18,
+        'reorder_level': 35,
+        'valuation_rate': 62500,
+        'item_group': 'Packaging',
+      }),
+      InventoryItem.fromJson({
+        'item_code': 'ITEM-SAMPLE-003',
+        'item_name': 'Display Rack Mini',
+        'warehouse': 'Transit Sample - SC',
+        'actual_qty': 4,
+        'reorder_level': 12,
+        'valuation_rate': 185000,
+        'item_group': 'Merchandising',
+      }),
+    ];
+
+    _salesOrders = [
+      SalesOrder.fromJson({
+        'name': 'SO-SAMPLE-0001',
+        'customer': 'CUST-SAMPLE-001',
+        'customer_name': 'Sample Retail Nusantara',
+        'transaction_date': date(0),
+        'delivery_date': date(1),
+        'status': 'Draft',
+        'docstatus': 0,
+        'grand_total': 1250000,
+        'total_qty': 5,
+        'currency': 'IDR',
+        'selling_price_list': 'Standard Selling',
+        'noted': 'Customer meminta diskon tambahan untuk pembelian rutin.',
+        'sales_team': [
+          {'sales_person': 'Example Sales', 'allocated_percentage': 100},
+        ],
+        'items': [
+          {
+            'item_code': 'ITEM-SAMPLE-001',
+            'item_name': 'Pisang Cavendish CL',
+            'qty': 5,
+            'rate': 246500,
+            'discount_amount': 5000,
+            'warehouse': 'Sample Warehouse - SC',
+            'delivery_date': date(1),
+          },
+        ],
+      }),
+      SalesOrder.fromJson({
+        'name': 'SO-SAMPLE-0002',
+        'customer': 'CUST-SAMPLE-002',
+        'customer_name': 'Cocomart Sample',
+        'transaction_date': date(2),
+        'delivery_date': date(3),
+        'status': 'Pending Approval',
+        'workflow_state': 'Pending Approval',
+        'docstatus': 0,
+        'grand_total': 842000,
+        'total_qty': 8,
+        'currency': 'IDR',
+        'sales_team': [
+          {'sales_person': 'Example Sales', 'allocated_percentage': 100},
+        ],
+        'items': [
+          {
+            'item_code': 'ITEM-SAMPLE-002',
+            'item_name': 'Fresh Pack 1 Kg',
+            'qty': 8,
+            'rate': 105250,
+            'warehouse': 'Sample Warehouse - SC',
+            'delivery_date': date(3),
+          },
+        ],
+      }),
+    ];
+
+    _deliveryNotes = [
+      DeliveryNote.fromJson({
+        'name': 'DN-SAMPLE-0001',
+        'customer': 'CUST-SAMPLE-001',
+        'customer_name': 'Sample Retail Nusantara',
+        'posting_date': date(1),
+        'status': 'To Bill',
+        'docstatus': 1,
+        'grand_total': 1250000,
+        'total_qty': 5,
+      }),
+    ];
+
+    _salesInvoices = [
+      SalesInvoice.fromJson({
+        'name': 'SI-SAMPLE-0001',
+        'customer': 'CUST-SAMPLE-001',
+        'customer_name': 'Sample Retail Nusantara',
+        'posting_date': date(1),
+        'due_date': date(-14),
+        'status': 'Unpaid',
+        'docstatus': 1,
+        'grand_total': 1250000,
+        'outstanding_amount': 1250000,
+      }),
+    ];
+
+    _purchaseOrders = [
+      PurchaseOrder.fromJson({
+        'name': 'PO-SAMPLE-0001',
+        'supplier': 'SUP-SAMPLE-001',
+        'supplier_name': 'Sample Supplier',
+        'transaction_date': date(4),
+        'schedule_date': date(2),
+        'status': 'To Receive and Bill',
+        'docstatus': 1,
+        'grand_total': 3500000,
+        'total_qty': 20,
+      }),
+    ];
+
+    _salesOrderSummary = const DocumentSummary(
+      totalValue: 2092000,
+      documentCount: 2,
+    );
+    _deliveryNoteSummary = const DocumentSummary(
+      totalValue: 1250000,
+      documentCount: 1,
+    );
+    _salesInvoiceSummary = const DocumentSummary(
+      totalValue: 1250000,
+      documentCount: 1,
+    );
+    _purchaseOrderSummary = const DocumentSummary(
+      totalValue: 3500000,
+      documentCount: 1,
+    );
+    _dashboardSummary = const DashboardSummary(
+      salesTotal: 2092000,
+      salesOpen: 842000,
+      salesCompleted: 1250000,
+      salesDraftCount: 1,
+      salesOpenCount: 1,
+      salesCompletedCount: 1,
+      purchaseTotal: 3500000,
+      purchasePending: 3500000,
+      purchasePendingCount: 1,
+      unpaidSalesInvoices: 1,
+      stockAlerts: 2,
+    );
+
+    _salesOrderTrendPoints = [
+      DocumentTrendPoint(label: 'W-3', value: 780000, documentCount: 1),
+      DocumentTrendPoint(label: 'W-2', value: 1250000, documentCount: 1),
+      DocumentTrendPoint(label: 'W-1', value: 2092000, documentCount: 2),
+    ];
+    _purchaseOrderTrendPoints = [
+      DocumentTrendPoint(label: 'W-3', value: 1800000, documentCount: 1),
+      DocumentTrendPoint(label: 'W-2', value: 2400000, documentCount: 1),
+      DocumentTrendPoint(label: 'W-1', value: 3500000, documentCount: 1),
+    ];
+
+    _sampleApprovalTodos = [
+      ErpApprovalTodo(
+        doctype: 'Sales Order',
+        name: 'SO-SAMPLE-0002',
+        party: 'CUST-SAMPLE-002',
+        partyName: 'Cocomart Sample',
+        workflowState: 'Pending Approval',
+        status: 'Pending Approval',
+        owner: 'example@gmail.com',
+        date: date(2),
+        amount: 842000,
+        docStatus: 0,
+        actions: const ['Approve', 'Reject'],
+      ),
+      ErpApprovalTodo(
+        doctype: 'Purchase Order',
+        name: 'PO-SAMPLE-0001',
+        party: 'SUP-SAMPLE-001',
+        partyName: 'Sample Supplier',
+        workflowState: 'Pending Approval',
+        status: 'To Receive and Bill',
+        owner: 'example@gmail.com',
+        date: date(4),
+        amount: 3500000,
+        docStatus: 1,
+        actions: const ['Approve', 'Reject'],
+      ),
+    ];
+    _salesOrderApprovalTodoCount = _sampleApprovalTodos.length;
+    _purchaseApprovalTodoCount = 1;
+
+    _notifications = [
+      AppNotification(
+        id: 'sample-approval',
+        title: 'Approval sample menunggu',
+        description: '2 dokumen contoh perlu ditinjau.',
+        type: NotificationType.action,
+        timeString: 'Baru saja',
+        documentType: 'Sales Order',
+        documentName: 'SO-SAMPLE-0002',
+        source: 'sample',
+        createdAt: DateTime.now(),
+      ),
+    ];
+  }
+
   Future<void> logout() async {
     _stopNotificationPolling();
     await _visitLocationService.stopTracking();
@@ -1306,6 +1570,7 @@ class AppState with ChangeNotifier {
     _salesOrderApprovalTodoCount = 0;
     _purchaseApprovalTodoCount = 0;
     _resetRuntimeDataForTenantSwitch();
+    _isSampleMode = false;
     _isAuthenticated = false;
     _currentUser = null;
     _userRole = 'Unassigned';
@@ -1387,6 +1652,10 @@ class AppState with ChangeNotifier {
 
   Future<void> refreshNotifications({bool silent = false}) async {
     if (!_isAuthenticated || _currentUser == null) return;
+    if (_isSampleMode) {
+      notifyListeners();
+      return;
+    }
     final inFlight = _notificationRefreshInFlight;
     if (inFlight != null) {
       await inFlight;
@@ -1695,6 +1964,26 @@ class AppState with ChangeNotifier {
   }
 
   Future<List<SalesCustomerOption>> fetchSalesCustomers() async {
+    if (_isSampleMode) {
+      return const [
+        SalesCustomerOption(
+          id: 'CUST-SAMPLE-001',
+          name: 'Sample Retail Nusantara',
+          address: 'Jl. Sample Raya No. 1',
+          salesTeam: [
+            {'sales_person': 'Example Sales', 'allocated_percentage': 100},
+          ],
+        ),
+        SalesCustomerOption(
+          id: 'CUST-SAMPLE-002',
+          name: 'Cocomart Sample',
+          address: 'Jl. Demo Market No. 8',
+          salesTeam: [
+            {'sales_person': 'Example Sales', 'allocated_percentage': 100},
+          ],
+        ),
+      ];
+    }
     if (_shouldScopeSalesData &&
         (_currentSalesPerson == null || _currentSalesPerson!.isEmpty)) {
       await resolveCurrentSalesIdentity();
@@ -2684,7 +2973,23 @@ class AppState with ChangeNotifier {
   Future<CustomerSalesInsight> fetchCustomerSalesInsight(
     String customer, {
     String? company,
-  }) => _customerService.fetchSalesInsight(customer, company: company);
+  }) {
+    if (_isSampleMode) {
+      return Future.value(
+        const CustomerSalesInsight(
+          creditLimit: 5000000,
+          outstanding: 1250000,
+          depositBalance: 250000,
+          company: 'Sample Company',
+          currency: 'IDR',
+          priceList: 'Standard Selling',
+          priceListCurrency: 'IDR',
+          customerGroup: 'Retail',
+        ),
+      );
+    }
+    return _customerService.fetchSalesInsight(customer, company: company);
+  }
 
   Future<List<CustomerItemPrice>> fetchCustomerItemPrices({
     required String customer,
@@ -2692,6 +2997,43 @@ class AppState with ChangeNotifier {
     String? query,
     int limit = 100,
   }) async {
+    if (_isSampleMode) {
+      final rows = [
+        const CustomerItemPrice(
+          itemCode: 'ITEM-SAMPLE-001',
+          itemName: 'Pisang Cavendish CL',
+          itemGroup: 'Fresh Produce',
+          priceList: 'Standard Selling',
+          currency: 'IDR',
+          rate: 246500,
+          uom: 'Box',
+        ),
+        const CustomerItemPrice(
+          itemCode: 'ITEM-SAMPLE-002',
+          itemName: 'Fresh Pack 1 Kg',
+          itemGroup: 'Packaging',
+          priceList: 'Standard Selling',
+          currency: 'IDR',
+          rate: 62500,
+          uom: 'Pcs',
+        ),
+        const CustomerItemPrice(
+          itemCode: 'ITEM-SAMPLE-003',
+          itemName: 'Display Rack Mini',
+          itemGroup: 'Merchandising',
+          priceList: 'Standard Selling',
+          currency: 'IDR',
+          rate: 185000,
+          uom: 'Unit',
+        ),
+      ];
+      final normalized = query?.trim().toLowerCase() ?? '';
+      if (normalized.isEmpty) return rows;
+      return rows.where((row) {
+        return row.itemCode.toLowerCase().contains(normalized) ||
+            row.itemName.toLowerCase().contains(normalized);
+      }).toList();
+    }
     await _frappeService.ensureLoggedIn();
     final insight = await fetchCustomerSalesInsight(customer, company: company);
     final priceList = insight.priceList.trim();
@@ -4165,6 +4507,10 @@ class AppState with ChangeNotifier {
     String? username,
     String? password,
   }) async {
+    if (_isSampleMode) {
+      notifyListeners();
+      return;
+    }
     _isSalesOrdersLoading = true;
     _salesOrdersError = null;
     _hasMoreSalesOrders = true;
@@ -4200,6 +4546,10 @@ class AppState with ChangeNotifier {
     String? username,
     String? password,
   }) async {
+    if (_isSampleMode) {
+      notifyListeners();
+      return;
+    }
     _frappeService.baseUrl = _activeFrappeBaseUrl(baseUrl);
     _isPurchaseOrdersLoading = true;
     _purchaseOrdersError = null;
@@ -4309,6 +4659,10 @@ class AppState with ChangeNotifier {
   Future<void> refreshDashboardSummaryForCurrentAccess({
     bool silent = false,
   }) async {
+    if (_isSampleMode) {
+      notifyListeners();
+      return;
+    }
     if (MobileRoleRegistry.isFullAccessRole(_userRole)) {
       await refreshAllSummaries(silent: silent);
       return;
@@ -6344,6 +6698,10 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchDeliveryNotesFromFrappe() async {
+    if (_isSampleMode) {
+      notifyListeners();
+      return;
+    }
     _isDeliveryNotesLoading = true;
     _deliveryNotesError = null;
     _hasMoreDeliveryNotes = true;
@@ -6370,6 +6728,10 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchSalesInvoicesFromFrappe() async {
+    if (_isSampleMode) {
+      notifyListeners();
+      return;
+    }
     _isSalesInvoicesLoading = true;
     _salesInvoicesError = null;
     _hasMoreSalesInvoices = true;
@@ -6954,6 +7316,10 @@ class AppState with ChangeNotifier {
     String? password,
     List<List<dynamic>>? filters,
   }) async {
+    if (_isSampleMode) {
+      notifyListeners();
+      return;
+    }
     _frappeService.baseUrl = _activeFrappeBaseUrl(baseUrl);
     _isInventoryLoading = true;
     _inventoryError = null;
@@ -7725,6 +8091,9 @@ class AppState with ChangeNotifier {
   }
 
   Future<List<ErpApprovalTodo>> fetchApprovalTodos() async {
+    if (_isSampleMode) {
+      return _sampleApprovalTodos;
+    }
     await _frappeService.ensureLoggedIn();
     const configs = [
       (

@@ -123,6 +123,17 @@ class _LoginScreenState extends State<LoginScreen> {
     await _continueWithSite(displayName: site['siteName']);
   }
 
+  Future<void> _continueSample() async {
+    setState(() => _isLoading = true);
+
+    final appState = context.read<AppState>();
+    appState.loginSample();
+    if (!mounted) return;
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => const AppMainScreen()));
+  }
+
   void _changeCompany() {
     setState(() {
       _isSiteConfirmed = false;
@@ -312,6 +323,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
         ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _isLoading ? null : _continueSample,
+          icon: const Icon(Icons.dataset_outlined),
+          label: const Text('Lanjut Sample'),
+        ),
       ],
     );
   }
@@ -440,6 +457,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     letterSpacing: 1.1,
                   ),
                 ),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _isLoading ? null : _continueSample,
+          icon: const Icon(Icons.dataset_outlined),
+          label: const Text('Lanjut Sample'),
         ),
       ],
     );
