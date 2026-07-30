@@ -35,6 +35,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   final _qtyCtrl = TextEditingController(text: '1');
   final _rateCtrl = TextEditingController();
   final _discountCtrl = TextEditingController(text: '0');
+  final _notedCtrl = TextEditingController();
   final List<_AdditionalItemRow> _additionalItems = [];
   final ImagePicker _imagePicker = ImagePicker();
   final List<XFile> _photos = [];
@@ -560,6 +561,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     _qtyCtrl.dispose();
     _rateCtrl.dispose();
     _discountCtrl.dispose();
+    _notedCtrl.dispose();
     for (final row in _additionalItems) {
       row.dispose();
     }
@@ -1593,6 +1595,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           priceListCurrency: _priceListCurrency,
           ignorePricingRule: false,
           salesPerson: _selectedSalesPerson,
+          noted: _notedCtrl.text.trim(),
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
           refreshAfterSave: false,
@@ -1609,6 +1612,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           sellingPriceList: _selectedPriceList,
           priceListCurrency: _priceListCurrency,
           salesPerson: _selectedSalesPerson,
+          noted: _notedCtrl.text.trim(),
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
           refreshAfterSave: false,
@@ -2027,6 +2031,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       _priceListCurrency = order.priceListCurrency.isNotEmpty
           ? order.priceListCurrency
           : _priceListCurrency;
+      _notedCtrl.text = order.noted;
       _discountCtrl.text = firstItem?.discountAmount != null
           ? _formatRupiah(firstItem!.discountAmount)
           : '0';
@@ -3245,6 +3250,10 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
               const SizedBox(height: 16),
 
+              _SalesOrderNotedCard(controller: _notedCtrl),
+
+              const SizedBox(height: 16),
+
               _AttachmentCard(
                 photos: _photos,
                 onCamera: () => _pickPhoto(ImageSource.camera),
@@ -3346,6 +3355,56 @@ class _AdditionalItemRow {
     qtyController.dispose();
     rateController.dispose();
     discountController.dispose();
+  }
+}
+
+class _SalesOrderNotedCard extends StatelessWidget {
+  final TextEditingController controller;
+
+  const _SalesOrderNotedCard({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('Noted', style: TextStyle(fontWeight: FontWeight.w800)),
+          const Padding(
+            padding: EdgeInsets.only(top: 4, bottom: 10),
+            child: Text(
+              'Catatan tambahan, termasuk permintaan diskon dari customer.',
+              style: TextStyle(fontSize: 11, color: AppColors.slate),
+            ),
+          ),
+          TextFormField(
+            controller: controller,
+            minLines: 3,
+            maxLines: 5,
+            textInputAction: TextInputAction.newline,
+            decoration: InputDecoration(
+              labelText: 'Noted',
+              hintText: 'Contoh: Customer meminta diskon tambahan.',
+              prefixIcon: const Icon(Icons.notes_rounded),
+              filled: true,
+              fillColor: AppColors.background,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: AppColors.primary.withValues(alpha: 0.2),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

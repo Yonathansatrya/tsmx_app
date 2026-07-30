@@ -56,6 +56,7 @@ class SalesOrder {
   final String currency;
   final String sellingPriceList;
   final String priceListCurrency;
+  final String noted;
   final bool ignorePricingRule;
   final int itemsCount;
   final List<SalesOrderItem> items;
@@ -76,6 +77,7 @@ class SalesOrder {
     this.currency = '',
     this.sellingPriceList = '',
     this.priceListCurrency = '',
+    this.noted = '',
     this.ignorePricingRule = false,
     required this.itemsCount,
     this.items = const [],
@@ -146,6 +148,7 @@ class SalesOrder {
       currency: json['currency']?.toString() ?? '',
       sellingPriceList: json['selling_price_list']?.toString() ?? '',
       priceListCurrency: json['price_list_currency']?.toString() ?? '',
+      noted: json['noted']?.toString() ?? '',
       ignorePricingRule:
           json['ignore_pricing_rule'] == 1 ||
           json['ignore_pricing_rule'] == true,
@@ -170,6 +173,7 @@ class SalesOrder {
     String? currency,
     String? sellingPriceList,
     String? priceListCurrency,
+    String? noted,
     bool? ignorePricingRule,
     int? itemsCount,
     List<SalesOrderItem>? items,
@@ -190,6 +194,7 @@ class SalesOrder {
       currency: currency ?? this.currency,
       sellingPriceList: sellingPriceList ?? this.sellingPriceList,
       priceListCurrency: priceListCurrency ?? this.priceListCurrency,
+      noted: noted ?? this.noted,
       ignorePricingRule: ignorePricingRule ?? this.ignorePricingRule,
       itemsCount: itemsCount ?? this.itemsCount,
       items: items ?? this.items,
