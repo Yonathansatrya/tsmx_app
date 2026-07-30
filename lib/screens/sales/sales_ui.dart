@@ -124,7 +124,8 @@ class SalesPillTabBar extends StatelessWidget {
       ),
       child: TabBar(
         controller: controller,
-        isScrollable: false,
+        isScrollable: tabs.length > 3,
+        tabAlignment: tabs.length > 3 ? TabAlignment.start : null,
         dividerColor: Colors.transparent,
         indicatorSize: TabBarIndicatorSize.tab,
         indicator: BoxDecoration(

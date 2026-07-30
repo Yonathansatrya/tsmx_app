@@ -2686,6 +2686,105 @@ class AppState with ChangeNotifier {
     String? company,
   }) => _customerService.fetchSalesInsight(customer, company: company);
 
+  Future<List<CustomerItemPrice>> fetchCustomerItemPrices({
+    required String customer,
+    String? company,
+    String? query,
+    int limit = 100,
+  }) async {
+    await _frappeService.ensureLoggedIn();
+    final insight = await fetchCustomerSalesInsight(customer, company: company);
+    final priceList = insight.priceList.trim();
+    final filters = <List<dynamic>>[
+      ['selling', '=', 1],
+      ['price_list_rate', '>', 0],
+      if (priceList.isNotEmpty) ['price_list', '=', priceList],
+    ];
+    final normalizedQuery = query?.trim() ?? '';
+    if (normalizedQuery.isNotEmpty) {
+      filters.add(['item_code', 'like', '%$normalizedQuery%']);
+    }
+
+    List<Map<String, dynamic>> rows;
+    try {
+      rows = await _fetchResourceWithFieldFallback(
+        doctype: 'Item Price',
+        fields: const [
+          'name',
+          'item_code',
+          'item_name',
+          'price_list',
+          'price_list_rate',
+          'currency',
+          'uom',
+          'valid_from',
+        ],
+        filters: filters,
+        orderBy: 'item_code asc, valid_from desc, modified desc',
+        limit: limit,
+      );
+    } catch (_) {
+      rows = await _fetchResourceWithFieldFallback(
+        doctype: 'Item Price',
+        fields: const [
+          'name',
+          'item_code',
+          'price_list',
+          'price_list_rate',
+          'currency',
+          'uom',
+          'valid_from',
+        ],
+        filters: filters,
+        orderBy: 'item_code asc, modified desc',
+        limit: limit,
+      );
+    }
+
+    final itemCodes = rows
+        .map((row) => row['item_code']?.toString().trim() ?? '')
+        .where((code) => code.isNotEmpty)
+        .toSet();
+    final itemMeta = <String, Map<String, dynamic>>{};
+    if (itemCodes.isNotEmpty) {
+      try {
+        final items = await _fetchResourceWithFieldFallback(
+          doctype: 'Item',
+          fields: const ['name', 'item_name', 'item_group', 'stock_uom'],
+          filters: [
+            ['name', 'in', itemCodes.toList()],
+          ],
+          limit: itemCodes.length,
+          orderBy: 'item_name asc',
+        );
+        for (final item in items) {
+          final name = item['name']?.toString() ?? '';
+          if (name.isNotEmpty) itemMeta[name] = item;
+        }
+      } catch (_) {}
+    }
+
+    final mapped = rows
+        .map(
+          (row) => CustomerItemPrice.fromJson(
+            row,
+            itemMeta: itemMeta[row['item_code']?.toString() ?? ''] ?? const {},
+          ),
+        )
+        .where((row) {
+          if (normalizedQuery.isEmpty) return row.itemCode.isNotEmpty;
+          final lower = normalizedQuery.toLowerCase();
+          return row.itemCode.toLowerCase().contains(lower) ||
+              row.itemName.toLowerCase().contains(lower);
+        })
+        .toList();
+    mapped.sort((a, b) {
+      final nameCompare = a.itemName.compareTo(b.itemName);
+      return nameCompare != 0 ? nameCompare : a.itemCode.compareTo(b.itemCode);
+    });
+    return mapped;
+  }
+
   Future<Map<String, dynamic>> createNooRequest(NooRequestDraft draft) {
     final payload = draft.toFrappeJson();
     final salesPerson = _currentSalesPerson?.trim();

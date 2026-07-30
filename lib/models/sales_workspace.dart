@@ -33,6 +33,48 @@ class SalesCustomerOption {
   }
 }
 
+class CustomerItemPrice {
+  final String itemCode;
+  final String itemName;
+  final String itemGroup;
+  final String priceList;
+  final String currency;
+  final double rate;
+  final String uom;
+  final String validFrom;
+
+  const CustomerItemPrice({
+    required this.itemCode,
+    required this.itemName,
+    this.itemGroup = '',
+    required this.priceList,
+    this.currency = '',
+    required this.rate,
+    this.uom = '',
+    this.validFrom = '',
+  });
+
+  factory CustomerItemPrice.fromJson(
+    Map<String, dynamic> json, {
+    Map<String, dynamic> itemMeta = const {},
+  }) {
+    final itemCode = json['item_code']?.toString() ?? '';
+    return CustomerItemPrice(
+      itemCode: itemCode,
+      itemName:
+          itemMeta['item_name']?.toString() ??
+          json['item_name']?.toString() ??
+          itemCode,
+      itemGroup: itemMeta['item_group']?.toString() ?? '',
+      priceList: json['price_list']?.toString() ?? '',
+      currency: json['currency']?.toString() ?? '',
+      rate: NumParse.asDouble(json['price_list_rate']),
+      uom: json['uom']?.toString() ?? itemMeta['stock_uom']?.toString() ?? '',
+      validFrom: json['valid_from']?.toString() ?? '',
+    );
+  }
+}
+
 class CustomerVisitLocation {
   final String addressId;
   final String displayAddress;
