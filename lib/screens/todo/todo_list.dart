@@ -45,6 +45,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   List<ErpApprovalTodo> _rows = const [];
   List<SalesOrderApprovalHistory> _history = const [];
   Timer? _syncTimer;
+  Future<void>? _loadInFlight;
   bool _loading = true;
   String? _error;
   String? _historyError;
@@ -62,9 +63,31 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     _search.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _load();
+      final cachedRows = _filterRows(
+        context.read<AppState>().cachedApprovalTodos,
+      );
+      if (cachedRows.isNotEmpty) {
+        setState(() {
+          _rows = cachedRows;
+          _loading = false;
+        });
+      }
+      unawaited(
+        _load(
+          silent: cachedRows.isNotEmpty,
+          forceRefresh: cachedRows.isNotEmpty,
+        ),
+      );
+      if (cachedRows.isEmpty) {
+        unawaited(
+          Future<void>.delayed(const Duration(milliseconds: 250), () {
+            if (!mounted) return Future<void>.value();
+            return _load(silent: true, forceRefresh: true);
+          }),
+        );
+      }
       _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-        if (mounted) _load(silent: true);
+        if (mounted) _load(silent: true, forceRefresh: true);
       });
     });
   }
@@ -82,7 +105,20 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     super.dispose();
   }
 
-  Future<void> _load({bool silent = false}) async {
+  Future<void> _load({bool silent = false, bool forceRefresh = false}) {
+    final inFlight = _loadInFlight;
+    if (inFlight != null) return inFlight;
+    final request = _loadInternal(silent: silent, forceRefresh: forceRefresh);
+    _loadInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_loadInFlight, request)) _loadInFlight = null;
+    });
+  }
+
+  Future<void> _loadInternal({
+    required bool silent,
+    required bool forceRefresh,
+  }) async {
     if (!mounted) return;
     if (!silent) {
       setState(() {
@@ -93,12 +129,10 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     }
     final appState = context.read<AppState>();
     try {
-      final rows = await appState.fetchApprovalTodos();
-      final filtered = widget.doctypeFilter == null
-          ? rows
-          : rows
-                .where((row) => widget.doctypeFilter!.contains(row.doctype))
-                .toList();
+      final rows = await appState.fetchApprovalTodos(
+        forceRefresh: forceRefresh,
+      );
+      final filtered = _filterRows(rows);
       if (!mounted) return;
       setState(() => _rows = filtered);
     } catch (error) {
@@ -115,6 +149,12 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
       }
     }
     if (!silent && mounted) setState(() => _loading = false);
+  }
+
+  List<ErpApprovalTodo> _filterRows(List<ErpApprovalTodo> rows) {
+    final filter = widget.doctypeFilter;
+    if (filter == null) return rows;
+    return rows.where((row) => filter.contains(row.doctype)).toList();
   }
 
   Future<void> _selectApproval(ErpApprovalTodo approval) async {
@@ -134,7 +174,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
             )
             .toList();
       });
-      unawaited(_load(silent: true));
+      unawaited(_load(silent: true, forceRefresh: true));
     }
   }
 
@@ -179,7 +219,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
         actions: [
           IconButton(
             tooltip: 'Sinkronkan',
-            onPressed: _loading ? null : _load,
+            onPressed: _loading ? null : () => _load(forceRefresh: true),
             icon: const Icon(Icons.sync_rounded),
           ),
         ],
@@ -218,7 +258,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     rows.sort(_compareApprovalTodos);
     final summary = _ApprovalTodoSummary.from(_rows);
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
@@ -494,7 +534,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   }
 
   Widget _historyTab() => RefreshIndicator(
-    onRefresh: _load,
+    onRefresh: () => _load(forceRefresh: true),
     child: ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
@@ -1239,6 +1279,8 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
         action: action,
         reason: reason,
         refreshAfterApply: false,
+        waitForComment: false,
+        currentDocument: _detail,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2440,6 +2482,8 @@ class _SalesOrderApprovalDetailPageState
         action: action,
         reason: decision.reason,
         refreshAfterApply: false,
+        waitForComment: false,
+        currentDocument: _detail,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

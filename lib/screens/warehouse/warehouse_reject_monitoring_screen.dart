@@ -38,7 +38,7 @@ class _WarehouseRejectMonitoringScreenState
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     setState(() {
       _loading = true;
       _error = null;
@@ -46,6 +46,7 @@ class _WarehouseRejectMonitoringScreenState
     try {
       _rows = await context.read<AppState>().fetchRejectedQualityInspections(
         periodDays: _periodDays,
+        forceRefresh: forceRefresh,
       );
     } catch (error) {
       _error = _friendlyError(error);
@@ -83,7 +84,7 @@ class _WarehouseRejectMonitoringScreenState
         ),
       ),
       body: RefreshIndicator(
-        onRefresh: _load,
+        onRefresh: () => _load(forceRefresh: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: warehousePagePadding,

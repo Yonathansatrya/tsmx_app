@@ -197,6 +197,7 @@ class AppState with ChangeNotifier {
   static const financeApprovalDoctypes = {'Journal Entry'};
 
   static const String _prefsUserRoleKey = 'user_role';
+  int _runtimeGeneration = 0;
 
   Future<void> refreshDataForCurrentRole() async {
     if (!_isAuthenticated) return;
@@ -388,14 +389,45 @@ class AppState with ChangeNotifier {
   int get purchaseApprovalTodoCount => _purchaseApprovalTodoCount;
   int _purchaseApprovalTodoCount = 0;
   List<ErpApprovalTodo> _sampleApprovalTodos = const [];
+  List<ErpApprovalTodo> _approvalTodoSnapshot = const [];
+  Future<List<ErpApprovalTodo>>? _approvalTodoFetchInFlight;
+  List<ErpApprovalTodo> get cachedApprovalTodos => _isSampleMode
+      ? _sampleApprovalTodos
+      : List<ErpApprovalTodo>.unmodifiable(_approvalTodoSnapshot);
 
   bool _isNotificationsLoading = false;
   bool get isNotificationsLoading => _isNotificationsLoading;
 
   Timer? _notificationPollTimer;
   Future<void>? _notificationRefreshInFlight;
+  final Map<String, Future<List<SalesInvoice>>> _collectionInvoiceInFlight = {};
+  final Map<String, Future<List<CollectionPayment>>>
+  _collectionPaymentInFlight = {};
+  final Map<String, Future<Map<String, List<SalesInvoicePaymentAllocation>>>>
+  _collectionAllocationInFlight = {};
+  final Map<String, Future<List<StockAgingItem>>> _stockAgingInFlight = {};
+  final Map<String, Future<List<DeadStockItem>>> _deadStockInFlight = {};
+  final Map<String, Future<List<StockMovementVelocityItem>>>
+  _stockVelocityInFlight = {};
+  Future<List<WarehouseBatchRecord>>? _warehouseBatchInFlight;
+  Future<List<WarehouseSerialRecord>>? _warehouseSerialInFlight;
+  final Map<String, Future<List<QualityInspectionRecord>>>
+  _qualityInspectionInFlight = {};
   static const Duration _notificationPollInterval = Duration(seconds: 30);
   static const Duration _documentCacheTtl = Duration(minutes: 2);
+  static const Duration _approvalTodoCacheTtl = Duration(seconds: 15);
+  static const String _approvalTodoDbCachePrefix = 'approval_todo_cache';
+  static const Duration _salesVisitCacheTtl = Duration(seconds: 45);
+  static const Duration _collectionCacheTtl = Duration(seconds: 60);
+  static const String _collectionDbCachePrefix = 'collection_cache';
+  static const Duration _stockReportCacheTtl = Duration(minutes: 2);
+  static const String _stockReportDbCachePrefix = 'stock_report_cache';
+  static const Duration _warehouseTrackingCacheTtl = Duration(minutes: 2);
+  static const String _warehouseTrackingDbCachePrefix =
+      'warehouse_tracking_cache';
+  static const Duration _qualityInspectionCacheTtl = Duration(minutes: 2);
+  static const String _qualityInspectionDbCachePrefix =
+      'quality_inspection_cache';
   final Map<String, _CachedDocument> _documentCache = {};
   final Map<String, bool> _doctypeSubmitPermissionCache = {};
 
@@ -413,6 +445,7 @@ class AppState with ChangeNotifier {
   String _salesOrderSearch = '';
   String? _salesOrderStatus;
   int _salesOrderQueryVersion = 0;
+  Future<void>? _salesOrdersFetchInFlight;
 
   int _sellingPeriodYear = DateTime.now().year;
   int _sellingPeriodMonth = DateTime.now().month;
@@ -459,6 +492,7 @@ class AppState with ChangeNotifier {
   String _purchaseOrderSearch = '';
   String? _purchaseOrderStatus;
   int _purchaseOrderQueryVersion = 0;
+  Future<void>? _purchaseOrdersFetchInFlight;
 
   int _buyingPeriodYear = DateTime.now().year;
   int _buyingPeriodMonth = DateTime.now().month;
@@ -576,6 +610,7 @@ class AppState with ChangeNotifier {
   String _deliveryNoteSearch = '';
   String? _deliveryNoteStatus;
   int _deliveryNoteQueryVersion = 0;
+  Future<void>? _deliveryNotesFetchInFlight;
 
   bool _isSalesInvoicesLoading = false;
   bool get isSalesInvoicesLoading => _isSalesInvoicesLoading;
@@ -588,6 +623,7 @@ class AppState with ChangeNotifier {
   String _salesInvoiceSearch = '';
   String? _salesInvoiceStatus;
   int _salesInvoiceQueryVersion = 0;
+  Future<void>? _salesInvoicesFetchInFlight;
 
   bool _isPurchaseReceiptsLoading = false;
   bool get isPurchaseReceiptsLoading => _isPurchaseReceiptsLoading;
@@ -600,6 +636,7 @@ class AppState with ChangeNotifier {
   String _purchaseReceiptSearch = '';
   String? _purchaseReceiptStatus;
   int _purchaseReceiptQueryVersion = 0;
+  Future<void>? _purchaseReceiptsFetchInFlight;
 
   bool _isPurchaseInvoicesLoading = false;
   bool get isPurchaseInvoicesLoading => _isPurchaseInvoicesLoading;
@@ -612,6 +649,7 @@ class AppState with ChangeNotifier {
   String _purchaseInvoiceSearch = '';
   String? _purchaseInvoiceStatus;
   int _purchaseInvoiceQueryVersion = 0;
+  Future<void>? _purchaseInvoicesFetchInFlight;
 
   bool _isMaterialRequestsLoading = false;
   bool get isMaterialRequestsLoading => _isMaterialRequestsLoading;
@@ -624,6 +662,7 @@ class AppState with ChangeNotifier {
   String _materialRequestSearch = '';
   String? _materialRequestStatus;
   int _materialRequestQueryVersion = 0;
+  Future<void>? _materialRequestsFetchInFlight;
 
   bool _isStockEntriesLoading = false;
   bool get isStockEntriesLoading => _isStockEntriesLoading;
@@ -632,6 +671,10 @@ class AppState with ChangeNotifier {
 
   bool _isInventoryLoading = false;
   bool get isInventoryLoading => _isInventoryLoading;
+  Future<void>? _warehousesFetchInFlight;
+  Future<void>? _inventoryFetchInFlight;
+  int _warehouseQueryVersion = 0;
+  int _inventoryQueryVersion = 0;
 
   String? _inventoryError;
   String? get inventoryError => _inventoryError;
@@ -661,6 +704,9 @@ class AppState with ChangeNotifier {
       SalesVisitLocationService();
   SalesVisit? _activeSalesVisit;
   SalesVisit? get activeSalesVisit => _activeSalesVisit;
+  List<SalesVisit> _salesVisitCache = const [];
+  DateTime? _salesVisitCacheAt;
+  Future<List<SalesVisit>>? _salesVisitFetchInFlight;
   VisitLocationPoint? _latestVisitLocation;
   VisitLocationPoint? get latestVisitLocation => _latestVisitLocation;
   String? _activeDeliveryTrackingNote;
@@ -970,7 +1016,7 @@ class AppState with ChangeNotifier {
       _currentUser = cfg['username'];
       await syncCurrentUserRoleFromFrappe();
       _startNotificationPolling();
-      await prefetchInitialData();
+      unawaited(prefetchInitialData());
       notifyListeners();
       return true;
     } catch (_) {
@@ -985,6 +1031,9 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> prefetchInitialData() async {
+    final generation = _runtimeGeneration;
+    final user = _currentUser;
+    final baseUrl = _frappeService.baseUrl;
     try {
       await Future.wait([
         if (canUseStock || canUseWarehouse || canUsePurchase || canUseSales)
@@ -1000,12 +1049,22 @@ class AppState with ChangeNotifier {
         if (canUseLogistics) fetchDeliveryNotesFromFrappe(),
         if (canUsePurchase) fetchPurchaseReceiptsFromFrappe(),
       ]);
+      if (!_isSameRuntime(generation, user: user, baseUrl: baseUrl)) return;
       await refreshNotifications(silent: true);
       unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     } catch (_) {
       // Prefetch failures should not block login.
     }
-    notifyListeners();
+    if (_isSameRuntime(generation, user: user, baseUrl: baseUrl)) {
+      notifyListeners();
+    }
+  }
+
+  bool _isSameRuntime(int generation, {String? user, String? baseUrl}) {
+    return generation == _runtimeGeneration &&
+        user == _currentUser &&
+        baseUrl == _frappeService.baseUrl &&
+        _isAuthenticated;
   }
 
   Future<void> _restoreSummaryCache() async {
@@ -1089,6 +1148,17 @@ class AppState with ChangeNotifier {
       await sp.remove(_prefsSummaryCacheKey);
       await LocalAppDatabase.instance.deleteByPrefix(_sellingTrendCachePrefix);
       await LocalAppDatabase.instance.deleteByPrefix(_documentDbCachePrefix);
+      await LocalAppDatabase.instance.deleteByPrefix(_collectionDbCachePrefix);
+      await LocalAppDatabase.instance.deleteByPrefix(_stockReportDbCachePrefix);
+      await LocalAppDatabase.instance.deleteByPrefix(
+        _warehouseTrackingDbCachePrefix,
+      );
+      await LocalAppDatabase.instance.deleteByPrefix(
+        _qualityInspectionDbCachePrefix,
+      );
+      await LocalAppDatabase.instance.deleteByPrefix(
+        _approvalTodoDbCachePrefix,
+      );
     } catch (_) {}
   }
 
@@ -1147,6 +1217,7 @@ class AppState with ChangeNotifier {
   }
 
   void _resetRuntimeDataForTenantSwitch() {
+    _runtimeGeneration++;
     _salesOrders = [];
     _purchaseOrders = [];
     _deliveryNotes = [];
@@ -1227,6 +1298,15 @@ class AppState with ChangeNotifier {
     _purchaseReceiptStatus = null;
     _purchaseInvoiceStatus = null;
     _materialRequestStatus = null;
+    _salesOrderQueryVersion++;
+    _purchaseOrderQueryVersion++;
+    _deliveryNoteQueryVersion++;
+    _salesInvoiceQueryVersion++;
+    _purchaseReceiptQueryVersion++;
+    _purchaseInvoiceQueryVersion++;
+    _materialRequestQueryVersion++;
+    _warehouseQueryVersion++;
+    _inventoryQueryVersion++;
 
     _sellingCompanyFilter = '';
     _buyingCompanyFilter = '';
@@ -1249,6 +1329,20 @@ class AppState with ChangeNotifier {
     _notificationRefreshInFlight = null;
     _doctypeSubmitPermissionCache.clear();
     _documentCache.clear();
+    _approvalTodoSnapshot = const [];
+    _approvalTodoFetchInFlight = null;
+    _salesVisitCache = const [];
+    _salesVisitCacheAt = null;
+    _salesVisitFetchInFlight = null;
+    _collectionInvoiceInFlight.clear();
+    _collectionPaymentInFlight.clear();
+    _collectionAllocationInFlight.clear();
+    _stockAgingInFlight.clear();
+    _deadStockInFlight.clear();
+    _stockVelocityInFlight.clear();
+    _warehouseBatchInFlight = null;
+    _warehouseSerialInFlight = null;
+    _qualityInspectionInFlight.clear();
   }
 
   void setRememberDevice(bool value) {
@@ -1282,8 +1376,8 @@ class AppState with ChangeNotifier {
       _isAuthenticated = true;
       _currentUser = username;
       await syncCurrentUserRoleFromFrappe();
-      await prefetchInitialData();
       _startNotificationPolling();
+      unawaited(prefetchInitialData());
       notifyListeners();
       return true;
     } catch (e, st) {
@@ -1634,7 +1728,7 @@ class AppState with ChangeNotifier {
     try {
       final sp = await SharedPreferences.getInstance();
       final previous = sp.getInt(_approvalNotificationCountPrefsKey);
-      final todos = await fetchApprovalTodos();
+      final todos = await fetchApprovalTodos(forceRefresh: true);
       final count = todos.length;
       await sp.setInt(_approvalNotificationCountPrefsKey, count);
       if (count <= 0) return;
@@ -2080,6 +2174,32 @@ class AppState with ChangeNotifier {
   }
 
   Future<List<SalesInvoice>> fetchCollectionOutstandingInvoices() async {
+    final key = _collectionOutstandingCacheKey();
+    final cachedRows = await _readDbRowList(key);
+    if (cachedRows != null) {
+      return cachedRows.map(SalesInvoice.fromJson).toList();
+    }
+    final inFlight = _collectionInvoiceInFlight[key];
+    if (inFlight != null) return inFlight;
+    final request = _fetchCollectionOutstandingInvoicesFromErp();
+    _collectionInvoiceInFlight[key] = request;
+    try {
+      final invoices = await request;
+      await _writeDbRowList(
+        key,
+        invoices.map(_collectionInvoiceToCacheJson).toList(),
+        ttl: _collectionCacheTtl,
+      );
+      return invoices;
+    } finally {
+      if (identical(_collectionInvoiceInFlight[key], request)) {
+        _collectionInvoiceInFlight.remove(key);
+      }
+    }
+  }
+
+  Future<List<SalesInvoice>>
+  _fetchCollectionOutstandingInvoicesFromErp() async {
     final scopeFilters = await _salesDocumentScopeFilters('Sales Invoice');
     final company = _sellingCompanyFilter.trim();
     final rows = await _fetchAllResourcePages(
@@ -2124,6 +2244,32 @@ class AppState with ChangeNotifier {
     }
     return invoices;
   }
+
+  String _collectionOutstandingCacheKey() {
+    return [
+      _collectionDbCachePrefix,
+      selectedSiteBaseUrl.trim(),
+      _currentUser?.trim() ?? '',
+      'outstanding',
+      _sellingCompanyFilter.trim(),
+      _shouldScopeSalesData,
+      _currentSalesPerson?.trim() ?? '',
+    ].join('|');
+  }
+
+  Map<String, dynamic> _collectionInvoiceToCacheJson(SalesInvoice invoice) => {
+    'name': invoice.id,
+    'customer_name': invoice.customer,
+    'base_net_total': invoice.value,
+    'outstanding_amount': invoice.outstandingAmount,
+    'status': invoice.statusText,
+    'docstatus': invoice.docStatus,
+    'posting_date': invoice.date,
+    'due_date': invoice.dueDate,
+    '_resolved_tukar_faktur': invoice.tukarFaktur,
+    '_resolved_tukar_faktur_date': invoice.tukarFakturDate,
+    '_resolved_tukar_faktur_due_date': invoice.tukarFakturDueDate,
+  };
 
   Future<List<Map<String, dynamic>>> _enrichCollectionInvoiceRows(
     List<Map<String, dynamic>> rows,
@@ -2610,6 +2756,43 @@ class AppState with ChangeNotifier {
     DateTime? to,
     bool scopeToCurrentSales = true,
   }) async {
+    final key = _collectionPaymentsCacheKey(
+      from: from,
+      to: to,
+      scopeToCurrentSales: scopeToCurrentSales,
+    );
+    final cachedRows = await _readDbRowList(key);
+    if (cachedRows != null) {
+      return cachedRows.map(_collectionPaymentFromCacheJson).toList();
+    }
+    final inFlight = _collectionPaymentInFlight[key];
+    if (inFlight != null) return inFlight;
+    final request = _fetchCollectionPaymentsFromErp(
+      from: from,
+      to: to,
+      scopeToCurrentSales: scopeToCurrentSales,
+    );
+    _collectionPaymentInFlight[key] = request;
+    try {
+      final payments = await request;
+      await _writeDbRowList(
+        key,
+        payments.map(_collectionPaymentToCacheJson).toList(),
+        ttl: _collectionCacheTtl,
+      );
+      return payments;
+    } finally {
+      if (identical(_collectionPaymentInFlight[key], request)) {
+        _collectionPaymentInFlight.remove(key);
+      }
+    }
+  }
+
+  Future<List<CollectionPayment>> _fetchCollectionPaymentsFromErp({
+    DateTime? from,
+    DateTime? to,
+    bool scopeToCurrentSales = true,
+  }) async {
     Set<String>? permittedCustomers;
     if (_shouldScopeSalesData && scopeToCurrentSales) {
       final customers = await fetchSalesCustomers();
@@ -2671,6 +2854,59 @@ class AppState with ChangeNotifier {
     }).toList();
   }
 
+  Map<String, dynamic> _collectionPaymentToCacheJson(
+    CollectionPayment payment,
+  ) => {
+    'name': payment.id,
+    'party': payment.customer,
+    'party_name': payment.customerName,
+    'posting_date': payment.postingDate,
+    'received_amount': payment.amount,
+    'reference_no': payment.referenceNo,
+    'remarks': payment.remarks,
+    'references': payment.references
+        .map(
+          (reference) => {
+            'reference_doctype': reference.doctype,
+            'reference_name': reference.documentName,
+            'allocated_amount': reference.allocatedAmount,
+          },
+        )
+        .toList(),
+  };
+
+  CollectionPayment _collectionPaymentFromCacheJson(Map<String, dynamic> json) {
+    final references =
+        (json['references'] is List ? json['references'] : const [])
+            .whereType<Map>()
+            .map(
+              (reference) => CollectionPaymentReference.fromJson(
+                Map<String, dynamic>.from(reference),
+              ),
+            )
+            .toList();
+    return CollectionPayment.fromJson(json).copyWithReferences(references);
+  }
+
+  String _collectionPaymentsCacheKey({
+    DateTime? from,
+    DateTime? to,
+    required bool scopeToCurrentSales,
+  }) {
+    return [
+      _collectionDbCachePrefix,
+      selectedSiteBaseUrl.trim(),
+      _currentUser?.trim() ?? '',
+      'payments',
+      _sellingCompanyFilter.trim(),
+      scopeToCurrentSales,
+      _shouldScopeSalesData,
+      _currentSalesPerson?.trim() ?? '',
+      from == null ? '' : DateRangePresets.toFrappeDate(from),
+      to == null ? '' : DateRangePresets.toFrappeDate(to),
+    ].join('|');
+  }
+
   Future<Map<String, List<SalesInvoicePaymentAllocation>>>
   fetchSalesInvoicePaymentAllocations(Iterable<String> invoiceIds) async {
     final ids = invoiceIds
@@ -2679,7 +2915,31 @@ class AppState with ChangeNotifier {
         .toSet()
         .toList();
     if (ids.isEmpty) return const {};
+    final key = _collectionAllocationsCacheKey(ids);
+    final cachedRows = await _readDbRowList(key);
+    if (cachedRows != null) {
+      return _groupCollectionAllocations(cachedRows);
+    }
+    final inFlight = _collectionAllocationInFlight[key];
+    if (inFlight != null) return inFlight;
+    final request = _fetchSalesInvoicePaymentAllocationsFromErp(ids);
+    _collectionAllocationInFlight[key] = request;
+    try {
+      final allocations = await request;
+      await _writeDbRowList(key, [
+        for (final entries in allocations.values)
+          ...entries.map(_collectionAllocationToCacheJson),
+      ], ttl: _collectionCacheTtl);
+      return allocations;
+    } finally {
+      if (identical(_collectionAllocationInFlight[key], request)) {
+        _collectionAllocationInFlight.remove(key);
+      }
+    }
+  }
 
+  Future<Map<String, List<SalesInvoicePaymentAllocation>>>
+  _fetchSalesInvoicePaymentAllocationsFromErp(List<String> ids) async {
     try {
       final references = await _fetchAllResourcePages(
         doctype: 'Payment Entry Reference',
@@ -2752,7 +3012,72 @@ class AppState with ChangeNotifier {
     }
   }
 
-  Future<List<SalesVisit>> fetchSalesVisits() async {
+  Map<String, dynamic> _collectionAllocationToCacheJson(
+    SalesInvoicePaymentAllocation allocation,
+  ) => {
+    'parent': allocation.paymentEntry,
+    'reference_name': allocation.invoice,
+    'allocated_amount': allocation.allocatedAmount,
+    'posting_date': allocation.postingDate,
+    'mode_of_payment': allocation.modeOfPayment,
+    'reference_no': allocation.referenceNo,
+  };
+
+  Map<String, List<SalesInvoicePaymentAllocation>> _groupCollectionAllocations(
+    List<Map<String, dynamic>> rows,
+  ) {
+    final grouped = <String, List<SalesInvoicePaymentAllocation>>{};
+    for (final row in rows) {
+      final allocation = SalesInvoicePaymentAllocation.fromJson(
+        row,
+        paymentEntry: row,
+      );
+      if (allocation.invoice.isEmpty || allocation.allocatedAmount <= 0) {
+        continue;
+      }
+      grouped.putIfAbsent(allocation.invoice, () => []).add(allocation);
+    }
+    return grouped;
+  }
+
+  String _collectionAllocationsCacheKey(List<String> ids) {
+    final sorted = [...ids]..sort();
+    return [
+      _collectionDbCachePrefix,
+      selectedSiteBaseUrl.trim(),
+      _currentUser?.trim() ?? '',
+      'allocations',
+      sorted.join(','),
+    ].join('|');
+  }
+
+  bool get _isSalesVisitCacheFresh {
+    final cachedAt = _salesVisitCacheAt;
+    if (cachedAt == null) return false;
+    return DateTime.now().difference(cachedAt) < _salesVisitCacheTtl;
+  }
+
+  Future<List<SalesVisit>> fetchSalesVisits({bool forceRefresh = false}) async {
+    if (!forceRefresh && _isSalesVisitCacheFresh) {
+      return List<SalesVisit>.unmodifiable(_salesVisitCache);
+    }
+    final inFlight = _salesVisitFetchInFlight;
+    if (inFlight != null) return inFlight;
+    final request = _fetchSalesVisitsFromErp();
+    _salesVisitFetchInFlight = request;
+    try {
+      final visits = await request;
+      _salesVisitCache = List<SalesVisit>.unmodifiable(visits);
+      _salesVisitCacheAt = DateTime.now();
+      return _salesVisitCache;
+    } finally {
+      if (identical(_salesVisitFetchInFlight, request)) {
+        _salesVisitFetchInFlight = null;
+      }
+    }
+  }
+
+  Future<List<SalesVisit>> _fetchSalesVisitsFromErp() async {
     final filters = _shouldScopeSalesData
         ? [
             ['owner', '=', _currentUser ?? '__unmapped_sales_user__'],
@@ -2775,6 +3100,11 @@ class AppState with ChangeNotifier {
       }
     }
     return visits;
+  }
+
+  void _invalidateSalesVisitCache() {
+    _salesVisitCacheAt = null;
+    _salesVisitFetchInFlight = null;
   }
 
   Future<List<Map<String, dynamic>>> _fetchSalesVisitRows({
@@ -2953,6 +3283,11 @@ class AppState with ChangeNotifier {
       await _frappeService.fetchDocument('Sales Visit', visit.id),
     );
     _activeSalesVisit = updated;
+    _salesVisitCache = List<SalesVisit>.unmodifiable([
+      updated,
+      ..._salesVisitCache.where((visit) => visit.id != updated.id),
+    ]);
+    _salesVisitCacheAt = DateTime.now();
     notifyListeners();
     return updated;
   }
@@ -2967,6 +3302,7 @@ class AppState with ChangeNotifier {
     });
     await _visitLocationService.stopTracking();
     _activeSalesVisit = null;
+    _invalidateSalesVisitCache();
     notifyListeners();
   }
 
@@ -4507,6 +4843,29 @@ class AppState with ChangeNotifier {
     String? username,
     String? password,
   }) async {
+    final canReuseInFlight =
+        baseUrl == null && username == null && password == null;
+    if (canReuseInFlight && _salesOrdersFetchInFlight != null) {
+      return _salesOrdersFetchInFlight;
+    }
+    final request = _fetchSalesOrdersFromFrappe(
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+    );
+    if (canReuseInFlight) _salesOrdersFetchInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_salesOrdersFetchInFlight, request)) {
+        _salesOrdersFetchInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _fetchSalesOrdersFromFrappe({
+    String? baseUrl,
+    String? username,
+    String? password,
+  }) async {
     if (_isSampleMode) {
       notifyListeners();
       return;
@@ -4542,6 +4901,29 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchPurchaseOrdersFromFrappe({
+    String? baseUrl,
+    String? username,
+    String? password,
+  }) async {
+    final canReuseInFlight =
+        baseUrl == null && username == null && password == null;
+    if (canReuseInFlight && _purchaseOrdersFetchInFlight != null) {
+      return _purchaseOrdersFetchInFlight;
+    }
+    final request = _fetchPurchaseOrdersFromFrappe(
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+    );
+    if (canReuseInFlight) _purchaseOrdersFetchInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_purchaseOrdersFetchInFlight, request)) {
+        _purchaseOrdersFetchInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _fetchPurchaseOrdersFromFrappe({
     String? baseUrl,
     String? username,
     String? password,
@@ -6698,6 +7080,18 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchDeliveryNotesFromFrappe() async {
+    final inFlight = _deliveryNotesFetchInFlight;
+    if (inFlight != null) return inFlight;
+    final request = _fetchDeliveryNotesFromFrappe();
+    _deliveryNotesFetchInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_deliveryNotesFetchInFlight, request)) {
+        _deliveryNotesFetchInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _fetchDeliveryNotesFromFrappe() async {
     if (_isSampleMode) {
       notifyListeners();
       return;
@@ -6728,6 +7122,18 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchSalesInvoicesFromFrappe() async {
+    final inFlight = _salesInvoicesFetchInFlight;
+    if (inFlight != null) return inFlight;
+    final request = _fetchSalesInvoicesFromFrappe();
+    _salesInvoicesFetchInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_salesInvoicesFetchInFlight, request)) {
+        _salesInvoicesFetchInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _fetchSalesInvoicesFromFrappe() async {
     if (_isSampleMode) {
       notifyListeners();
       return;
@@ -6758,6 +7164,18 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchPurchaseReceiptsFromFrappe() async {
+    final inFlight = _purchaseReceiptsFetchInFlight;
+    if (inFlight != null) return inFlight;
+    final request = _fetchPurchaseReceiptsFromFrappe();
+    _purchaseReceiptsFetchInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_purchaseReceiptsFetchInFlight, request)) {
+        _purchaseReceiptsFetchInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _fetchPurchaseReceiptsFromFrappe() async {
     _isPurchaseReceiptsLoading = true;
     _purchaseReceiptsError = null;
     _hasMorePurchaseReceipts = true;
@@ -6784,6 +7202,18 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchPurchaseInvoicesFromFrappe() async {
+    final inFlight = _purchaseInvoicesFetchInFlight;
+    if (inFlight != null) return inFlight;
+    final request = _fetchPurchaseInvoicesFromFrappe();
+    _purchaseInvoicesFetchInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_purchaseInvoicesFetchInFlight, request)) {
+        _purchaseInvoicesFetchInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _fetchPurchaseInvoicesFromFrappe() async {
     _isPurchaseInvoicesLoading = true;
     _purchaseInvoicesError = null;
     _hasMorePurchaseInvoices = true;
@@ -6810,6 +7240,18 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> fetchMaterialRequestsFromFrappe() async {
+    final inFlight = _materialRequestsFetchInFlight;
+    if (inFlight != null) return inFlight;
+    final request = _fetchMaterialRequestsFromFrappe();
+    _materialRequestsFetchInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_materialRequestsFetchInFlight, request)) {
+        _materialRequestsFetchInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _fetchMaterialRequestsFromFrappe() async {
     _isMaterialRequestsLoading = true;
     _materialRequestsError = null;
     _hasMoreMaterialRequests = true;
@@ -7094,6 +7536,30 @@ class AppState with ChangeNotifier {
     String? username,
     String? password,
   }) async {
+    final canReuseInFlight =
+        baseUrl == null && username == null && password == null;
+    if (canReuseInFlight && _warehousesFetchInFlight != null) {
+      return _warehousesFetchInFlight;
+    }
+    final request = _fetchWarehousesFromFrappe(
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+    );
+    if (canReuseInFlight) _warehousesFetchInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_warehousesFetchInFlight, request)) {
+        _warehousesFetchInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _fetchWarehousesFromFrappe({
+    String? baseUrl,
+    String? username,
+    String? password,
+  }) async {
+    final version = ++_warehouseQueryVersion;
     _frappeService.baseUrl = _activeFrappeBaseUrl(baseUrl);
 
     try {
@@ -7140,6 +7606,7 @@ class AppState with ChangeNotifier {
         );
       }
 
+      if (version != _warehouseQueryVersion || !_isAuthenticated) return;
       _warehouses = data
           .map((row) => WarehouseInfo.fromJson(row))
           .where((w) => w.name.isNotEmpty && !w.isGroup && w.isDisabled != true)
@@ -7147,7 +7614,7 @@ class AppState with ChangeNotifier {
     } catch (_) {
       // Warehouse list is optional; stock can fall back to name filters.
     } finally {
-      notifyListeners();
+      if (version == _warehouseQueryVersion) notifyListeners();
     }
   }
 
@@ -7316,6 +7783,35 @@ class AppState with ChangeNotifier {
     String? password,
     List<List<dynamic>>? filters,
   }) async {
+    final canReuseInFlight =
+        baseUrl == null &&
+        username == null &&
+        password == null &&
+        filters == null;
+    if (canReuseInFlight && _inventoryFetchInFlight != null) {
+      return _inventoryFetchInFlight;
+    }
+    final request = _fetchInventoryFromFrappe(
+      baseUrl: baseUrl,
+      username: username,
+      password: password,
+      filters: filters,
+    );
+    if (canReuseInFlight) _inventoryFetchInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_inventoryFetchInFlight, request)) {
+        _inventoryFetchInFlight = null;
+      }
+    });
+  }
+
+  Future<void> _fetchInventoryFromFrappe({
+    String? baseUrl,
+    String? username,
+    String? password,
+    List<List<dynamic>>? filters,
+  }) async {
+    final version = ++_inventoryQueryVersion;
     if (_isSampleMode) {
       notifyListeners();
       return;
@@ -7385,6 +7881,7 @@ class AppState with ChangeNotifier {
         items.map((i) => i.sku).where((s) => s.isNotEmpty).toSet(),
       );
 
+      if (version != _inventoryQueryVersion || !_isAuthenticated) return;
       _inventory = items.map((inv) {
         final meta = itemMeta[inv.sku];
 
@@ -7408,10 +7905,13 @@ class AppState with ChangeNotifier {
       }).toList();
       _inventoryError = null;
     } catch (err) {
+      if (version != _inventoryQueryVersion) return;
       _inventoryError = err.toString();
     } finally {
-      _isInventoryLoading = false;
-      notifyListeners();
+      if (version == _inventoryQueryVersion) {
+        _isInventoryLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -7665,7 +8165,39 @@ class AppState with ChangeNotifier {
     return StockLedgerResult.fromMovements(movements);
   }
 
-  Future<List<StockAgingItem>> fetchStockAging({int lookbackDays = 365}) async {
+  Future<List<StockAgingItem>> fetchStockAging({
+    int lookbackDays = 365,
+    bool forceRefresh = false,
+  }) async {
+    final key = _stockReportCacheKey('aging', '$lookbackDays');
+    if (!forceRefresh) {
+      final cachedRows = await _readDbRowList(key);
+      if (cachedRows != null) {
+        return cachedRows.map(_stockAgingFromCacheJson).toList();
+      }
+    }
+    final inFlight = _stockAgingInFlight[key];
+    if (inFlight != null) return inFlight;
+    final request = _fetchStockAgingFromErp(lookbackDays: lookbackDays);
+    _stockAgingInFlight[key] = request;
+    try {
+      final rows = await request;
+      await _writeDbRowList(
+        key,
+        rows.map(_stockAgingToCacheJson).toList(),
+        ttl: _stockReportCacheTtl,
+      );
+      return rows;
+    } finally {
+      if (identical(_stockAgingInFlight[key], request)) {
+        _stockAgingInFlight.remove(key);
+      }
+    }
+  }
+
+  Future<List<StockAgingItem>> _fetchStockAgingFromErp({
+    required int lookbackDays,
+  }) async {
     await _frappeService.ensureLoggedIn();
     if (_inventory.isEmpty) await refreshInventory();
     final today = DateTime.now();
@@ -7716,7 +8248,39 @@ class AppState with ChangeNotifier {
     ];
   }
 
-  Future<List<DeadStockItem>> fetchDeadStock({int lookbackDays = 365}) async {
+  Future<List<DeadStockItem>> fetchDeadStock({
+    int lookbackDays = 365,
+    bool forceRefresh = false,
+  }) async {
+    final key = _stockReportCacheKey('dead', '$lookbackDays');
+    if (!forceRefresh) {
+      final cachedRows = await _readDbRowList(key);
+      if (cachedRows != null) {
+        return cachedRows.map(_deadStockFromCacheJson).toList();
+      }
+    }
+    final inFlight = _deadStockInFlight[key];
+    if (inFlight != null) return inFlight;
+    final request = _fetchDeadStockFromErp(lookbackDays: lookbackDays);
+    _deadStockInFlight[key] = request;
+    try {
+      final rows = await request;
+      await _writeDbRowList(
+        key,
+        rows.map(_deadStockToCacheJson).toList(),
+        ttl: _stockReportCacheTtl,
+      );
+      return rows;
+    } finally {
+      if (identical(_deadStockInFlight[key], request)) {
+        _deadStockInFlight.remove(key);
+      }
+    }
+  }
+
+  Future<List<DeadStockItem>> _fetchDeadStockFromErp({
+    required int lookbackDays,
+  }) async {
     await _frappeService.ensureLoggedIn();
     if (_inventory.isEmpty) await refreshInventory();
     final today = DateTime.now();
@@ -7769,6 +8333,36 @@ class AppState with ChangeNotifier {
 
   Future<List<StockMovementVelocityItem>> fetchStockMovementVelocity({
     int periodDays = 30,
+    bool forceRefresh = false,
+  }) async {
+    final key = _stockReportCacheKey('velocity', '$periodDays');
+    if (!forceRefresh) {
+      final cachedRows = await _readDbRowList(key);
+      if (cachedRows != null) {
+        return cachedRows.map(_stockVelocityFromCacheJson).toList();
+      }
+    }
+    final inFlight = _stockVelocityInFlight[key];
+    if (inFlight != null) return inFlight;
+    final request = _fetchStockMovementVelocityFromErp(periodDays: periodDays);
+    _stockVelocityInFlight[key] = request;
+    try {
+      final rows = await request;
+      await _writeDbRowList(
+        key,
+        rows.map(_stockVelocityToCacheJson).toList(),
+        ttl: _stockReportCacheTtl,
+      );
+      return rows;
+    } finally {
+      if (identical(_stockVelocityInFlight[key], request)) {
+        _stockVelocityInFlight.remove(key);
+      }
+    }
+  }
+
+  Future<List<StockMovementVelocityItem>> _fetchStockMovementVelocityFromErp({
+    required int periodDays,
   }) async {
     await _frappeService.ensureLoggedIn();
     if (_inventory.isEmpty) await refreshInventory();
@@ -7812,7 +8406,127 @@ class AppState with ChangeNotifier {
     ];
   }
 
-  Future<List<WarehouseBatchRecord>> fetchWarehouseBatches() async {
+  String _stockReportCacheKey(String report, String parameter) {
+    final warehouses =
+        (_mobileBoot?.warehouses ?? const <String>[])
+            .map((warehouse) => warehouse.trim())
+            .where((warehouse) => warehouse.isNotEmpty)
+            .toList()
+          ..sort();
+    return [
+      _stockReportDbCachePrefix,
+      selectedSiteBaseUrl.trim(),
+      _currentUser?.trim() ?? '',
+      report,
+      parameter,
+      warehouses.join(','),
+      _inventory.length,
+    ].join('|');
+  }
+
+  Map<String, dynamic> _stockAgingToCacheJson(StockAgingItem item) => {
+    'item_code': item.itemCode,
+    'item_name': item.itemName,
+    'warehouse': item.warehouse,
+    'quantity': item.quantity,
+    'valuation_rate': item.valuationRate,
+    'last_incoming_date': item.lastIncomingDate?.toIso8601String(),
+    'age_days': item.ageDays,
+  };
+
+  StockAgingItem _stockAgingFromCacheJson(Map<String, dynamic> json) {
+    return StockAgingItem(
+      itemCode: json['item_code']?.toString() ?? '',
+      itemName: json['item_name']?.toString() ?? '',
+      warehouse: json['warehouse']?.toString() ?? '',
+      quantity: NumParse.asInt(json['quantity']),
+      valuationRate: NumParse.asDouble(json['valuation_rate']),
+      lastIncomingDate: DateTime.tryParse(
+        json['last_incoming_date']?.toString() ?? '',
+      ),
+      ageDays: NumParse.asInt(json['age_days']),
+    );
+  }
+
+  Map<String, dynamic> _deadStockToCacheJson(DeadStockItem item) => {
+    'item_code': item.itemCode,
+    'item_name': item.itemName,
+    'warehouse': item.warehouse,
+    'quantity': item.quantity,
+    'valuation_rate': item.valuationRate,
+    'last_movement_date': item.lastMovementDate?.toIso8601String(),
+    'inactive_days': item.inactiveDays,
+  };
+
+  DeadStockItem _deadStockFromCacheJson(Map<String, dynamic> json) {
+    return DeadStockItem(
+      itemCode: json['item_code']?.toString() ?? '',
+      itemName: json['item_name']?.toString() ?? '',
+      warehouse: json['warehouse']?.toString() ?? '',
+      quantity: NumParse.asInt(json['quantity']),
+      valuationRate: NumParse.asDouble(json['valuation_rate']),
+      lastMovementDate: DateTime.tryParse(
+        json['last_movement_date']?.toString() ?? '',
+      ),
+      inactiveDays: NumParse.asInt(json['inactive_days']),
+    );
+  }
+
+  Map<String, dynamic> _stockVelocityToCacheJson(
+    StockMovementVelocityItem item,
+  ) => {
+    'item_code': item.itemCode,
+    'item_name': item.itemName,
+    'warehouse': item.warehouse,
+    'current_quantity': item.currentQuantity,
+    'outgoing_quantity': item.outgoingQuantity,
+    'transaction_count': item.transactionCount,
+  };
+
+  StockMovementVelocityItem _stockVelocityFromCacheJson(
+    Map<String, dynamic> json,
+  ) {
+    return StockMovementVelocityItem(
+      itemCode: json['item_code']?.toString() ?? '',
+      itemName: json['item_name']?.toString() ?? '',
+      warehouse: json['warehouse']?.toString() ?? '',
+      currentQuantity: NumParse.asInt(json['current_quantity']),
+      outgoingQuantity: NumParse.asDouble(json['outgoing_quantity']),
+      transactionCount: NumParse.asInt(json['transaction_count']),
+    );
+  }
+
+  Future<List<WarehouseBatchRecord>> fetchWarehouseBatches({
+    bool forceRefresh = false,
+  }) async {
+    final key = _warehouseTrackingCacheKey('batch');
+    if (!forceRefresh) {
+      final cachedRows = await _readDbRowList(key);
+      if (cachedRows != null) {
+        return cachedRows.map(WarehouseBatchRecord.fromJson).toList();
+      }
+    }
+    final inFlight = _warehouseBatchInFlight;
+    if (inFlight != null) return inFlight;
+    final request = _fetchWarehouseBatchesFromErp();
+    _warehouseBatchInFlight = request;
+    return request
+        .then((rows) async {
+          await _writeDbRowList(
+            key,
+            rows.map(_warehouseBatchToCacheJson).toList(),
+            ttl: _warehouseTrackingCacheTtl,
+          );
+          return rows;
+        })
+        .whenComplete(() {
+          if (identical(_warehouseBatchInFlight, request)) {
+            _warehouseBatchInFlight = null;
+          }
+        });
+  }
+
+  Future<List<WarehouseBatchRecord>> _fetchWarehouseBatchesFromErp() async {
     await _frappeService.ensureLoggedIn();
     final rows = await _fetchAllResourcePages(
       doctype: 'Batch',
@@ -7829,7 +8543,38 @@ class AppState with ChangeNotifier {
     return rows.map(WarehouseBatchRecord.fromJson).toList();
   }
 
-  Future<List<WarehouseSerialRecord>> fetchWarehouseSerialNumbers() async {
+  Future<List<WarehouseSerialRecord>> fetchWarehouseSerialNumbers({
+    bool forceRefresh = false,
+  }) async {
+    final key = _warehouseTrackingCacheKey('serial');
+    if (!forceRefresh) {
+      final cachedRows = await _readDbRowList(key);
+      if (cachedRows != null) {
+        return cachedRows.map(WarehouseSerialRecord.fromJson).toList();
+      }
+    }
+    final inFlight = _warehouseSerialInFlight;
+    if (inFlight != null) return inFlight;
+    final request = _fetchWarehouseSerialNumbersFromErp();
+    _warehouseSerialInFlight = request;
+    return request
+        .then((rows) async {
+          await _writeDbRowList(
+            key,
+            rows.map(_warehouseSerialToCacheJson).toList(),
+            ttl: _warehouseTrackingCacheTtl,
+          );
+          return rows;
+        })
+        .whenComplete(() {
+          if (identical(_warehouseSerialInFlight, request)) {
+            _warehouseSerialInFlight = null;
+          }
+        });
+  }
+
+  Future<List<WarehouseSerialRecord>>
+  _fetchWarehouseSerialNumbersFromErp() async {
     await _frappeService.ensureLoggedIn();
     final rows = await _fetchAllResourcePages(
       doctype: 'Serial No',
@@ -7841,38 +8586,120 @@ class AppState with ChangeNotifier {
     return rows.map(WarehouseSerialRecord.fromJson).toList();
   }
 
+  String _warehouseTrackingCacheKey(String type) {
+    return [
+      _warehouseTrackingDbCachePrefix,
+      selectedSiteBaseUrl.trim(),
+      _currentUser?.trim() ?? '',
+      type,
+    ].join('|');
+  }
+
+  Map<String, dynamic> _warehouseBatchToCacheJson(WarehouseBatchRecord row) => {
+    'name': row.name,
+    'item': row.itemCode,
+    'manufacturing_date': row.manufacturingDate?.toIso8601String(),
+    'expiry_date': row.expiryDate?.toIso8601String(),
+    'disabled': row.disabled,
+  };
+
+  Map<String, dynamic> _warehouseSerialToCacheJson(WarehouseSerialRecord row) =>
+      {
+        'name': row.name,
+        'item_code': row.itemCode,
+        'warehouse': row.warehouse,
+        'status': row.status,
+        'batch_no': row.batchNo,
+      };
+
   Future<List<QualityInspectionRecord>> fetchRejectedQualityInspections({
     int periodDays = 30,
+    bool forceRefresh = false,
   }) async {
-    await _frappeService.ensureLoggedIn();
-    final from = DateTime.now().subtract(Duration(days: periodDays));
-    final rows = await _fetchAllResourcePages(
-      doctype: 'Quality Inspection',
-      fields: const [
-        'name',
-        'item_code',
-        'item_name',
-        'inspection_type',
-        'reference_type',
-        'reference_name',
-        'inspected_by',
-        'status',
-        'remarks',
-        'report_date',
-        'docstatus',
-      ],
-      filters: [
+    return _fetchCachedQualityInspections(
+      key: 'rejected:$periodDays',
+      periodDays: periodDays,
+      forceRefresh: forceRefresh,
+      filtersBuilder: (from) => [
         ['status', '=', 'Rejected'],
         ['report_date', '>=', DateRangePresets.toFrappeDate(from)],
       ],
-      orderBy: 'report_date desc, modified desc',
-      maxRows: 1000,
     );
-    return rows.map(QualityInspectionRecord.fromJson).toList();
   }
 
   Future<List<QualityInspectionRecord>> fetchProductionQualityInspections({
     int periodDays = 30,
+    bool forceRefresh = false,
+  }) async {
+    return _fetchCachedQualityInspections(
+      key: 'production:$periodDays',
+      periodDays: periodDays,
+      forceRefresh: forceRefresh,
+      filtersBuilder: (from) => [
+        ['inspection_type', '=', 'In Process'],
+        ['report_date', '>=', DateRangePresets.toFrappeDate(from)],
+      ],
+    );
+  }
+
+  Future<List<QualityInspectionRecord>> fetchIncomingQualityInspections({
+    int periodDays = 30,
+    bool forceRefresh = false,
+  }) async {
+    return _fetchCachedQualityInspections(
+      key: 'incoming:$periodDays',
+      periodDays: periodDays,
+      forceRefresh: forceRefresh,
+      filtersBuilder: (from) => [
+        ['inspection_type', '=', 'Incoming'],
+        ['report_date', '>=', DateRangePresets.toFrappeDate(from)],
+      ],
+    );
+  }
+
+  Future<List<QualityInspectionRecord>> _fetchCachedQualityInspections({
+    required String key,
+    required int periodDays,
+    required bool forceRefresh,
+    required List<List<dynamic>> Function(DateTime from) filtersBuilder,
+  }) async {
+    final cacheKey = [
+      _qualityInspectionDbCachePrefix,
+      selectedSiteBaseUrl.trim(),
+      _currentUser?.trim() ?? '',
+      key,
+    ].join('|');
+    if (!forceRefresh) {
+      final cachedRows = await _readDbRowList(cacheKey);
+      if (cachedRows != null) {
+        return cachedRows.map(QualityInspectionRecord.fromJson).toList();
+      }
+    }
+    final inFlight = _qualityInspectionInFlight[cacheKey];
+    if (inFlight != null) return inFlight;
+    final request = _fetchQualityInspectionsFromErp(
+      periodDays: periodDays,
+      filtersBuilder: filtersBuilder,
+    );
+    _qualityInspectionInFlight[cacheKey] = request;
+    try {
+      final rows = await request;
+      await _writeDbRowList(
+        cacheKey,
+        rows.map(_qualityInspectionToCacheJson).toList(),
+        ttl: _qualityInspectionCacheTtl,
+      );
+      return rows;
+    } finally {
+      if (identical(_qualityInspectionInFlight[cacheKey], request)) {
+        _qualityInspectionInFlight.remove(cacheKey);
+      }
+    }
+  }
+
+  Future<List<QualityInspectionRecord>> _fetchQualityInspectionsFromErp({
+    required int periodDays,
+    required List<List<dynamic>> Function(DateTime from) filtersBuilder,
   }) async {
     await _frappeService.ensureLoggedIn();
     final from = DateTime.now().subtract(Duration(days: periodDays));
@@ -7891,45 +8718,28 @@ class AppState with ChangeNotifier {
         'report_date',
         'docstatus',
       ],
-      filters: [
-        ['inspection_type', '=', 'In Process'],
-        ['report_date', '>=', DateRangePresets.toFrappeDate(from)],
-      ],
+      filters: filtersBuilder(from),
       orderBy: 'report_date desc, modified desc',
       maxRows: 1000,
     );
     return rows.map(QualityInspectionRecord.fromJson).toList();
   }
 
-  Future<List<QualityInspectionRecord>> fetchIncomingQualityInspections({
-    int periodDays = 30,
-  }) async {
-    await _frappeService.ensureLoggedIn();
-    final from = DateTime.now().subtract(Duration(days: periodDays));
-    final rows = await _fetchAllResourcePages(
-      doctype: 'Quality Inspection',
-      fields: const [
-        'name',
-        'item_code',
-        'item_name',
-        'inspection_type',
-        'reference_type',
-        'reference_name',
-        'inspected_by',
-        'status',
-        'remarks',
-        'report_date',
-        'docstatus',
-      ],
-      filters: [
-        ['inspection_type', '=', 'Incoming'],
-        ['report_date', '>=', DateRangePresets.toFrappeDate(from)],
-      ],
-      orderBy: 'report_date desc, modified desc',
-      maxRows: 1000,
-    );
-    return rows.map(QualityInspectionRecord.fromJson).toList();
-  }
+  Map<String, dynamic> _qualityInspectionToCacheJson(
+    QualityInspectionRecord row,
+  ) => {
+    'name': row.name,
+    'item_code': row.itemCode,
+    'item_name': row.itemName,
+    'inspection_type': row.inspectionType,
+    'reference_type': row.referenceType,
+    'reference_name': row.referenceName,
+    'inspected_by': row.inspectedBy,
+    'status': row.status,
+    'remarks': row.remarks,
+    'report_date': row.reportDate?.toIso8601String(),
+    'docstatus': row.docstatus,
+  };
 
   Future<List<QualityInspectionRecord>> fetchQualityInspectionsForReceipt(
     String purchaseReceiptId,
@@ -8050,6 +8860,26 @@ class AppState with ChangeNotifier {
     return rows.map(QualityInspectionRecord.fromJson).toList();
   }
 
+  bool _isApprovalCandidateRow(Map<String, dynamic> row) {
+    final docstatus = int.tryParse(row['docstatus']?.toString() ?? '') ?? 0;
+    if (docstatus >= 2) return false;
+    final state = [
+      row['workflow_state'],
+      row['status'],
+    ].map((value) => value?.toString().trim().toLowerCase() ?? '').join(' ');
+    if (state.isEmpty) return true;
+    const terminalWords = [
+      'approved',
+      'completed',
+      'cancelled',
+      'canceled',
+      'closed',
+      'rejected',
+      'stopped',
+    ];
+    return !terminalWords.any(state.contains);
+  }
+
   Future<List<SalesOrderApproval>> fetchSalesOrderApprovals() async {
     await _frappeService.ensureLoggedIn();
     final rows = await _fetchAllResourcePages(
@@ -8072,11 +8902,12 @@ class AppState with ChangeNotifier {
       maxRows: 200,
     );
     final approvals = <SalesOrderApproval>[];
+    final candidateRows = rows.where(_isApprovalCandidateRow).toList();
     final actionsByName = await _fetchWorkflowActionsForRows(
       doctype: 'Sales Order',
-      rows: rows,
+      rows: candidateRows,
     );
-    for (final row in rows) {
+    for (final row in candidateRows) {
       final name = row['name']?.toString() ?? '';
       final actions = actionsByName[name] ?? const <String>[];
       if (actions.isNotEmpty) {
@@ -8090,10 +8921,129 @@ class AppState with ChangeNotifier {
     return approvals;
   }
 
-  Future<List<ErpApprovalTodo>> fetchApprovalTodos() async {
+  String _approvalTodoCacheKey() {
+    final site = _frappeService.baseUrl.trim();
+    final user = _currentUser?.trim() ?? _frappeService.username?.trim() ?? '';
+    return [_approvalTodoDbCachePrefix, site, user].join('|');
+  }
+
+  void _setApprovalTodoSnapshot(List<ErpApprovalTodo> todos) {
+    final snapshot = List<ErpApprovalTodo>.unmodifiable(todos);
+    final purchaseCount = snapshot
+        .where((todo) => purchaseApprovalDoctypes.contains(todo.doctype))
+        .length;
+    final changed =
+        !_isSameApprovalTodoSnapshot(_approvalTodoSnapshot, snapshot) ||
+        _salesOrderApprovalTodoCount != snapshot.length ||
+        _purchaseApprovalTodoCount != purchaseCount;
+    _approvalTodoSnapshot = snapshot;
+    _salesOrderApprovalTodoCount = snapshot.length;
+    _purchaseApprovalTodoCount = purchaseCount;
+    if (changed) notifyListeners();
+  }
+
+  bool _isSameApprovalTodoSnapshot(
+    List<ErpApprovalTodo> current,
+    List<ErpApprovalTodo> next,
+  ) {
+    if (current.length != next.length) return false;
+    for (var i = 0; i < current.length; i++) {
+      final a = current[i];
+      final b = next[i];
+      if (a.doctype != b.doctype ||
+          a.name != b.name ||
+          a.workflowState != b.workflowState ||
+          a.status != b.status ||
+          a.docStatus != b.docStatus ||
+          a.actions.join('|') != b.actions.join('|')) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Map<String, dynamic> _approvalTodoToCacheJson(ErpApprovalTodo todo) {
+    return {
+      'doctype': todo.doctype,
+      'name': todo.name,
+      'party': todo.party,
+      'party_name': todo.partyName,
+      'workflow_state': todo.workflowState,
+      'status': todo.status,
+      'owner': todo.owner,
+      'date': todo.date,
+      'amount': todo.amount,
+      'secondary_amount': todo.secondaryAmount,
+      'docstatus': todo.docStatus,
+      'actions': todo.actions,
+    };
+  }
+
+  ErpApprovalTodo _approvalTodoFromCacheJson(Map<String, dynamic> json) {
+    final actionsSource = json['actions'];
+    final actions = actionsSource is List
+        ? actionsSource
+              .map((action) => action.toString().trim())
+              .where((action) => action.isNotEmpty)
+              .toList(growable: false)
+        : const <String>[];
+    return ErpApprovalTodo(
+      doctype: json['doctype']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      party: json['party']?.toString() ?? '',
+      partyName: json['party_name']?.toString() ?? '',
+      workflowState: json['workflow_state']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      owner: json['owner']?.toString() ?? '',
+      date: json['date']?.toString() ?? '',
+      amount: NumParse.asDouble(json['amount']),
+      secondaryAmount: NumParse.asDouble(json['secondary_amount']),
+      docStatus: NumParse.asInt(json['docstatus']),
+      actions: actions,
+    );
+  }
+
+  Future<List<ErpApprovalTodo>> fetchApprovalTodos({
+    bool forceRefresh = false,
+  }) async {
     if (_isSampleMode) {
       return _sampleApprovalTodos;
     }
+    final key = _approvalTodoCacheKey();
+    if (!forceRefresh) {
+      final cachedRows = await _readDbRowList(key);
+      if (cachedRows != null) {
+        final todos = cachedRows
+            .map(_approvalTodoFromCacheJson)
+            .where((todo) => todo.doctype.isNotEmpty && todo.name.isNotEmpty)
+            .toList(growable: false);
+        _setApprovalTodoSnapshot(todos);
+        return cachedApprovalTodos;
+      }
+    }
+    final inFlight = _approvalTodoFetchInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+    final request = _fetchApprovalTodosFromErp();
+    _approvalTodoFetchInFlight = request;
+    try {
+      final todos = await request;
+      _setApprovalTodoSnapshot(todos);
+      await _writeDbRowList(
+        key,
+        todos.map(_approvalTodoToCacheJson).toList(growable: false),
+        ttl: _approvalTodoCacheTtl,
+      );
+      return cachedApprovalTodos;
+    } finally {
+      if (identical(_approvalTodoFetchInFlight, request)) {
+        _approvalTodoFetchInFlight = null;
+      }
+    }
+  }
+
+  Future<List<ErpApprovalTodo>> _fetchApprovalTodosFromErp() async {
     await _frappeService.ensureLoggedIn();
     const configs = [
       (
@@ -8189,11 +9139,13 @@ class AppState with ChangeNotifier {
         // one document type, keep showing approval items from the allowed types.
         continue;
       }
+      final candidateRows = rows.where(_isApprovalCandidateRow).toList();
+      if (candidateRows.isEmpty) continue;
       final actionsByName = await _fetchWorkflowActionsForRows(
         doctype: config.doctype,
-        rows: rows,
+        rows: candidateRows,
       );
-      for (final row in rows) {
+      for (final row in candidateRows) {
         final name = row['name']?.toString() ?? '';
         if (name.isEmpty) continue;
         final actions = actionsByName[name] ?? const <String>[];
@@ -8205,17 +9157,6 @@ class AppState with ChangeNotifier {
     }
 
     todos.sort((a, b) => b.date.compareTo(a.date));
-    final purchaseCount = todos
-        .where((todo) => purchaseApprovalDoctypes.contains(todo.doctype))
-        .length;
-    final changed =
-        _salesOrderApprovalTodoCount != todos.length ||
-        _purchaseApprovalTodoCount != purchaseCount;
-    if (changed) {
-      _salesOrderApprovalTodoCount = todos.length;
-      _purchaseApprovalTodoCount = purchaseCount;
-      notifyListeners();
-    }
     return todos;
   }
 
@@ -8224,6 +9165,22 @@ class AppState with ChangeNotifier {
     return todos
         .where((todo) => purchaseApprovalDoctypes.contains(todo.doctype))
         .toList();
+  }
+
+  void _removeApprovalTodoCacheItem(String doctype, String name) {
+    if (_approvalTodoSnapshot.isEmpty) return;
+    final filtered = _approvalTodoSnapshot
+        .where((todo) => todo.doctype != doctype || todo.name != name)
+        .toList(growable: false);
+    if (filtered.length == _approvalTodoSnapshot.length) return;
+    _setApprovalTodoSnapshot(filtered);
+    unawaited(
+      _writeDbRowList(
+        _approvalTodoCacheKey(),
+        filtered.map(_approvalTodoToCacheJson).toList(growable: false),
+        ttl: _approvalTodoCacheTtl,
+      ).catchError((_) {}),
+    );
   }
 
   Future<List<SalesOrderApprovalHistory>>
@@ -8276,6 +9233,8 @@ class AppState with ChangeNotifier {
     required String action,
     String reason = '',
     bool refreshAfterApply = true,
+    bool waitForComment = true,
+    Map<String, dynamic>? currentDocument,
   }) async {
     await _frappeService.ensureLoggedIn();
     final normalizedAction = action.trim();
@@ -8287,10 +9246,9 @@ class AppState with ChangeNotifier {
     if (isReject && reason.trim().isEmpty) {
       throw Exception('Alasan reject wajib diisi.');
     }
-    final doc = await _frappeService.fetchDocument(
-      'Sales Order',
-      approval.name,
-    );
+    final doc =
+        currentDocument ??
+        await _frappeService.fetchDocument('Sales Order', approval.name);
     await _frappeService.callMethod(
       'frappe.model.workflow.apply_workflow',
       args: {'doc': doc, 'action': normalizedAction},
@@ -8301,7 +9259,7 @@ class AppState with ChangeNotifier {
       'Action: $normalizedAction',
       if (reason.trim().isNotEmpty) 'Alasan: ${reason.trim()}',
     ].join('\n');
-    await _frappeService.callMethod(
+    final commentRequest = _frappeService.callMethod(
       'frappe.desk.form.utils.add_comment',
       args: {
         'reference_doctype': 'Sales Order',
@@ -8311,7 +9269,13 @@ class AppState with ChangeNotifier {
         'comment_by': _currentUser ?? '',
       },
     );
+    if (waitForComment) {
+      await commentRequest;
+    } else {
+      unawaited(commentRequest.then<void>((_) {}).catchError((_) {}));
+    }
     await _deleteCachedDocument('Sales Order', approval.name);
+    _removeApprovalTodoCacheItem('Sales Order', approval.name);
     final refresh = Future.wait([
       refreshSalesOrders(),
       refreshNotifications(silent: true),
@@ -8401,6 +9365,8 @@ class AppState with ChangeNotifier {
     required String action,
     String reason = '',
     bool refreshAfterApply = true,
+    bool waitForComment = true,
+    Map<String, dynamic>? currentDocument,
   }) async {
     await _frappeService.ensureLoggedIn();
     final normalizedAction = action.trim();
@@ -8413,7 +9379,8 @@ class AppState with ChangeNotifier {
     if (isReject && reason.trim().isEmpty) {
       throw Exception('Alasan reject/return wajib diisi.');
     }
-    final doc = await _frappeService.fetchDocument(doctype, name);
+    final doc =
+        currentDocument ?? await _frappeService.fetchDocument(doctype, name);
     await _frappeService.callMethod(
       'frappe.model.workflow.apply_workflow',
       args: {'doc': doc, 'action': normalizedAction},
@@ -8424,7 +9391,7 @@ class AppState with ChangeNotifier {
       'Action: $normalizedAction',
       if (reason.trim().isNotEmpty) 'Alasan: ${reason.trim()}',
     ].join('\n');
-    await _frappeService.callMethod(
+    final commentRequest = _frappeService.callMethod(
       'frappe.desk.form.utils.add_comment',
       args: {
         'reference_doctype': doctype,
@@ -8434,7 +9401,13 @@ class AppState with ChangeNotifier {
         'comment_by': _currentUser ?? '',
       },
     );
+    if (waitForComment) {
+      await commentRequest;
+    } else {
+      unawaited(commentRequest.then<void>((_) {}).catchError((_) {}));
+    }
     await _deleteCachedDocument(doctype, name);
+    _removeApprovalTodoCacheItem(doctype, name);
     final refresh = Future.wait([
       switch (doctype) {
         'Purchase Order' => refreshPurchaseOrders(),
@@ -9244,6 +10217,24 @@ class AppState with ChangeNotifier {
     final key = _documentCacheKey(doctype, name);
     _documentCache.remove(key);
     await LocalAppDatabase.instance.delete(key);
+  }
+
+  Future<List<Map<String, dynamic>>?> _readDbRowList(String key) async {
+    final json = await LocalAppDatabase.instance.readJson(key);
+    final rows = json?['rows'];
+    if (rows is! List) return null;
+    return rows
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Future<void> _writeDbRowList(
+    String key,
+    List<Map<String, dynamic>> rows, {
+    required Duration ttl,
+  }) {
+    return LocalAppDatabase.instance.writeJson(key, {'rows': rows}, ttl: ttl);
   }
 
   String _documentCacheKey(String doctype, String name) {

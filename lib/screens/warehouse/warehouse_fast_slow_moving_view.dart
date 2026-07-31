@@ -40,7 +40,7 @@ class _WarehouseFastSlowMovingViewState
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     setState(() {
       _loading = true;
       _error = null;
@@ -48,6 +48,7 @@ class _WarehouseFastSlowMovingViewState
     try {
       _rows = await context.read<AppState>().fetchStockMovementVelocity(
         periodDays: _periodDays,
+        forceRefresh: forceRefresh,
       );
     } catch (error) {
       _error = _friendlyError(error);
@@ -64,7 +65,7 @@ class _WarehouseFastSlowMovingViewState
     final warehouses = _rows.map((row) => row.warehouse).toSet().toList()
       ..sort();
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: warehousePagePadding,

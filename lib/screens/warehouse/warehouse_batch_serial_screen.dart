@@ -64,13 +64,15 @@ class _BatchViewState extends State<_BatchView> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      _rows = await context.read<AppState>().fetchWarehouseBatches();
+      _rows = await context.read<AppState>().fetchWarehouseBatches(
+        forceRefresh: forceRefresh,
+      );
     } catch (error) {
       _error = _friendlyError(error);
     } finally {
@@ -92,7 +94,7 @@ class _BatchViewState extends State<_BatchView> {
       return days >= 0 && days <= 30;
     }).length;
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: warehousePagePadding,
@@ -196,7 +198,7 @@ class _SerialViewState extends State<_SerialView> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     setState(() {
       _loading = true;
       _error = null;
@@ -206,7 +208,9 @@ class _SerialViewState extends State<_SerialView> {
       if (state.warehouses.isEmpty) {
         await state.refreshWarehouses();
       }
-      _rows = await state.fetchWarehouseSerialNumbers();
+      _rows = await state.fetchWarehouseSerialNumbers(
+        forceRefresh: forceRefresh,
+      );
     } catch (error) {
       _error = _friendlyError(error);
     } finally {
@@ -237,7 +241,7 @@ class _SerialViewState extends State<_SerialView> {
               row.batchNo.toLowerCase().contains(query));
     }).toList();
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: warehousePagePadding,

@@ -71,7 +71,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     setState(() {
       loading = true;
       error = null;
@@ -89,7 +89,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     }
 
     try {
-      nextVisits = await state.fetchSalesVisits();
+      nextVisits = await state.fetchSalesVisits(forceRefresh: forceRefresh);
       final active = state.activeSalesVisit;
       if (state.mobileAccess.isSalesUser && active != null) {
         try {
@@ -213,7 +213,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     final hasMoreHistory = visits.length > history.length;
 
     final content = RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),

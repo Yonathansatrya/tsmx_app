@@ -44,7 +44,7 @@ class _DashboardTabState extends State<DashboardTab> {
         appState.refreshDashboardSummaryForCurrentAccess(silent: true);
       }
       if (appState.canUseApprovals) {
-        appState.fetchSalesOrderApprovals();
+        appState.fetchApprovalTodos();
       }
     });
   }
@@ -73,7 +73,8 @@ class _DashboardTabState extends State<DashboardTab> {
           if (appState.canUsePurchase) appState.refreshPurchaseInvoices(),
           if (showStockKpi) appState.refreshInventory(),
           appState.refreshDashboardSummaryForCurrentAccess(),
-          if (appState.canUseApprovals) appState.fetchSalesOrderApprovals(),
+          if (appState.canUseApprovals)
+            appState.fetchApprovalTodos(forceRefresh: true),
         ]);
       },
       child: SingleChildScrollView(

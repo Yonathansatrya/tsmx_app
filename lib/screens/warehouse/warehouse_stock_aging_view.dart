@@ -39,13 +39,15 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      _rows = await context.read<AppState>().fetchStockAging();
+      _rows = await context.read<AppState>().fetchStockAging(
+        forceRefresh: forceRefresh,
+      );
     } catch (error) {
       _error = _friendlyError(error);
     } finally {
@@ -63,7 +65,7 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
     final warehouses = _rows.map((row) => row.warehouse).toSet().toList()
       ..sort();
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: warehousePagePadding,

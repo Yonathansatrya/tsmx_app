@@ -371,11 +371,11 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     await Future.wait([
       _loadDailyReport(forceRemote: forceRemote),
       _loadRanking(forceRemote: forceRemote),
-      _loadVisitSnapshot(),
+      _loadVisitSnapshot(forceRefresh: forceRemote),
     ]);
   }
 
-  Future<void> _loadVisitSnapshot() async {
+  Future<void> _loadVisitSnapshot({bool forceRefresh = false}) async {
     final state = context.read<AppState>();
     if (!state.canUseSales) {
       if (mounted) {
@@ -392,7 +392,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       _visitError = null;
     });
     try {
-      final rows = await state.fetchSalesVisits();
+      final rows = await state.fetchSalesVisits(forceRefresh: forceRefresh);
       if (!mounted) return;
       setState(() => _recentVisits = rows.take(5).toList());
     } catch (error) {

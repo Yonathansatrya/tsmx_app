@@ -46,7 +46,7 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
       onInitialize: (state) async {
         await state.refreshDataForCurrentRole();
         if (state.isSalesManagerRole) {
-          await state.fetchSalesOrderApprovals();
+          await state.fetchApprovalTodos();
         }
       },
       screensBuilder: (onMenuSelected) => [

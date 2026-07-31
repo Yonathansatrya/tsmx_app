@@ -38,7 +38,7 @@ class _WarehouseProductionQcScreenState
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool forceRefresh = false}) async {
     setState(() {
       _loading = true;
       _error = null;
@@ -46,6 +46,7 @@ class _WarehouseProductionQcScreenState
     try {
       _rows = await context.read<AppState>().fetchProductionQualityInspections(
         periodDays: _periodDays,
+        forceRefresh: forceRefresh,
       );
     } catch (error) {
       _error = _friendlyError(error);
@@ -74,7 +75,7 @@ class _WarehouseProductionQcScreenState
         ),
       ),
       body: RefreshIndicator(
-        onRefresh: _load,
+        onRefresh: () => _load(forceRefresh: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: warehousePagePadding,

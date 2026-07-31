@@ -75,6 +75,9 @@ class _ArAgingTabState extends State<ArAgingTab> {
   List<CollectionPayment> payments = const [];
   Map<String, List<SalesInvoicePaymentAllocation>> invoicePaymentAllocations =
       const {};
+  Future<void>? _loadInFlight;
+  String? _loadInFlightKey;
+  int _loadVersion = 0;
   bool loading = true;
   String? agingError;
   String? paymentError;
@@ -96,7 +99,30 @@ class _ArAgingTabState extends State<ArAgingTab> {
     }
   }
 
-  Future<void> _load() async {
+  Future<void> _load() {
+    final key = _loadKey;
+    final inFlight = _loadInFlight;
+    if (inFlight != null && _loadInFlightKey == key) return inFlight;
+    final request = _loadInternal();
+    _loadInFlightKey = key;
+    _loadInFlight = request;
+    return request.whenComplete(() {
+      if (identical(_loadInFlight, request)) {
+        _loadInFlight = null;
+        _loadInFlightKey = null;
+      }
+    });
+  }
+
+  String get _loadKey => [
+    widget.range.from.toIso8601String(),
+    widget.range.to.toIso8601String(),
+    widget.dateBasis.name,
+    widget.applyDateFilter,
+  ].join('|');
+
+  Future<void> _loadInternal() async {
+    final version = ++_loadVersion;
     setState(() {
       loading = true;
       agingError = null;
@@ -106,27 +132,33 @@ class _ArAgingTabState extends State<ArAgingTab> {
     await Future.wait([
       () async {
         try {
-          outstanding = await state.fetchCollectionOutstandingInvoices();
-          invoicePaymentAllocations = await state
+          final nextOutstanding = await state
+              .fetchCollectionOutstandingInvoices();
+          final nextAllocations = await state
               .fetchSalesInvoicePaymentAllocations(
-                outstanding.map((invoice) => invoice.id),
+                nextOutstanding.map((invoice) => invoice.id),
               );
+          if (version == _loadVersion) {
+            outstanding = nextOutstanding;
+            invoicePaymentAllocations = nextAllocations;
+          }
         } catch (error) {
-          agingError = error.toString();
+          if (version == _loadVersion) agingError = error.toString();
         }
       }(),
       () async {
         try {
-          payments = await state.fetchCollectionPayments(
+          final nextPayments = await state.fetchCollectionPayments(
             from: widget.range.from,
             to: widget.range.to,
           );
+          if (version == _loadVersion) payments = nextPayments;
         } catch (error) {
-          paymentError = error.toString();
+          if (version == _loadVersion) paymentError = error.toString();
         }
       }(),
     ]);
-    if (mounted) setState(() => loading = false);
+    if (mounted && version == _loadVersion) setState(() => loading = false);
   }
 
   List<SalesInvoice> get filteredOutstanding {
