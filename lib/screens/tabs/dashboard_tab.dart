@@ -34,15 +34,6 @@ class _DashboardTabState extends State<DashboardTab> {
           appState.inventory.isEmpty) {
         appState.refreshInventory();
       }
-      if (appState.canUseSales && appState.salesInvoices.isEmpty) {
-        appState.refreshSalesInvoices();
-      }
-      if (appState.canUsePurchase && appState.purchaseInvoices.isEmpty) {
-        appState.refreshPurchaseInvoices();
-      }
-      if (!appState.hasFullOrderSummary) {
-        appState.refreshDashboardSummaryForCurrentAccess(silent: true);
-      }
       if (appState.canUseApprovals) {
         appState.fetchApprovalTodos();
       }
@@ -53,15 +44,7 @@ class _DashboardTabState extends State<DashboardTab> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
 
-    final summary = appState.dashboardSummary;
-    final pendingPurchasesCount = summary.purchasePendingCount;
-    final openSalesCount = summary.salesOpenCount;
-    final lowStockCount = summary.stockAlerts;
-    final unpaidSiCount = summary.unpaidSalesInvoices;
-    final showSalesKpi = appState.canUseSales;
-    final showPurchaseKpi = appState.canUsePurchase;
     final showStockKpi = appState.canUseStock || appState.canUseWarehouse;
-    final summaryError = _visibleSummaryError(appState.orderSummaryError);
 
     return RefreshIndicator(
       color: AppColors.primary,
@@ -69,10 +52,7 @@ class _DashboardTabState extends State<DashboardTab> {
         await Future.wait([
           if (appState.canUseSales) appState.refreshSalesOrders(),
           if (appState.canUsePurchase) appState.refreshPurchaseOrders(),
-          if (appState.canUseSales) appState.refreshSalesInvoices(),
-          if (appState.canUsePurchase) appState.refreshPurchaseInvoices(),
           if (showStockKpi) appState.refreshInventory(),
-          appState.refreshDashboardSummaryForCurrentAccess(),
           if (appState.canUseApprovals)
             appState.fetchApprovalTodos(forceRefresh: true),
         ]);
@@ -82,222 +62,9 @@ class _DashboardTabState extends State<DashboardTab> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _OperationsSnapshot(
-              openSales: openSalesCount,
-              unpaidInvoices: unpaidSiCount,
-              pendingPurchases: pendingPurchasesCount,
-              stockAlerts: lowStockCount,
-              showSales: showSalesKpi,
-              showPurchase: showPurchaseKpi,
-              showStock: showStockKpi,
-            ),
-            if (appState.isOrderSummaryLoading) ...[
-              const SizedBox(height: 10),
-              const LinearProgressIndicator(),
-            ],
-            if (summaryError != null) ...[
-              const SizedBox(height: 10),
-              Text(
-                'Summary sync failed: $summaryError',
-                style: const TextStyle(
-                  color: Colors.redAccent,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-
-            const SizedBox(height: 18),
-
-            const DashboardModuleLauncher(),
-          ],
+          children: const [DashboardModuleLauncher()],
         ),
       ),
-    );
-  }
-
-  String? _visibleSummaryError(String? error) {
-    if (error == null) return null;
-    final lower = error.toLowerCase();
-    if (lower.contains('permissionerror') ||
-        lower.contains('not permitted') ||
-        lower.contains('permission') ||
-        lower.contains('tidak diizinkan') ||
-        lower.contains('akses erpnext')) {
-      return null;
-    }
-    return error;
-  }
-}
-
-class _OperationsSnapshot extends StatelessWidget {
-  final int openSales;
-  final int unpaidInvoices;
-  final int pendingPurchases;
-  final int stockAlerts;
-  final bool showSales;
-  final bool showPurchase;
-  final bool showStock;
-
-  const _OperationsSnapshot({
-    required this.openSales,
-    required this.unpaidInvoices,
-    required this.pendingPurchases,
-    required this.stockAlerts,
-    required this.showSales,
-    required this.showPurchase,
-    required this.showStock,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final metrics = <_SnapshotMetricData>[
-      if (showSales)
-        _SnapshotMetricData(
-          icon: Icons.point_of_sale_rounded,
-          label: 'Open SO',
-          value: openSales,
-        ),
-      if (showSales)
-        _SnapshotMetricData(
-          icon: Icons.receipt_long_rounded,
-          label: 'Unpaid',
-          value: unpaidInvoices,
-        ),
-      if (showPurchase)
-        _SnapshotMetricData(
-          icon: Icons.shopping_bag_rounded,
-          label: 'Pending PO',
-          value: pendingPurchases,
-        ),
-      if (showStock)
-        _SnapshotMetricData(
-          icon: Icons.warning_amber_rounded,
-          label: 'Stock',
-          value: stockAlerts,
-        ),
-    ];
-    if (metrics.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Prioritas Hari Ini',
-            style: TextStyle(
-              color: AppColors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            _priorityMessage,
-            style: TextStyle(
-              color: AppColors.white.withValues(alpha: 0.8),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              for (final metric in metrics)
-                Expanded(
-                  child: _SnapshotMetric(
-                    icon: metric.icon,
-                    label: metric.label,
-                    value: metric.value,
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  String get _priorityMessage {
-    if (showStock && stockAlerts > 0) {
-      return 'Cek stok kritis sebelum membuat transaksi baru.';
-    }
-    if (showSales && unpaidInvoices > 0) {
-      return 'Ada invoice sales yang perlu ditindaklanjuti.';
-    }
-    if (showPurchase && pendingPurchases > 0) {
-      return 'Pantau PO yang belum selesai dan jadwal penerimaan.';
-    }
-    return 'Operasional terlihat aman. Tarik layar untuk sinkronisasi.';
-  }
-}
-
-class _SnapshotMetricData {
-  final IconData icon;
-  final String label;
-  final int value;
-
-  const _SnapshotMetricData({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-}
-
-class _SnapshotMetric extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final int value;
-
-  const _SnapshotMetric({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: AppColors.white, size: 18),
-        ),
-        const SizedBox(height: 7),
-        Text(
-          '$value',
-          style: const TextStyle(
-            color: AppColors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
-            height: 1,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: AppColors.white.withValues(alpha: 0.72),
-            fontSize: 10,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
     );
   }
 }

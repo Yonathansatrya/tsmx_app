@@ -5,6 +5,8 @@ import '../../config/mobile_role_registry.dart';
 import '../../models/delivery_note.dart';
 import '../../models/inventory_item.dart';
 import '../../models/mobile_boot.dart';
+import '../../models/purchase_order.dart';
+import '../../models/sales_order.dart';
 import '../../screens/shared/module_screen_registry.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
@@ -89,25 +91,30 @@ class DashboardModuleLauncher extends StatelessWidget {
   String _badgeForEntry(AppState appState, ModuleLaunchEntry entry) {
     switch (entry.routeKey) {
       case MobileModule.sales:
-        return _countLabel(appState.dashboardSummary.salesOpenCount, 'open');
+        final openSales = appState.dashboardSalesOrders.where((order) {
+          return order.statusKey != SalesOrderStatusKey.completed &&
+              order.statusKey != SalesOrderStatusKey.cancelled &&
+              order.statusKey != SalesOrderStatusKey.closed;
+        }).length;
+        return _countLabel(openSales, 'open');
       case MobileModule.purchase:
         if (appState.purchaseApprovalTodoCount > 0) {
           return '${appState.purchaseApprovalTodoCount} approval';
         }
-        return _countLabel(
-          appState.dashboardSummary.purchasePendingCount,
-          'open',
-        );
+        final openPurchases = appState.dashboardPurchaseOrders.where((order) {
+          return order.statusKey != PurchaseOrderStatusKey.completed &&
+              order.statusKey != PurchaseOrderStatusKey.cancelled &&
+              order.statusKey != PurchaseOrderStatusKey.closed;
+        }).length;
+        return _countLabel(openPurchases, 'open');
       case MobileModule.stock:
-        final alertCount = appState.dashboardSummary.stockAlerts > 0
-            ? appState.dashboardSummary.stockAlerts
-            : appState.inventory
-                  .where(
-                    (item) =>
-                        item.status == StockStatus.lowStock ||
-                        item.status == StockStatus.urgent,
-                  )
-                  .length;
+        final alertCount = appState.inventory
+            .where(
+              (item) =>
+                  item.status == StockStatus.lowStock ||
+                  item.status == StockStatus.urgent,
+            )
+            .length;
         return _countLabel(alertCount, 'alert');
       case MobileModule.warehouse:
         return _countLabel(appState.warehouses.length, 'gudang');

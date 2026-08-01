@@ -1051,7 +1051,6 @@ class AppState with ChangeNotifier {
       ]);
       if (!_isSameRuntime(generation, user: user, baseUrl: baseUrl)) return;
       await refreshNotifications(silent: true);
-      unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     } catch (_) {
       // Prefetch failures should not block login.
     }
@@ -9186,6 +9185,9 @@ class AppState with ChangeNotifier {
   Future<List<SalesOrderApprovalHistory>>
   fetchSalesOrderApprovalHistory() async {
     await _frappeService.ensureLoggedIn();
+    final currentUser = (_currentUser ?? _frappeService.username ?? '')
+        .trim()
+        .toLowerCase();
     final rows = await _fetchAllResourcePages(
       doctype: 'Comment',
       fields: const [
@@ -9214,7 +9216,17 @@ class AppState with ChangeNotifier {
       orderBy: 'creation desc',
       maxRows: 200,
     );
-    return rows.map(SalesOrderApprovalHistory.fromJson).toList();
+    return rows
+        .where((row) {
+          if (currentUser.isEmpty) return false;
+          final actor = (row['comment_by'] ?? row['owner'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+          return actor == currentUser;
+        })
+        .map(SalesOrderApprovalHistory.fromJson)
+        .toList();
   }
 
   Future<Map<String, dynamic>> fetchSalesOrderApprovalDetail(String name) {
