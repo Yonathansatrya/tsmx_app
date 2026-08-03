@@ -824,17 +824,19 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     try {
       final qty =
           double.tryParse((row?.qtyController ?? _qtyCtrl).text.trim()) ?? 1;
-      final insight = await context.read<AppState>().fetchItemSalesInsight(
-        itemCode,
-        customer: _customerCtrl.text.trim(),
-        company: _activeCompany(),
-        priceList: _selectedPriceList,
-        currency: _selectedCurrency,
-        warehouse: row?.warehouse ?? _selectedWarehouse,
-        customerGroup: _customerInsight?.customerGroup,
-        transactionDate: _selectedDate,
-        qty: qty,
-        ignorePricingRule: false,
+      final insight = await _withTransientRetry(
+        () => context.read<AppState>().fetchItemSalesInsight(
+          itemCode,
+          customer: _customerCtrl.text.trim(),
+          company: _activeCompany(),
+          priceList: _selectedPriceList,
+          currency: _selectedCurrency,
+          warehouse: row?.warehouse ?? _selectedWarehouse,
+          customerGroup: _customerInsight?.customerGroup,
+          transactionDate: _selectedDate,
+          qty: qty,
+          ignorePricingRule: false,
+        ),
       );
       if (!mounted || requestContextKey != pricingContextKey()) {
         return insight;
@@ -865,14 +867,43 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       return insight;
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengambil stok/harga: $error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_pricingErrorMessage(error))));
       }
       return null;
     } finally {
       if (mounted) setState(() => _loadingItemPrices.remove(loadingKey));
     }
+  }
+
+  Future<T> _withTransientRetry<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } catch (error) {
+      if (!_isTransientNetworkError(error)) rethrow;
+      await Future<void>.delayed(const Duration(milliseconds: 650));
+      return action();
+    }
+  }
+
+  bool _isTransientNetworkError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('socketexception') ||
+        message.contains('connection abort') ||
+        message.contains('connection reset') ||
+        message.contains('connection closed') ||
+        message.contains('connection refused') ||
+        message.contains('failed host lookup') ||
+        message.contains('timed out') ||
+        message.contains('timeout');
+  }
+
+  String _pricingErrorMessage(Object error) {
+    if (_isTransientNetworkError(error)) {
+      return 'Koneksi ke ERPNext terputus saat mengambil stok/harga. Coba refresh atau pilih item lagi.';
+    }
+    return 'Gagal mengambil stok/harga: ${_selectorErrorMessage(error)}';
   }
 
   Future<void> _pickPhoto(ImageSource source) async {

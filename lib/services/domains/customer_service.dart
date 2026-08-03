@@ -320,6 +320,12 @@ class CustomerService {
     String customer, {
     String? company,
   }) async {
+    final advanceBalance = await _fetchCustomerAdvanceUnallocatedBalance(
+      customer,
+      company: company,
+    );
+    if (advanceBalance > 0) return advanceBalance;
+
     try {
       final response = await _frappe.callMethod(
         'frappe.desk.query_report.run',
@@ -370,6 +376,76 @@ class CustomerService {
     } catch (_) {
       return _fetchCustomerNegativeInvoiceBalance(customer, company: company);
     }
+  }
+
+  Future<double> _fetchCustomerAdvanceUnallocatedBalance(
+    String customer, {
+    String? company,
+  }) async {
+    try {
+      final now = DateTime.now();
+      final from = DateTime(now.year, now.month - 2, 1);
+      final to = DateTime(now.year, now.month + 1, 0);
+      final response = await _frappe.callMethod(
+        'frappe.desk.query_report.run',
+        args: {
+          'report_name': 'Laporan Uang Muka Customer',
+          'filters': {
+            if (company?.trim().isNotEmpty == true) 'company': company!.trim(),
+            'customer': customer,
+            'from_date': _frappeDate(from),
+            'to_date': _frappeDate(to),
+          },
+          'ignore_prepared_report': true,
+          'are_default_filters': false,
+        },
+      );
+      final report = _queryReportPayload(response);
+      final columns = _queryReportColumns(report?['columns']);
+      final rows = _queryReportRows(report?['result'] ?? report?['data']);
+      var total = 0.0;
+      final seenPayments = <String>{};
+      for (final row in rows) {
+        final mapped = _queryReportRowMap(row, columns);
+        if (_isQueryReportTotalRow(mapped)) continue;
+        final rowCustomer = _firstText(mapped, const [
+          'customer',
+          'Customer',
+          'party',
+          'Party',
+        ]);
+        if (rowCustomer.isNotEmpty &&
+            rowCustomer != customer &&
+            !rowCustomer.toLowerCase().contains(customer.toLowerCase())) {
+          continue;
+        }
+        final paymentEntry = _firstText(mapped, const [
+          'payment_entry',
+          'Payment Entry',
+          'name',
+        ]);
+        final unallocated = _firstNumber(mapped, const [
+          'unallocated_amount',
+          'Unallocated Amount',
+          'Unallocated A...',
+          'unallocated',
+        ]);
+        if (unallocated <= 0) continue;
+        if (paymentEntry.isNotEmpty && !seenPayments.add(paymentEntry)) {
+          continue;
+        }
+        total += unallocated;
+      }
+      return total;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  String _frappeDate(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
   }
 
   Future<double> _fetchCustomerNegativeInvoiceBalance(
