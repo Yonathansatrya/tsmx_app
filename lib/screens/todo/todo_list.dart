@@ -1224,6 +1224,7 @@ class _ErpApprovalDetailPage extends StatefulWidget {
 
 class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
   Map<String, dynamic>? _detail;
+  List<SalesOrderApprovalHistory> _activity = const [];
   String? _error;
   bool _loading = true;
   bool _processing = false;
@@ -1240,12 +1241,24 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
       _error = null;
     });
     try {
-      final detail = await context.read<AppState>().fetchApprovalDocument(
-        doctype: widget.approval.doctype,
-        name: widget.approval.name,
-      );
+      final appState = context.read<AppState>();
+      final results = await Future.wait<dynamic>([
+        appState.fetchApprovalDocument(
+          doctype: widget.approval.doctype,
+          name: widget.approval.name,
+        ),
+        appState.fetchApprovalDocumentActivity(
+          doctype: widget.approval.doctype,
+          name: widget.approval.name,
+        ),
+      ]);
       if (!mounted) return;
-      setState(() => _detail = detail);
+      setState(() {
+        _detail = Map<String, dynamic>.from(results[0] as Map);
+        _activity = (results[1] as List)
+            .whereType<SalesOrderApprovalHistory>()
+            .toList();
+      });
     } catch (error) {
       if (mounted) setState(() => _error = _friendlyError(error));
     } finally {
@@ -1386,6 +1399,8 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
                     ? [const Text('Tidak ada item.')]
                     : items.map(_itemRow).toList(),
               ),
+              const SizedBox(height: 12),
+              _activitySection(),
             ],
             const SizedBox(height: 16),
             _decisionCard(),
@@ -1733,6 +1748,105 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
     ),
   );
 
+  Widget _activitySection() => _sectionCard(
+    title: 'Activity',
+    children: _activity.isEmpty
+        ? [const Text('Belum ada activity dokumen.')]
+        : _activity.take(20).map(_activityRow).toList(),
+  );
+
+  Widget _activityRow(SalesOrderApprovalHistory item) {
+    final content = _plainText(item.content);
+    final actor = item.actor.isEmpty ? 'Unknown' : item.actor;
+    final color = _activityColor(content);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            margin: const EdgeInsets.only(top: 6),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: actor,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      TextSpan(
+                        text: ' ${_activityActionLabel(content)}',
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (item.createdAt.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    item.createdAt,
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+                if (content.isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    content,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 11,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _activityColor(String content) {
+    final plain = content.toLowerCase();
+    if (plain.contains('reject')) return AppColors.danger;
+    if (plain.contains('approve') || plain.contains('submit')) {
+      return AppColors.success;
+    }
+    return AppColors.slate;
+  }
+
+  String _activityActionLabel(String content) {
+    final plain = content.toLowerCase();
+    if (plain.contains('reject')) return 'rejected';
+    if (plain.contains('approve')) return 'approved';
+    if (plain.contains('submit')) return 'submitted';
+    if (plain.contains('created')) return 'created';
+    if (plain.contains('changed') || plain.contains('edited')) return 'updated';
+    return 'activity';
+  }
+
   Widget _errorBox(String message) => Container(
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
@@ -1764,6 +1878,12 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
   }
 
   String _text(dynamic value) => value?.toString().trim() ?? '';
+
+  String _plainText(String value) => value
+      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
+      .replaceAll(RegExp(r'<[^>]*>'), ' ')
+      .replaceAll(RegExp(r'[ \t]+'), ' ')
+      .trim();
 
   String _number(dynamic value) {
     final number = NumParse.asDouble(value);
@@ -1801,12 +1921,14 @@ class _SalesOrderApprovalHistoryDetailPage extends StatefulWidget {
 class _SalesOrderApprovalHistoryDetailPageState
     extends State<_SalesOrderApprovalHistoryDetailPage> {
   Map<String, dynamic>? _detail;
+  List<SalesOrderApprovalHistory> _activity = const [];
   String? _error;
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
+    _activity = widget.group.items;
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadDetail());
   }
 
@@ -1816,12 +1938,24 @@ class _SalesOrderApprovalHistoryDetailPageState
       _error = null;
     });
     try {
-      final detail = await context.read<AppState>().fetchApprovalDocument(
-        doctype: widget.group.doctype,
-        name: widget.group.documentName,
-      );
+      final appState = context.read<AppState>();
+      final results = await Future.wait<dynamic>([
+        appState.fetchApprovalDocument(
+          doctype: widget.group.doctype,
+          name: widget.group.documentName,
+        ),
+        appState.fetchApprovalDocumentActivity(
+          doctype: widget.group.doctype,
+          name: widget.group.documentName,
+        ),
+      ]);
       if (!mounted) return;
-      setState(() => _detail = detail);
+      setState(() {
+        _detail = Map<String, dynamic>.from(results[0] as Map);
+        _activity = (results[1] as List)
+            .whereType<SalesOrderApprovalHistory>()
+            .toList();
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = _friendlyError(error));
@@ -1926,15 +2060,21 @@ class _SalesOrderApprovalHistoryDetailPageState
               ),
             ),
             const SizedBox(height: 10),
-            ...widget.group.items.asMap().entries.map((entry) {
-              final index = entry.key;
-              final item = entry.value;
-              return _timelineItem(
-                item,
-                isFirst: index == 0,
-                isLast: index == widget.group.items.length - 1,
-              );
-            }),
+            if (_activity.isEmpty)
+              _sectionCard(
+                title: 'Belum ada aktivitas',
+                children: const [Text('Activity dokumen belum tersedia.')],
+              )
+            else
+              ..._activity.asMap().entries.map((entry) {
+                final index = entry.key;
+                final item = entry.value;
+                return _timelineItem(
+                  item,
+                  isFirst: index == 0,
+                  isLast: index == _activity.length - 1,
+                );
+              }),
           ],
         ),
       ),
@@ -1998,7 +2138,7 @@ class _SalesOrderApprovalHistoryDetailPageState
               ),
             ),
             Text(
-              '${widget.group.items.length} aktivitas',
+              '${_activity.length} aktivitas',
               style: const TextStyle(
                 color: AppColors.slate,
                 fontSize: 11,
@@ -2092,8 +2232,17 @@ class _SalesOrderApprovalHistoryDetailPageState
     required bool isFirst,
     required bool isLast,
   }) {
-    final rejected = item.content.toLowerCase().contains('reject');
-    final color = rejected ? AppColors.danger : AppColors.success;
+    final plainContent = _plainText(item.content).toLowerCase();
+    final rejected = plainContent.contains('reject');
+    final isUpdate =
+        plainContent.contains('changed') ||
+        plainContent.contains('edited') ||
+        plainContent.contains('created');
+    final color = rejected
+        ? AppColors.danger
+        : isUpdate
+        ? AppColors.slate
+        : AppColors.success;
     final action = _approvalActionLabel(item.content);
     final content = _plainText(item.content);
     return IntrinsicHeight(
@@ -2276,6 +2425,8 @@ class _SalesOrderApprovalHistoryDetailPageState
     final plain = _plainText(content).toLowerCase();
     if (plain.contains('reject')) return 'rejected';
     if (plain.contains('approve')) return 'approved';
+    if (plain.contains('created')) return 'created';
+    if (plain.contains('changed') || plain.contains('edited')) return 'updated';
     return 'Aktivitas Approval';
   }
 

@@ -9203,6 +9203,7 @@ class AppState with ChangeNotifier {
     final currentUser = (_currentUser ?? _frappeService.username ?? '')
         .trim()
         .toLowerCase();
+    if (currentUser.isEmpty) return const [];
     final rows = await _fetchAllResourcePages(
       doctype: 'Comment',
       fields: const [
@@ -9210,6 +9211,7 @@ class AppState with ChangeNotifier {
         'reference_doctype',
         'reference_name',
         'content',
+        'comment_type',
         'comment_by',
         'owner',
         'creation',
@@ -9226,22 +9228,282 @@ class AppState with ChangeNotifier {
             'Journal Entry',
           ],
         ],
-        ['content', 'like', '%via TMSX%'],
       ],
       orderBy: 'creation desc',
-      maxRows: 200,
+      maxRows: 500,
     );
     return rows
         .where((row) {
-          if (currentUser.isEmpty) return false;
-          final actor = (row['comment_by'] ?? row['owner'] ?? '')
+          final owner = (row['owner'] ?? '').toString().trim().toLowerCase();
+          final commentBy = (row['comment_by'] ?? '')
               .toString()
               .trim()
               .toLowerCase();
-          return actor == currentUser;
+          final actorMatches = owner == currentUser || commentBy == currentUser;
+          if (!actorMatches) return false;
+          return _isApprovalHistoryComment(row);
         })
         .map(SalesOrderApprovalHistory.fromJson)
         .toList();
+  }
+
+  Future<List<SalesOrderApprovalHistory>> fetchApprovalDocumentActivity({
+    required String doctype,
+    required String name,
+  }) async {
+    final normalizedDoctype = doctype.trim();
+    final normalizedName = name.trim();
+    if (normalizedDoctype.isEmpty || normalizedName.isEmpty) return const [];
+    await _frappeService.ensureLoggedIn();
+    final comments = await _fetchAllResourcePages(
+      doctype: 'Comment',
+      fields: const [
+        'name',
+        'reference_doctype',
+        'reference_name',
+        'content',
+        'comment_type',
+        'comment_by',
+        'owner',
+        'creation',
+      ],
+      filters: [
+        ['reference_doctype', '=', normalizedDoctype],
+        ['reference_name', '=', normalizedName],
+      ],
+      orderBy: 'creation desc',
+      maxRows: 500,
+    );
+    final activity = comments.map(SalesOrderApprovalHistory.fromJson).toList();
+    try {
+      final versions = await _fetchAllResourcePages(
+        doctype: 'Version',
+        fields: const [
+          'name',
+          'ref_doctype',
+          'docname',
+          'data',
+          'owner',
+          'creation',
+        ],
+        filters: [
+          ['ref_doctype', '=', normalizedDoctype],
+          ['docname', '=', normalizedName],
+        ],
+        orderBy: 'creation desc',
+        maxRows: 500,
+      );
+      activity.addAll(
+        versions
+            .map(
+              (row) => _approvalVersionHistoryFromJson(
+                row,
+                fallbackDoctype: normalizedDoctype,
+                fallbackName: normalizedName,
+              ),
+            )
+            .where((row) => row.content.trim().isNotEmpty),
+      );
+    } catch (_) {
+      // Some roles can read comments but not Version. Keep the visible workflow
+      // activity instead of failing the whole detail page.
+    }
+    try {
+      final document = await _fetchCachedDocument(
+        normalizedDoctype,
+        normalizedName,
+      );
+      activity.addAll(
+        _approvalDocumentAuditHistory(
+          document,
+          doctype: normalizedDoctype,
+          name: normalizedName,
+          existing: activity,
+        ),
+      );
+    } catch (_) {
+      // Audit fields are useful but not critical for the approval detail page.
+    }
+    activity.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return activity;
+  }
+
+  List<SalesOrderApprovalHistory> _approvalDocumentAuditHistory(
+    Map<String, dynamic> document, {
+    required String doctype,
+    required String name,
+    required List<SalesOrderApprovalHistory> existing,
+  }) {
+    final rows = <SalesOrderApprovalHistory>[];
+    final hasCreated = existing.any(
+      (row) => row.content.toLowerCase().contains('created this'),
+    );
+    final owner = document['owner']?.toString().trim() ?? '';
+    final creation = document['creation']?.toString().trim() ?? '';
+    if (!hasCreated && (owner.isNotEmpty || creation.isNotEmpty)) {
+      rows.add(
+        SalesOrderApprovalHistory(
+          id: '$doctype::$name::created',
+          doctype: doctype,
+          salesOrder: name,
+          content: 'created this',
+          actor: owner,
+          createdAt: creation,
+        ),
+      );
+    }
+
+    final hasEdited = existing.any((row) {
+      final content = row.content.toLowerCase();
+      return content.contains('last edited this') ||
+          content.contains('changed ');
+    });
+    final modifiedBy = (document['modified_by'] ?? document['owner'])
+        .toString()
+        .trim();
+    final modified = document['modified']?.toString().trim() ?? '';
+    final sameTimestamp = creation.isNotEmpty && creation == modified;
+    if (!hasEdited &&
+        !sameTimestamp &&
+        (modifiedBy.isNotEmpty || modified.isNotEmpty)) {
+      rows.add(
+        SalesOrderApprovalHistory(
+          id: '$doctype::$name::modified',
+          doctype: doctype,
+          salesOrder: name,
+          content: 'last edited this',
+          actor: modifiedBy,
+          createdAt: modified,
+        ),
+      );
+    }
+    return rows;
+  }
+
+  SalesOrderApprovalHistory _approvalVersionHistoryFromJson(
+    Map<String, dynamic> row, {
+    required String fallbackDoctype,
+    required String fallbackName,
+  }) {
+    final data = _versionDataMap(row['data']);
+    return SalesOrderApprovalHistory(
+      id: row['name']?.toString() ?? '',
+      doctype: row['ref_doctype']?.toString() ?? fallbackDoctype,
+      salesOrder: row['docname']?.toString() ?? fallbackName,
+      content: _approvalVersionContent(data),
+      actor: row['owner']?.toString() ?? '',
+      createdAt: row['creation']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> _versionDataMap(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    if (raw is String && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) return decoded;
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        return const {};
+      }
+    }
+    return const {};
+  }
+
+  String _approvalVersionContent(Map<String, dynamic> data) {
+    final lines = <String>[];
+    final changed = data['changed'];
+    if (changed is List) {
+      for (final raw in changed.take(8)) {
+        if (raw is! List || raw.isEmpty) continue;
+        final field = _activityFieldLabel(raw[0]);
+        final oldValue = raw.length > 1 ? _activityValue(raw[1]) : '';
+        final newValue = raw.length > 2 ? _activityValue(raw[2]) : '';
+        if (oldValue.isEmpty && newValue.isEmpty) {
+          lines.add('Changed $field');
+        } else {
+          lines.add('Changed $field from $oldValue to $newValue');
+        }
+      }
+    }
+
+    final rowChanged = data['row_changed'];
+    if (rowChanged is List) {
+      for (final raw in rowChanged.take(4)) {
+        if (raw is! List || raw.isEmpty) continue;
+        final table = _activityFieldLabel(raw[0]);
+        final changes = raw.length > 2 && raw[2] is List ? raw[2] as List : [];
+        final details = <String>[];
+        for (final change in changes.take(4)) {
+          if (change is! List || change.isEmpty) continue;
+          final field = _activityFieldLabel(change[0]);
+          final oldValue = change.length > 1 ? _activityValue(change[1]) : '';
+          final newValue = change.length > 2 ? _activityValue(change[2]) : '';
+          details.add('$field from $oldValue to $newValue');
+        }
+        lines.add(
+          details.isEmpty
+              ? 'Changed row in $table'
+              : 'Changed row in $table: ${details.join(', ')}',
+        );
+      }
+    }
+
+    final added = data['added'];
+    if (added is List && added.isNotEmpty) {
+      lines.add('Added ${added.length} row${added.length == 1 ? '' : 's'}');
+    }
+    final removed = data['removed'];
+    if (removed is List && removed.isNotEmpty) {
+      lines.add(
+        'Removed ${removed.length} row${removed.length == 1 ? '' : 's'}',
+      );
+    }
+
+    if (lines.isEmpty) return 'last edited this';
+    return lines.join('\n');
+  }
+
+  String _activityFieldLabel(dynamic raw) {
+    final value = raw?.toString().trim() ?? '';
+    if (value.isEmpty) return 'Field';
+    return value
+        .replaceAll('_', ' ')
+        .split(' ')
+        .where((part) => part.isNotEmpty)
+        .map((part) => part[0].toUpperCase() + part.substring(1))
+        .join(' ');
+  }
+
+  String _activityValue(dynamic raw) {
+    if (raw == null) return '-';
+    final value = raw.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (value.isEmpty) return '-';
+    return value.length > 90 ? '${value.substring(0, 87)}...' : value;
+  }
+
+  bool _isApprovalHistoryComment(Map<String, dynamic> row) {
+    final commentType = row['comment_type']?.toString().trim().toLowerCase();
+    if (commentType == 'workflow') return true;
+
+    final content = row['content']?.toString().trim().toLowerCase() ?? '';
+    if (content.isEmpty) return false;
+    const approvalKeywords = [
+      'via tmsx',
+      'approved',
+      'approve',
+      'rejected',
+      'reject',
+      'submitted',
+      'submit',
+      'pending approval',
+      'to deliver and bill',
+      'cancelled',
+      'canceled',
+      'cancel',
+    ];
+    return approvalKeywords.any(content.contains);
   }
 
   Future<Map<String, dynamic>> fetchSalesOrderApprovalDetail(String name) {
