@@ -27,21 +27,18 @@ class PurchaseMainScreen extends StatelessWidget {
       onInitialize: (state) async {
         await state.loadBuyingFilterOptions();
         await Future.wait([
-          state.refreshBuyingSummaries(),
           state.refreshPurchaseOrders(),
           state.refreshPurchaseReceipts(),
           state.refreshPurchaseInvoices(),
-          state.refreshMaterialRequests(),
-          state.refreshInventory(),
           if (state.canUseApprovals) state.fetchApprovalTodos(),
         ]);
       },
       screensBuilder: (onMenuSelected) => [
         PurchaseOverviewTab(onMenuSelected: onMenuSelected),
-        const _PurchasePane(child: PurchaseOrderPanel()),
-        const _PurchasePane(child: PurchaseReceiptPanel()),
-        const _PurchasePane(child: PurchaseInvoicePanel()),
-        const _PurchasePane(child: MaterialRequestPanel()),
+        const _PurchasePane(index: 1, child: PurchaseOrderPanel()),
+        const _PurchasePane(index: 2, child: PurchaseReceiptPanel()),
+        const _PurchasePane(index: 3, child: PurchaseInvoicePanel()),
+        const _PurchasePane(index: 4, child: MaterialRequestPanel()),
         const SalesOrderApprovalScreen(
           embedded: true,
           title: 'Approval Pembelian',
@@ -123,7 +120,6 @@ Future<void> _openPurchaseCreate(BuildContext context, int currentIndex) async {
 
   final state = context.read<AppState>();
   await Future.wait([
-    state.refreshBuyingSummaries(),
     switch (currentIndex) {
       2 => state.refreshPurchaseReceipts(),
       3 => state.refreshPurchaseInvoices(),
@@ -134,9 +130,10 @@ Future<void> _openPurchaseCreate(BuildContext context, int currentIndex) async {
 }
 
 class _PurchasePane extends StatelessWidget {
+  final int index;
   final Widget child;
 
-  const _PurchasePane({required this.child});
+  const _PurchasePane({required this.index, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -144,13 +141,12 @@ class _PurchasePane extends StatelessWidget {
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: () async {
-        await Future.wait([
-          state.refreshBuyingSummaries(),
-          state.refreshPurchaseOrders(),
-          state.refreshPurchaseReceipts(),
-          state.refreshPurchaseInvoices(),
-          state.refreshMaterialRequests(),
-        ]);
+        await switch (index) {
+          2 => state.refreshPurchaseReceipts(),
+          3 => state.refreshPurchaseInvoices(),
+          4 => state.refreshMaterialRequests(),
+          _ => state.refreshPurchaseOrders(),
+        };
       },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),

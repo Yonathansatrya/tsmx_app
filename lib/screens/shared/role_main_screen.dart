@@ -185,12 +185,59 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: IndexedStack(index: _currentIndex, children: _screens),
+      body: Stack(
+        children: [
+          for (var index = 0; index < _screens.length; index++)
+            Positioned.fill(
+              child: _LazyRolePane(
+                active: index == _currentIndex,
+                child: _screens[index],
+              ),
+            ),
+        ],
+      ),
       bottomNavigationBar: _RoleBottomNav(
         destinations: widget.destinations,
         selectedIndex: _currentIndex,
         onSelected: _changeTab,
       ),
+    );
+  }
+}
+
+class _LazyRolePane extends StatefulWidget {
+  final bool active;
+  final Widget child;
+
+  const _LazyRolePane({required this.active, required this.child});
+
+  @override
+  State<_LazyRolePane> createState() => _LazyRolePaneState();
+}
+
+class _LazyRolePaneState extends State<_LazyRolePane> {
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loaded = widget.active;
+  }
+
+  @override
+  void didUpdateWidget(covariant _LazyRolePane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !_loaded) {
+      _loaded = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loaded) return const SizedBox.shrink();
+    return Offstage(
+      offstage: !widget.active,
+      child: TickerMode(enabled: widget.active, child: widget.child),
     );
   }
 }
