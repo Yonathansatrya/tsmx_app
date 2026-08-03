@@ -8,13 +8,17 @@ import 'selling/sales_order_panel.dart';
 import 'selling/delivery_note_panel.dart';
 import 'selling/sales_invoice_panel.dart';
 
+const _defaultSellingSegmentIds = ['so', 'dn', 'si'];
+
 class SellingTab extends StatefulWidget {
   final String selectedSegment;
+  final List<String> allowedSegments;
   final ValueChanged<String>? onSegmentChanged;
 
   const SellingTab({
     super.key,
     required this.selectedSegment,
+    this.allowedSegments = _defaultSellingSegmentIds,
     this.onSegmentChanged,
   });
 
@@ -26,12 +30,18 @@ class SellingTabState extends State<SellingTab>
     with SingleTickerProviderStateMixin {
   TabController? _tabController;
 
-  static const _segmentIds = ['so', 'dn', 'si'];
+  List<String> get _allowedSegments {
+    final allowed = widget.allowedSegments
+        .where(_defaultSellingSegmentIds.contains)
+        .toSet()
+        .toList(growable: false);
+    return allowed.isEmpty ? const ['so'] : allowed;
+  }
 
   String get _activeDocumentType {
     final controller = _tabController;
     final index = controller?.index ?? _initialIndex;
-    return switch (_segmentIds[index]) {
+    return switch (_allowedSegments[index]) {
       'dn' => 'Delivery Note',
       'si' => 'Sales Invoice',
       _ => 'Sales Order',
@@ -39,7 +49,7 @@ class SellingTabState extends State<SellingTab>
   }
 
   int get _initialIndex {
-    final index = _segmentIds.indexOf(widget.selectedSegment);
+    final index = _allowedSegments.indexOf(widget.selectedSegment);
     return index < 0 ? 0 : index;
   }
 
@@ -48,7 +58,7 @@ class SellingTabState extends State<SellingTab>
     super.initState();
 
     _tabController = TabController(
-      length: _segmentIds.length,
+      length: _allowedSegments.length,
       vsync: this,
       initialIndex: _initialIndex,
     );
@@ -73,7 +83,7 @@ class SellingTabState extends State<SellingTab>
 
     if (oldWidget.selectedSegment == widget.selectedSegment) return;
 
-    final nextIndex = _segmentIds.indexOf(widget.selectedSegment);
+    final nextIndex = _allowedSegments.indexOf(widget.selectedSegment);
     if (nextIndex < 0 || nextIndex == controller.index) return;
 
     controller.animateTo(nextIndex);
@@ -94,7 +104,7 @@ class SellingTabState extends State<SellingTab>
     if (controller == null) return;
     if (controller.indexIsChanging) return;
 
-    final id = _segmentIds[controller.index];
+    final id = _allowedSegments[controller.index];
 
     widget.onSegmentChanged?.call(id);
 
@@ -105,7 +115,7 @@ class SellingTabState extends State<SellingTab>
 
   void _ensureActiveDocumentLoaded(AppState appState) {
     final controller = _tabController;
-    final id = _segmentIds[controller?.index ?? _initialIndex];
+    final id = _allowedSegments[controller?.index ?? _initialIndex];
     switch (id) {
       case 'dn':
         if (appState.deliveryNotes.isEmpty) {
@@ -139,7 +149,7 @@ class SellingTabState extends State<SellingTab>
         forceRemote: true,
         documentType: _activeDocumentType,
       ),
-      switch (_segmentIds[controller.index]) {
+      switch (_allowedSegments[controller.index]) {
         'dn' => appState.refreshDeliveryNotes(),
         'si' => appState.refreshSalesInvoices(),
         _ => appState.refreshSalesOrders(),
@@ -152,7 +162,7 @@ class SellingTabState extends State<SellingTab>
     if (controller == null) return;
 
     final appState = context.read<AppState>();
-    final id = _segmentIds[controller.index];
+    final id = _allowedSegments[controller.index];
 
     switch (id) {
       case 'dn':
@@ -265,19 +275,16 @@ class SellingTabState extends State<SellingTab>
 
                   SalesPillTabBar(
                     controller: controller,
-                    tabs: const [
-                      Tab(text: 'Sales Order'),
-                      Tab(text: 'Delivery Note'),
-                      Tab(text: 'Invoice'),
+                    tabs: [
+                      for (final segment in _allowedSegments)
+                        Tab(text: _segmentLabel(segment)),
                     ],
                   ),
 
                   const SizedBox(height: 14),
 
                   switch (controller.index) {
-                    1 => const DeliveryNotePanel(),
-                    2 => const SalesInvoicePanel(),
-                    _ => const SalesOrderPanel(),
+                    _ => _segmentPanel(_allowedSegments[controller.index]),
                   },
                 ],
               );
@@ -287,4 +294,16 @@ class SellingTabState extends State<SellingTab>
       ),
     );
   }
+
+  String _segmentLabel(String segment) => switch (segment) {
+    'dn' => 'Delivery Note',
+    'si' => 'Invoice',
+    _ => 'Sales Order',
+  };
+
+  Widget _segmentPanel(String segment) => switch (segment) {
+    'dn' => const DeliveryNotePanel(),
+    'si' => const SalesInvoicePanel(),
+    _ => const SalesOrderPanel(),
+  };
 }

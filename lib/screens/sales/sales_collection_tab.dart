@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/date_range_presets.dart';
+import '../../widgets/erp/erp_filter_tools.dart';
 import 'collection/ar_aging_tab.dart';
 import 'collection/outstanding_invoice_tab.dart';
 import 'collection/customer_payment_schedule_tab.dart';
@@ -56,25 +57,40 @@ class _SalesCollectionTabState extends State<SalesCollectionTab> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: _CollectionFilterPanel(
-                companies: companies,
-                selectedCompany: selectedCompany,
-                range: _range,
-                dateBasis: _dateBasis,
-                applyDateFilter: _applyDateFilter,
-                onChanged: (company) {
-                  context.read<AppState>().setSellingPeriod(
-                    year: state.sellingPeriodYear,
-                    month: state.sellingPeriodMonth,
-                    company: company,
-                  );
-                },
-                onDateBasisChanged: (value) =>
-                    setState(() => _dateBasis = value),
-                onApplyDateFilterChanged: (value) =>
-                    setState(() => _applyDateFilter = value),
-                onPickRange: _pickRange,
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Column(
+                children: [
+                  ErpPeriodFilterCard(
+                    title: 'Filter Koleksi',
+                    subtitle:
+                        'Outstanding invoice mengikuti periode dan company ERPNext',
+                    icon: Icons.payments_rounded,
+                    selectedYear: state.sellingPeriodYear,
+                    selectedMonth: state.sellingPeriodMonth,
+                    loading: false,
+                    showLoadingIndicator: state.isOrderSummaryLoading,
+                    companyOptions: companies,
+                    selectedCompany: selectedCompany,
+                    onChanged: (year, month) =>
+                        _setPeriod(year: year, month: month),
+                    onCompanyChanged: (company) => _setPeriod(
+                      year: state.sellingPeriodYear,
+                      month: state.sellingPeriodMonth,
+                      company: company,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _CollectionAgingFilterPanel(
+                    range: _range,
+                    dateBasis: _dateBasis,
+                    applyDateFilter: _applyDateFilter,
+                    onDateBasisChanged: (value) =>
+                        setState(() => _dateBasis = value),
+                    onApplyDateFilterChanged: (value) =>
+                        setState(() => _applyDateFilter = value),
+                    onPickRange: _pickRange,
+                  ),
+                ],
               ),
             ),
             Padding(
@@ -136,195 +152,170 @@ class _SalesCollectionTabState extends State<SalesCollectionTab> {
       _applyDateFilter = true;
     });
   }
+
+  void _setPeriod({required int year, required int month, String? company}) {
+    context.read<AppState>().setSellingPeriod(
+      year: year,
+      month: month,
+      company: company,
+      documentType: 'Sales Invoice',
+    );
+    setState(() {
+      _range = _rangeForPeriod(year, month);
+      _applyDateFilter = false;
+    });
+  }
+
+  DateRangePreset _rangeForPeriod(int year, int month) {
+    if (month == 0) {
+      return DateRangePreset(from: DateTime(year), to: DateTime(year, 12, 31));
+    }
+    return DateRangePreset(
+      from: DateTime(year, month, 1),
+      to: DateTime(year, month + 1, 0),
+    );
+  }
 }
 
-class _CollectionFilterPanel extends StatelessWidget {
-  const _CollectionFilterPanel({
-    required this.companies,
-    required this.selectedCompany,
+class _CollectionAgingFilterPanel extends StatelessWidget {
+  const _CollectionAgingFilterPanel({
     required this.range,
     required this.dateBasis,
     required this.applyDateFilter,
-    required this.onChanged,
     required this.onDateBasisChanged,
     required this.onApplyDateFilterChanged,
     required this.onPickRange,
   });
 
-  final List<String> companies;
-  final String selectedCompany;
   final DateRangePreset range;
   final CollectionAgingDateBasis dateBasis;
   final bool applyDateFilter;
-  final ValueChanged<String> onChanged;
   final ValueChanged<CollectionAgingDateBasis> onDateBasisChanged;
   final ValueChanged<bool> onApplyDateFilterChanged;
   final VoidCallback onPickRange;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const _CollectionIconTile(
-                icon: Icons.business_rounded,
-                color: AppColors.primary,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: companies.contains(selectedCompany)
-                        ? selectedCompany
-                        : null,
-                    hint: const Text('Pilih Company'),
-                    isExpanded: true,
-                    icon: const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: AppColors.slate,
-                    ),
-                    style: const TextStyle(
-                      color: AppColors.navy,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                    ),
-                    items: companies
-                        .map(
-                          (company) => DropdownMenuItem(
-                            value: company,
-                            child: Text(
-                              company,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null || value.isEmpty) return;
-                      onChanged(value);
-                    },
-                  ),
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 180),
+      opacity: applyDateFilter ? 1 : 0.78,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const _CollectionIconTile(
+                  icon: Icons.filter_alt_rounded,
+                  color: AppColors.primary,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const _CollectionIconTile(
-                icon: Icons.filter_alt_rounded,
-                color: AppColors.primary,
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Filter Aging Piutang',
-                      style: TextStyle(
-                        color: AppColors.navy,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Pakai tanggal SI atau tanggal tukar faktur',
-                      style: TextStyle(
-                        color: AppColors.slate,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Switch(
-                value: applyDateFilter,
-                onChanged: onApplyDateFilterChanged,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _FilterChipButton(
-                  label: 'Tanggal SI',
-                  selected: dateBasis == CollectionAgingDateBasis.invoiceDate,
-                  onTap: () =>
-                      onDateBasisChanged(CollectionAgingDateBasis.invoiceDate),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _FilterChipButton(
-                  label: 'Tanggal TT',
-                  selected:
-                      dateBasis == CollectionAgingDateBasis.tukarFakturDate,
-                  onTap: () => onDateBasisChanged(
-                    CollectionAgingDateBasis.tukarFakturDate,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Material(
-            color: AppColors.surfaceMuted,
-            borderRadius: BorderRadius.circular(16),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: onPickRange,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.border),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.date_range_rounded,
-                      color: AppColors.primary,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${DateRangePresets.toFrappeDate(range.from)} s/d '
-                        '${DateRangePresets.toFrappeDate(range.to)}',
-                        style: const TextStyle(
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Filter Aging Piutang',
+                        style: TextStyle(
                           color: AppColors.navy,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Pakai tanggal SI atau tanggal tukar faktur',
+                        style: TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: applyDateFilter,
+                  onChanged: onApplyDateFilterChanged,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _FilterChipButton(
+                    label: 'Tanggal SI',
+                    selected: dateBasis == CollectionAgingDateBasis.invoiceDate,
+                    onTap: () => onDateBasisChanged(
+                      CollectionAgingDateBasis.invoiceDate,
                     ),
-                    const Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: AppColors.slate,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _FilterChipButton(
+                    label: 'Tanggal TT',
+                    selected:
+                        dateBasis == CollectionAgingDateBasis.tukarFakturDate,
+                    onTap: () => onDateBasisChanged(
+                      CollectionAgingDateBasis.tukarFakturDate,
                     ),
-                  ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Material(
+              color: AppColors.surfaceMuted,
+              borderRadius: BorderRadius.circular(16),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: onPickRange,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.border),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.date_range_rounded,
+                        color: AppColors.primary,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${DateRangePresets.toFrappeDate(range.from)} s/d '
+                          '${DateRangePresets.toFrappeDate(range.to)}',
+                          style: const TextStyle(
+                            color: AppColors.navy,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: AppColors.slate,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -146,20 +146,35 @@ class AppState with ChangeNotifier {
   bool get canUseAccounting => mobileAccess.canUse(MobileModule.accounting);
   bool get canUsePlantation => mobileAccess.canUse(MobileModule.plantation);
 
-  Future<bool> canSubmitDoctype(String doctype) async {
+  Future<bool> canReadDoctype(String doctype) =>
+      _hasDoctypePermission(doctype, 'read');
+
+  Future<bool> canCreateDoctype(String doctype) =>
+      _hasDoctypePermission(doctype, 'create');
+
+  Future<bool> canWriteDoctype(String doctype) =>
+      _hasDoctypePermission(doctype, 'write');
+
+  Future<bool> canSubmitDoctype(String doctype) =>
+      _hasDoctypePermission(doctype, 'submit');
+
+  Future<bool> _hasDoctypePermission(String doctype, String permType) async {
     final normalizedDoctype = doctype.trim();
+    final normalizedPermType = permType.trim().toLowerCase();
     if (normalizedDoctype.isEmpty || !_isAuthenticated) return false;
+    if (normalizedPermType.isEmpty) return false;
+    if (MobileRoleRegistry.isFullAccessRole(_userRole)) return true;
 
     final site = _frappeService.baseUrl.trim();
     final user = _currentUser?.trim() ?? _frappeService.username?.trim() ?? '';
-    final cacheKey = '$site::$user::$normalizedDoctype::submit';
+    final cacheKey = '$site::$user::$normalizedDoctype::$normalizedPermType';
     final cached = _doctypeSubmitPermissionCache[cacheKey];
     if (cached != null) return cached;
 
     try {
       final result = await _frappeService.callMethod(
         'frappe.client.has_permission',
-        args: {'doctype': normalizedDoctype, 'perm_type': 'submit'},
+        args: {'doctype': normalizedDoctype, 'perm_type': normalizedPermType},
       );
       final allowed = _permissionResultToBool(result);
       _doctypeSubmitPermissionCache[cacheKey] = allowed;

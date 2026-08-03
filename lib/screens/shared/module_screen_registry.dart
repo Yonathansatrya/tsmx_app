@@ -3,16 +3,12 @@ import 'package:flutter/material.dart';
 import '../../config/mobile_role_registry.dart';
 import '../driver/driver_main_screen.dart';
 import '../finance/finance_main_screen.dart';
-import '../logistics/logistics_delivery_tab.dart';
 import '../logistics/logistics_main_screen.dart';
-import '../logistics/logistics_tracking_tab.dart';
 import '../plantation/plantation_main_screen.dart';
 import '../purchase/purchase_main_screen.dart';
 import '../sales/sales_main_screen.dart';
-import '../tabs/stock_tab.dart';
 import '../warehouse/warehouse_main_screen.dart';
 import 'module_placeholder_screen.dart';
-import 'module_shell_screen.dart';
 
 /// Resolves module keys to workspace screens for the dashboard launcher.
 class ModuleScreenRegistry {
@@ -66,27 +62,24 @@ class ModuleScreenRegistry {
       case MobileModule.purchase:
         return const PurchaseMainScreen();
       case MobileModule.stock:
-        return const ModuleShellScreen(title: 'Stok', child: StockTab());
+        return const WarehouseMainScreen(stockOnly: true);
       case MobileModule.warehouse:
         return const WarehouseMainScreen();
       case MobileModule.qualityControl:
-        return const WarehouseMainScreen(initialTabIndex: 3);
+        return const WarehouseMainScreen(qualityOnly: true);
       case MobileModule.logistics:
         return const LogisticsMainScreen();
       case 'logistics.tracking':
-        return const ModuleShellScreen(
-          title: 'Tracking Armada',
-          child: LogisticsTrackingTab(),
-        );
+        return const LogisticsMainScreen(trackingOnly: true);
       case 'logistics.delivery':
-        return const ModuleShellScreen(
-          title: 'Delivery Monitoring',
-          child: LogisticsDeliveryTab(),
-        );
+        return const LogisticsMainScreen(deliveryOnly: true);
       case MobileModule.finance:
         return const FinanceMainScreen();
       case MobileModule.accounting:
-        return const FinanceMainScreen(initialTabIndex: 3);
+        return const FinanceMainScreen(
+          initialTabIndex: 3,
+          accountingOnly: true,
+        );
       case MobileModule.plantation:
         return const PlantationMainScreen();
       default:

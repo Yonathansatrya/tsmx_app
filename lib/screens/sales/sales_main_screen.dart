@@ -20,7 +20,14 @@ class SalesMainScreen extends StatefulWidget {
 
 class _SalesMainScreenState extends State<SalesMainScreen> {
   final _orderTabIndex = ValueNotifier<int>(0);
+  Future<_SalesDoctypePermissions>? _permissionsFuture;
   static const _sellingSegments = ['so', 'dn', 'si'];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _permissionsFuture ??= _loadPermissions();
+  }
 
   @override
   void dispose() {
@@ -40,66 +47,190 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<_SalesDoctypePermissions>(
+      future: _permissionsFuture,
+      builder: (context, snapshot) {
+        final permissions = snapshot.data;
+        if (permissions == null) {
+          return const Scaffold(
+            backgroundColor: AppColors.background,
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          );
+        }
+        return _buildRoleScreen(permissions);
+      },
+    );
+  }
+
+  Widget _buildRoleScreen(_SalesDoctypePermissions permissions) {
+    final sellingSegments = permissions.sellingSegments;
+    final entries = _buildMenuEntries(permissions, sellingSegments);
+    if (entries.isEmpty) return const _NoSalesAccessScreen();
+
+    final orderIndex = entries.indexWhere((entry) => entry.key == 'order');
+
     return RoleMainScreen(
-      title: 'Sales',
+      title: permissions.canReadSalesOrder ? 'Sales' : 'Collection',
       fallbackUsername: 'Salesman',
       onInitialize: (state) async {
-        await state.refreshDataForCurrentRole();
+        await Future.wait([
+          if (permissions.canReadSalesOrder) state.refreshSalesOrders(),
+          if (permissions.canReadDeliveryNote) state.refreshDeliveryNotes(),
+          if (permissions.canReadSalesInvoice) state.refreshSalesInvoices(),
+        ]);
         if (state.isSalesManagerRole) {
           await state.fetchApprovalTodos();
         }
       },
-      screensBuilder: (onMenuSelected) => [
-        SalesOverviewTab(
-          onMenuSelected: onMenuSelected,
-          onOrderTabSelected: _selectOrderTab,
-        ),
-        ValueListenableBuilder<int>(
-          valueListenable: _orderTabIndex,
-          builder: (context, index, _) {
-            return SellingTab(
-              selectedSegment: _sellingSegments[index],
-              onSegmentChanged: _handleSellingSegmentChanged,
-            );
-          },
-        ),
-        const SalesCollectionTab(),
-        const CustomerRequestTab(),
-        const SalesVisitTab(showCheckIn: false),
-      ],
-      floatingActionButtonBuilder: _buildSalesFab,
-      destinations: [
-        const NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: 'Beranda',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.receipt_long_outlined),
-          selectedIcon: Icon(Icons.receipt_long_rounded),
-          label: 'Order',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.account_balance_wallet_outlined),
-          selectedIcon: Icon(Icons.account_balance_wallet_rounded),
-          label: 'Koleksi',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.groups_2_outlined),
-          selectedIcon: Icon(Icons.groups_2_rounded),
-          label: 'Customer',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.location_on_outlined),
-          selectedIcon: Icon(Icons.location_on_rounded),
-          label: 'Kunjungan',
-        ),
-      ],
+      screensBuilder: (onMenuSelected) => entries
+          .map(
+            (entry) => entry.builder(
+              _SalesMenuRouter(
+                onMenuSelected: onMenuSelected,
+                entries: entries,
+              ),
+            ),
+          )
+          .toList(growable: false),
+      floatingActionButtonBuilder: (context, currentIndex) =>
+          _buildSalesFab(context, currentIndex, orderIndex, permissions),
+      destinations: entries.map((entry) => entry.destination).toList(),
     );
   }
 
-  Widget? _buildSalesFab(BuildContext context, int currentIndex) {
-    if (currentIndex != 1) return null;
+  List<_SalesMenuEntry> _buildMenuEntries(
+    _SalesDoctypePermissions permissions,
+    List<String> sellingSegments,
+  ) {
+    final entries = <_SalesMenuEntry>[];
+    final canShowOverview =
+        permissions.canReadSalesOrder && permissions.canReadSalesInvoice;
+    if (canShowOverview) {
+      entries.add(
+        _SalesMenuEntry(
+          key: 'home',
+          destination: const NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Beranda',
+          ),
+          builder: (router) => SalesOverviewTab(
+            onMenuSelected: router.selectLegacySalesIndex,
+            onOrderTabSelected: _selectOrderTab,
+          ),
+        ),
+      );
+    }
+    if (sellingSegments.isNotEmpty) {
+      entries.add(
+        _SalesMenuEntry(
+          key: 'order',
+          destination: const NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long_rounded),
+            label: 'Order',
+          ),
+          builder: (_) => ValueListenableBuilder<int>(
+            valueListenable: _orderTabIndex,
+            builder: (context, index, _) {
+              final selected =
+                  sellingSegments[index.clamp(0, sellingSegments.length - 1)];
+              return SellingTab(
+                selectedSegment: selected,
+                allowedSegments: sellingSegments,
+                onSegmentChanged: _handleSellingSegmentChanged,
+              );
+            },
+          ),
+        ),
+      );
+    }
+    if (permissions.canReadSalesInvoice) {
+      entries.add(
+        _SalesMenuEntry(
+          key: 'collection',
+          destination: const NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: Icon(Icons.account_balance_wallet_rounded),
+            label: 'Koleksi',
+          ),
+          builder: (_) => const SalesCollectionTab(),
+        ),
+      );
+    }
+    if (permissions.canReadCustomer) {
+      entries.add(
+        _SalesMenuEntry(
+          key: 'customer',
+          destination: const NavigationDestination(
+            icon: Icon(Icons.groups_2_outlined),
+            selectedIcon: Icon(Icons.groups_2_rounded),
+            label: 'Customer',
+          ),
+          builder: (_) => const CustomerRequestTab(),
+        ),
+      );
+    }
+    if (permissions.canUseSalesVisit) {
+      entries.add(
+        _SalesMenuEntry(
+          key: 'visit',
+          destination: const NavigationDestination(
+            icon: Icon(Icons.location_on_outlined),
+            selectedIcon: Icon(Icons.location_on_rounded),
+            label: 'Kunjungan',
+          ),
+          builder: (_) => const SalesVisitTab(showCheckIn: false),
+        ),
+      );
+    }
+    return entries;
+  }
+
+  Future<_SalesDoctypePermissions> _loadPermissions() async {
+    final state = context.read<AppState>();
+    if (state.mobileAccess.isAdministrator ||
+        state.mobileAccess.isDeveloper ||
+        state.mobileAccess.isCompanyAdministrator ||
+        state.mobileAccess.isDirector) {
+      return _SalesDoctypePermissions.fullAccess();
+    }
+    final results = await Future.wait([
+      state.canReadDoctype('Sales Order'),
+      state.canCreateDoctype('Sales Order'),
+      state.canReadDoctype('Delivery Note'),
+      state.canReadDoctype('Sales Invoice'),
+      state.canReadDoctype('Customer'),
+      state.canReadDoctype('Sales Visit'),
+      state.canCreateDoctype('Sales Visit'),
+    ]);
+    final permissions = _SalesDoctypePermissions(
+      canReadSalesOrder: results[0],
+      canCreateSalesOrder: results[1],
+      canReadDeliveryNote: results[2],
+      canReadSalesInvoice: results[3],
+      canReadCustomer: results[4],
+      canReadSalesVisit: results[5],
+      canCreateSalesVisit: results[6],
+    );
+    if (!permissions.hasAnyAccess && state.canUseSales) {
+      return _SalesDoctypePermissions.legacyModuleAccess(
+        collectionOnly: state.mobileAccess.isCollectionUser,
+      );
+    }
+    return permissions;
+  }
+
+  Widget? _buildSalesFab(
+    BuildContext context,
+    int currentIndex,
+    int orderIndex,
+    _SalesDoctypePermissions permissions,
+  ) {
+    if (orderIndex < 0 || currentIndex != orderIndex) return null;
+    if (!permissions.canCreateSalesOrder) return null;
     return ValueListenableBuilder<int>(
       valueListenable: _orderTabIndex,
       builder: (context, orderTabIndex, _) {
@@ -126,4 +257,122 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
       state.refreshSellingSummaries(documentType: 'Sales Order'),
     ]);
   }
+}
+
+class _SalesDoctypePermissions {
+  final bool canReadSalesOrder;
+  final bool canCreateSalesOrder;
+  final bool canReadDeliveryNote;
+  final bool canReadSalesInvoice;
+  final bool canReadCustomer;
+  final bool canReadSalesVisit;
+  final bool canCreateSalesVisit;
+
+  const _SalesDoctypePermissions({
+    required this.canReadSalesOrder,
+    required this.canCreateSalesOrder,
+    required this.canReadDeliveryNote,
+    required this.canReadSalesInvoice,
+    required this.canReadCustomer,
+    required this.canReadSalesVisit,
+    required this.canCreateSalesVisit,
+  });
+
+  factory _SalesDoctypePermissions.fullAccess() {
+    return const _SalesDoctypePermissions(
+      canReadSalesOrder: true,
+      canCreateSalesOrder: true,
+      canReadDeliveryNote: true,
+      canReadSalesInvoice: true,
+      canReadCustomer: true,
+      canReadSalesVisit: true,
+      canCreateSalesVisit: true,
+    );
+  }
+
+  factory _SalesDoctypePermissions.legacyModuleAccess({
+    required bool collectionOnly,
+  }) {
+    if (collectionOnly) {
+      return const _SalesDoctypePermissions(
+        canReadSalesOrder: false,
+        canCreateSalesOrder: false,
+        canReadDeliveryNote: false,
+        canReadSalesInvoice: true,
+        canReadCustomer: true,
+        canReadSalesVisit: false,
+        canCreateSalesVisit: false,
+      );
+    }
+    return _SalesDoctypePermissions.fullAccess();
+  }
+
+  List<String> get sellingSegments => [
+    if (canReadSalesOrder) 'so',
+    if (canReadDeliveryNote) 'dn',
+    if (canReadSalesInvoice) 'si',
+  ];
+
+  bool get canUseSalesVisit => canReadSalesVisit || canCreateSalesVisit;
+
+  bool get hasAnyAccess =>
+      canReadSalesOrder ||
+      canReadDeliveryNote ||
+      canReadSalesInvoice ||
+      canReadCustomer ||
+      canUseSalesVisit;
+}
+
+class _SalesMenuEntry {
+  final String key;
+  final NavigationDestination destination;
+  final Widget Function(_SalesMenuRouter router) builder;
+
+  const _SalesMenuEntry({
+    required this.key,
+    required this.destination,
+    required this.builder,
+  });
+}
+
+class _SalesMenuRouter {
+  final ValueChanged<int> onMenuSelected;
+  final List<_SalesMenuEntry> entries;
+
+  const _SalesMenuRouter({required this.onMenuSelected, required this.entries});
+
+  void selectLegacySalesIndex(int legacyIndex) {
+    final key = switch (legacyIndex) {
+      1 => 'order',
+      2 => 'collection',
+      3 => 'customer',
+      4 => 'visit',
+      _ => 'home',
+    };
+    final index = entries.indexWhere((entry) => entry.key == key);
+    if (index >= 0) onMenuSelected(index);
+  }
+}
+
+class _NoSalesAccessScreen extends StatelessWidget {
+  const _NoSalesAccessScreen();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+    backgroundColor: AppColors.background,
+    body: Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Text(
+          'Tidak ada akses Sales yang tersedia untuk user ini.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppColors.slate,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    ),
+  );
 }

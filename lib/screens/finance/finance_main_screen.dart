@@ -14,52 +14,226 @@ import '../../widgets/erp/erp_detail_sheet.dart';
 import '../../widgets/erp/erp_filter_tools.dart';
 import '../shared/role_main_screen.dart';
 
-class FinanceMainScreen extends StatelessWidget {
+class FinanceMainScreen extends StatefulWidget {
   final int initialTabIndex;
+  final bool accountingOnly;
 
-  const FinanceMainScreen({super.key, this.initialTabIndex = 0});
+  const FinanceMainScreen({
+    super.key,
+    this.initialTabIndex = 0,
+    this.accountingOnly = false,
+  });
+
+  @override
+  State<FinanceMainScreen> createState() => _FinanceMainScreenState();
+}
+
+class _FinanceMainScreenState extends State<FinanceMainScreen> {
+  late Future<_FinanceAccess> _accessFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _accessFuture = _loadAccess();
+  }
+
+  Future<_FinanceAccess> _loadAccess() async {
+    final state = context.read<AppState>();
+    await state.frappeService.ensureLoggedIn();
+
+    final results = await Future.wait<bool>([
+      state.canReadDoctype('Payment Entry'),
+      state.canCreateDoctype('Payment Entry'),
+      state.canReadDoctype('Sales Invoice'),
+      state.canReadDoctype('Purchase Invoice'),
+      state.canReadDoctype('Account'),
+      state.canReadDoctype('GL Entry'),
+      state.canReadDoctype('Journal Entry'),
+      state.canCreateDoctype('Journal Entry'),
+    ]);
+
+    var access = _FinanceAccess(
+      canReadPaymentEntry: results[0],
+      canCreatePaymentEntry: results[1],
+      canReadSalesInvoice: results[2],
+      canReadPurchaseInvoice: results[3],
+      canReadAccount: results[4],
+      canReadGlEntry: results[5],
+      canReadJournalEntry: results[6],
+      canCreateJournalEntry: results[7],
+    );
+
+    if (!access.hasAnyFinanceAccess) {
+      final legacyFinance = state.canUseFinance;
+      final legacyAccounting = state.canUseAccounting;
+      access = _FinanceAccess(
+        canReadPaymentEntry: legacyFinance,
+        canCreatePaymentEntry: legacyFinance,
+        canReadSalesInvoice: legacyFinance,
+        canReadPurchaseInvoice: legacyFinance,
+        canReadAccount: legacyFinance || legacyAccounting,
+        canReadGlEntry: legacyFinance || legacyAccounting,
+        canReadJournalEntry: legacyAccounting,
+        canCreateJournalEntry: legacyAccounting,
+      );
+    }
+
+    return access;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isAccounting = initialTabIndex == 3;
-    return RoleMainScreen(
-      title: isAccounting ? 'Accounting' : 'Finance',
-      fallbackUsername: isAccounting ? 'Accounting' : 'Finance',
-      initialTabIndex: initialTabIndex,
-      onInitialize: (state) async => state.frappeService.ensureLoggedIn(),
-      screensBuilder: (_) => const [
-        _FinanceWorkspaceTab(initialView: _FinanceView.dashboard),
-        _FinanceWorkspaceTab(initialView: _FinanceView.cashBank),
-        _FinanceWorkspaceTab(initialView: _FinanceView.receivablePayable),
-        _FinanceWorkspaceTab(initialView: _FinanceView.accounting),
-      ],
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.dashboard_outlined),
-          selectedIcon: Icon(Icons.dashboard_rounded),
-          label: 'Dashboard',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.account_balance_outlined),
-          selectedIcon: Icon(Icons.account_balance_rounded),
-          label: 'Bank',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.receipt_long_outlined),
-          selectedIcon: Icon(Icons.receipt_long_rounded),
-          label: 'AR/AP',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.auto_stories_outlined),
-          selectedIcon: Icon(Icons.auto_stories_rounded),
-          label: 'Ledger',
-        ),
-      ],
+    return FutureBuilder<_FinanceAccess>(
+      future: _accessFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            backgroundColor: AppColors.background,
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.primary),
+            ),
+          );
+        }
+
+        final access = snapshot.data ?? const _FinanceAccess();
+        final entries = access.entries(accountingOnly: widget.accountingOnly);
+        if (entries.isEmpty) {
+          return const Scaffold(
+            backgroundColor: AppColors.background,
+            body: Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'Tidak ada akses Keuangan yang tersedia untuk user ini.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppColors.slate),
+                ),
+              ),
+            ),
+          );
+        }
+
+        final preferredView = widget.accountingOnly
+            ? _FinanceView.accounting
+            : _FinanceView.values[widget.initialTabIndex.clamp(
+                0,
+                _FinanceView.values.length - 1,
+              )];
+        final initialIndex = entries.indexWhere(
+          (entry) => entry.view == preferredView,
+        );
+        final isAccounting =
+            widget.accountingOnly || preferredView == _FinanceView.accounting;
+
+        return RoleMainScreen(
+          title: isAccounting ? 'Accounting' : 'Finance',
+          fallbackUsername: isAccounting ? 'Accounting' : 'Finance',
+          initialTabIndex: initialIndex < 0 ? 0 : initialIndex,
+          onInitialize: (state) async => state.frappeService.ensureLoggedIn(),
+          screensBuilder: (_) => [
+            for (final entry in entries)
+              _FinanceWorkspaceTab(initialView: entry.view, access: access),
+          ],
+          destinations: [for (final entry in entries) entry.destination],
+        );
+      },
     );
   }
 }
 
 enum _FinanceView { dashboard, cashBank, receivablePayable, accounting }
+
+class _FinanceTabEntry {
+  final _FinanceView view;
+  final NavigationDestination destination;
+
+  const _FinanceTabEntry({required this.view, required this.destination});
+}
+
+class _FinanceAccess {
+  final bool canReadPaymentEntry;
+  final bool canCreatePaymentEntry;
+  final bool canReadSalesInvoice;
+  final bool canReadPurchaseInvoice;
+  final bool canReadAccount;
+  final bool canReadGlEntry;
+  final bool canReadJournalEntry;
+  final bool canCreateJournalEntry;
+
+  const _FinanceAccess({
+    this.canReadPaymentEntry = false,
+    this.canCreatePaymentEntry = false,
+    this.canReadSalesInvoice = false,
+    this.canReadPurchaseInvoice = false,
+    this.canReadAccount = false,
+    this.canReadGlEntry = false,
+    this.canReadJournalEntry = false,
+    this.canCreateJournalEntry = false,
+  });
+
+  bool get canUseCashBank =>
+      canReadPaymentEntry || canReadAccount || canReadGlEntry;
+  bool get canUseReceivablePayable =>
+      canReadSalesInvoice || canReadPurchaseInvoice;
+  bool get canUseAccounting => canReadJournalEntry || canReadGlEntry;
+  bool get canUseDashboard =>
+      canUseCashBank || canUseReceivablePayable || canUseAccounting;
+  bool get hasAnyFinanceAccess =>
+      canUseDashboard || canCreatePaymentEntry || canCreateJournalEntry;
+
+  List<_FinanceTabEntry> entries({required bool accountingOnly}) {
+    final entries = <_FinanceTabEntry>[];
+    if (!accountingOnly && canUseDashboard) {
+      entries.add(
+        const _FinanceTabEntry(
+          view: _FinanceView.dashboard,
+          destination: NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard_rounded),
+            label: 'Dashboard',
+          ),
+        ),
+      );
+    }
+    if (!accountingOnly && canUseCashBank) {
+      entries.add(
+        const _FinanceTabEntry(
+          view: _FinanceView.cashBank,
+          destination: NavigationDestination(
+            icon: Icon(Icons.account_balance_outlined),
+            selectedIcon: Icon(Icons.account_balance_rounded),
+            label: 'Bank',
+          ),
+        ),
+      );
+    }
+    if (!accountingOnly && canUseReceivablePayable) {
+      entries.add(
+        const _FinanceTabEntry(
+          view: _FinanceView.receivablePayable,
+          destination: NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long_rounded),
+            label: 'AR/AP',
+          ),
+        ),
+      );
+    }
+    if (canUseAccounting) {
+      entries.add(
+        const _FinanceTabEntry(
+          view: _FinanceView.accounting,
+          destination: NavigationDestination(
+            icon: Icon(Icons.auto_stories_outlined),
+            selectedIcon: Icon(Icons.auto_stories_rounded),
+            label: 'Ledger',
+          ),
+        ),
+      );
+    }
+    return entries;
+  }
+}
 
 final _financeFilterStore = _FinanceFilterStore();
 
@@ -94,8 +268,9 @@ class _FinanceFilterStore extends ChangeNotifier {
 
 class _FinanceWorkspaceTab extends StatefulWidget {
   final _FinanceView initialView;
+  final _FinanceAccess access;
 
-  const _FinanceWorkspaceTab({required this.initialView});
+  const _FinanceWorkspaceTab({required this.initialView, required this.access});
 
   @override
   State<_FinanceWorkspaceTab> createState() => _FinanceWorkspaceTabState();
@@ -221,30 +396,33 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
             ['company', '=', company.trim()],
           ];
 
-    final paymentRows = await _safeFetchResource(
-      state,
-      'Payment Entry',
-      fields: const [
-        'name',
-        'posting_date',
-        'payment_type',
-        'party_type',
-        'party',
-        'party_name',
-        'paid_amount',
-        'received_amount',
-        'base_paid_amount',
-        'base_received_amount',
-      ],
-      filters: [
-        ['docstatus', '=', 1],
-        ['posting_date', '>=', fromText],
-        ['posting_date', '<=', toText],
-        ...companyFilter,
-      ],
-      orderBy: 'posting_date desc, name desc',
-      limit: 10000,
-    );
+    final access = widget.access;
+    final paymentRows = access.canReadPaymentEntry
+        ? await _safeFetchResource(
+            state,
+            'Payment Entry',
+            fields: const [
+              'name',
+              'posting_date',
+              'payment_type',
+              'party_type',
+              'party',
+              'party_name',
+              'paid_amount',
+              'received_amount',
+              'base_paid_amount',
+              'base_received_amount',
+            ],
+            filters: [
+              ['docstatus', '=', 1],
+              ['posting_date', '>=', fromText],
+              ['posting_date', '<=', toText],
+              ...companyFilter,
+            ],
+            orderBy: 'posting_date desc, name desc',
+            limit: 10000,
+          )
+        : const <Map<String, dynamic>>[];
 
     var cashIn = 0.0;
     var cashOut = 0.0;
@@ -269,44 +447,48 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       }
     }
 
-    final arRows = await _safeFetchResource(
-      state,
-      'Sales Invoice',
-      fields: const [
-        'name',
-        'customer',
-        'customer_name',
-        'posting_date',
-        'due_date',
-        'status',
-        'outstanding_amount',
-      ],
-      filters: [
-        ['docstatus', '=', 1],
-        ['outstanding_amount', '>', 0],
-        ...companyFilter,
-      ],
-      limit: 10000,
-    );
-    final apRows = await _safeFetchResource(
-      state,
-      'Purchase Invoice',
-      fields: const [
-        'name',
-        'supplier',
-        'supplier_name',
-        'posting_date',
-        'due_date',
-        'status',
-        'outstanding_amount',
-      ],
-      filters: [
-        ['docstatus', '=', 1],
-        ['outstanding_amount', '>', 0],
-        ...companyFilter,
-      ],
-      limit: 10000,
-    );
+    final arRows = access.canReadSalesInvoice
+        ? await _safeFetchResource(
+            state,
+            'Sales Invoice',
+            fields: const [
+              'name',
+              'customer',
+              'customer_name',
+              'posting_date',
+              'due_date',
+              'status',
+              'outstanding_amount',
+            ],
+            filters: [
+              ['docstatus', '=', 1],
+              ['outstanding_amount', '>', 0],
+              ...companyFilter,
+            ],
+            limit: 10000,
+          )
+        : const <Map<String, dynamic>>[];
+    final apRows = access.canReadPurchaseInvoice
+        ? await _safeFetchResource(
+            state,
+            'Purchase Invoice',
+            fields: const [
+              'name',
+              'supplier',
+              'supplier_name',
+              'posting_date',
+              'due_date',
+              'status',
+              'outstanding_amount',
+            ],
+            filters: [
+              ['docstatus', '=', 1],
+              ['outstanding_amount', '>', 0],
+              ...companyFilter,
+            ],
+            limit: 10000,
+          )
+        : const <Map<String, dynamic>>[];
     final outstandingAr = arRows.fold<double>(
       0,
       (sum, row) => sum + NumParse.asDouble(row['outstanding_amount']),
@@ -316,16 +498,18 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       (sum, row) => sum + NumParse.asDouble(row['outstanding_amount']),
     );
 
-    final accountRows = await _safeFetchResource(
-      state,
-      'Account',
-      fields: const ['name', 'account_name', 'account_type', 'root_type'],
-      filters: [
-        ['is_group', '=', 0],
-        ...companyFilter,
-      ],
-      limit: 10000,
-    );
+    final accountRows = access.canReadAccount
+        ? await _safeFetchResource(
+            state,
+            'Account',
+            fields: const ['name', 'account_name', 'account_type', 'root_type'],
+            filters: [
+              ['is_group', '=', 0],
+              ...companyFilter,
+            ],
+            limit: 10000,
+          )
+        : const <Map<String, dynamic>>[];
     final bankAccounts = accountRows
         .where((row) => row['account_type']?.toString() == 'Bank')
         .map((row) => row['name']?.toString() ?? '')
@@ -337,23 +521,27 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
         .where((name) => name.isNotEmpty)
         .toList();
 
-    final bankBalances = await _accountBalances(
-      state,
-      accounts: bankAccounts,
-      to: to,
-      company: company,
-    );
+    final bankBalances = access.canReadGlEntry
+        ? await _accountBalances(
+            state,
+            accounts: bankAccounts,
+            to: to,
+            company: company,
+          )
+        : const <FinanceBankBalance>[];
     final bankBalance = bankBalances.fold<double>(
       0,
       (sum, row) => sum + row.balance,
     );
-    final collectionLedgerRows = await _collectionLedgerEntries(
-      state,
-      bankAccounts: bankAccounts,
-      from: from,
-      to: to,
-      company: company,
-    );
+    final collectionLedgerRows = access.canReadGlEntry
+        ? await _collectionLedgerEntries(
+            state,
+            bankAccounts: bankAccounts,
+            from: from,
+            to: to,
+            company: company,
+          )
+        : const <Map<String, dynamic>>[];
     final ledgerCollectionTotal = collectionLedgerRows.fold<double>(
       0,
       (sum, row) => sum + NumParse.asDouble(row['debit']),
@@ -373,89 +561,101 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       dailyCollection = ledgerCollectionTotal;
     }
 
-    final glExpenseTotal = await _expenseTotal(
-      state,
-      accounts: expenseAccounts,
-      from: from,
-      to: to,
-      company: company,
-    );
-    final expenseEntries = await _expenseEntries(
-      state,
-      accounts: expenseAccounts,
-      from: from,
-      to: to,
-      company: company,
-    );
+    final glExpenseTotal = access.canReadGlEntry
+        ? await _expenseTotal(
+            state,
+            accounts: expenseAccounts,
+            from: from,
+            to: to,
+            company: company,
+          )
+        : 0.0;
+    final expenseEntries = access.canReadGlEntry
+        ? await _expenseEntries(
+            state,
+            accounts: expenseAccounts,
+            from: from,
+            to: to,
+            company: company,
+          )
+        : const <Map<String, dynamic>>[];
 
-    final approvalCandidateRows = await _safeFetchResource(
-      state,
-      'Journal Entry',
-      fields: const [
-        'name',
-        'title',
-        'posting_date',
-        'workflow_state',
-        'docstatus',
-        'total_debit',
-      ],
-      filters: [
-        ['docstatus', '<', 2],
-        ...companyFilter,
-      ],
-      orderBy: 'modified desc',
-      limit: 100,
-    );
+    final approvalCandidateRows = access.canReadJournalEntry
+        ? await _safeFetchResource(
+            state,
+            'Journal Entry',
+            fields: const [
+              'name',
+              'title',
+              'posting_date',
+              'workflow_state',
+              'docstatus',
+              'total_debit',
+            ],
+            filters: [
+              ['docstatus', '<', 2],
+              ...companyFilter,
+            ],
+            orderBy: 'modified desc',
+            limit: 100,
+          )
+        : const <Map<String, dynamic>>[];
     final journalRows = approvalCandidateRows.where(_isJournalPending).toList();
-    final recentJournalRows = await _safeFetchResource(
-      state,
-      'Journal Entry',
-      fields: const [
-        'name',
-        'title',
-        'posting_date',
-        'workflow_state',
-        'docstatus',
-        'total_debit',
-      ],
-      filters: [
-        ['posting_date', '>=', fromText],
-        ['posting_date', '<=', toText],
-        ...companyFilter,
-      ],
-      orderBy: 'posting_date desc, modified desc',
-      limit: 30,
-    );
+    final recentJournalRows = access.canReadJournalEntry
+        ? await _safeFetchResource(
+            state,
+            'Journal Entry',
+            fields: const [
+              'name',
+              'title',
+              'posting_date',
+              'workflow_state',
+              'docstatus',
+              'total_debit',
+            ],
+            filters: [
+              ['posting_date', '>=', fromText],
+              ['posting_date', '<=', toText],
+              ...companyFilter,
+            ],
+            orderBy: 'posting_date desc, modified desc',
+            limit: 30,
+          )
+        : const <Map<String, dynamic>>[];
 
-    final ledgerRows = await _safeFetchResource(
-      state,
-      'GL Entry',
-      fields: const [
-        'name',
-        'posting_date',
-        'account',
-        'party',
-        'voucher_type',
-        'voucher_no',
-        'debit',
-        'credit',
-      ],
-      filters: [
-        ['is_cancelled', '=', 0],
-        ['posting_date', '>=', fromText],
-        ['posting_date', '<=', toText],
-        ...companyFilter,
-      ],
-      orderBy: 'posting_date desc, creation desc',
-      limit: 30,
-    );
+    final ledgerRows = access.canReadGlEntry
+        ? await _safeFetchResource(
+            state,
+            'GL Entry',
+            fields: const [
+              'name',
+              'posting_date',
+              'account',
+              'party',
+              'voucher_type',
+              'voucher_no',
+              'debit',
+              'credit',
+            ],
+            filters: [
+              ['is_cancelled', '=', 0],
+              ['posting_date', '>=', fromText],
+              ['posting_date', '<=', toText],
+              ...companyFilter,
+            ],
+            orderBy: 'posting_date desc, creation desc',
+            limit: 30,
+          )
+        : const <Map<String, dynamic>>[];
 
-    final cashFlowMetrics = await _loadCashFlowMetrics(
-      state,
-      from: from,
-      to: to,
-      company: company,
-    );
+    final cashFlowMetrics = access.canReadGlEntry
+        ? await _loadCashFlowMetrics(
+            state,
+            from: from,
+            to: to,
+            company: company,
+          )
+        : const <FinanceReportMetric>[];
     final cashFlowReportTotal = _metricValue(
       cashFlowMetrics,
       'Net Change in Cash',
@@ -470,29 +670,33 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
               ),
           ];
 
-    final profitLoss = await _loadReportMetrics(
-      state,
-      reportName: 'Profit and Loss Statement',
-      from: from,
-      to: to,
-      company: company,
-      labels: const [
-        'Total Income',
-        'Total Expense',
-        'Net Profit',
-        'Profit for the year',
-      ],
-    );
+    final profitLoss = access.canReadGlEntry
+        ? await _loadReportMetrics(
+            state,
+            reportName: 'Profit and Loss Statement',
+            from: from,
+            to: to,
+            company: company,
+            labels: const [
+              'Total Income',
+              'Total Expense',
+              'Net Profit',
+              'Profit for the year',
+            ],
+          )
+        : const <FinanceReportMetric>[];
     final expenseTotal =
         _metricValue(profitLoss, 'Total Expense') ?? glExpenseTotal;
-    final balanceSheet = await _loadReportMetrics(
-      state,
-      reportName: 'Balance Sheet',
-      from: from,
-      to: to,
-      company: company,
-      labels: const ['Total Asset', 'Total Liability', 'Total Equity'],
-    );
+    final balanceSheet = access.canReadGlEntry
+        ? await _loadReportMetrics(
+            state,
+            reportName: 'Balance Sheet',
+            from: from,
+            to: to,
+            company: company,
+            labels: const ['Total Asset', 'Total Liability', 'Total Equity'],
+          )
+        : const <FinanceReportMetric>[];
 
     return FinanceDashboardData(
       cashIn: cashIn,
