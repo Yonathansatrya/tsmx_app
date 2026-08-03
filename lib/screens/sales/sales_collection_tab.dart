@@ -54,86 +54,88 @@ class _SalesCollectionTabState extends State<SalesCollectionTab> {
       length: 3,
       child: ColoredBox(
         color: AppColors.background,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: Column(
-                children: [
-                  ErpPeriodFilterCard(
-                    title: 'Filter Koleksi',
-                    subtitle:
-                        'Outstanding invoice mengikuti periode dan company ERPNext',
-                    icon: Icons.payments_rounded,
-                    selectedYear: state.sellingPeriodYear,
-                    selectedMonth: state.sellingPeriodMonth,
-                    loading: false,
-                    showLoadingIndicator: state.isOrderSummaryLoading,
-                    companyOptions: companies,
-                    selectedCompany: selectedCompany,
-                    onChanged: (year, month) =>
-                        _setPeriod(year: year, month: month),
-                    onCompanyChanged: (company) => _setPeriod(
-                      year: state.sellingPeriodYear,
-                      month: state.sellingPeriodMonth,
-                      company: company,
+        child: NestedScrollView(
+          headerSliverBuilder: (context, innerBoxIsScrolled) => [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                child: Column(
+                  children: [
+                    ErpPeriodFilterCard(
+                      title: 'Filter Koleksi',
+                      subtitle:
+                          'Outstanding invoice mengikuti periode dan company ERPNext',
+                      icon: Icons.payments_rounded,
+                      selectedYear: state.sellingPeriodYear,
+                      selectedMonth: state.sellingPeriodMonth,
+                      loading: false,
+                      showLoadingIndicator: state.isOrderSummaryLoading,
+                      companyOptions: companies,
+                      selectedCompany: selectedCompany,
+                      onChanged: (year, month) =>
+                          _setPeriod(year: year, month: month),
+                      onCompanyChanged: (company) => _setPeriod(
+                        year: state.sellingPeriodYear,
+                        month: state.sellingPeriodMonth,
+                        company: company,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  _CollectionAgingFilterPanel(
-                    range: _range,
-                    dateBasis: _dateBasis,
-                    applyDateFilter: _applyDateFilter,
-                    onDateBasisChanged: (value) =>
-                        setState(() => _dateBasis = value),
-                    onApplyDateFilterChanged: (value) =>
-                        setState(() => _applyDateFilter = value),
-                    onPickRange: _pickRange,
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    _CollectionAgingFilterPanel(
+                      range: _range,
+                      dateBasis: _dateBasis,
+                      applyDateFilter: _applyDateFilter,
+                      onDateBasisChanged: (value) =>
+                          setState(() => _dateBasis = value),
+                      onApplyDateFilterChanged: (value) =>
+                          setState(() => _applyDateFilter = value),
+                      onPickRange: _pickRange,
+                    ),
+                  ],
+                ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: SalesPillTabBar(
-                tabs: const [
-                  Tab(text: 'AR Aging'),
-                  Tab(text: 'Invoice'),
-                  Tab(text: 'Janji Bayar'),
-                ],
-              ),
-            ),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  ArAgingTab(
-                    key: ValueKey(
-                      'ar-$selectedCompany-${_range.from}-${_range.to}-$_dateBasis-$_applyDateFilter',
-                    ),
-                    range: _range,
-                    dateBasis: _dateBasis,
-                    applyDateFilter: _applyDateFilter,
-                  ),
-                  OutstandingInvoiceTab(
-                    key: ValueKey(
-                      'invoice-$selectedCompany-${_range.from}-${_range.to}-$_dateBasis-$_applyDateFilter',
-                    ),
-                    range: _range,
-                    dateBasis: _dateBasis,
-                    applyDateFilter: _applyDateFilter,
-                  ),
-                  CustomerPaymentScheduleTab(
-                    key: ValueKey(
-                      'schedule-$selectedCompany-${_range.from}-${_range.to}-$_dateBasis-$_applyDateFilter',
-                    ),
-                    range: _range,
-                    dateBasis: _dateBasis,
-                    applyDateFilter: _applyDateFilter,
-                  ),
-                ],
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: SalesPillTabBar(
+                  tabs: const [
+                    Tab(text: 'AR Aging'),
+                    Tab(text: 'Invoice'),
+                    Tab(text: 'Janji Bayar'),
+                  ],
+                ),
               ),
             ),
           ],
+          body: TabBarView(
+            children: [
+              ArAgingTab(
+                key: ValueKey(
+                  'ar-$selectedCompany-${_range.from}-${_range.to}-$_dateBasis-$_applyDateFilter',
+                ),
+                range: _range,
+                dateBasis: _dateBasis,
+                applyDateFilter: _applyDateFilter,
+              ),
+              OutstandingInvoiceTab(
+                key: ValueKey(
+                  'invoice-$selectedCompany-${_range.from}-${_range.to}-$_dateBasis-$_applyDateFilter',
+                ),
+                range: _range,
+                dateBasis: _dateBasis,
+                applyDateFilter: _applyDateFilter,
+              ),
+              CustomerPaymentScheduleTab(
+                key: ValueKey(
+                  'schedule-$selectedCompany-${_range.from}-${_range.to}-$_dateBasis-$_applyDateFilter',
+                ),
+                range: _range,
+                dateBasis: _dateBasis,
+                applyDateFilter: _applyDateFilter,
+              ),
+            ],
+          ),
         ),
       ),
     );
