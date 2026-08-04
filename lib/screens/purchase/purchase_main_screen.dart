@@ -8,7 +8,6 @@ import '../shared/role_main_screen.dart';
 import '../tabs/buying/purchase_invoice_panel.dart';
 import '../tabs/buying/purchase_order_panel.dart';
 import '../tabs/buying/purchase_receipt_panel.dart';
-import '../todo/todo_list.dart';
 import 'material_request/create_material_request_screen.dart';
 import 'material_request/material_request_panel.dart';
 import 'purchase_invoice/create_purchase_invoice_screen.dart';
@@ -68,8 +67,6 @@ class _PurchaseMainScreenState extends State<PurchaseMainScreen> {
             state.refreshPurchaseInvoices(),
           if (permissions.canReadMaterialRequest)
             state.refreshMaterialRequests(),
-          if (state.canUseApprovals && permissions.canReadApprovalTodo)
-            state.fetchApprovalTodos(),
         ]);
       },
       screensBuilder: (onMenuSelected) => entries
@@ -172,19 +169,6 @@ class _PurchaseMainScreenState extends State<PurchaseMainScreen> {
         ),
       );
     }
-    if (permissions.canReadApprovalTodo) {
-      entries.add(
-        const _PurchaseMenuEntry(
-          key: 'approval',
-          destination: NavigationDestination(
-            icon: Icon(Icons.task_alt_outlined),
-            selectedIcon: Icon(Icons.task_alt_rounded),
-            label: 'Approval',
-          ),
-          builder: _approvalScreen,
-        ),
-      );
-    }
     return entries;
   }
 
@@ -276,15 +260,6 @@ class _PurchaseMainScreenState extends State<PurchaseMainScreen> {
       _ => state.refreshPurchaseOrders(),
     };
   }
-}
-
-Widget _approvalScreen(ValueChanged<int> _) {
-  return const SalesOrderApprovalScreen(
-    embedded: true,
-    title: 'Approval Pembelian',
-    doctypeFilter: AppState.purchaseApprovalDoctypes,
-    showHistoryTab: false,
-  );
 }
 
 class _PurchasePane extends StatelessWidget {
@@ -391,13 +366,11 @@ class _PurchaseDoctypePermissions {
     return _PurchaseDoctypePermissions.fullAccess();
   }
 
-  bool get canReadApprovalTodo =>
+  bool get hasAnyAccess =>
       canReadPurchaseOrder ||
       canReadPurchaseReceipt ||
       canReadPurchaseInvoice ||
       canReadMaterialRequest;
-
-  bool get hasAnyAccess => canReadApprovalTodo;
 }
 
 class _PurchaseMenuEntry {

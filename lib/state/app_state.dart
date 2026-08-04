@@ -3393,8 +3393,17 @@ class AppState with ChangeNotifier {
       if (priceList.isNotEmpty) ['price_list', '=', priceList],
     ];
     final normalizedQuery = query?.trim() ?? '';
+    Set<String>? candidateItemCodes;
     if (normalizedQuery.isNotEmpty) {
-      filters.add(['item_code', 'like', '%$normalizedQuery%']);
+      candidateItemCodes = await _fetchCustomerPriceItemCandidates(
+        normalizedQuery,
+        limit: limit,
+      );
+      if (candidateItemCodes.isNotEmpty) {
+        filters.add(['item_code', 'in', candidateItemCodes.toList()]);
+      } else {
+        filters.add(['item_code', 'like', '%$normalizedQuery%']);
+      }
     }
 
     List<Map<String, dynamic>> rows;
@@ -3475,6 +3484,53 @@ class AppState with ChangeNotifier {
       return nameCompare != 0 ? nameCompare : a.itemCode.compareTo(b.itemCode);
     });
     return mapped;
+  }
+
+  Future<Set<String>> _fetchCustomerPriceItemCandidates(
+    String query, {
+    required int limit,
+  }) async {
+    final normalizedQuery = query.trim();
+    if (normalizedQuery.isEmpty) return const {};
+    try {
+      final rows = await _fetchResourceWithFieldFallback(
+        doctype: 'Item',
+        fields: const ['name', 'item_name'],
+        filters: const [
+          ['disabled', '=', 0],
+        ],
+        orFilters: [
+          ['name', 'like', '%$normalizedQuery%'],
+          ['item_code', 'like', '%$normalizedQuery%'],
+          ['item_name', 'like', '%$normalizedQuery%'],
+        ],
+        orderBy: 'item_name asc',
+        limit: limit * 3,
+      );
+      return rows
+          .map((row) => row['name']?.toString().trim() ?? '')
+          .where((code) => code.isNotEmpty)
+          .toSet();
+    } catch (_) {
+      try {
+        final rows = await _fetchResourceWithFieldFallback(
+          doctype: 'Item',
+          fields: const ['name'],
+          orFilters: [
+            ['name', 'like', '%$normalizedQuery%'],
+            ['item_name', 'like', '%$normalizedQuery%'],
+          ],
+          orderBy: 'name asc',
+          limit: limit * 3,
+        );
+        return rows
+            .map((row) => row['name']?.toString().trim() ?? '')
+            .where((code) => code.isNotEmpty)
+            .toSet();
+      } catch (_) {
+        return const {};
+      }
+    }
   }
 
   Future<Map<String, dynamic>> createNooRequest(NooRequestDraft draft) {
