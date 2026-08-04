@@ -48,7 +48,6 @@ class SalesVisitCheckInScreen extends StatelessWidget {
 
 class _SalesVisitTabState extends State<SalesVisitTab> {
   final picker = ImagePicker();
-  final notes = TextEditingController();
   List<SalesCustomerOption> customers = const [];
   List<SalesVisit> visits = const [];
   SalesCustomerOption? customer;
@@ -66,10 +65,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
   }
 
   @override
-  void dispose() {
-    notes.dispose();
-    super.dispose();
-  }
+  void dispose() => super.dispose();
 
   Future<void> _load({bool forceRefresh = false}) async {
     setState(() {
@@ -149,10 +145,8 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
         customer: customer!.id,
         target: target!,
         photoPath: photo!.path,
-        notes: notes.text,
       );
       photo = null;
-      notes.clear();
       await _load();
     });
   }
@@ -432,16 +426,6 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
                 ),
               ),
             ],
-            const SizedBox(height: 12),
-            TextField(
-              controller: notes,
-              minLines: 2,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Catatan opsional',
-                prefixIcon: Icon(Icons.notes_rounded),
-              ),
-            ),
             const SizedBox(height: 14),
             FilledButton.icon(
               onPressed: loading || !canCheckIn
@@ -719,6 +703,15 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
                           _detailRow('Status', visit.status),
                           _detailRow('Customer ID', visit.customer),
                           _detailRow('Sales Person', visit.salesPerson),
+                          _detailRow('Employee', visit.employee),
+                          _detailRow(
+                            'Employee Checkin IN',
+                            visit.employeeCheckinIn,
+                          ),
+                          _detailRow(
+                            'Employee Checkin OUT',
+                            visit.employeeCheckinOut,
+                          ),
                           _detailRow('Check-in', visit.checkInTime),
                           _detailRow('Check-out', visit.checkOutTime),
                           _detailRow('Alamat', visit.address),
@@ -795,18 +788,15 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
   }
 
   Widget _stepPanel(SalesVisit? active) {
-    final status = active?.status.toLowerCase();
-    final step = active == null
+    final step = active == null || active.employeeCheckinIn.trim().isEmpty
         ? 1
-        : status == 'traveling'
-        ? 2
-        : 3;
+        : 2;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            for (var index = 1; index <= 3; index++) ...[
+            for (var index = 1; index <= 2; index++) ...[
               Expanded(
                 child: Column(
                   children: [
@@ -826,9 +816,8 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
                     const SizedBox(height: 5),
                     Text(
                       switch (index) {
-                        1 => 'Pilih tujuan',
-                        2 => 'Tiba & check-in',
-                        _ => 'Selesaikan',
+                        1 => 'Check-in',
+                        _ => 'Check-out',
                       },
                       textAlign: TextAlign.center,
                       style: TextStyle(
@@ -842,9 +831,9 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
                   ],
                 ),
               ),
-              if (index < 3)
+              if (index < 2)
                 Container(
-                  width: 22,
+                  width: 52,
                   height: 2,
                   color: index < step ? AppColors.primary : AppColors.border,
                 ),

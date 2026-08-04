@@ -3100,14 +3100,15 @@ class AppState with ChangeNotifier {
     final rows = await _fetchSalesVisitRows(
       filters: filters,
       limit: 300,
-      orderBy: 'check_in_time desc, name desc',
+      orderBy: 'modified desc, name desc',
     );
-    final visits = rows.map(SalesVisit.fromJson).toList();
+    final visits = await _hydrateSalesVisitCheckins(
+      rows.map(SalesVisit.fromJson).toList(),
+    );
     if (_shouldScopeSalesData) {
       _activeSalesVisit = null;
       for (final visit in visits) {
-        final status = visit.status.toLowerCase();
-        if (status == 'checked in') {
+        if (visit.isActive) {
           _activeSalesVisit = visit;
           break;
         }
@@ -3132,6 +3133,9 @@ class AppState with ChangeNotifier {
         'name',
         'customer',
         'customer_name',
+        'employee',
+        'employee_checkin_in',
+        'employee_checkin_out',
         'check_in_time',
         'check_out_time',
         'status',
@@ -3151,30 +3155,111 @@ class AppState with ChangeNotifier {
         'name',
         'customer',
         'customer_name',
+        'employee',
+        'employee_checkin_in',
+        'employee_checkin_out',
         'check_in_time',
         'check_out_time',
         'status',
         'sales_person',
       ],
+      const [
+        'name',
+        'customer',
+        'address',
+        'sales_person',
+        'employee',
+        'employee_checkin_in',
+        'employee_checkin_out',
+        'modified',
+      ],
       const ['name', 'customer', 'customer_name', 'status', 'modified'],
       const ['name', 'modified'],
       const ['name'],
     ]) {
-      for (final scopedFilters in <List<List<dynamic>>?>[filters, null]) {
-        try {
-          return await _fetchSalesVisitRowsWithFallback(
-            fieldSet,
-            filters: scopedFilters,
-            limit: limit,
-            orderBy: orderBy,
-          );
-        } catch (error) {
-          lastError = error;
-          if (!_looksLikeVisitListIssue(error)) rethrow;
+      for (final candidateOrderBy in <String>[
+        orderBy,
+        'modified desc, name desc',
+        'name desc',
+      ]) {
+        for (final scopedFilters in <List<List<dynamic>>?>[filters, null]) {
+          try {
+            return await _fetchSalesVisitRowsWithFallback(
+              fieldSet,
+              filters: scopedFilters,
+              limit: limit,
+              orderBy: candidateOrderBy,
+            );
+          } catch (error) {
+            lastError = error;
+            if (!_looksLikeVisitListIssue(error)) rethrow;
+          }
         }
       }
     }
     throw lastError ?? Exception('Gagal membaca Sales Visit.');
+  }
+
+  Future<List<SalesVisit>> _hydrateSalesVisitCheckins(
+    List<SalesVisit> visits,
+  ) async {
+    final checkinIds = <String>{
+      for (final visit in visits) ...[
+        if (visit.employeeCheckinIn.trim().isNotEmpty)
+          visit.employeeCheckinIn.trim(),
+        if (visit.employeeCheckinOut.trim().isNotEmpty)
+          visit.employeeCheckinOut.trim(),
+      ],
+    }.toList();
+    if (checkinIds.isEmpty) return visits;
+    try {
+      List<Map<String, dynamic>> rows;
+      try {
+        rows = await _fetchAllResourcePages(
+          doctype: 'Employee Checkin',
+          fields: const [
+            'name',
+            'time',
+            'log_type',
+            'device_id',
+            'latitude',
+            'longitude',
+          ],
+          filters: [
+            ['name', 'in', checkinIds],
+          ],
+          orderBy: 'time desc, name desc',
+          maxRows: checkinIds.length,
+        );
+      } catch (_) {
+        rows = await _fetchAllResourcePages(
+          doctype: 'Employee Checkin',
+          fields: const ['name', 'time', 'log_type', 'device_id'],
+          filters: [
+            ['name', 'in', checkinIds],
+          ],
+          orderBy: 'time desc, name desc',
+          maxRows: checkinIds.length,
+        );
+      }
+      final byName = {
+        for (final row in rows) row['name']?.toString() ?? '': row,
+      };
+      return visits.map((visit) {
+        final checkIn = byName[visit.employeeCheckinIn];
+        final checkOut = byName[visit.employeeCheckinOut];
+        return visit.copyWith(
+          checkInTime: checkIn?['time']?.toString(),
+          checkOutTime: checkOut?['time']?.toString(),
+          checkInLatitude: NumParse.asDouble(checkIn?['latitude']),
+          checkInLongitude: NumParse.asDouble(checkIn?['longitude']),
+          checkOutLatitude: NumParse.asDouble(checkOut?['latitude']),
+          checkOutLongitude: NumParse.asDouble(checkOut?['longitude']),
+        );
+      }).toList();
+    } catch (_) {
+      return visits;
+    }
   }
 
   Future<List<Map<String, dynamic>>> _fetchSalesVisitRowsWithFallback(
@@ -3253,7 +3338,6 @@ class AppState with ChangeNotifier {
     required String customer,
     required CustomerVisitLocation target,
     required String photoPath,
-    String? notes,
   }) async {
     if (_activeSalesVisit != null) {
       throw Exception('Selesaikan check-in aktif sebelum memulai yang baru.');
@@ -3271,31 +3355,36 @@ class AppState with ChangeNotifier {
         'Check-in maksimal ${target.geofenceRadius.toStringAsFixed(0)} meter.',
       );
     }
-    final now = DateTime.now().toIso8601String();
+    final employee = _currentEmployee?.trim() ?? '';
+    if (employee.isEmpty) {
+      throw Exception(
+        'User belum terhubung ke Employee. Isi Employee.user_id di ERPNext.',
+      );
+    }
+    final now = _formatFrappeDateTime(DateTime.now());
     final created = await _frappeService.createDocument('Sales Visit', {
       'customer': customer,
       'address': target.addressId,
       if (_currentSalesPerson?.isNotEmpty == true)
         'sales_person': _currentSalesPerson,
-      'status': 'Checked In',
-      'journey_start_time': now,
-      'check_in_time': now,
-      'target_latitude': target.latitude,
-      'target_longitude': target.longitude,
-      'check_in_latitude': point.latitude,
-      'check_in_longitude': point.longitude,
-      'check_in_distance': distance,
-      if (notes?.trim().isNotEmpty == true) 'notes': notes!.trim(),
+      'employee': employee,
     });
     final visit = SalesVisit.fromJson(created);
-    await uploadAttachment(
-      doctype: 'Sales Visit',
-      documentName: visit.id,
-      filePath: photoPath,
+    final checkin = await _createEmployeeCheckin(
+      employee: employee,
+      logType: 'IN',
+      time: now,
+      point: point,
+      target: target,
+      distance: distance,
+      photoPath: photoPath,
     );
+    await _frappeService.updateDocument('Sales Visit', visit.id, {
+      'employee_checkin_in': checkin['name']?.toString() ?? '',
+    });
     final updated = SalesVisit.fromJson(
       await _frappeService.fetchDocument('Sales Visit', visit.id),
-    );
+    ).copyWith(checkInTime: checkin['time']?.toString() ?? now);
     _activeSalesVisit = updated;
     _salesVisitCache = List<SalesVisit>.unmodifiable([
       updated,
@@ -3308,16 +3397,81 @@ class AppState with ChangeNotifier {
 
   Future<void> checkOutSalesVisit(String visitId) async {
     final point = await getCurrentVisitLocation();
+    SalesVisit? activeVisit = _activeSalesVisit?.id == visitId
+        ? _activeSalesVisit
+        : null;
+    if (activeVisit == null) {
+      for (final visit in _salesVisitCache) {
+        if (visit.id == visitId) {
+          activeVisit = visit;
+          break;
+        }
+      }
+    }
+    final employee = activeVisit?.employee.trim().isNotEmpty == true
+        ? activeVisit!.employee.trim()
+        : (_currentEmployee?.trim() ?? '');
+    if (employee.isEmpty) {
+      throw Exception(
+        'User belum terhubung ke Employee. Isi Employee.user_id di ERPNext.',
+      );
+    }
+    final checkout = await _createEmployeeCheckin(
+      employee: employee,
+      logType: 'OUT',
+      time: _formatFrappeDateTime(DateTime.now()),
+      point: point,
+      target: null,
+      distance: null,
+    );
     await _frappeService.updateDocument('Sales Visit', visitId, {
-      'check_out_time': DateTime.now().toIso8601String(),
-      'status': 'Checked Out',
-      'check_out_latitude': point.latitude,
-      'check_out_longitude': point.longitude,
+      'employee_checkin_out': checkout['name']?.toString() ?? '',
     });
     await _visitLocationService.stopTracking();
     _activeSalesVisit = null;
     _invalidateSalesVisitCache();
     notifyListeners();
+  }
+
+  Future<Map<String, dynamic>> _createEmployeeCheckin({
+    required String employee,
+    required String logType,
+    required String time,
+    required VisitLocationPoint point,
+    required CustomerVisitLocation? target,
+    required double? distance,
+    String? photoPath,
+  }) async {
+    final locationText = [
+      point.latitude.toStringAsFixed(6),
+      point.longitude.toStringAsFixed(6),
+      'accuracy ${point.accuracy.toStringAsFixed(0)}m',
+      if (target != null && distance != null)
+        'distance ${distance.toStringAsFixed(0)}m',
+    ].join(', ');
+    final created = await _frappeService.createDocument('Employee Checkin', {
+      'employee': employee,
+      'time': time,
+      'log_type': logType,
+      'device_id': locationText,
+      'skip_auto_attendance': 0,
+    });
+    final name = created['name']?.toString() ?? '';
+    if (name.isNotEmpty && photoPath?.trim().isNotEmpty == true) {
+      await uploadAttachment(
+        doctype: 'Employee Checkin',
+        documentName: name,
+        filePath: photoPath!,
+      );
+    }
+    return created;
+  }
+
+  String _formatFrappeDateTime(DateTime value) {
+    final local = value.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
   }
 
   Future<CustomerSalesInsight> fetchCustomerSalesInsight(

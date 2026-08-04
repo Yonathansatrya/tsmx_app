@@ -6,11 +6,11 @@
     <!-- Camera -->
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!--
-    LOCATION DINONAKTIFKAN SEMENTARA
-
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!--
+    LOCATION BACKGROUND DINONAKTIFKAN SEMENTARA
+
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

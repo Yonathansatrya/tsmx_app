@@ -205,6 +205,8 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
       state.canReadDoctype('Customer'),
       state.canReadDoctype('Sales Visit'),
       state.canCreateDoctype('Sales Visit'),
+      state.canReadDoctype('Employee Checkin'),
+      state.canCreateDoctype('Employee Checkin'),
     ]);
     final permissions = _SalesDoctypePermissions(
       canReadSalesOrder: results[0],
@@ -214,6 +216,8 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
       canReadCustomer: results[4],
       canReadSalesVisit: results[5],
       canCreateSalesVisit: results[6],
+      canReadEmployeeCheckin: results[7],
+      canCreateEmployeeCheckin: results[8],
     );
     if (!permissions.hasAnyAccess && state.canUseSales) {
       return _SalesDoctypePermissions.legacyModuleAccess(
@@ -267,6 +271,8 @@ class _SalesDoctypePermissions {
   final bool canReadCustomer;
   final bool canReadSalesVisit;
   final bool canCreateSalesVisit;
+  final bool canReadEmployeeCheckin;
+  final bool canCreateEmployeeCheckin;
 
   const _SalesDoctypePermissions({
     required this.canReadSalesOrder,
@@ -276,6 +282,8 @@ class _SalesDoctypePermissions {
     required this.canReadCustomer,
     required this.canReadSalesVisit,
     required this.canCreateSalesVisit,
+    required this.canReadEmployeeCheckin,
+    required this.canCreateEmployeeCheckin,
   });
 
   factory _SalesDoctypePermissions.fullAccess() {
@@ -287,6 +295,8 @@ class _SalesDoctypePermissions {
       canReadCustomer: true,
       canReadSalesVisit: true,
       canCreateSalesVisit: true,
+      canReadEmployeeCheckin: true,
+      canCreateEmployeeCheckin: true,
     );
   }
 
@@ -302,6 +312,8 @@ class _SalesDoctypePermissions {
         canReadCustomer: true,
         canReadSalesVisit: false,
         canCreateSalesVisit: false,
+        canReadEmployeeCheckin: false,
+        canCreateEmployeeCheckin: false,
       );
     }
     return _SalesDoctypePermissions.fullAccess();
@@ -313,7 +325,11 @@ class _SalesDoctypePermissions {
     if (canReadSalesInvoice) 'si',
   ];
 
-  bool get canUseSalesVisit => canReadSalesVisit || canCreateSalesVisit;
+  bool get canUseSalesVisit =>
+      canReadSalesVisit ||
+      canCreateSalesVisit ||
+      canReadEmployeeCheckin ||
+      canCreateEmployeeCheckin;
 
   bool get hasAnyAccess =>
       canReadSalesOrder ||

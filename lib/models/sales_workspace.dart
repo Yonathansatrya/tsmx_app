@@ -308,6 +308,9 @@ class SalesVisit {
   final String customer;
   final String customerName;
   final String salesPerson;
+  final String employee;
+  final String employeeCheckinIn;
+  final String employeeCheckinOut;
   final String checkInTime;
   final String checkOutTime;
   final String status;
@@ -329,6 +332,9 @@ class SalesVisit {
     required this.customer,
     this.customerName = '',
     required this.salesPerson,
+    this.employee = '',
+    this.employeeCheckinIn = '',
+    this.employeeCheckinOut = '',
     required this.checkInTime,
     this.checkOutTime = '',
     this.status = 'Checked In',
@@ -348,14 +354,31 @@ class SalesVisit {
 
   factory SalesVisit.fromJson(Map<String, dynamic> json) {
     final customer = json['customer']?.toString() ?? '';
+    final employeeCheckinIn = json['employee_checkin_in']?.toString() ?? '';
+    final employeeCheckinOut = json['employee_checkin_out']?.toString() ?? '';
+    final rawStatus = json['status']?.toString().trim() ?? '';
+    final inferredStatus = employeeCheckinIn.isEmpty
+        ? 'Draft'
+        : employeeCheckinOut.isEmpty
+        ? 'Checked In'
+        : 'Checked Out';
     return SalesVisit(
       id: json['name']?.toString() ?? '',
       customer: customer,
       customerName: json['customer_name']?.toString() ?? customer,
       salesPerson: json['sales_person']?.toString() ?? '',
-      checkInTime: json['check_in_time']?.toString() ?? '',
-      checkOutTime: json['check_out_time']?.toString() ?? '',
-      status: json['status']?.toString() ?? 'Checked In',
+      employee: json['employee']?.toString() ?? '',
+      employeeCheckinIn: employeeCheckinIn,
+      employeeCheckinOut: employeeCheckinOut,
+      checkInTime:
+          json['check_in_time']?.toString() ??
+          json['employee_checkin_in_time']?.toString() ??
+          '',
+      checkOutTime:
+          json['check_out_time']?.toString() ??
+          json['employee_checkin_out_time']?.toString() ??
+          '',
+      status: rawStatus.isEmpty ? inferredStatus : rawStatus,
       notes: json['notes']?.toString() ?? '',
       journeyStartTime: json['journey_start_time']?.toString() ?? '',
       address: json['address']?.toString() ?? '',
@@ -377,5 +400,44 @@ class SalesVisit {
         .whereType<Map>()
         .map((row) => Map<String, dynamic>.from(row))
         .toList();
+  }
+
+  bool get isActive {
+    if (employeeCheckinIn.isNotEmpty) return employeeCheckinOut.isEmpty;
+    return status.trim().toLowerCase() == 'checked in';
+  }
+
+  SalesVisit copyWith({
+    String? checkInTime,
+    String? checkOutTime,
+    double? checkInLatitude,
+    double? checkInLongitude,
+    double? checkOutLatitude,
+    double? checkOutLongitude,
+  }) {
+    return SalesVisit(
+      id: id,
+      customer: customer,
+      customerName: customerName,
+      salesPerson: salesPerson,
+      employee: employee,
+      employeeCheckinIn: employeeCheckinIn,
+      employeeCheckinOut: employeeCheckinOut,
+      checkInTime: checkInTime ?? this.checkInTime,
+      checkOutTime: checkOutTime ?? this.checkOutTime,
+      status: status,
+      notes: notes,
+      journeyStartTime: journeyStartTime,
+      address: address,
+      targetLatitude: targetLatitude,
+      targetLongitude: targetLongitude,
+      checkInLatitude: checkInLatitude ?? this.checkInLatitude,
+      checkInLongitude: checkInLongitude ?? this.checkInLongitude,
+      checkOutLatitude: checkOutLatitude ?? this.checkOutLatitude,
+      checkOutLongitude: checkOutLongitude ?? this.checkOutLongitude,
+      checkInDistance: checkInDistance,
+      competitors: competitors,
+      potentialOrders: potentialOrders,
+    );
   }
 }
