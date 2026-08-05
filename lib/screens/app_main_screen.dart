@@ -899,7 +899,7 @@ class _TmsxHeaderTitle extends StatelessWidget {
           width: 50,
           height: 50,
           padding: const EdgeInsets.all(6),
-          child: Image.asset('assets/images/logo.jpeg', fit: BoxFit.contain),
+          child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
         ),
         const SizedBox(width: 12),
         Expanded(

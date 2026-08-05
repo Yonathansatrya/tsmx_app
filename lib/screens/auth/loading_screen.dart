@@ -54,7 +54,7 @@ class _LoadingScreenState extends State<LoadingScreen> {
                 width: 104,
                 height: 104,
                 child: Image.asset(
-                  'assets/images/logo.jpeg',
+                  'assets/images/logo.png',
                   fit: BoxFit.contain,
                   cacheWidth: 512,
                 ),
