@@ -9647,6 +9647,13 @@ class AppState with ChangeNotifier {
         .trim()
         .toLowerCase();
     if (currentUser.isEmpty) return const [];
+    const doctypes = [
+      'Sales Order',
+      'Purchase Order',
+      'Purchase Invoice',
+      'Material Request',
+      'Journal Entry',
+    ];
     final rows = await _fetchAllResourcePages(
       doctype: 'Comment',
       fields: const [
@@ -9660,22 +9667,16 @@ class AppState with ChangeNotifier {
         'creation',
       ],
       filters: [
-        [
-          'reference_doctype',
-          'in',
-          [
-            'Sales Order',
-            'Purchase Order',
-            'Purchase Invoice',
-            'Material Request',
-            'Journal Entry',
-          ],
-        ],
+        ['reference_doctype', 'in', doctypes],
+      ],
+      orFilters: [
+        ['owner', '=', currentUser],
+        ['comment_by', '=', currentUser],
       ],
       orderBy: 'creation desc',
-      maxRows: 500,
+      maxRows: 5000,
     );
-    return rows
+    final history = rows
         .where((row) {
           final owner = (row['owner'] ?? '').toString().trim().toLowerCase();
           final commentBy = (row['comment_by'] ?? '')
@@ -9688,6 +9689,48 @@ class AppState with ChangeNotifier {
         })
         .map(SalesOrderApprovalHistory.fromJson)
         .toList();
+    try {
+      final versions = await _fetchAllResourcePages(
+        doctype: 'Version',
+        fields: const [
+          'name',
+          'ref_doctype',
+          'docname',
+          'data',
+          'owner',
+          'creation',
+        ],
+        filters: [
+          ['ref_doctype', 'in', doctypes],
+          ['owner', '=', currentUser],
+        ],
+        orderBy: 'creation desc',
+        maxRows: 5000,
+      );
+      history.addAll(
+        versions
+            .map(
+              (row) => _approvalVersionHistoryFromJson(
+                row,
+                fallbackDoctype: row['ref_doctype']?.toString() ?? '',
+                fallbackName: row['docname']?.toString() ?? '',
+              ),
+            )
+            .where((row) => _isApprovalHistoryContent(row.content)),
+      );
+    } catch (_) {
+      // Version access is optional; comments remain usable for history.
+    }
+    final byId = <String, SalesOrderApprovalHistory>{};
+    for (final row in history) {
+      final key = row.id.trim().isEmpty
+          ? '${row.doctype}|${row.salesOrder}|${row.content}|${row.createdAt}'
+          : row.id;
+      byId[key] = row;
+    }
+    final result = byId.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return result;
   }
 
   Future<List<SalesOrderApprovalHistory>> fetchApprovalDocumentActivity({
@@ -9930,8 +9973,13 @@ class AppState with ChangeNotifier {
     final commentType = row['comment_type']?.toString().trim().toLowerCase();
     if (commentType == 'workflow') return true;
 
-    final content = row['content']?.toString().trim().toLowerCase() ?? '';
-    if (content.isEmpty) return false;
+    final content = row['content']?.toString() ?? '';
+    return _isApprovalHistoryContent(content);
+  }
+
+  bool _isApprovalHistoryContent(String content) {
+    final normalized = content.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
     const approvalKeywords = [
       'via tmsx',
       'approved',
@@ -9945,8 +9993,10 @@ class AppState with ChangeNotifier {
       'cancelled',
       'canceled',
       'cancel',
+      'workflow',
+      'status',
     ];
-    return approvalKeywords.any(content.contains);
+    return approvalKeywords.any(normalized.contains);
   }
 
   Future<Map<String, dynamic>> fetchSalesOrderApprovalDetail(String name) {
@@ -10873,6 +10923,7 @@ class AppState with ChangeNotifier {
     required List<String> fields,
     String? orderBy,
     List<List<dynamic>>? filters,
+    List<List<dynamic>>? orFilters,
     required int? maxRows,
   }) async {
     return walkFrappePages(
@@ -10885,6 +10936,7 @@ class AppState with ChangeNotifier {
         limitStart: start,
         orderBy: orderBy,
         filters: filters,
+        orFilters: orFilters,
       ),
     );
   }

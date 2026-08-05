@@ -226,15 +226,9 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
 
   Widget _todoTab() {
     final query = _search.text.trim().toLowerCase();
-    final statusOptions = _approvalStatusOptions(_rows);
-    final doctypeOptions = _approvalDoctypeOptions(_rows);
-    final rows = _rows.where((row) {
+    final baseRows = _rows.where((row) {
       final matchType =
           _doctypeQuickFilter == null || row.doctype == _doctypeQuickFilter;
-      final matchStatus =
-          _statusQuickFilter == null ||
-          _approvalStatus(row).toLowerCase() ==
-              _statusQuickFilter!.toLowerCase();
       final matchSearch =
           query.isEmpty ||
           row.name.toLowerCase().contains(query) ||
@@ -242,7 +236,15 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
           row.party.toLowerCase().contains(query) ||
           row.partyName.toLowerCase().contains(query) ||
           row.workflowState.toLowerCase().contains(query);
-      return matchType && matchStatus && matchSearch;
+      return matchType && matchSearch;
+    }).toList();
+    final statusOptions = _approvalStatusOptions(baseRows);
+    final statusCounts = _approvalStatusCounts(baseRows);
+    final doctypeOptions = _approvalDoctypeOptions(_rows);
+    final rows = baseRows.where((row) {
+      return _statusQuickFilter == null ||
+          _approvalStatus(row).toLowerCase() ==
+              _statusQuickFilter!.toLowerCase();
     }).toList();
     rows.sort(_compareApprovalTodos);
     final summary = _ApprovalTodoSummary.from(_rows);
@@ -266,6 +268,8 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
             visibleCount: rows.length,
             totalCount: _rows.length,
             statusOptions: statusOptions,
+            statusCounts: statusCounts,
+            allStatusCount: baseRows.length,
             doctypeOptions: doctypeOptions,
           ),
           if (_loading) ...[
@@ -294,6 +298,8 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     required int visibleCount,
     required int totalCount,
     required List<String> statusOptions,
+    required Map<String, int> statusCounts,
+    required int allStatusCount,
     required List<String> doctypeOptions,
   }) {
     final hasActiveFilter =
@@ -424,9 +430,17 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
           selected: _statusQuickFilter,
           onSelected: (status) => setState(() => _statusQuickFilter = status),
           chips: [
-            const ErpStatusChip<String?>(label: 'All', value: null),
+            ErpStatusChip<String?>(
+              label: 'All',
+              value: null,
+              count: allStatusCount,
+            ),
             ...statusOptions.map(
-              (status) => ErpStatusChip<String?>(label: status, value: status),
+              (status) => ErpStatusChip<String?>(
+                label: status,
+                value: status,
+                count: statusCounts[status] ?? 0,
+              ),
             ),
           ],
         ),
@@ -798,6 +812,15 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     final statuses = rows.map(_approvalStatus).toSet().toList();
     statuses.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return statuses;
+  }
+
+  Map<String, int> _approvalStatusCounts(List<ErpApprovalTodo> rows) {
+    final counts = <String, int>{};
+    for (final row in rows) {
+      final status = _approvalStatus(row);
+      counts[status] = (counts[status] ?? 0) + 1;
+    }
+    return counts;
   }
 
   List<String> _approvalDoctypeOptions(List<ErpApprovalTodo> rows) {
