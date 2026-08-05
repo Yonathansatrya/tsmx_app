@@ -31,6 +31,7 @@ import '../models/stock_area_option.dart';
 import '../models/erp_summary.dart';
 import '../models/sales_order_insight.dart';
 import '../models/sales_workspace.dart';
+import '../models/spg_workspace.dart';
 import '../services/domains/auth_service.dart';
 import '../services/domains/customer_service.dart';
 import '../services/domains/purchase_invoice_service.dart';
@@ -3673,12 +3674,42 @@ class AppState with ChangeNotifier {
       doctype: 'Employee',
       fields: const ['name', 'employee_name', 'user_id', 'status'],
       filters: [
-        ['status', '=', 'Active'],
         if (normalized.isNotEmpty) ['employee_name', 'like', '%$normalized%'],
       ],
       orderBy: 'employee_name asc, name asc',
       limit: 100,
+    ).then(
+      (rows) => rows
+          .where(
+            (row) =>
+                row['status']?.toString().trim().isEmpty != false ||
+                row['status']?.toString() == 'Active',
+          )
+          .toList(),
     );
+  }
+
+  Future<List<SpgCustomerOption>> fetchSpgCustomers({String query = ''}) async {
+    if (_isSampleMode) {
+      return const [
+        SpgCustomerOption(id: 'CUST-SAMPLE-001', name: 'Sample Customer'),
+        SpgCustomerOption(id: 'CUST-SAMPLE-002', name: 'Sample Outlet'),
+      ];
+    }
+    final normalized = query.trim();
+    final rows = await _fetchResourceWithFieldFallback(
+      doctype: 'Customer',
+      fields: const ['name', 'customer_name', 'primary_address'],
+      filters: [
+        if (normalized.isNotEmpty) ['customer_name', 'like', '%$normalized%'],
+      ],
+      orderBy: 'customer_name asc, name asc',
+      limit: 200,
+    );
+    return rows
+        .map((row) => SpgCustomerOption.fromJson(row))
+        .where((customer) => customer.id.trim().isNotEmpty)
+        .toList();
   }
 
   Future<Map<String, dynamic>> createSpgDailyActivity({
@@ -3765,13 +3796,17 @@ class AppState with ChangeNotifier {
     final normalized = query.trim();
     return _fetchResourceWithFieldFallback(
       doctype: 'Item',
-      fields: const ['name', 'item_code', 'item_name', 'stock_uom', 'uom'],
-      filters: [
-        ['disabled', '=', 0],
-        if (normalized.isNotEmpty) ['item_code', 'like', '%$normalized%'],
-      ],
-      orderBy: 'item_name asc, item_code asc',
-      limit: 30,
+      fields: const ['name', 'item_code', 'item_name', 'stock_uom'],
+      filters: const [],
+      orFilters: normalized.isEmpty
+          ? null
+          : [
+              ['name', 'like', '%$normalized%'],
+              ['item_code', 'like', '%$normalized%'],
+              ['item_name', 'like', '%$normalized%'],
+            ],
+      orderBy: 'name asc',
+      limit: FrappeService.maxPageLength,
     );
   }
 

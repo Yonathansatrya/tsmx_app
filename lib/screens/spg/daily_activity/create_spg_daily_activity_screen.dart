@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../../models/sales_workspace.dart';
+import '../../../models/spg_workspace.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_error_box.dart';
@@ -21,10 +21,10 @@ class _CreateSpgDailyActivityScreenState
     extends State<CreateSpgDailyActivityScreen> {
   final _picker = ImagePicker();
   final _notes = TextEditingController();
-  List<SalesCustomerOption> _customers = const [];
+  List<SpgCustomerOption> _customers = const [];
   List<Map<String, dynamic>> _employees = const [];
   List<XFile> _photos = const [];
-  SalesCustomerOption? _customer;
+  SpgCustomerOption? _customer;
   Map<String, dynamic>? _employee;
   bool _loading = true;
   bool _saving = false;
@@ -49,7 +49,7 @@ class _CreateSpgDailyActivityScreenState
     });
     try {
       final state = context.read<AppState>();
-      final customers = await state.fetchSalesCustomers();
+      final customers = await state.fetchSpgCustomers();
       final employees = state.mobileAccess.canSelectAnyEmployee
           ? await state.fetchEmployeeOptions()
           : const <Map<String, dynamic>>[];
@@ -314,7 +314,7 @@ class _CreateSpgDailyActivityScreenState
   }
 
   Widget _customerSearchField() {
-    return Autocomplete<SalesCustomerOption>(
+    return Autocomplete<SpgCustomerOption>(
       displayStringForOption: _customerLabel,
       optionsMaxHeight: 280,
       optionsBuilder: (value) {
@@ -399,7 +399,7 @@ class _CreateSpgDailyActivityScreenState
     );
   }
 
-  String _customerLabel(SalesCustomerOption customer) {
+  String _customerLabel(SpgCustomerOption customer) {
     if (customer.id.trim().isEmpty) return customer.name;
     return '${customer.name} - ${customer.id}';
   }

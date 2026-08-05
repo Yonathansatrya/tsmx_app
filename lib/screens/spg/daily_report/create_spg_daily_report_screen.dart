@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../models/sales_workspace.dart';
+import '../../../models/spg_workspace.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_error_box.dart';
@@ -18,10 +18,10 @@ class _CreateSpgDailyReportScreenState
     extends State<CreateSpgDailyReportScreen> {
   final _notes = TextEditingController();
   final List<_SpgSellingRow> _rows = [_SpgSellingRow()];
-  List<SalesCustomerOption> _customers = const [];
+  List<SpgCustomerOption> _customers = const [];
   List<Map<String, dynamic>> _items = const [];
   List<Map<String, dynamic>> _employees = const [];
-  SalesCustomerOption? _customer;
+  SpgCustomerOption? _customer;
   Map<String, dynamic>? _employee;
   bool _loading = true;
   bool _saving = false;
@@ -50,14 +50,14 @@ class _CreateSpgDailyReportScreenState
     try {
       final state = context.read<AppState>();
       final results = await Future.wait([
-        state.fetchSalesCustomers(),
+        state.fetchSpgCustomers(),
         state.fetchSpgSellingItems(''),
         if (state.mobileAccess.canSelectAnyEmployee)
           state.fetchEmployeeOptions(),
       ]);
       if (!mounted) return;
       setState(() {
-        _customers = results[0] as List<SalesCustomerOption>;
+        _customers = results[0] as List<SpgCustomerOption>;
         _items = results[1] as List<Map<String, dynamic>>;
         _employees = state.mobileAccess.canSelectAnyEmployee
             ? results[2] as List<Map<String, dynamic>>
@@ -322,13 +322,20 @@ class _CreateSpgDailyReportScreenState
           Autocomplete<Map<String, dynamic>>(
             displayStringForOption: _itemLabel,
             optionsMaxHeight: 280,
-            optionsBuilder: (value) {
+            optionsBuilder: (value) async {
               final query = value.text.toLowerCase().trim();
               if (query.isEmpty) return _items;
+              final remoteItems = await context
+                  .read<AppState>()
+                  .fetchSpgSellingItems(query);
+              if (remoteItems.isNotEmpty) return remoteItems;
               return _items.where((item) {
                 final code = item['item_code']?.toString().toLowerCase() ?? '';
                 final name = item['item_name']?.toString().toLowerCase() ?? '';
-                return code.contains(query) || name.contains(query);
+                final id = item['name']?.toString().toLowerCase() ?? '';
+                return code.contains(query) ||
+                    name.contains(query) ||
+                    id.contains(query);
               });
             },
             onSelected: (option) {
@@ -338,9 +345,7 @@ class _CreateSpgDailyReportScreenState
                     option['name']?.toString() ??
                     '';
                 row.itemLabel = _itemLabel(option);
-                row.uom = option['uom']?.toString().trim().isNotEmpty == true
-                    ? option['uom'].toString()
-                    : option['stock_uom']?.toString() ?? '';
+                row.uom = option['stock_uom']?.toString() ?? '';
               });
             },
             fieldViewBuilder: (context, controller, focusNode, onSubmit) {
@@ -436,14 +441,19 @@ class _CreateSpgDailyReportScreenState
   }
 
   String _itemLabel(Map<String, dynamic> option) {
-    if (option['item_name']?.toString().trim().isNotEmpty == true) {
-      return option['item_name'].toString();
-    }
-    return option['item_code']?.toString() ?? option['name']?.toString() ?? '';
+    final itemName = option['item_name']?.toString().trim() ?? '';
+    final itemCode =
+        (option['item_code']?.toString().trim().isNotEmpty == true
+            ? option['item_code']?.toString().trim()
+            : option['name']?.toString().trim()) ??
+        '';
+    if (itemName.isEmpty) return itemCode;
+    if (itemCode.isEmpty || itemCode == itemName) return itemName;
+    return '$itemName - $itemCode';
   }
 
   Widget _customerSearchField() {
-    return Autocomplete<SalesCustomerOption>(
+    return Autocomplete<SpgCustomerOption>(
       displayStringForOption: _customerLabel,
       optionsMaxHeight: 280,
       optionsBuilder: (value) {
@@ -528,7 +538,7 @@ class _CreateSpgDailyReportScreenState
     );
   }
 
-  String _customerLabel(SalesCustomerOption customer) {
+  String _customerLabel(SpgCustomerOption customer) {
     if (customer.id.trim().isEmpty) return customer.name;
     return '${customer.name} - ${customer.id}';
   }

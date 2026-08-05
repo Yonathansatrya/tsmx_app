@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../sales/sales_visit_tab.dart';
 import '../shared/role_main_screen.dart';
 import 'daily_activity/spg_daily_activity_tab.dart';
 import 'daily_report/spg_daily_report_tab.dart';
 import 'overview/spg_overview_tab.dart';
+import 'visit/spg_visit_tab.dart';
 
 class SpgMainScreen extends StatelessWidget {
   const SpgMainScreen({super.key});
@@ -38,7 +38,7 @@ class SpgMainScreen extends StatelessWidget {
       ],
       screensBuilder: (onMenuSelected) => [
         SpgOverviewTab(onMenuSelected: onMenuSelected),
-        const SalesVisitTab(showCheckIn: false, spgMode: true),
+        const SpgVisitTab(showCheckIn: false),
         const SpgDailyActivityTab(),
         const SpgDailyReportTab(),
       ],
