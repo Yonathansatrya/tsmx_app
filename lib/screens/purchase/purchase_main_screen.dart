@@ -59,15 +59,6 @@ class _PurchaseMainScreenState extends State<PurchaseMainScreen> {
       fallbackUsername: 'Purchase',
       onInitialize: (state) async {
         await state.loadBuyingFilterOptions();
-        await Future.wait([
-          if (permissions.canReadPurchaseOrder) state.refreshPurchaseOrders(),
-          if (permissions.canReadPurchaseReceipt)
-            state.refreshPurchaseReceipts(),
-          if (permissions.canReadPurchaseInvoice)
-            state.refreshPurchaseInvoices(),
-          if (permissions.canReadMaterialRequest)
-            state.refreshMaterialRequests(),
-        ]);
       },
       screensBuilder: (onMenuSelected) => entries
           .map((entry) => entry.builder(onMenuSelected))

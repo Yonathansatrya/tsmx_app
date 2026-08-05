@@ -217,9 +217,19 @@ class _AppMainScreenState extends State<AppMainScreen> {
                 ],
               )
             : null,
-        body: IndexedStack(
-          index: selectedIndex,
-          children: tabs.map((tab) => tab.child).toList(),
+        body: Stack(
+          children: [
+            for (var index = 0; index < tabs.length; index++)
+              Positioned.fill(
+                child: _LazyMainTabPane(
+                  active: index == selectedIndex,
+                  child: KeyedSubtree(
+                    key: ValueKey(tabs[index].keyName),
+                    child: tabs[index].child,
+                  ),
+                ),
+              ),
+          ],
         ),
         floatingActionButton: showCreateFab
             ? Padding(
@@ -862,6 +872,43 @@ class _QuickCreateTile extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _LazyMainTabPane extends StatefulWidget {
+  final bool active;
+  final Widget child;
+
+  const _LazyMainTabPane({required this.active, required this.child});
+
+  @override
+  State<_LazyMainTabPane> createState() => _LazyMainTabPaneState();
+}
+
+class _LazyMainTabPaneState extends State<_LazyMainTabPane> {
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loaded = widget.active;
+  }
+
+  @override
+  void didUpdateWidget(covariant _LazyMainTabPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !_loaded) {
+      _loaded = true;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_loaded) return const SizedBox.shrink();
+    return Offstage(
+      offstage: !widget.active,
+      child: TickerMode(enabled: widget.active, child: widget.child),
+    );
+  }
 }
 
 class _MainTabItem {

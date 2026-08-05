@@ -79,11 +79,6 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
       title: permissions.canReadSalesOrder ? 'Sales' : 'Collection',
       fallbackUsername: 'Salesman',
       onInitialize: (state) async {
-        await Future.wait([
-          if (permissions.canReadSalesOrder) state.refreshSalesOrders(),
-          if (permissions.canReadDeliveryNote) state.refreshDeliveryNotes(),
-          if (permissions.canReadSalesInvoice) state.refreshSalesInvoices(),
-        ]);
         if (state.isSalesManagerRole) {
           await state.fetchApprovalTodos();
         }

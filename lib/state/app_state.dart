@@ -478,9 +478,9 @@ class AppState with ChangeNotifier {
   Future<List<WarehouseSerialRecord>>? _warehouseSerialInFlight;
   final Map<String, Future<List<QualityInspectionRecord>>>
   _qualityInspectionInFlight = {};
-  static const Duration _notificationPollInterval = Duration(seconds: 30);
+  static const Duration _notificationPollInterval = Duration(minutes: 2);
   static const Duration _documentCacheTtl = Duration(minutes: 2);
-  static const Duration _approvalTodoCacheTtl = Duration(seconds: 15);
+  static const Duration _approvalTodoCacheTtl = Duration(minutes: 1);
   static const String _approvalTodoDbCachePrefix = 'approval_todo_cache';
   static const Duration _salesVisitCacheTtl = Duration(seconds: 45);
   static const Duration _collectionCacheTtl = Duration(seconds: 60);
@@ -1098,20 +1098,7 @@ class AppState with ChangeNotifier {
     final user = _currentUser;
     final baseUrl = _frappeService.baseUrl;
     try {
-      await Future.wait([
-        if (canUseStock || canUseWarehouse || canUsePurchase || canUseSales)
-          fetchWarehousesFromFrappe(),
-        if (canUseStock || canUseWarehouse || canUsePurchase || canUseSales)
-          fetchInventoryFromFrappe(
-            filters: _inventoryScopeFiltersForCurrentRole(),
-          ),
-        if (canUseSales) fetchSalesOrdersFromFrappe(),
-        if (canUseSales) fetchSalesInvoicesFromFrappe(),
-        if (canUsePurchase) fetchPurchaseOrdersFromFrappe(),
-        if (canUsePurchase) fetchPurchaseInvoicesFromFrappe(),
-        if (canUseLogistics) fetchDeliveryNotesFromFrappe(),
-        if (canUsePurchase) fetchPurchaseReceiptsFromFrappe(),
-      ]);
+      await Future.wait([if (canUseApprovals) fetchApprovalTodos()]);
       if (!_isSameRuntime(generation, user: user, baseUrl: baseUrl)) return;
       await refreshNotifications(silent: true);
     } catch (_) {

@@ -691,21 +691,46 @@ class _ReceiptIssueSummaryCard extends StatelessWidget {
   }
 }
 
-class _ReceiptQcCard extends StatelessWidget {
+class _ReceiptQcCard extends StatefulWidget {
   final PurchaseReceipt receipt;
   final ValueChanged<PurchaseReceipt> onCreate;
 
   const _ReceiptQcCard({required this.receipt, required this.onCreate});
 
   @override
+  State<_ReceiptQcCard> createState() => _ReceiptQcCardState();
+}
+
+class _ReceiptQcCardState extends State<_ReceiptQcCard> {
+  late Future<List<QualityInspectionRecord>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReceiptQcCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.receipt.id != widget.receipt.id) {
+      _future = _load();
+    }
+  }
+
+  Future<List<QualityInspectionRecord>> _load() {
+    return context.read<AppState>().fetchQualityInspectionsForReceipt(
+      widget.receipt.id,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<QualityInspectionRecord>>(
-      future: context.read<AppState>().fetchQualityInspectionsForReceipt(
-        receipt.id,
-      ),
+      future: _future,
       builder: (context, snapshot) {
         final records = snapshot.data ?? const <QualityInspectionRecord>[];
-        final fallbackRefs = receipt.items
+        final fallbackRefs = widget.receipt.items
             .where((item) => item.qualityInspection.isNotEmpty)
             .toList();
         final loading = snapshot.connectionState == ConnectionState.waiting;
@@ -749,7 +774,7 @@ class _ReceiptQcCard extends StatelessWidget {
                 ),
               const SizedBox(height: 10),
               OutlinedButton.icon(
-                onPressed: () => onCreate(receipt),
+                onPressed: () => widget.onCreate(widget.receipt),
                 icon: Icon(
                   records.isEmpty && fallbackRefs.isEmpty
                       ? Icons.fact_check_outlined
@@ -1137,19 +1162,46 @@ class _CreateReceiptQcSheetState extends State<_CreateReceiptQcSheet> {
   }
 }
 
-class _ReceiptAttachmentPreviewCard extends StatelessWidget {
+class _ReceiptAttachmentPreviewCard extends StatefulWidget {
   final String receiptId;
 
   const _ReceiptAttachmentPreviewCard({super.key, required this.receiptId});
 
   @override
+  State<_ReceiptAttachmentPreviewCard> createState() =>
+      _ReceiptAttachmentPreviewCardState();
+}
+
+class _ReceiptAttachmentPreviewCardState
+    extends State<_ReceiptAttachmentPreviewCard> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ReceiptAttachmentPreviewCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.receiptId != widget.receiptId) {
+      _future = _load();
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _load() {
+    return context.read<AppState>().fetchDocumentAttachments(
+      doctype: 'Purchase Receipt',
+      documentName: widget.receiptId,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final appState = context.read<AppState>();
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: appState.fetchDocumentAttachments(
-        doctype: 'Purchase Receipt',
-        documentName: receiptId,
-      ),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const LinearProgressIndicator();

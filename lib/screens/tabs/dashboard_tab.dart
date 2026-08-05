@@ -14,33 +14,6 @@ class DashboardTab extends StatefulWidget {
 
 class _DashboardTabState extends State<DashboardTab> {
   @override
-  void initState() {
-    super.initState();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final appState = context.read<AppState>();
-
-      if (appState.canUseSales && appState.salesOrders.isEmpty) {
-        appState.refreshSalesOrders();
-      }
-      if (appState.canUsePurchase && appState.purchaseOrders.isEmpty) {
-        appState.refreshPurchaseOrders();
-      }
-      if ((appState.canUseStock || appState.canUseWarehouse) &&
-          appState.warehouses.isEmpty) {
-        appState.refreshWarehouses();
-      }
-      if ((appState.canUseStock || appState.canUseWarehouse) &&
-          appState.inventory.isEmpty) {
-        appState.refreshInventory();
-      }
-      if (appState.canUseApprovals) {
-        appState.fetchApprovalTodos();
-      }
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
 
