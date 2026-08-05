@@ -7,7 +7,6 @@ import '../../theme/app_colors.dart';
 import '../../utils/erp_format.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_status_badge.dart';
-import 'purchase_order/create_purchase_order_screen.dart';
 
 class PurchaseOverviewTab extends StatelessWidget {
   final ValueChanged<int> onMenuSelected;
@@ -71,54 +70,6 @@ class PurchaseOverviewTab extends StatelessWidget {
             ),
             const SizedBox(height: 16),
           ],
-          const _SectionHeader(
-            title: 'Akses Cepat',
-            subtitle: 'Buat dan pantau dokumen pembelian utama',
-            icon: Icons.dashboard_customize_outlined,
-          ),
-          const SizedBox(height: 10),
-          _QuickActionGrid(
-            children: [
-              _QuickActionCard(
-                title: 'Buat PO',
-                subtitle: 'Purchase order baru',
-                icon: Icons.add_shopping_cart_rounded,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CreatePurchaseOrderScreen(),
-                  ),
-                ),
-              ),
-              _QuickActionCard(
-                title: 'Receipt',
-                subtitle: receiptIssues > 0
-                    ? '$receiptIssues perlu cek'
-                    : 'Penerimaan barang',
-                icon: Icons.move_to_inbox_rounded,
-                onTap: () => onMenuSelected(2),
-              ),
-              _QuickActionCard(
-                title: 'Invoice',
-                subtitle: overdueInvoices > 0
-                    ? '$overdueInvoices overdue'
-                    : 'Tagihan supplier',
-                icon: Icons.receipt_long_rounded,
-                onTap: () => onMenuSelected(3),
-              ),
-              _QuickActionCard(
-                title: 'Approval',
-                subtitle: state.purchaseApprovalTodoCount > 0
-                    ? '${state.purchaseApprovalTodoCount} menunggu'
-                    : 'Todo pembelian',
-                icon: Icons.task_alt_rounded,
-                badgeCount: state.purchaseApprovalTodoCount,
-                onTap: () => onMenuSelected(5),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-
           const _SectionHeader(
             title: 'Outstanding Purchase Order',
             subtitle: 'PO aktif yang perlu dipantau penerimaan atau penagihan',
@@ -551,98 +502,4 @@ class _AlertStrip extends StatelessWidget {
       ),
     );
   }
-}
-
-class _QuickActionGrid extends StatelessWidget {
-  final List<Widget> children;
-
-  const _QuickActionGrid({required this.children});
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      const spacing = 10.0;
-      final itemWidth = (constraints.maxWidth - spacing) / 2;
-      return Wrap(
-        spacing: spacing,
-        runSpacing: spacing,
-        children: [
-          for (final child in children)
-            SizedBox(width: itemWidth, child: child),
-        ],
-      );
-    },
-  );
-}
-
-class _QuickActionCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final VoidCallback onTap;
-  final int badgeCount;
-
-  const _QuickActionCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.onTap,
-    this.badgeCount = 0,
-  });
-
-  @override
-  Widget build(BuildContext context) => Material(
-    color: AppColors.white,
-    borderRadius: BorderRadius.circular(18),
-    child: InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Badge(
-              isLabelVisible: badgeCount > 0,
-              label: Text('$badgeCount'),
-              backgroundColor: AppColors.danger,
-              child: CircleAvatar(
-                backgroundColor: AppColors.softGreen,
-                foregroundColor: AppColors.primary,
-                child: Icon(icon),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: AppColors.navy,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: AppColors.slate,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }
