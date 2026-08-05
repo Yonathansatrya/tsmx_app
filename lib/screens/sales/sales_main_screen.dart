@@ -10,6 +10,7 @@ import 'customer_request_tab.dart';
 import 'sales_collection_tab.dart';
 import 'sales_overview_tab.dart';
 import 'sales_visit_tab.dart';
+import '../spg/spg_main_screen.dart';
 
 class SalesMainScreen extends StatefulWidget {
   const SalesMainScreen({super.key});
@@ -47,6 +48,9 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (context.watch<AppState>().mobileAccess.isSpg) {
+      return const SpgMainScreen();
+    }
     return FutureBuilder<_SalesDoctypePermissions>(
       future: _permissionsFuture,
       builder: (context, snapshot) {

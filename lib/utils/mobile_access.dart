@@ -19,6 +19,7 @@ class MobileAccess {
   bool get isDirector => normalizedRole == MobileRole.director;
   bool get isSalesUser => normalizedRole == MobileRole.sales;
   bool get isSalesManager => normalizedRole == MobileRole.salesManager;
+  bool get isSpg => normalizedRole == MobileRole.spg;
   bool get isSalesArea => isSalesUser || isSalesManager;
   bool get isCollectionUser => normalizedRole == MobileRole.collection;
   bool get isPurchaseUser => normalizedRole == MobileRole.purchase;
@@ -33,6 +34,8 @@ class MobileAccess {
   bool get isPlantationSupervisor =>
       normalizedRole == MobileRole.plantationSupervisor;
   bool get shouldScopeSalesData => isSalesUser;
+  bool get canSelectAnyEmployee =>
+      MobileRoleRegistry.isFullAccessRole(normalizedRole);
 
   bool canUse(String module) {
     final normalized = module.trim().toLowerCase();

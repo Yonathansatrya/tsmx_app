@@ -7,6 +7,7 @@ import '../logistics/logistics_main_screen.dart';
 import '../plantation/plantation_main_screen.dart';
 import '../purchase/purchase_main_screen.dart';
 import '../sales/sales_main_screen.dart';
+import '../spg/spg_main_screen.dart';
 import '../warehouse/warehouse_main_screen.dart';
 import 'module_placeholder_screen.dart';
 
@@ -32,6 +33,7 @@ class ModuleScreenRegistry {
     }
 
     add(MobileModule.sales);
+    add(MobileModule.spg);
     add(MobileModule.purchase);
     add(MobileModule.stock);
     add(MobileModule.warehouse);
@@ -59,6 +61,8 @@ class ModuleScreenRegistry {
     switch (route) {
       case MobileModule.sales:
         return const SalesMainScreen();
+      case MobileModule.spg:
+        return const SpgMainScreen();
       case MobileModule.purchase:
         return const PurchaseMainScreen();
       case MobileModule.stock:

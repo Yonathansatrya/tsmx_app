@@ -6,6 +6,7 @@ class MobileModule {
 
   static const dashboard = 'dashboard';
   static const sales = 'sales';
+  static const spg = 'spg';
   static const purchase = 'purchase';
   static const stock = 'stock';
   static const warehouse = 'warehouse';
@@ -19,6 +20,7 @@ class MobileModule {
   static const all = [
     dashboard,
     sales,
+    spg,
     purchase,
     stock,
     warehouse,
@@ -33,6 +35,7 @@ class MobileModule {
   static const implemented = [
     dashboard,
     sales,
+    spg,
     purchase,
     stock,
     warehouse,
@@ -55,6 +58,7 @@ class MobileRole {
   static const developer = 'Developer';
   static const sales = 'Sales';
   static const salesManager = 'Sales Manager';
+  static const spg = 'SPG';
   static const collection = 'Collection';
   static const warehouse = 'Warehouse';
   static const qualityControl = 'Quality Control';
@@ -140,6 +144,14 @@ class MobileRoleRegistry {
       defaultSubtitle: 'Order, invoice, collection, visit',
       icon: Icons.point_of_sale_rounded,
       menuOrder: 20,
+    ),
+    MobileModule.spg: MobileModuleMeta(
+      key: MobileModule.spg,
+      groupKey: 'sales',
+      defaultLabel: 'SPG',
+      defaultSubtitle: 'Check-in, report foto, dan selling',
+      icon: Icons.storefront_rounded,
+      menuOrder: 25,
     ),
     MobileModule.purchase: MobileModuleMeta(
       key: MobileModule.purchase,
@@ -230,6 +242,9 @@ class MobileRoleRegistry {
     'sales user': MobileRole.sales,
     'selling user': MobileRole.sales,
     'sales': MobileRole.sales,
+    'spg': MobileRole.spg,
+    'sales promotion': MobileRole.spg,
+    'sales promotion girl': MobileRole.spg,
     'collection admin': MobileRole.collection,
     'collection user': MobileRole.collection,
     'collection manager': MobileRole.collection,
@@ -287,6 +302,7 @@ class MobileRoleRegistry {
     MobileRole.plantationSupervisor,
     MobileRole.purchaseManager,
     MobileRole.salesManager,
+    MobileRole.spg,
     MobileRole.qualityControl,
     MobileRole.logistics,
     MobileRole.collection,
@@ -300,6 +316,7 @@ class MobileRoleRegistry {
     MobileRole.administrator: {
       MobileModule.dashboard,
       MobileModule.sales,
+      MobileModule.spg,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -313,6 +330,7 @@ class MobileRoleRegistry {
     MobileRole.developer: {
       MobileModule.dashboard,
       MobileModule.sales,
+      MobileModule.spg,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -326,6 +344,7 @@ class MobileRoleRegistry {
     MobileRole.companyAdministrator: {
       MobileModule.dashboard,
       MobileModule.sales,
+      MobileModule.spg,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -336,6 +355,7 @@ class MobileRoleRegistry {
     MobileRole.director: {
       MobileModule.dashboard,
       MobileModule.sales,
+      MobileModule.spg,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -348,6 +368,7 @@ class MobileRoleRegistry {
       MobileModule.approvals,
     },
     MobileRole.sales: {MobileModule.dashboard, MobileModule.sales},
+    MobileRole.spg: {MobileModule.dashboard, MobileModule.spg},
     MobileRole.collection: {MobileModule.dashboard, MobileModule.sales},
     MobileRole.purchaseManager: {
       MobileModule.dashboard,

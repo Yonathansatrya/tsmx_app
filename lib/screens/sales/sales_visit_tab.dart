@@ -17,10 +17,12 @@ class SalesVisitTab extends StatefulWidget {
     super.key,
     this.showCheckIn = true,
     this.showHistory = true,
+    this.spgMode = false,
   });
 
   final bool? showCheckIn;
   final bool? showHistory;
+  final bool spgMode;
 
   bool get shouldShowCheckIn => showCheckIn ?? true;
   bool get shouldShowHistory => showHistory ?? true;
@@ -30,18 +32,24 @@ class SalesVisitTab extends StatefulWidget {
 }
 
 class SalesVisitCheckInScreen extends StatelessWidget {
-  const SalesVisitCheckInScreen({super.key});
+  const SalesVisitCheckInScreen({super.key, this.spgMode = false});
+
+  final bool spgMode;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Check-in Kunjungan'),
+        title: Text(spgMode ? 'Check-in SPG' : 'Check-in Kunjungan'),
         backgroundColor: AppColors.background,
         foregroundColor: AppColors.navy,
       ),
-      body: const SalesVisitTab(showCheckIn: true, showHistory: false),
+      body: SalesVisitTab(
+        showCheckIn: true,
+        showHistory: false,
+        spgMode: spgMode,
+      ),
     );
   }
 }
@@ -85,9 +93,11 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     }
 
     try {
-      nextVisits = await state.fetchSalesVisits(forceRefresh: forceRefresh);
+      nextVisits = widget.spgMode
+          ? await state.fetchSpgVisits(forceRefresh: forceRefresh)
+          : await state.fetchSalesVisits(forceRefresh: forceRefresh);
       final active = state.activeSalesVisit;
-      if (state.mobileAccess.isSalesUser && active != null) {
+      if (active != null) {
         try {
           target = await state.fetchCustomerVisitLocation(active.customer);
         } catch (_) {
@@ -141,11 +151,19 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
       return;
     }
     await _runAction(() async {
-      await context.read<AppState>().checkInSalesCustomer(
-        customer: customer!.id,
-        target: target!,
-        photoPath: photo!.path,
-      );
+      if (widget.spgMode) {
+        await context.read<AppState>().checkInSpgCustomer(
+          customer: customer!.id,
+          target: target!,
+          photoPath: photo!.path,
+        );
+      } else {
+        await context.read<AppState>().checkInSalesCustomer(
+          customer: customer!.id,
+          target: target!,
+          photoPath: photo!.path,
+        );
+      }
       photo = null;
       await _load();
     });
@@ -215,8 +233,7 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
           if (widget.shouldShowCheckIn) ...[
             const CollectionSectionHeader(
               title: 'Check-in Customer',
-              subtitle:
-                  'Pilih customer, validasi radius, selfie, lalu check-in',
+              subtitle: 'Pilih customer, validasi radius, foto, lalu check-in',
               icon: Icons.location_on_outlined,
             ),
             const SizedBox(height: 12),
@@ -295,9 +312,11 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
   }
 
   Future<void> _openCreateVisit() async {
-    await Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const SalesVisitCheckInScreen()));
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SalesVisitCheckInScreen(spgMode: widget.spgMode),
+      ),
+    );
     if (mounted) await _load();
   }
 
@@ -554,7 +573,8 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
                         ),
                       ),
                     ],
-                    if (visit.salesPerson.trim().isNotEmpty) ...[
+                    if (!widget.spgMode &&
+                        visit.salesPerson.trim().isNotEmpty) ...[
                       const SizedBox(height: 5),
                       Text(
                         visit.salesPerson,
@@ -702,7 +722,8 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
                         children: [
                           _detailRow('Status', visit.status),
                           _detailRow('Customer ID', visit.customer),
-                          _detailRow('Sales Person', visit.salesPerson),
+                          if (!widget.spgMode)
+                            _detailRow('Sales Person', visit.salesPerson),
                           _detailRow('Employee', visit.employee),
                           _detailRow(
                             'Employee Checkin IN',
@@ -875,7 +896,11 @@ class _SalesVisitTabState extends State<SalesVisitTab> {
     );
     if (!confirmed || !mounted) return;
     await _runAction(() async {
-      await context.read<AppState>().checkOutSalesVisit(visit.id);
+      if (widget.spgMode) {
+        await context.read<AppState>().checkOutSpgVisit(visit.id);
+      } else {
+        await context.read<AppState>().checkOutSalesVisit(visit.id);
+      }
       await _load();
     });
   }

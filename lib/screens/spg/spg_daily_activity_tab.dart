@@ -1,0 +1,292 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../state/app_state.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/erp/erp_empty_state.dart';
+import '../../widgets/erp/erp_error_box.dart';
+import '../sales/collection/collection_widgets.dart';
+import 'create_spg_daily_activity_screen.dart';
+
+class SpgDailyActivityTab extends StatefulWidget {
+  const SpgDailyActivityTab({super.key});
+
+  @override
+  State<SpgDailyActivityTab> createState() => _SpgDailyActivityTabState();
+}
+
+class _SpgDailyActivityTabState extends State<SpgDailyActivityTab> {
+  List<Map<String, dynamic>> _records = const [];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final records = await context.read<AppState>().fetchSpgDailyActivities();
+      if (!mounted) return;
+      setState(() => _records = records);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _openCreate() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const CreateSpgDailyActivityScreen()),
+    );
+    if (created == true && mounted) await _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
+            children: [
+              const CollectionSectionHeader(
+                title: 'SPG Daily Activity',
+                subtitle: 'Riwayat foto aktivitas customer harian',
+                icon: Icons.photo_camera_outlined,
+              ),
+              if (_loading) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                ErpErrorBox(message: _error!),
+              ],
+              const SizedBox(height: 12),
+              if (_records.isEmpty && !_loading)
+                const ErpEmptyState(title: 'Belum ada report foto SPG')
+              else
+                ..._records.map(_recordTile),
+            ],
+          ),
+        ),
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton.extended(
+            heroTag: 'create-spg-daily-activity',
+            backgroundColor: AppColors.primary,
+            foregroundColor: AppColors.white,
+            onPressed: _openCreate,
+            icon: const Icon(Icons.add_a_photo_rounded),
+            label: const Text('Foto'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _recordTile(Map<String, dynamic> row) {
+    final name = row['name']?.toString() ?? '';
+    final customer = row['customer']?.toString() ?? '-';
+    final date =
+        row['activity_date']?.toString() ?? row['modified']?.toString() ?? '-';
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: const CircleAvatar(
+          backgroundColor: AppColors.softGreen,
+          foregroundColor: AppColors.primary,
+          child: Icon(Icons.photo_library_outlined),
+        ),
+        title: Text(
+          customer,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+        subtitle: Text(date, maxLines: 1, overflow: TextOverflow.ellipsis),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: name.isEmpty ? null : () => _showDetail(name),
+      ),
+    );
+  }
+
+  Future<void> _showDetail(String name) async {
+    try {
+      final detail = await context.read<AppState>().fetchSpgDailyActivityDetail(
+        name,
+      );
+      if (!mounted) return;
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _SpgDailyActivityDetailSheet(detail: detail),
+      );
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    }
+  }
+}
+
+class _SpgDailyActivityDetailSheet extends StatelessWidget {
+  final Map<String, dynamic> detail;
+
+  const _SpgDailyActivityDetailSheet({required this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.read<AppState>();
+    final rows = _childRows(detail['activity_photos']);
+    return DraggableScrollableSheet(
+      initialChildSize: 0.72,
+      minChildSize: 0.42,
+      maxChildSize: 0.92,
+      builder: (context, controller) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: ListView(
+            controller: controller,
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              CollectionSectionHeader(
+                title: detail['customer']?.toString() ?? 'SPG Daily Activity',
+                subtitle: detail['name']?.toString() ?? '',
+                icon: Icons.photo_camera_outlined,
+              ),
+              const SizedBox(height: 12),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    children: [
+                      _detailRow(
+                        'Employee',
+                        detail['employee']?.toString() ?? '',
+                      ),
+                      _detailRow(
+                        'Activity Date',
+                        detail['activity_date']?.toString() ?? '',
+                      ),
+                      _detailRow('Notes', detail['notes']?.toString() ?? ''),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (rows.isEmpty)
+                const ErpEmptyState(title: 'Belum ada foto')
+              else
+                ...rows.map((row) => _photoCard(state, row)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static List<Map<String, dynamic>> _childRows(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Widget _photoCard(AppState state, Map<String, dynamic> row) {
+    final photo = row['photo']?.toString() ?? '';
+    final url = _absoluteFileUrl(state.selectedSiteBaseUrl, photo);
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (url.isNotEmpty)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  url,
+                  height: 220,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      const ErpEmptyState(title: 'Foto tidak bisa dimuat'),
+                ),
+              ),
+            const SizedBox(height: 8),
+            _detailRow('Waktu', row['photo_time']?.toString() ?? ''),
+            _detailRow('Deskripsi', row['description']?.toString() ?? ''),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _absoluteFileUrl(String baseUrl, String fileUrl) {
+    final value = fileUrl.trim();
+    if (value.isEmpty) return '';
+    if (value.startsWith('http://') || value.startsWith('https://')) {
+      return value;
+    }
+    return '${baseUrl.replaceAll(RegExp(r'/+$'), '')}$value';
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.slate,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.trim().isEmpty ? '-' : value,
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: AppColors.navy,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

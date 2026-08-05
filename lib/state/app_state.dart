@@ -123,6 +123,7 @@ class AppState with ChangeNotifier {
   MobileAccess get mobileAccess =>
       MobileAccess(role: _userRole, boot: _mobileBoot);
   bool get isSalesUserRole => mobileAccess.isSalesUser;
+  bool get isSpgRole => mobileAccess.isSpg;
   bool get isSalesManagerRole => mobileAccess.isSalesManager;
   bool get isSalesAreaRole => mobileAccess.isSalesArea;
   bool get isPurchaseUserRole => mobileAccess.isPurchaseUser;
@@ -135,6 +136,7 @@ class AppState with ChangeNotifier {
   bool canUseMobileModule(String module) => mobileAccess.canUse(module);
   bool get canUseDashboard => mobileAccess.canUse(MobileModule.dashboard);
   bool get canUseSales => mobileAccess.canUse(MobileModule.sales);
+  bool get canUseSpg => mobileAccess.canUse(MobileModule.spg);
   bool get canUsePurchase => mobileAccess.canUse(MobileModule.purchase);
   bool get canUseStock => mobileAccess.canUse(MobileModule.stock);
   bool get canUseWarehouse => mobileAccess.canUse(MobileModule.warehouse);
@@ -327,6 +329,63 @@ class AppState with ChangeNotifier {
     }
     notifyListeners();
     return _currentSalesPerson;
+  }
+
+  Future<Map<String, dynamic>> _ensureCurrentEmployee() async {
+    final existing = _currentEmployee?.trim() ?? '';
+    if (existing.isNotEmpty) return _currentEmployeeProfile;
+
+    final user = _currentUser?.trim() ?? '';
+    if (user.isEmpty) {
+      throw Exception('User login belum tersedia.');
+    }
+
+    List<Map<String, dynamic>> rows;
+    try {
+      try {
+        rows = await _frappeService.fetchResource(
+          'Employee',
+          fields: const [
+            'name',
+            'employee_name',
+            'user_id',
+            'status',
+            'company',
+            'designation',
+            'department',
+            'branch',
+          ],
+          filters: [
+            ['user_id', '=', user],
+          ],
+          limit: 1,
+        );
+      } catch (_) {
+        rows = await _frappeService.fetchResource(
+          'Employee',
+          fields: const ['name', 'employee_name', 'user_id'],
+          filters: [
+            ['user_id', '=', user],
+          ],
+          limit: 1,
+        );
+      }
+    } catch (error) {
+      throw Exception(
+        'Role tidak memiliki izin membaca Employee.user_id. Detail: $error',
+      );
+    }
+
+    if (rows.isEmpty) {
+      throw Exception(
+        'User $user belum terhubung ke Employee melalui field User ID.',
+      );
+    }
+
+    _currentEmployeeProfile = Map<String, dynamic>.from(rows.first);
+    _currentEmployee = _currentEmployeeProfile['name']?.toString() ?? '';
+    notifyListeners();
+    return _currentEmployeeProfile;
   }
 
   List<SalesOrder> _salesOrders = [];
@@ -3433,6 +3492,368 @@ class AppState with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<List<SalesVisit>> fetchSpgVisits({bool forceRefresh = false}) async {
+    final filters = mobileAccess.isSpg
+        ? [
+            ['owner', '=', _currentUser ?? '__unmapped_spg_user__'],
+          ]
+        : null;
+    final rows = await _fetchVisitRows(
+      doctype: 'SPG Visit',
+      filters: filters,
+      limit: 300,
+      orderBy: 'modified desc, name desc',
+      fieldSets: const [
+        [
+          'name',
+          'customer',
+          'address',
+          'employee',
+          'employee_checkin_in',
+          'employee_checkin_out',
+          'modified',
+        ],
+        [
+          'name',
+          'customer',
+          'employee',
+          'employee_checkin_in',
+          'employee_checkin_out',
+          'modified',
+        ],
+        ['name', 'customer', 'employee', 'modified'],
+        ['name', 'modified'],
+        ['name'],
+      ],
+    );
+    final visits = await _hydrateSalesVisitCheckins(
+      rows
+          .map(
+            (row) => SalesVisit.fromJson({
+              ...row,
+              'customer_name':
+                  row['customer_name'] ?? row['customer'] ?? row['name'] ?? '',
+            }),
+          )
+          .toList(),
+    );
+    _activeSalesVisit = null;
+    for (final visit in visits) {
+      if (visit.isActive) {
+        _activeSalesVisit = visit;
+        break;
+      }
+    }
+    return visits;
+  }
+
+  Future<SalesVisit> checkInSpgCustomer({
+    required String customer,
+    required CustomerVisitLocation target,
+    required String photoPath,
+  }) async {
+    if (_activeSalesVisit != null) {
+      throw Exception('Selesaikan check-in aktif sebelum memulai yang baru.');
+    }
+    final point = await getCurrentVisitLocation();
+    final distance = visitDistanceTo(target, point);
+    if (point.accuracy > 50) {
+      throw Exception(
+        'Akurasi GPS ${point.accuracy.toStringAsFixed(0)} meter terlalu rendah.',
+      );
+    }
+    if (distance > target.geofenceRadius) {
+      throw Exception(
+        'Anda masih ${distance.toStringAsFixed(0)} meter dari customer. '
+        'Check-in maksimal ${target.geofenceRadius.toStringAsFixed(0)} meter.',
+      );
+    }
+    await _ensureCurrentEmployee();
+    final employee = _currentEmployee?.trim() ?? '';
+    final now = _formatFrappeDateTime(DateTime.now());
+    final created = await _frappeService.createDocument('SPG Visit', {
+      'customer': customer,
+      'address': target.addressId,
+      'employee': employee,
+    });
+    final visit = SalesVisit.fromJson({
+      ...created,
+      'customer_name': created['customer'] ?? customer,
+    });
+    final checkin = await _createEmployeeCheckin(
+      employee: employee,
+      logType: 'IN',
+      time: now,
+      point: point,
+      target: target,
+      distance: distance,
+      photoPath: photoPath,
+    );
+    await _frappeService.updateDocument('SPG Visit', visit.id, {
+      'employee_checkin_in': checkin['name']?.toString() ?? '',
+    });
+    final updated = SalesVisit.fromJson({
+      ...await _frappeService.fetchDocument('SPG Visit', visit.id),
+      'customer_name': customer,
+    }).copyWith(checkInTime: checkin['time']?.toString() ?? now);
+    _activeSalesVisit = updated;
+    notifyListeners();
+    return updated;
+  }
+
+  Future<void> checkOutSpgVisit(String visitId) async {
+    final point = await getCurrentVisitLocation();
+    final activeVisit = _activeSalesVisit?.id == visitId
+        ? _activeSalesVisit
+        : null;
+    var employee = activeVisit?.employee.trim().isNotEmpty == true
+        ? activeVisit!.employee.trim()
+        : (_currentEmployee?.trim() ?? '');
+    if (employee.isEmpty) {
+      await _ensureCurrentEmployee();
+      employee = _currentEmployee?.trim() ?? '';
+    }
+    if (employee.isEmpty) {
+      throw Exception(
+        'User belum terhubung ke Employee melalui field User ID.',
+      );
+    }
+    final checkout = await _createEmployeeCheckin(
+      employee: employee,
+      logType: 'OUT',
+      time: _formatFrappeDateTime(DateTime.now()),
+      point: point,
+      target: null,
+      distance: null,
+    );
+    await _frappeService.updateDocument('SPG Visit', visitId, {
+      'employee_checkin_out': checkout['name']?.toString() ?? '',
+    });
+    await _visitLocationService.stopTracking();
+    _activeSalesVisit = null;
+    notifyListeners();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSpgDailyActivities({
+    bool forceRefresh = false,
+  }) async {
+    final filters = <List<dynamic>>[
+      if (mobileAccess.isSpg)
+        ['owner', '=', _currentUser ?? '__unmapped_spg_user__'],
+    ];
+    return _fetchVisitRows(
+      doctype: 'SPG Daily Activity',
+      fieldSets: const [
+        ['name', 'employee', 'customer', 'activity_date', 'notes', 'modified'],
+        ['name', 'employee', 'customer', 'activity_date', 'modified'],
+        ['name', 'modified'],
+        ['name'],
+      ],
+      filters: filters.isEmpty ? null : filters,
+      orderBy: 'activity_date desc, modified desc',
+      limit: 100,
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchSpgDailyActivityDetail(String name) {
+    return _frappeService.fetchDocument('SPG Daily Activity', name);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchEmployeeOptions({
+    String query = '',
+  }) async {
+    if (_isSampleMode) {
+      return const [
+        {'name': 'EMP-SAMPLE-001', 'employee_name': 'Sample SPG'},
+        {'name': 'EMP-SAMPLE-002', 'employee_name': 'Sample Sales'},
+      ];
+    }
+    final normalized = query.trim();
+    return _fetchResourceWithFieldFallback(
+      doctype: 'Employee',
+      fields: const ['name', 'employee_name', 'user_id', 'status'],
+      filters: [
+        ['status', '=', 'Active'],
+        if (normalized.isNotEmpty) ['employee_name', 'like', '%$normalized%'],
+      ],
+      orderBy: 'employee_name asc, name asc',
+      limit: 100,
+    );
+  }
+
+  Future<Map<String, dynamic>> createSpgDailyActivity({
+    required String customer,
+    required List<String> photoPaths,
+    String? employee,
+    String notes = '',
+  }) async {
+    var selectedEmployee = employee?.trim() ?? _currentEmployee?.trim() ?? '';
+    if (selectedEmployee.isEmpty && !mobileAccess.canSelectAnyEmployee) {
+      await _ensureCurrentEmployee();
+      selectedEmployee = _currentEmployee?.trim() ?? '';
+    }
+    if (selectedEmployee.isEmpty) {
+      throw Exception(
+        mobileAccess.canSelectAnyEmployee
+            ? 'Employee wajib dipilih.'
+            : 'User belum terhubung ke Employee melalui field User ID.',
+      );
+    }
+    if (customer.trim().isEmpty) {
+      throw Exception('Customer wajib dipilih.');
+    }
+    if (photoPaths.isEmpty) {
+      throw Exception('Minimal 1 foto aktivitas wajib diambil.');
+    }
+    final today = _formatFrappeDate(DateTime.now());
+    final created = await _frappeService.createDocument('SPG Daily Activity', {
+      'employee': selectedEmployee,
+      'customer': customer.trim(),
+      'activity_date': today,
+      if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+    });
+    final name = created['name']?.toString() ?? '';
+    if (name.isEmpty) return created;
+
+    final rows = <Map<String, dynamic>>[];
+    for (final path in photoPaths) {
+      final uploaded = await _frappeService.uploadFile(
+        filePath: path,
+        doctype: 'SPG Daily Activity',
+        documentName: name,
+      );
+      final fileUrl = uploaded['file_url']?.toString() ?? '';
+      if (fileUrl.trim().isEmpty) continue;
+      rows.add({
+        'photo': fileUrl,
+        'description': notes.trim(),
+        'photo_time': _formatFrappeDateTime(DateTime.now()),
+      });
+    }
+    if (rows.isNotEmpty) {
+      await _frappeService.updateDocument('SPG Daily Activity', name, {
+        'activity_photos': rows,
+      });
+    }
+    return _frappeService.fetchDocument('SPG Daily Activity', name);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSpgDailyReports() {
+    final filters = <List<dynamic>>[
+      if (mobileAccess.isSpg)
+        ['owner', '=', _currentUser ?? '__unmapped_spg_user__'],
+    ];
+    return _fetchVisitRows(
+      doctype: 'SPG Daily Report',
+      fieldSets: const [
+        ['name', 'employee', 'customer', 'report_date', 'notes', 'modified'],
+        ['name', 'employee', 'customer', 'report_date', 'modified'],
+        ['name', 'modified'],
+        ['name'],
+      ],
+      filters: filters.isEmpty ? null : filters,
+      orderBy: 'report_date desc, modified desc',
+      limit: 100,
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchSpgDailyReportDetail(String name) {
+    return _frappeService.fetchDocument('SPG Daily Report', name);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSpgSellingItems(String query) {
+    final normalized = query.trim();
+    return _fetchResourceWithFieldFallback(
+      doctype: 'Item',
+      fields: const ['name', 'item_code', 'item_name', 'stock_uom', 'uom'],
+      filters: [
+        ['disabled', '=', 0],
+        if (normalized.isNotEmpty) ['item_code', 'like', '%$normalized%'],
+      ],
+      orderBy: 'item_name asc, item_code asc',
+      limit: 30,
+    );
+  }
+
+  Future<Map<String, dynamic>> createSpgDailyReport({
+    required String customer,
+    required List<Map<String, dynamic>> sellingItems,
+    String? employee,
+    String notes = '',
+  }) async {
+    var selectedEmployee = employee?.trim() ?? _currentEmployee?.trim() ?? '';
+    if (selectedEmployee.isEmpty && !mobileAccess.canSelectAnyEmployee) {
+      await _ensureCurrentEmployee();
+      selectedEmployee = _currentEmployee?.trim() ?? '';
+    }
+    if (selectedEmployee.isEmpty) {
+      throw Exception(
+        mobileAccess.canSelectAnyEmployee
+            ? 'Employee wajib dipilih.'
+            : 'User belum terhubung ke Employee melalui field User ID.',
+      );
+    }
+    if (customer.trim().isEmpty) {
+      throw Exception('Customer wajib dipilih.');
+    }
+    final rows = sellingItems
+        .where((row) => row['item']?.toString().trim().isNotEmpty == true)
+        .map(
+          (row) => {
+            'item': row['item']?.toString().trim() ?? '',
+            'uom': row['uom']?.toString().trim() ?? '',
+            'stock_awal': NumParse.asDouble(row['stock_awal']),
+            'stock_akhir': NumParse.asDouble(row['stock_akhir']),
+            'sell_out': NumParse.asDouble(row['sell_out']),
+          },
+        )
+        .toList();
+    if (rows.isEmpty) {
+      throw Exception('Minimal 1 item selling wajib diisi.');
+    }
+    final payload = {
+      'employee': selectedEmployee,
+      'customer': customer.trim(),
+      'report_date': _formatFrappeDate(DateTime.now()),
+      'selling_items': rows,
+      if (notes.trim().isNotEmpty) 'notes': notes.trim(),
+    };
+    return _frappeService.createDocument('SPG Daily Report', payload);
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchVisitRows({
+    required String doctype,
+    required List<List<dynamic>>? filters,
+    required int limit,
+    required String orderBy,
+    required List<List<String>> fieldSets,
+  }) async {
+    Object? lastError;
+    for (final fieldSet in fieldSets) {
+      for (final candidateOrderBy in <String>[
+        orderBy,
+        'modified desc, name desc',
+        'name desc',
+      ]) {
+        for (final scopedFilters in <List<List<dynamic>>?>[filters, null]) {
+          try {
+            return await _fetchAllResourcePages(
+              doctype: doctype,
+              fields: fieldSet,
+              filters: scopedFilters,
+              orderBy: candidateOrderBy,
+              maxRows: limit,
+            );
+          } catch (error) {
+            lastError = error;
+            if (!_looksLikeVisitListIssue(error)) rethrow;
+          }
+        }
+      }
+    }
+    throw lastError ?? Exception('Gagal membaca $doctype.');
+  }
+
   Future<Map<String, dynamic>> _createEmployeeCheckin({
     required String employee,
     required String logType,
@@ -3472,6 +3893,12 @@ class AppState with ChangeNotifier {
     String two(int number) => number.toString().padLeft(2, '0');
     return '${local.year}-${two(local.month)}-${two(local.day)} '
         '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
+  }
+
+  String _formatFrappeDate(DateTime value) {
+    final local = value.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)}';
   }
 
   Future<CustomerSalesInsight> fetchCustomerSalesInsight(

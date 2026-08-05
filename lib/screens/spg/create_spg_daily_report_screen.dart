@@ -1,0 +1,579 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../models/sales_workspace.dart';
+import '../../state/app_state.dart';
+import '../../theme/app_colors.dart';
+import '../../widgets/erp/erp_error_box.dart';
+
+class CreateSpgDailyReportScreen extends StatefulWidget {
+  const CreateSpgDailyReportScreen({super.key});
+
+  @override
+  State<CreateSpgDailyReportScreen> createState() =>
+      _CreateSpgDailyReportScreenState();
+}
+
+class _CreateSpgDailyReportScreenState
+    extends State<CreateSpgDailyReportScreen> {
+  final _notes = TextEditingController();
+  final List<_SpgSellingRow> _rows = [_SpgSellingRow()];
+  List<SalesCustomerOption> _customers = const [];
+  List<Map<String, dynamic>> _items = const [];
+  List<Map<String, dynamic>> _employees = const [];
+  SalesCustomerOption? _customer;
+  Map<String, dynamic>? _employee;
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    _notes.dispose();
+    for (final row in _rows) {
+      row.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final state = context.read<AppState>();
+      final results = await Future.wait([
+        state.fetchSalesCustomers(),
+        state.fetchSpgSellingItems(''),
+        if (state.mobileAccess.canSelectAnyEmployee)
+          state.fetchEmployeeOptions(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _customers = results[0] as List<SalesCustomerOption>;
+        _items = results[1] as List<Map<String, dynamic>>;
+        _employees = state.mobileAccess.canSelectAnyEmployee
+            ? results[2] as List<Map<String, dynamic>>
+            : const <Map<String, dynamic>>[];
+      });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _save() async {
+    final canSelectEmployee = context
+        .read<AppState>()
+        .mobileAccess
+        .canSelectAnyEmployee;
+    if (canSelectEmployee && _employee == null) {
+      setState(() => _error = 'Employee wajib dipilih.');
+      return;
+    }
+    if (_customer == null) {
+      setState(() => _error = 'Customer wajib dipilih.');
+      return;
+    }
+    final missingUom = _rows.any(
+      (row) => row.item.trim().isNotEmpty && row.uom.trim().isEmpty,
+    );
+    if (missingUom) {
+      setState(
+        () => _error = 'Pilih item dari hasil pencarian agar UOM terisi.',
+      );
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await context.read<AppState>().createSpgDailyReport(
+        customer: _customer!.id,
+        sellingItems: _rows.map((row) => row.toPayload()).toList(),
+        employee: _employee?['name']?.toString(),
+        notes: _notes.text,
+      );
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Buat Report Selling'),
+        backgroundColor: AppColors.background,
+        foregroundColor: AppColors.navy,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
+        children: [
+          _headerCard(),
+          const SizedBox(height: 12),
+          _formCard(),
+          if (_loading) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            ErpErrorBox(message: _error!),
+          ],
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        child: FilledButton.icon(
+          onPressed: _saving ? null : _save,
+          icon: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.send_rounded),
+          label: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(_saving ? 'Menyimpan...' : 'Kirim Report Selling'),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headerCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: const [
+            CircleAvatar(
+              backgroundColor: AppColors.softGreen,
+              foregroundColor: AppColors.primary,
+              child: Icon(Icons.bar_chart_outlined),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'SPG Daily Report',
+                    style: TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  SizedBox(height: 3),
+                  Text(
+                    'Isi stock awal, stock akhir, dan sell out per item.',
+                    style: TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _formCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (context
+                .watch<AppState>()
+                .mobileAccess
+                .canSelectAnyEmployee) ...[
+              _employeeSearchField(),
+              const SizedBox(height: 12),
+            ],
+            _customerSearchField(),
+            const SizedBox(height: 12),
+            ..._rows.asMap().entries.map(
+              (entry) => _sellingRowCard(entry.key, entry.value),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _saving
+                  ? null
+                  : () => setState(() => _rows.add(_SpgSellingRow())),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Tambah Item'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _notes,
+              minLines: 3,
+              maxLines: 5,
+              enabled: !_saving,
+              decoration: const InputDecoration(
+                labelText: 'Notes',
+                prefixIcon: Icon(Icons.notes_rounded),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sellingRowCard(int index, _SpgSellingRow row) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.navy.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: AppColors.softGreen,
+                foregroundColor: AppColors.primary,
+                child: Text(
+                  '${index + 1}',
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      row.itemLabel.isEmpty ? 'Item Selling' : row.itemLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.navy,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      row.item.isEmpty
+                          ? 'Pilih item dari master Item'
+                          : [row.item, row.uom]
+                                .where((value) => value.trim().isNotEmpty)
+                                .join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_rows.length > 1)
+                IconButton(
+                  onPressed: _saving
+                      ? null
+                      : () => setState(() {
+                          row.dispose();
+                          _rows.removeAt(index);
+                        }),
+                  icon: const Icon(Icons.delete_outline_rounded),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Autocomplete<Map<String, dynamic>>(
+            displayStringForOption: _itemLabel,
+            optionsMaxHeight: 280,
+            optionsBuilder: (value) {
+              final query = value.text.toLowerCase().trim();
+              if (query.isEmpty) return _items;
+              return _items.where((item) {
+                final code = item['item_code']?.toString().toLowerCase() ?? '';
+                final name = item['item_name']?.toString().toLowerCase() ?? '';
+                return code.contains(query) || name.contains(query);
+              });
+            },
+            onSelected: (option) {
+              setState(() {
+                row.item =
+                    option['item_code']?.toString() ??
+                    option['name']?.toString() ??
+                    '';
+                row.itemLabel = _itemLabel(option);
+                row.uom = option['uom']?.toString().trim().isNotEmpty == true
+                    ? option['uom'].toString()
+                    : option['stock_uom']?.toString() ?? '';
+              });
+            },
+            fieldViewBuilder: (context, controller, focusNode, onSubmit) {
+              if (row.itemLabel.isNotEmpty && controller.text.isEmpty) {
+                controller.text = row.itemLabel;
+              }
+              return TextField(
+                controller: controller,
+                focusNode: focusNode,
+                enabled: !_saving,
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  hintText: 'Cari name atau kode item',
+                  prefixIcon: Icon(Icons.inventory_2_outlined),
+                  suffixIcon: Icon(Icons.search_rounded),
+                ),
+                onChanged: (value) {
+                  if (value.trim() != row.itemLabel) {
+                    setState(() {
+                      row.item = '';
+                      row.itemLabel = value.trim();
+                      row.uom = '';
+                    });
+                  }
+                },
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.softGreen.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.straighten_rounded,
+                  color: AppColors.primary,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'UOM',
+                  style: TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  row.uom.trim().isEmpty ? 'Pilih item dulu' : row.uom,
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _stockNumberField(
+                  label: 'Stock Awal',
+                  controller: row.stockAwal,
+                  icon: Icons.login_rounded,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _stockNumberField(
+                  label: 'Stock Akhir',
+                  controller: row.stockAkhir,
+                  icon: Icons.logout_rounded,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _stockNumberField(
+            label: 'Sell Out',
+            controller: row.sellOut,
+            icon: Icons.point_of_sale_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _itemLabel(Map<String, dynamic> option) {
+    if (option['item_name']?.toString().trim().isNotEmpty == true) {
+      return option['item_name'].toString();
+    }
+    return option['item_code']?.toString() ?? option['name']?.toString() ?? '';
+  }
+
+  Widget _customerSearchField() {
+    return Autocomplete<SalesCustomerOption>(
+      displayStringForOption: _customerLabel,
+      optionsMaxHeight: 280,
+      optionsBuilder: (value) {
+        final query = value.text.toLowerCase().trim();
+        if (query.isEmpty) return _customers;
+        return _customers.where((customer) {
+          return customer.id.toLowerCase().contains(query) ||
+              customer.name.toLowerCase().contains(query) ||
+              customer.address.toLowerCase().contains(query);
+        });
+      },
+      onSelected: (value) => setState(() => _customer = value),
+      fieldViewBuilder: (context, controller, focusNode, onSubmit) {
+        final selectedLabel = _customer == null
+            ? ''
+            : _customerLabel(_customer!);
+        if (selectedLabel.isNotEmpty && controller.text.isEmpty) {
+          controller.text = selectedLabel;
+        }
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: !_saving && !_loading,
+          decoration: const InputDecoration(
+            labelText: 'Customer',
+            hintText: 'Cari customer',
+            prefixIcon: Icon(Icons.storefront_outlined),
+            suffixIcon: Icon(Icons.search_rounded),
+          ),
+          onChanged: (text) {
+            if (_customer != null && text != selectedLabel) {
+              setState(() => _customer = null);
+            }
+          },
+        );
+      },
+    );
+  }
+
+  Widget _employeeSearchField() {
+    return Autocomplete<Map<String, dynamic>>(
+      displayStringForOption: _employeeLabel,
+      optionsMaxHeight: 280,
+      optionsBuilder: (value) {
+        final query = value.text.toLowerCase().trim();
+        if (query.isEmpty) return _employees;
+        return _employees.where((employee) {
+          final name = employee['name']?.toString().toLowerCase() ?? '';
+          final employeeName =
+              employee['employee_name']?.toString().toLowerCase() ?? '';
+          final userId = employee['user_id']?.toString().toLowerCase() ?? '';
+          return name.contains(query) ||
+              employeeName.contains(query) ||
+              userId.contains(query);
+        });
+      },
+      onSelected: (value) => setState(() => _employee = value),
+      fieldViewBuilder: (context, controller, focusNode, onSubmit) {
+        final selectedLabel = _employee == null
+            ? ''
+            : _employeeLabel(_employee!);
+        if (selectedLabel.isNotEmpty && controller.text.isEmpty) {
+          controller.text = selectedLabel;
+        }
+        return TextField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: !_saving && !_loading,
+          decoration: const InputDecoration(
+            labelText: 'Employee',
+            hintText: 'Cari employee',
+            prefixIcon: Icon(Icons.badge_outlined),
+            suffixIcon: Icon(Icons.search_rounded),
+          ),
+          onChanged: (text) {
+            if (_employee != null && text != selectedLabel) {
+              setState(() => _employee = null);
+            }
+          },
+        );
+      },
+    );
+  }
+
+  String _customerLabel(SalesCustomerOption customer) {
+    if (customer.id.trim().isEmpty) return customer.name;
+    return '${customer.name} - ${customer.id}';
+  }
+
+  String _employeeLabel(Map<String, dynamic> employee) {
+    final name = employee['name']?.toString() ?? '';
+    final employeeName = employee['employee_name']?.toString() ?? '';
+    if (employeeName.trim().isEmpty) return name;
+    if (name.trim().isEmpty) return employeeName;
+    return '$employeeName - $name';
+  }
+
+  Widget _stockNumberField({
+    required String label,
+    required TextEditingController controller,
+    required IconData icon,
+  }) {
+    return TextField(
+      controller: controller,
+      enabled: !_saving,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
+    );
+  }
+}
+
+class _SpgSellingRow {
+  String item = '';
+  String itemLabel = '';
+  String uom = '';
+  final stockAwal = TextEditingController();
+  final stockAkhir = TextEditingController();
+  final sellOut = TextEditingController();
+
+  Map<String, dynamic> toPayload() => {
+    'item': item,
+    'uom': uom,
+    'stock_awal': stockAwal.text,
+    'stock_akhir': stockAkhir.text,
+    'sell_out': sellOut.text,
+  };
+
+  void dispose() {
+    stockAwal.dispose();
+    stockAkhir.dispose();
+    sellOut.dispose();
+  }
+}
