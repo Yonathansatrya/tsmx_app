@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/erp/erp_filter_tools.dart';
-import '../sales/sales_ui.dart';
+import '../sales/shared/sales_ui.dart';
 import '../sales/delivery_note/delivery_note_panel.dart';
 import '../sales/sales_invoice/sales_invoice_panel.dart';
 import '../sales/sales_order/sales_order_panel.dart';

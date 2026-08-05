@@ -1,4 +1,4 @@
-import '../visits/customer_visit_tab.dart';
+import '../../visits/customer_visit_tab.dart';
 
 class SalesVisitTab extends CustomerVisitTab {
   const SalesVisitTab({super.key, super.showCheckIn, super.showHistory})

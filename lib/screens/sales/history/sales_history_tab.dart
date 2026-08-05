@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../utils/erp_format.dart';
-import '../../widgets/erp/erp_empty_state.dart';
-import '../../widgets/erp/erp_error_box.dart';
-import '../../widgets/erp/erp_status_badge.dart';
-import 'sales_ui.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../utils/erp_format.dart';
+import '../../../widgets/erp/erp_empty_state.dart';
+import '../../../widgets/erp/erp_error_box.dart';
+import '../../../widgets/erp/erp_status_badge.dart';
+import '../shared/sales_ui.dart';
 
 class SalesHistoryTab extends StatelessWidget {
   final bool compact;

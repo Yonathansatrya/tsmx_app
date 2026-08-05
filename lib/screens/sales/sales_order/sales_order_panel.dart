@@ -15,7 +15,7 @@ import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
-import '../../sales/create_sales_order_screen.dart';
+import 'create_sales_order_screen.dart';
 import '../shared/selling_document_detail_sheet.dart';
 
 enum _OrderSortOption { newest, oldest, valueHigh, valueLow }

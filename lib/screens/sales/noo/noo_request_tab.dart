@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import 'sales_ui.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../shared/sales_ui.dart';
 import 'create_noo_request_screen.dart';
 
 class NooRequestTab extends StatefulWidget {

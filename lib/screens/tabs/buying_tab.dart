@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/erp/erp_filter_tools.dart';
-import '../sales/sales_ui.dart';
+import '../sales/shared/sales_ui.dart';
 import '../purchase/material_request/material_request_panel.dart';
 import '../purchase/purchase_invoice/purchase_invoice_panel.dart';
 import '../purchase/purchase_order/purchase_order_panel.dart';

@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/inactive_customer.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../widgets/erp/erp_empty_state.dart';
-import '../../widgets/erp/erp_error_box.dart';
-import 'sales_ui.dart';
+import '../../../models/inactive_customer.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../widgets/erp/erp_empty_state.dart';
+import '../../../widgets/erp/erp_error_box.dart';
+import '../shared/sales_ui.dart';
 
 class InactiveCustomerTab extends StatefulWidget {
   const InactiveCustomerTab({super.key});

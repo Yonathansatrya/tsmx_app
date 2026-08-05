@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/promo_request.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import 'sales_ui.dart';
+import '../../../models/promo_request.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../shared/sales_ui.dart';
 
 class CreatePromoRequestScreen extends StatefulWidget {
   const CreatePromoRequestScreen({super.key});

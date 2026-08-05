@@ -10,7 +10,7 @@ import '../../../utils/erp_format.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import 'collection_widgets.dart';
-import '../sales_ui.dart';
+import '../shared/sales_ui.dart';
 
 enum CollectionAgingDateBasis { invoiceDate, tukarFakturDate }
 

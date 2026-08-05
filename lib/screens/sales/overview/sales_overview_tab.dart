@@ -5,18 +5,18 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../models/sales_workspace.dart';
-import '../../services/local_app_database.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../utils/date_range_presets.dart';
-import '../../utils/erp_format.dart';
-import '../../utils/num_parse.dart';
-import '../../widgets/erp/erp_empty_state.dart';
-import '../../widgets/erp/erp_error_box.dart';
-import 'collection/collection_widgets.dart';
-import 'sales_ui.dart';
-import 'sales_visit_tab.dart';
+import '../../../models/sales_workspace.dart';
+import '../../../services/local_app_database.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../utils/date_range_presets.dart';
+import '../../../utils/erp_format.dart';
+import '../../../utils/num_parse.dart';
+import '../../../widgets/erp/erp_empty_state.dart';
+import '../../../widgets/erp/erp_error_box.dart';
+import '../collection/collection_widgets.dart';
+import '../shared/sales_ui.dart';
+import '../visit/sales_visit_tab.dart';
 
 enum _DailySalesDocType { salesOrder, deliveryNote, salesInvoice }
 

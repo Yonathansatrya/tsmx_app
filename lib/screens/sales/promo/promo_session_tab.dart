@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
 import 'create_promo_request_screen.dart';
-import 'sales_ui.dart';
+import '../shared/sales_ui.dart';
 
 class PromoSessionTab extends StatefulWidget {
   const PromoSessionTab({super.key});

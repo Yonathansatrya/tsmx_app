@@ -5,11 +5,11 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../shared/role_main_screen.dart';
 import '../tabs/selling_tab.dart';
-import 'create_sales_order_screen.dart';
-import 'customer_request_tab.dart';
-import 'sales_collection_tab.dart';
-import 'sales_overview_tab.dart';
-import 'sales_visit_tab.dart';
+import 'sales_order/create_sales_order_screen.dart';
+import 'customer/customer_request_tab.dart';
+import 'collection/sales_collection_tab.dart';
+import 'overview/sales_overview_tab.dart';
+import 'visit/sales_visit_tab.dart';
 import '../spg/spg_main_screen.dart';
 
 class SalesMainScreen extends StatefulWidget {

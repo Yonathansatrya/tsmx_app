@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../theme/app_colors.dart';
+import '../../../theme/app_colors.dart';
 import 'customer_price_list_tab.dart';
 import 'inactive_customer_tab.dart';
-import 'noo_request_tab.dart';
-import 'promo_session_tab.dart';
-import 'sales_ui.dart';
+import '../noo/noo_request_tab.dart';
+import '../promo/promo_session_tab.dart';
+import '../shared/sales_ui.dart';
 
 class CustomerRequestTab extends StatelessWidget {
   const CustomerRequestTab({super.key});

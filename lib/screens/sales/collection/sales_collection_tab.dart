@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../utils/date_range_presets.dart';
-import '../../widgets/erp/erp_filter_tools.dart';
-import 'collection/ar_aging_tab.dart';
-import 'collection/outstanding_invoice_tab.dart';
-import 'collection/customer_payment_schedule_tab.dart';
-import 'sales_ui.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../utils/date_range_presets.dart';
+import '../../../widgets/erp/erp_filter_tools.dart';
+import 'ar_aging_tab.dart';
+import 'outstanding_invoice_tab.dart';
+import 'customer_payment_schedule_tab.dart';
+import '../shared/sales_ui.dart';
 
 class SalesCollectionTab extends StatefulWidget {
   const SalesCollectionTab({super.key});
