@@ -295,6 +295,17 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
       );
       if (!mounted) return;
 
+      var workflowActions = const <String>[];
+      try {
+        workflowActions = await appState.fetchDocumentWorkflowActions(
+          doctype: 'Sales Order',
+          name: detail.id,
+        );
+      } catch (_) {
+        workflowActions = const <String>[];
+      }
+      if (!mounted) return;
+
       final canSubmit = isDocDraft(detail.docStatus)
           ? await appState.canSubmitDoctype('Sales Order')
           : false;
@@ -393,14 +404,22 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
                 icon: Icons.edit_outlined,
                 onPressed: () => _editSo(detail.id, closeSheet: true),
               ),
-            if (canSubmit)
+            ...workflowActions.map(
+              (action) => erpActionButton(
+                label: action,
+                icon: _workflowActionIcon(action),
+                filled: _isPositiveWorkflowAction(action),
+                onPressed: () => _applySoWorkflowAction(detail.id, action),
+              ),
+            ),
+            if (workflowActions.isEmpty && canSubmit)
               erpActionButton(
                 label: 'Submit Sales Order',
                 icon: Icons.check_circle_outline_rounded,
                 filled: true,
                 onPressed: () => _submitSo(detail.id),
               ),
-            if (!canSubmit && !canEdit)
+            if (workflowActions.isEmpty && !canSubmit && !canEdit)
               const Text(
                 'No workflow actions available for this document.',
                 style: TextStyle(fontSize: 12, color: AppColors.slate),
@@ -411,6 +430,93 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     } finally {
       if (mounted) setState(() => _isOpeningDetail = false);
     }
+  }
+
+  Future<void> _applySoWorkflowAction(String id, String action) async {
+    final reject = _isRejectWorkflowAction(action);
+    var reason = '';
+    if (reject) {
+      reason = await _askWorkflowReason(id, action) ?? '';
+      if (reason.trim().isEmpty || !mounted) return;
+    } else {
+      final ok = await confirmErpAction(
+        context,
+        title: '$action $id?',
+        message: 'Lanjutkan action "$action" untuk Sales Order ini?',
+      );
+      if (!ok || !mounted) return;
+    }
+
+    final ok = await runErpWorkflowAction(
+      context,
+      action: () => context.read<AppState>().applyDocumentWorkflow(
+        doctype: 'Sales Order',
+        name: id,
+        action: action,
+        reason: reason,
+      ),
+      successMessage: 'Sales Order: $action berhasil',
+    );
+    if (ok && mounted) {
+      await context.read<AppState>().refreshSalesOrders();
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
+  Future<String?> _askWorkflowReason(String id, String action) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$action $id'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 3,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            labelText: 'Alasan',
+            hintText: 'Tulis alasan agar tercatat di ERPNext',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Lanjutkan'),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
+  }
+
+  bool _isRejectWorkflowAction(String action) {
+    final value = action.toLowerCase();
+    return value.contains('reject') ||
+        value.contains('tolak') ||
+        value.contains('return') ||
+        value.contains('decline');
+  }
+
+  bool _isPositiveWorkflowAction(String action) {
+    final value = action.toLowerCase();
+    return value.contains('approve') ||
+        value.contains('submit') ||
+        value.contains('deliver') ||
+        value.contains('bill');
+  }
+
+  IconData _workflowActionIcon(String action) {
+    final value = action.toLowerCase();
+    if (_isRejectWorkflowAction(action)) return Icons.close_rounded;
+    if (value.contains('approve')) return Icons.verified_rounded;
+    if (value.contains('submit')) return Icons.send_rounded;
+    if (value.contains('deliver')) return Icons.local_shipping_outlined;
+    if (value.contains('bill')) return Icons.receipt_long_outlined;
+    return Icons.check_circle_outline_rounded;
   }
 
   Future<void> _downloadAndShareSoPdf(String id) async {
