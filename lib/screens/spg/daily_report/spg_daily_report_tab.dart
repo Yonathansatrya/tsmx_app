@@ -101,25 +101,73 @@ class _SpgDailyReportTabState extends State<SpgDailyReportTab> {
     final customer = row['customer_name']?.toString().trim().isNotEmpty == true
         ? row['customer_name'].toString()
         : row['customer']?.toString() ?? '-';
+    final employee = row['employee']?.toString() ?? '-';
     final date =
         row['report_date']?.toString() ?? row['modified']?.toString() ?? '-';
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: const CircleAvatar(
-          backgroundColor: AppColors.softGreen,
-          foregroundColor: AppColors.primary,
-          child: Icon(Icons.bar_chart_outlined),
-        ),
-        title: Text(
-          customer,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        subtitle: Text(date, maxLines: 1, overflow: TextOverflow.ellipsis),
-        trailing: const Icon(Icons.chevron_right_rounded),
+    return Material(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
         onTap: name.isEmpty ? null : () => _showDetail(name),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.border),
+            boxShadow: AppColors.cardShadow,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.softGreen,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.bar_chart_outlined,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customer,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      employee,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 9),
+                    _MetaPill(icon: Icons.calendar_today_outlined, label: date),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.slate),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -139,6 +187,44 @@ class _SpgDailyReportTabState extends State<SpgDailyReportTab> {
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     }
+  }
+}
+
+class _MetaPill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _MetaPill({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: AppColors.primary),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label.trim().isEmpty ? '-' : label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.navy,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -224,18 +310,137 @@ class _SpgDailyReportDetailSheet extends StatelessWidget {
   }
 
   Widget _itemCard(Map<String, dynamic> row) {
+    final item = row['item']?.toString() ?? '';
+    final uom = row['uom']?.toString() ?? '';
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _detailRow('Item', row['item']?.toString() ?? ''),
-            _detailRow('Stock Awal', row['stock_awal']?.toString() ?? ''),
-            _detailRow('Stock Akhir', row['stock_akhir']?.toString() ?? ''),
-            _detailRow('Sell Out', row['sell_out']?.toString() ?? ''),
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppColors.softGreen,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.inventory_2_outlined,
+                    color: AppColors.primary,
+                    size: 19,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.trim().isEmpty ? 'Item' : item,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      if (uom.trim().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          uom,
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _quantityTile(
+                    label: 'Stock Awal',
+                    value: row['stock_awal']?.toString() ?? '',
+                    icon: Icons.login_rounded,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _quantityTile(
+                    label: 'Stock Akhir',
+                    value: row['stock_akhir']?.toString() ?? '',
+                    icon: Icons.logout_rounded,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _quantityTile(
+              label: 'Sell Out',
+              value: row['sell_out']?.toString() ?? '',
+              icon: Icons.point_of_sale_rounded,
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _quantityTile({
+    required String label,
+    required String value,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.primary, size: 17),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value.trim().isEmpty ? '-' : value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

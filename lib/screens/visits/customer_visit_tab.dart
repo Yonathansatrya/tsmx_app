@@ -228,7 +228,7 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
       onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
         children: [
           if (widget.shouldShowCheckIn) ...[
             const CollectionSectionHeader(
@@ -259,7 +259,7 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
             ErpErrorBox(message: error!),
           ],
           if (widget.shouldShowHistory) ...[
-            const SizedBox(height: 18),
+            if (widget.shouldShowCheckIn) const SizedBox(height: 18),
             CollectionSectionHeader(
               title: widget.shouldShowCheckIn
                   ? 'Riwayat Check-in'
