@@ -47,6 +47,7 @@ class SalesOrder {
   final double value;
   final SalesOrderStatusKey statusKey;
   final String statusText;
+  final String workflowState;
   final int docStatus;
   final double perDelivered;
   final double perBilled;
@@ -68,6 +69,7 @@ class SalesOrder {
     required this.value,
     required this.statusKey,
     required this.statusText,
+    this.workflowState = '',
     this.docStatus = 0,
     this.perDelivered = 0,
     this.perBilled = 0,
@@ -110,6 +112,7 @@ class SalesOrder {
       docstatus: docstatus,
     );
     final statusKey = parseSalesOrderStatus(statusText, docstatus: docstatus);
+    final workflowState = json['workflow_state']?.toString().trim() ?? '';
 
     final rawItems = json['items'];
     final items = rawItems is List
@@ -139,6 +142,7 @@ class SalesOrder {
       value: value,
       statusKey: statusKey,
       statusText: statusText,
+      workflowState: workflowState,
       docStatus: NumParse.asInt(json['docstatus']),
       perDelivered: NumParse.asDouble(json['per_delivered']),
       perBilled: NumParse.asDouble(json['per_billed']),
@@ -164,6 +168,7 @@ class SalesOrder {
     double? value,
     SalesOrderStatusKey? statusKey,
     String? statusText,
+    String? workflowState,
     int? docStatus,
     double? perDelivered,
     double? perBilled,
@@ -185,6 +190,7 @@ class SalesOrder {
       value: value ?? this.value,
       statusKey: statusKey ?? this.statusKey,
       statusText: statusText ?? this.statusText,
+      workflowState: workflowState ?? this.workflowState,
       docStatus: docStatus ?? this.docStatus,
       perDelivered: perDelivered ?? this.perDelivered,
       perBilled: perBilled ?? this.perBilled,
@@ -200,4 +206,13 @@ class SalesOrder {
       items: items ?? this.items,
     );
   }
+
+  String get effectiveStatusText {
+    final workflow = workflowState.trim();
+    if (workflow.isNotEmpty) return workflow;
+    return statusText;
+  }
+
+  SalesOrderStatusKey get effectiveStatusKey =>
+      parseSalesOrderStatus(effectiveStatusText, docstatus: docStatus);
 }

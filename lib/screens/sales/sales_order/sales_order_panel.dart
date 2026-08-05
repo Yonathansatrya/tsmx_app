@@ -32,7 +32,7 @@ class SalesOrderPanel extends StatefulWidget {
 class _SalesOrderPanelState extends State<SalesOrderPanel> {
   final TextEditingController _searchController = TextEditingController();
   String _search = '';
-  SalesOrderStatusKey? _statusFilter;
+  String? _statusFilter;
   _OrderSortOption _sortOption = _OrderSortOption.newest;
   String _advancedCustomer = '';
   String _advancedItem = '';
@@ -45,28 +45,15 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
   Timer? _searchDebounce;
   bool _isOpeningDetail = false;
 
-  static final _chips = <ErpStatusChip<SalesOrderStatusKey?>>[
-    const ErpStatusChip(label: 'All', value: null),
-    const ErpStatusChip(label: 'Draft', value: SalesOrderStatusKey.draft),
-    const ErpStatusChip(label: 'Overdue', value: SalesOrderStatusKey.overdue),
-    const ErpStatusChip(
-      label: 'Deliver & Bill',
-      value: SalesOrderStatusKey.toDeliverAndBill,
-    ),
-    const ErpStatusChip(label: 'To Bill', value: SalesOrderStatusKey.toBill),
-    const ErpStatusChip(
-      label: 'To Deliver',
-      value: SalesOrderStatusKey.toDeliver,
-    ),
-    const ErpStatusChip(
-      label: 'Completed',
-      value: SalesOrderStatusKey.completed,
-    ),
-    const ErpStatusChip(label: 'Closed', value: SalesOrderStatusKey.closed),
-    const ErpStatusChip(
-      label: 'Cancelled',
-      value: SalesOrderStatusKey.cancelled,
-    ),
+  static const _defaultStatusChips = <String>[
+    'Draft',
+    'Overdue',
+    'To Deliver and Bill',
+    'To Bill',
+    'To Deliver',
+    'Completed',
+    'Closed',
+    'Cancelled',
   ];
 
   @override
@@ -94,35 +81,33 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
       if (mounted) {
         context.read<AppState>().setSalesOrderQuery(
           search: value,
-          status: _statusText,
+          status: null,
         );
       }
     });
   }
 
-  String? get _statusText => switch (_statusFilter) {
-    SalesOrderStatusKey.draft => 'Draft',
-    SalesOrderStatusKey.overdue => 'Overdue',
-    SalesOrderStatusKey.toDeliverAndBill => 'To Deliver and Bill',
-    SalesOrderStatusKey.toBill => 'To Bill',
-    SalesOrderStatusKey.toDeliver => 'To Deliver',
-    SalesOrderStatusKey.completed => 'Completed',
-    SalesOrderStatusKey.closed => 'Closed',
-    SalesOrderStatusKey.cancelled => 'Cancelled',
-    _ => null,
-  };
-
   List<SalesOrder> _filter(List<SalesOrder> orders) {
+    final filtered = _baseFilter(
+      orders,
+    ).where((order) => _matchesStatusFilter(order)).toList();
+
+    _sortOrders(filtered);
+    return filtered;
+  }
+
+  List<SalesOrder> _baseFilter(List<SalesOrder> orders) {
     final q = _search.toLowerCase();
-    final filtered = orders.where((o) {
+    return orders.where((o) {
       final matchSearch =
           q.isEmpty ||
           o.id.toLowerCase().contains(q) ||
           o.customer.toLowerCase().contains(q);
-      final matchStatus = _statusFilter == null || o.statusKey == _statusFilter;
-      return matchSearch && matchStatus && _matchesAdvancedFilters(o);
+      return matchSearch && _matchesAdvancedFilters(o);
     }).toList();
+  }
 
+  void _sortOrders(List<SalesOrder> filtered) {
     filtered.sort((a, b) {
       return switch (_sortOption) {
         _OrderSortOption.newest => _compareDateDesc(a.date, b.date),
@@ -131,8 +116,78 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
         _OrderSortOption.valueLow => a.value.compareTo(b.value),
       };
     });
+  }
 
-    return filtered;
+  bool _matchesStatusFilter(SalesOrder order) {
+    final filter = _statusFilter?.trim();
+    if (filter == null || filter.isEmpty) return true;
+    final filterKey = _statusIdentity(filter);
+    return _statusCandidates(
+      order,
+    ).any((status) => _statusIdentity(status) == filterKey);
+  }
+
+  String _statusIdentity(String value) =>
+      value.trim().toLowerCase().replaceAll('&', 'and');
+
+  List<String> _statusCandidates(SalesOrder order) {
+    final values = <String>[order.statusText, order.workflowState];
+    final seen = <String>{};
+    return values
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .where((value) => seen.add(_statusIdentity(value)))
+        .toList();
+  }
+
+  String _statusChipLabel(String status) {
+    return status == 'To Deliver and Bill' ? 'Deliver & Bill' : status;
+  }
+
+  List<ErpStatusChip<String?>> _statusChips(List<SalesOrder> source) {
+    final counts = <String, int>{};
+    final labels = <String, String>{};
+    for (final order in source) {
+      for (final status in _statusCandidates(order)) {
+        final key = _statusIdentity(status);
+        counts[key] = (counts[key] ?? 0) + 1;
+        labels.putIfAbsent(key, () => status);
+      }
+    }
+
+    final chips = <ErpStatusChip<String?>>[
+      ErpStatusChip(label: 'All (${source.length})', value: null),
+    ];
+
+    final used = <String>{};
+    for (final status in _defaultStatusChips) {
+      final key = _statusIdentity(status);
+      final count = counts[key] ?? 0;
+      if (count == 0) continue;
+      used.add(key);
+      chips.add(
+        ErpStatusChip(
+          label: '${_statusChipLabel(status)} ($count)',
+          value: status,
+        ),
+      );
+    }
+
+    final dynamicKeys = counts.keys.where((key) => !used.contains(key)).toList()
+      ..sort(
+        (a, b) => labels[a]!.toLowerCase().compareTo(labels[b]!.toLowerCase()),
+      );
+    for (final key in dynamicKeys) {
+      final label = labels[key]!;
+      chips.add(
+        ErpStatusChip(
+          label: '${_statusChipLabel(label)} (${counts[key]})',
+          value: label,
+        ),
+      );
+    }
+
+    return chips;
   }
 
   int _compareDateDesc(String a, String b) {
@@ -250,7 +305,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
         context: context,
         title: detail.id,
         subtitle: detail.customer,
-        statusText: detail.statusText,
+        statusText: detail.effectiveStatusText,
         icon: Icons.point_of_sale_rounded,
         metrics: [
           SellingDetailMetric(
@@ -544,7 +599,9 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final baseFiltered = _baseFilter(appState.salesOrders);
     final filtered = _filter(appState.salesOrders);
+    final statusChips = _statusChips(baseFiltered);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -616,15 +673,11 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
           onAdvancedFilters: _openAdvancedFilters,
         ),
         const SizedBox(height: 10),
-        ErpStatusChipBar<SalesOrderStatusKey?>(
-          chips: _chips,
+        ErpStatusChipBar<String?>(
+          chips: statusChips,
           selected: _statusFilter,
           onSelected: (v) {
             setState(() => _statusFilter = v);
-            context.read<AppState>().setSalesOrderQuery(
-              search: _search,
-              status: _statusText,
-            );
           },
         ),
         const SizedBox(height: 12),
@@ -635,7 +688,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
             (o) => ErpDocumentCard(
               id: o.id,
               party: o.customer,
-              statusText: o.statusText,
+              statusText: o.effectiveStatusText,
               date: o.date,
               value: o.value,
               onTap: () => _openDetail(o),

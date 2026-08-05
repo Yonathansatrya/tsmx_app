@@ -10487,6 +10487,7 @@ class AppState with ChangeNotifier {
         'customer_name',
         'grand_total',
         'status',
+        'workflow_state',
         'docstatus',
         'transaction_date',
         'delivery_date',
