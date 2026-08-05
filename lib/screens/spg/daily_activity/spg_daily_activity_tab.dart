@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../widgets/erp/erp_empty_state.dart';
-import '../../widgets/erp/erp_error_box.dart';
-import '../sales/collection/collection_widgets.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../widgets/erp/erp_empty_state.dart';
+import '../../../widgets/erp/erp_error_box.dart';
+import '../../sales/collection/collection_widgets.dart';
 import 'create_spg_daily_activity_screen.dart';
 
 class SpgDailyActivityTab extends StatefulWidget {

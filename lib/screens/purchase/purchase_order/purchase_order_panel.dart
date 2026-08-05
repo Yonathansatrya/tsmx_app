@@ -14,7 +14,7 @@ import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../purchase/purchase_order/create_purchase_order_screen.dart';
-import 'buying_document_detail_sheet.dart';
+import '../shared/buying_document_detail_sheet.dart';
 
 enum _PurchaseSortOption { newestEta, oldestEta, valueHigh, valueLow }
 

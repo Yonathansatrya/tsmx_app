@@ -5,15 +5,15 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/erp/erp_filter_tools.dart';
 import '../shared/role_main_screen.dart';
-import '../tabs/buying/purchase_invoice_panel.dart';
-import '../tabs/buying/purchase_order_panel.dart';
-import '../tabs/buying/purchase_receipt_panel.dart';
 import 'material_request/create_material_request_screen.dart';
 import 'material_request/material_request_panel.dart';
 import 'purchase_invoice/create_purchase_invoice_screen.dart';
+import 'purchase_invoice/purchase_invoice_panel.dart';
 import 'purchase_order/create_purchase_order_screen.dart';
+import 'purchase_order/purchase_order_panel.dart';
 import 'purchase_overview_tab.dart';
 import 'purchase_receipt/create_purchase_receipt_screen.dart';
+import 'purchase_receipt/purchase_receipt_panel.dart';
 
 class PurchaseMainScreen extends StatefulWidget {
   const PurchaseMainScreen({super.key});

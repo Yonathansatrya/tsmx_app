@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../tabs/buying/material_request_panel.dart' as buying;
+import 'material_request_panel_base.dart' as buying;
 
 class MaterialRequestPanel extends StatelessWidget {
   const MaterialRequestPanel({super.key});

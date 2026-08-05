@@ -4,10 +4,10 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/erp/erp_filter_tools.dart';
 import '../sales/sales_ui.dart';
-import 'buying/purchase_order_panel.dart';
-import 'buying/purchase_receipt_panel.dart';
-import 'buying/purchase_invoice_panel.dart';
-import 'buying/material_request_panel.dart';
+import '../purchase/material_request/material_request_panel.dart';
+import '../purchase/purchase_invoice/purchase_invoice_panel.dart';
+import '../purchase/purchase_order/purchase_order_panel.dart';
+import '../purchase/purchase_receipt/purchase_receipt_panel.dart';
 
 class BuyingTab extends StatefulWidget {
   final String selectedSegment;

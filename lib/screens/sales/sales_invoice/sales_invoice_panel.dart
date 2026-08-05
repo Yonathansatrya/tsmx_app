@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../models/delivery_note.dart';
+import '../../../models/sales_invoice.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../utils/erp_doc_utils.dart';
@@ -12,45 +12,40 @@ import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../../widgets/erp/document_trend_card.dart';
-import 'selling_filter_widgets.dart';
-import 'selling_document_detail_sheet.dart';
+import '../shared/selling_document_detail_sheet.dart';
+import '../shared/selling_filter_widgets.dart';
 
-class DeliveryNotePanel extends StatefulWidget {
-  const DeliveryNotePanel({super.key});
+class SalesInvoicePanel extends StatefulWidget {
+  const SalesInvoicePanel({super.key});
 
   @override
-  State<DeliveryNotePanel> createState() => _DeliveryNotePanelState();
+  State<SalesInvoicePanel> createState() => _SalesInvoicePanelState();
 }
 
-class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
+class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
   final TextEditingController _searchController = TextEditingController();
   String _search = '';
-  DeliveryNoteStatusKey? _statusFilter;
+  InvoiceStatusKey? _statusFilter;
   SellingSortOption _sortOption = SellingSortOption.newest;
   SellingAdvancedFilters _advancedFilters = SellingAdvancedFilters.empty;
   Timer? _searchDebounce;
 
-  static final _chips = <ErpStatusChip<DeliveryNoteStatusKey?>>[
+  static final _chips = <ErpStatusChip<InvoiceStatusKey?>>[
     const ErpStatusChip(label: 'All', value: null),
-    const ErpStatusChip(label: 'Draft', value: DeliveryNoteStatusKey.draft),
-    const ErpStatusChip(label: 'To Bill', value: DeliveryNoteStatusKey.toBill),
+    const ErpStatusChip(label: 'Draft', value: InvoiceStatusKey.draft),
+    const ErpStatusChip(label: 'Return', value: InvoiceStatusKey.returnDoc),
     const ErpStatusChip(
-      label: 'Completed',
-      value: DeliveryNoteStatusKey.completed,
+      label: 'Credit Note Issued',
+      value: InvoiceStatusKey.creditNoteIssued,
     ),
+    const ErpStatusChip(label: 'Paid', value: InvoiceStatusKey.paid),
     const ErpStatusChip(
-      label: 'Return Issued',
-      value: DeliveryNoteStatusKey.returnIssued,
+      label: 'Partly Paid',
+      value: InvoiceStatusKey.partlyPaid,
     ),
-    const ErpStatusChip(
-      label: 'Return',
-      value: DeliveryNoteStatusKey.returnDoc,
-    ),
-    const ErpStatusChip(
-      label: 'Cancelled',
-      value: DeliveryNoteStatusKey.cancelled,
-    ),
-    const ErpStatusChip(label: 'Closed', value: DeliveryNoteStatusKey.closed),
+    const ErpStatusChip(label: 'Unpaid', value: InvoiceStatusKey.unpaid),
+    const ErpStatusChip(label: 'Overdue', value: InvoiceStatusKey.overdue),
+    const ErpStatusChip(label: 'Cancelled', value: InvoiceStatusKey.cancelled),
   ];
 
   @override
@@ -58,8 +53,8 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final appState = context.read<AppState>();
-      if (appState.deliveryNotes.isEmpty) {
-        appState.refreshDeliveryNotes();
+      if (appState.salesInvoices.isEmpty) {
+        appState.refreshSalesInvoices();
       }
     });
   }
@@ -72,13 +67,14 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
   }
 
   String? get _statusText => switch (_statusFilter) {
-    DeliveryNoteStatusKey.draft => 'Draft',
-    DeliveryNoteStatusKey.toBill => 'To Bill',
-    DeliveryNoteStatusKey.completed => 'Completed',
-    DeliveryNoteStatusKey.returnIssued => 'Return Issued',
-    DeliveryNoteStatusKey.returnDoc => 'Return',
-    DeliveryNoteStatusKey.cancelled => 'Cancelled',
-    DeliveryNoteStatusKey.closed => 'Closed',
+    InvoiceStatusKey.draft => 'Draft',
+    InvoiceStatusKey.unpaid => 'Unpaid',
+    InvoiceStatusKey.partlyPaid => 'Partly Paid',
+    InvoiceStatusKey.paid => 'Paid',
+    InvoiceStatusKey.overdue => 'Overdue',
+    InvoiceStatusKey.returnDoc => 'Return',
+    InvoiceStatusKey.creditNoteIssued => 'Credit Note Issued',
+    InvoiceStatusKey.cancelled => 'Cancelled',
     _ => null,
   };
 
@@ -87,7 +83,7 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 350), () {
       if (mounted) {
-        context.read<AppState>().setDeliveryNoteQuery(
+        context.read<AppState>().setSalesInvoiceQuery(
           search: value,
           status: _statusText,
         );
@@ -95,7 +91,7 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
     });
   }
 
-  List<DeliveryNote> _filter(List<DeliveryNote> docs) {
+  List<SalesInvoice> _filter(List<SalesInvoice> docs) {
     final q = _search.toLowerCase();
     final filtered = docs.where((d) {
       final matchSearch =
@@ -169,7 +165,7 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
     };
   }
 
-  bool _matchesAdvancedFilters(DeliveryNote doc) {
+  bool _matchesAdvancedFilters(SalesInvoice doc) {
     final filters = _advancedFilters;
     final customer = filters.customer.toLowerCase();
     if (customer.isNotEmpty && !doc.customer.toLowerCase().contains(customer)) {
@@ -223,7 +219,7 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
       ),
       builder: (_) {
         return SellingAdvancedFilterSheet(
-          title: 'Advanced Delivery Filters',
+          title: 'Advanced Invoice Filters',
           initial: _advancedFilters,
         );
       },
@@ -242,11 +238,11 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
       _sortOption = SellingSortOption.newest;
       _advancedFilters = SellingAdvancedFilters.empty;
     });
-    context.read<AppState>().setDeliveryNoteQuery(search: '', status: null);
+    context.read<AppState>().setSalesInvoiceQuery(search: '', status: null);
   }
 
-  Future<void> _openDetail(DeliveryNote doc) async {
-    final detail = await context.read<AppState>().loadDeliveryNoteDetail(
+  Future<void> _openDetail(SalesInvoice doc) async {
+    final detail = await context.read<AppState>().loadSalesInvoiceDetail(
       doc.id,
     );
     if (!mounted) return;
@@ -258,16 +254,21 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
       title: detail.id,
       subtitle: detail.customer,
       statusText: detail.statusText,
-      icon: Icons.local_shipping_rounded,
+      icon: Icons.receipt_long_rounded,
       metrics: [
         SellingDetailMetric(
-          label: 'Total',
+          label: 'Grand Total',
           value: 'Rp ${formatErpCurrency(detail.value)}',
           icon: Icons.payments_outlined,
         ),
         SellingDetailMetric(
-          label: 'Qty',
-          value: '${detail.itemsCount}',
+          label: 'Outstanding',
+          value: 'Rp ${formatErpCurrency(detail.outstandingAmount)}',
+          icon: Icons.account_balance_wallet_outlined,
+        ),
+        SellingDetailMetric(
+          label: 'Items',
+          value: '${detail.items.length}',
           icon: Icons.inventory_2_outlined,
         ),
       ],
@@ -277,6 +278,10 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
           value: docStatusLabel(detail.docStatus),
         ),
         SellingDetailInfo(label: 'Posting Date', value: detail.date),
+        SellingDetailInfo(
+          label: 'Due Date',
+          value: detail.dueDate.isEmpty ? '-' : detail.dueDate,
+        ),
       ],
       items: detail.items
           .map(
@@ -293,7 +298,7 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
           .toList(),
       footer: canSubmit
           ? erpActionButton(
-              label: 'Submit Delivery Note',
+              label: 'Submit Sales Invoice',
               icon: Icons.check_circle_outline_rounded,
               filled: true,
               onPressed: () => _submit(detail.id),
@@ -305,7 +310,7 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
   Future<void> _submit(String id) async {
     if (!await confirmErpAction(
       context,
-      title: 'Submit Delivery Note?',
+      title: 'Submit Sales Invoice?',
       message: 'Submit $id?',
     )) {
       return;
@@ -314,8 +319,8 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
     final ok = await runErpWorkflowAction(
       context,
       action: () =>
-          context.read<AppState>().submitDocument('Delivery Note', id),
-      successMessage: 'Delivery Note submitted',
+          context.read<AppState>().submitDocument('Sales Invoice', id),
+      successMessage: 'Sales Invoice submitted',
     );
     if (ok && mounted) Navigator.pop(context);
   }
@@ -323,15 +328,15 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final filtered = _filter(appState.deliveryNotes);
+    final filtered = _filter(appState.salesInvoices);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         DocumentTrendCard(
-          title: 'Delivery Note',
+          title: 'Sales Invoice',
           emptyMessage:
-              'Belum ada nilai Delivery Note dari Sales Analytics pada periode ini.',
-          points: appState.deliveryNoteTrendPoints,
+              'Belum ada nilai Sales Invoice dari Sales Analytics pada periode ini.',
+          points: appState.salesInvoiceTrendPoints,
           selectedYear: appState.sellingPeriodYear,
           selectedMonth: appState.sellingPeriodMonth,
           sourceLabel: 'Sumber: Sales Analytics ERPNext',
@@ -344,7 +349,7 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
           controller: _searchController,
           onChanged: _searchChanged,
           decoration: InputDecoration(
-            hintText: 'Search DN or customer…',
+            hintText: 'Search SI or customer…',
             prefixIcon: const Icon(Icons.search_rounded, size: 20),
             filled: true,
             fillColor: AppColors.white,
@@ -363,9 +368,9 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
           ),
         ),
 
-        if (appState.deliveryNotesError != null) ...[
+        if (appState.salesInvoicesError != null) ...[
           const SizedBox(height: 10),
-          ErpErrorBox(message: appState.deliveryNotesError!),
+          ErpErrorBox(message: appState.salesInvoicesError!),
         ],
 
         const SizedBox(height: 10),
@@ -381,12 +386,12 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
 
         const SizedBox(height: 10),
 
-        ErpStatusChipBar<DeliveryNoteStatusKey?>(
+        ErpStatusChipBar<InvoiceStatusKey?>(
           chips: _chips,
           selected: _statusFilter,
           onSelected: (v) {
             setState(() => _statusFilter = v);
-            context.read<AppState>().setDeliveryNoteQuery(
+            context.read<AppState>().setSalesInvoiceQuery(
               search: _search,
               status: _statusText,
             );
@@ -395,8 +400,8 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
 
         const SizedBox(height: 12),
 
-        if (filtered.isEmpty && !appState.isDeliveryNotesLoading)
-          const ErpEmptyState(title: 'No delivery notes found')
+        if (filtered.isEmpty && !appState.isSalesInvoicesLoading)
+          const ErpEmptyState(title: 'No sales invoices found')
         else
           ...filtered.map(
             (d) => ErpDocumentCard(
@@ -409,16 +414,16 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
             ),
           ),
 
-        if (appState.hasMoreDeliveryNotes ||
-            appState.isMoreDeliveryNotesLoading) ...[
+        if (appState.hasMoreSalesInvoices ||
+            appState.isMoreSalesInvoicesLoading) ...[
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: appState.isMoreDeliveryNotesLoading
+              onPressed: appState.isMoreSalesInvoicesLoading
                   ? null
-                  : () => context.read<AppState>().loadMoreDeliveryNotes(),
-              icon: appState.isMoreDeliveryNotesLoading
+                  : () => context.read<AppState>().loadMoreSalesInvoices(),
+              icon: appState.isMoreSalesInvoicesLoading
                   ? const SizedBox(
                       width: 16,
                       height: 16,
@@ -426,9 +431,9 @@ class _DeliveryNotePanelState extends State<DeliveryNotePanel> {
                     )
                   : const Icon(Icons.expand_more_rounded),
               label: Text(
-                appState.isMoreDeliveryNotesLoading
-                    ? 'Loading delivery notes...'
-                    : 'Load more delivery notes',
+                appState.isMoreSalesInvoicesLoading
+                    ? 'Loading invoices...'
+                    : 'Load more invoices',
               ),
             ),
           ),

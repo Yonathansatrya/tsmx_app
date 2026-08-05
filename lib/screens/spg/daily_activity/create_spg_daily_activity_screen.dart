@@ -4,10 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/sales_workspace.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../widgets/erp/erp_error_box.dart';
+import '../../../models/sales_workspace.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../widgets/erp/erp_error_box.dart';
 
 class CreateSpgDailyActivityScreen extends StatefulWidget {
   const CreateSpgDailyActivityScreen({super.key});
