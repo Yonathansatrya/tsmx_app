@@ -24,7 +24,7 @@ class _StockTabState extends State<StockTab> {
   final TextEditingController _stockSearchController = TextEditingController();
   _StockStatusFilter _stockStatusFilter = _StockStatusFilter.all;
   _StockSortOption _stockSortOption = _StockSortOption.urgentFirst;
-  String? _selectedCategory;
+  String? _selectedItemGroup;
   bool _selectionInitialized = false;
 
   @override
@@ -44,6 +44,7 @@ class _StockTabState extends State<StockTab> {
     if (appState.warehouses.isEmpty) {
       await appState.refreshWarehouses();
     }
+    await appState.refreshItemGroups();
     if (!mounted) return;
 
     _applyDefaultSelection(appState);
@@ -79,6 +80,7 @@ class _StockTabState extends State<StockTab> {
   Future<void> _onPullRefresh() async {
     final appState = context.read<AppState>();
     await appState.refreshWarehouses();
+    await appState.refreshItemGroups();
     if (!mounted) return;
     _applyDefaultSelection(appState);
     if (_selectedCompany != null) {
@@ -95,7 +97,7 @@ class _StockTabState extends State<StockTab> {
     setState(() {
       _selectedCompany = company;
       _selectedWarehouseType = _defaultWarehouseType(areas);
-      _selectedCategory = null;
+      _selectedItemGroup = null;
     });
 
     appState.refreshInventoryForCompany(company);
@@ -307,6 +309,7 @@ class _StockTabState extends State<StockTab> {
                 resultCount: filteredInventory.length,
                 totalCount: areaInventory.length,
                 currentItems: areaInventory,
+                itemGroupOptions: appState.itemGroups,
               ),
               const SizedBox(height: 10),
 
@@ -358,17 +361,17 @@ class _StockTabState extends State<StockTab> {
   bool get _hasActiveStockFilters {
     return _stockSearchController.text.trim().isNotEmpty ||
         _stockStatusFilter != _StockStatusFilter.all ||
-        _selectedCategory != null;
+        _selectedItemGroup != null;
   }
 
-  List<String> _getUniqueCategories(List<InventoryItem> items) {
-    final categories = <String>{};
+  List<String> _getUniqueItemGroups(List<InventoryItem> items) {
+    final itemGroups = <String>{};
     for (final item in items) {
       if (item.category != null && item.category!.isNotEmpty) {
-        categories.add(item.category!);
+        itemGroups.add(item.category!);
       }
     }
-    return categories.toList()..sort();
+    return itemGroups.toList()..sort();
   }
 
   String _warehouseTypeLabel(WarehouseType type) {
@@ -456,7 +459,8 @@ class _StockTabState extends State<StockTab> {
       final matchesSearch =
           query.isEmpty ||
           item.sku.toLowerCase().contains(query) ||
-          item.name.toLowerCase().contains(query);
+          item.name.toLowerCase().contains(query) ||
+          (item.category?.toLowerCase().contains(query) ?? false);
 
       final matchesStatus = switch (_stockStatusFilter) {
         _StockStatusFilter.all => true,
@@ -465,10 +469,10 @@ class _StockTabState extends State<StockTab> {
         _StockStatusFilter.inStock => item.status == StockStatus.inStock,
       };
 
-      final matchesCategory =
-          _selectedCategory == null || item.category == _selectedCategory;
+      final matchesItemGroup =
+          _selectedItemGroup == null || item.category == _selectedItemGroup;
 
-      return matchesSearch && matchesStatus && matchesCategory;
+      return matchesSearch && matchesStatus && matchesItemGroup;
     }).toList();
 
     filtered.sort((a, b) {
@@ -533,6 +537,7 @@ class _StockTabState extends State<StockTab> {
     required int resultCount,
     required int totalCount,
     required List<InventoryItem> currentItems,
+    required List<String> itemGroupOptions,
   }) {
     return Container(
       width: double.infinity,
@@ -612,7 +617,7 @@ class _StockTabState extends State<StockTab> {
             ],
           ),
           const SizedBox(height: 10),
-          _buildCategoryFilterSection(currentItems),
+          _buildItemGroupFilterSection(currentItems, itemGroupOptions),
           if (_hasActiveStockFilters) ...[
             const SizedBox(height: 8),
             Row(
@@ -632,7 +637,7 @@ class _StockTabState extends State<StockTab> {
                     _stockSearchController.clear();
                     setState(() {
                       _stockStatusFilter = _StockStatusFilter.all;
-                      _selectedCategory = null;
+                      _selectedItemGroup = null;
                     });
                   },
                   style: TextButton.styleFrom(
@@ -681,10 +686,18 @@ class _StockTabState extends State<StockTab> {
     );
   }
 
-  Widget _buildCategoryFilterSection(List<InventoryItem> currentItems) {
-    final categories = _getUniqueCategories(currentItems);
+  Widget _buildItemGroupFilterSection(
+    List<InventoryItem> currentItems,
+    List<String> itemGroupOptions,
+  ) {
+    final itemGroups = {
+      ...itemGroupOptions
+          .map((group) => group.trim())
+          .where((group) => group.isNotEmpty),
+      ..._getUniqueItemGroups(currentItems),
+    }.toList()..sort();
 
-    if (categories.isEmpty) {
+    if (itemGroups.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -694,7 +707,7 @@ class _StockTabState extends State<StockTab> {
         Padding(
           padding: const EdgeInsets.only(bottom: 8, left: 4),
           child: Text(
-            'Category',
+            'Item Group',
             style: TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w700,
@@ -709,12 +722,12 @@ class _StockTabState extends State<StockTab> {
             children: [
               Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: _buildCategoryChip(null, 'All'),
+                child: _buildItemGroupChip(null, 'All'),
               ),
-              ...categories.map((category) {
+              ...itemGroups.map((itemGroup) {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
-                  child: _buildCategoryChip(category, category),
+                  child: _buildItemGroupChip(itemGroup, itemGroup),
                 );
               }),
             ],
@@ -724,15 +737,15 @@ class _StockTabState extends State<StockTab> {
     );
   }
 
-  Widget _buildCategoryChip(String? category, String label) {
-    final isSelected = _selectedCategory == category;
+  Widget _buildItemGroupChip(String? itemGroup, String label) {
+    final isSelected = _selectedItemGroup == itemGroup;
 
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
       onSelected: (_) {
         setState(() {
-          _selectedCategory = category;
+          _selectedItemGroup = itemGroup;
         });
       },
       showCheckmark: false,
@@ -1065,7 +1078,7 @@ class _StockTabState extends State<StockTab> {
                 onTap: () {
                   setState(() {
                     _selectedWarehouseType = type;
-                    _selectedCategory = null;
+                    _selectedItemGroup = null;
                   });
                 },
                 borderRadius: BorderRadius.circular(12),

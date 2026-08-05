@@ -398,6 +398,7 @@ class AppState with ChangeNotifier {
   List<StockEntry> _stockEntries = [];
   List<StockReconciliationSummary> _stockReconciliations = [];
   List<InventoryItem> _inventory = [];
+  List<String> _itemGroups = [];
   DocumentSummary _salesOrderSummary = const DocumentSummary();
   DocumentSummary _deliveryNoteSummary = const DocumentSummary();
   DocumentSummary _salesInvoiceSummary = const DocumentSummary();
@@ -445,6 +446,7 @@ class AppState with ChangeNotifier {
   List<StockReconciliationSummary> get stockReconciliations =>
       _stockReconciliations;
   List<InventoryItem> get inventory => _inventory;
+  List<String> get itemGroups => List.unmodifiable(_itemGroups);
   List<SalesOrder> get dashboardSalesOrders => _salesOrders;
   List<PurchaseOrder> get dashboardPurchaseOrders => _purchaseOrders;
 
@@ -1275,6 +1277,7 @@ class AppState with ChangeNotifier {
     _stockEntries = [];
     _stockReconciliations = [];
     _inventory = [];
+    _itemGroups = [];
     _warehouses = [];
     _salesOrderSummary = const DocumentSummary();
     _deliveryNoteSummary = const DocumentSummary();
@@ -7905,22 +7908,28 @@ class AppState with ChangeNotifier {
 
     try {
       await _frappeService.ensureLoggedIn();
-      final data = await _fetchAllResourcePages(
-        doctype: 'Stock Entry',
-        fields: const [
-          'name',
-          'stock_entry_type',
-          'status',
-          'docstatus',
-          'posting_date',
-          'total_qty',
-          'from_warehouse',
-          'to_warehouse',
-        ],
-        orderBy: 'posting_date desc',
-        filters: _companyScopeFilters(''),
-        maxRows: _defaultFetchRowLimit,
-      );
+      final filters = _companyScopeFilters('');
+      List<Map<String, dynamic>> data;
+      try {
+        data = await _fetchAllResourcePages(
+          doctype: 'Stock Entry',
+          fields: const [
+            'name',
+            'stock_entry_type',
+            'status',
+            'docstatus',
+            'posting_date',
+            'total_qty',
+            'from_warehouse',
+            'to_warehouse',
+          ],
+          orderBy: 'posting_date desc',
+          filters: filters,
+          maxRows: _defaultFetchRowLimit,
+        );
+      } catch (_) {
+        data = await _fetchStockEntriesViaReportView(filters);
+      }
       _stockEntries = data.map((e) => StockEntry.fromJson(e)).toList();
       _stockEntriesError = null;
     } catch (err) {
@@ -7932,6 +7941,29 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> refreshStockEntries() => fetchStockEntriesFromFrappe();
+
+  Future<List<Map<String, dynamic>>> _fetchStockEntriesViaReportView(
+    List<List<dynamic>> filters,
+  ) {
+    return walkFrappePages(
+      pageSize: _frappePageSize,
+      maxRows: _defaultFetchRowLimit,
+      fetchPage: (start, limit) => _frappeService.fetchReportView(
+        'Stock Entry',
+        fields: const [
+          'name',
+          'stock_entry_type',
+          'status',
+          'docstatus',
+          'posting_date',
+        ],
+        limit: limit,
+        limitStart: start,
+        orderBy: 'posting_date desc',
+        filters: filters,
+      ),
+    );
+  }
 
   Future<void> refreshStockReconciliations() async {
     final rows = await _fetchAllResourcePages(
@@ -8313,6 +8345,9 @@ class AppState with ChangeNotifier {
         }
         if (meta != null && meta.reorderLevel > 0) {
           updated = updated.copyWith(minStockThreshold: meta.reorderLevel);
+        }
+        if (meta != null && meta.itemGroup.trim().isNotEmpty) {
+          updated = updated.copyWith(category: meta.itemGroup.trim());
         }
         if (meta != null && meta.valuationRate > 0) {
           updated = updated.copyWith(unitValue: meta.valuationRate);
@@ -10130,6 +10165,50 @@ class AppState with ChangeNotifier {
 
   Future<void> refreshWarehouses() => fetchWarehousesFromFrappe();
 
+  Future<void> refreshItemGroups() async {
+    if (_isSampleMode) {
+      _itemGroups =
+          _inventory
+              .map((item) => item.category?.trim() ?? '')
+              .where((group) => group.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+      notifyListeners();
+      return;
+    }
+
+    try {
+      await _frappeService.ensureLoggedIn();
+      final rows = await _fetchAllResourcePages(
+        doctype: 'Item Group',
+        fields: const ['name'],
+        orderBy: 'name asc',
+        maxRows: _defaultFetchRowLimit,
+      );
+      _itemGroups =
+          rows
+              .map((row) => row['name']?.toString().trim() ?? '')
+              .where((group) => group.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+      notifyListeners();
+    } catch (_) {
+      final fallback =
+          _inventory
+              .map((item) => item.category?.trim() ?? '')
+              .where((group) => group.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
+      if (fallback.isNotEmpty) {
+        _itemGroups = fallback;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> refreshInventoryForCompany(String company) async {
     if (_warehouses.isEmpty) {
       await fetchWarehousesFromFrappe();
@@ -11079,13 +11158,26 @@ class AppState with ChangeNotifier {
     }).toList();
   }
 
-  Future<Map<String, ({String name, int reorderLevel, double valuationRate})>>
+  Future<
+    Map<
+      String,
+      ({String name, String itemGroup, int reorderLevel, double valuationRate})
+    >
+  >
   _fetchItemMeta(Set<String> itemCodes) async {
     if (itemCodes.isEmpty) return {};
 
     final codes = itemCodes.toList();
     final meta =
-        <String, ({String name, int reorderLevel, double valuationRate})>{};
+        <
+          String,
+          ({
+            String name,
+            String itemGroup,
+            int reorderLevel,
+            double valuationRate,
+          })
+        >{};
 
     for (var i = 0; i < codes.length; i += 80) {
       final chunk = codes.sublist(
@@ -11098,6 +11190,7 @@ class AppState with ChangeNotifier {
           fields: const [
             'name',
             'item_name',
+            'item_group',
             'reorder_level',
             'valuation_rate',
           ],
@@ -11111,6 +11204,7 @@ class AppState with ChangeNotifier {
           if (code.isEmpty) continue;
           meta[code] = (
             name: row['item_name']?.toString() ?? code,
+            itemGroup: row['item_group']?.toString() ?? '',
             reorderLevel: NumParse.asInt(row['reorder_level']),
             valuationRate: NumParse.asDouble(row['valuation_rate']),
           );
@@ -11119,7 +11213,7 @@ class AppState with ChangeNotifier {
         try {
           final data = await _fetchResourceWithFieldFallback(
             doctype: 'Item',
-            fields: const ['name', 'item_name'],
+            fields: const ['name', 'item_name', 'item_group'],
             limit: chunk.length,
             filters: [
               ['name', 'in', chunk],
@@ -11130,6 +11224,7 @@ class AppState with ChangeNotifier {
             if (code.isEmpty) continue;
             meta[code] = (
               name: row['item_name']?.toString() ?? code,
+              itemGroup: row['item_group']?.toString() ?? '',
               reorderLevel: 0,
               valuationRate: 0,
             );
