@@ -5,10 +5,13 @@ import 'package:provider/provider.dart';
 import 'config/app_config.dart';
 import 'state/app_state.dart';
 import 'services/erp_services.dart';
+import 'services/native_notification_service.dart';
 import 'screens/auth/loading_screen.dart';
 import 'theme/app_colors.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  NativeNotificationService.instance.initialize();
   final services = ErpServices();
   runApp(
     MultiProvider(

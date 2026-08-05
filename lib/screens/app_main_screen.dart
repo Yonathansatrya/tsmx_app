@@ -1,8 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/sales_order.dart';
-import '../widgets/notifications/notification_sheet.dart';
+import '../services/native_notification_service.dart';
 import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../utils/erp_doc_utils.dart';
@@ -31,14 +33,27 @@ class _AppMainScreenState extends State<AppMainScreen> {
   static const _profileTabKey = 'profile';
 
   int _currentIndex = 0;
+  StreamSubscription<Map<String, dynamic>>? _notificationTapSub;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<AppState>().refreshNotifications(silent: true);
+      _notificationTapSub = NativeNotificationService.instance.notificationTaps
+          .listen(_handleNotificationTap);
+      NativeNotificationService.instance.consumeInitialTapPayload().then((
+        payload,
+      ) {
+        if (payload != null) _handleNotificationTap(payload);
+      });
     });
+  }
+
+  @override
+  void dispose() {
+    _notificationTapSub?.cancel();
+    super.dispose();
   }
 
   int _totalTodoCount(AppState appState) => appState.approvalTodoCount;
@@ -113,6 +128,20 @@ class _AppMainScreenState extends State<AppMainScreen> {
     });
   }
 
+  void _handleNotificationTap(Map<String, dynamic> payload) {
+    if (!mounted) return;
+    if (payload['target']?.toString() != 'approval_todo') return;
+    final appState = context.read<AppState>();
+    if (!appState.canUseApprovals) return;
+    final tabs = _tabs(appState);
+    final todoIndex = tabs.indexWhere(
+      (tab) => tab.keyName == MobileModule.approvals,
+    );
+    if (todoIndex < 0) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    setState(() => _currentIndex = todoIndex);
+  }
+
   void _redirectToLogin() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -184,39 +213,6 @@ class _AppMainScreenState extends State<AppMainScreen> {
                         _totalTodoCount(appState),
                       ),
                     ),
-                  IconButton(
-                    tooltip: 'Notifications',
-                    icon: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        const Icon(
-                          Icons.notifications_none_rounded,
-                          color: AppColors.primary,
-                        ),
-                        if (appState.hasUnreadNotifications)
-                          Positioned(
-                            right: -2,
-                            top: -2,
-                            child: Container(
-                              width: 9,
-                              height: 9,
-                              decoration: const BoxDecoration(
-                                color: Colors.redAccent,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const NotificationPage(),
-                        ),
-                      );
-                    },
-                  ),
                   const SizedBox(width: 8),
                 ],
               )
@@ -910,7 +906,7 @@ class _TmsxHeaderTitle extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [ 
+            children: [
               Text(
                 appState.appDisplayName,
                 maxLines: 1,

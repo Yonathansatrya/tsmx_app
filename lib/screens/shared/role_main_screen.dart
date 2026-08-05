@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/notifications/notification_sheet.dart';
 import '../auth/login_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -136,40 +135,6 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: state.hasUnreadNotifications
-                ? 'Ada notifikasi baru'
-                : 'Notifications',
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(
-                  Icons.notifications_none_rounded,
-                  color: AppColors.primary,
-                  size: 22,
-                ),
-                if (state.hasUnreadNotifications)
-                  Positioned(
-                    right: -1,
-                    top: -1,
-                    child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.danger,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NotificationPage()),
-              );
-            },
-          ),
           IconButton(
             tooltip: 'Profile',
             icon: const Icon(

@@ -48,7 +48,6 @@ import '../utils/num_parse.dart';
 import '../utils/frappe_page_walker.dart';
 import '../config/mobile_role_registry.dart';
 import '../utils/mobile_access.dart';
-import '../widgets/notifications/notification_model.dart';
 
 class _LocalFrappeSite {
   final String name;
@@ -452,11 +451,6 @@ class AppState with ChangeNotifier {
   List<WarehouseInfo> _warehouses = [];
   List<WarehouseInfo> get warehouses => _warehouses;
 
-  List<AppNotification> _notifications = [];
-  List<AppNotification> get notifications => _notifications;
-  bool get hasUnreadNotifications =>
-      _notifications.any((notification) => !notification.isRead);
-
   int _salesOrderApprovalTodoCount = 0;
   int get salesOrderApprovalTodoCount => _salesOrderApprovalTodoCount;
   int get approvalTodoCount => _salesOrderApprovalTodoCount;
@@ -470,11 +464,7 @@ class AppState with ChangeNotifier {
       ? _sampleApprovalTodos
       : List<ErpApprovalTodo>.unmodifiable(_approvalTodoSnapshot);
 
-  bool _isNotificationsLoading = false;
-  bool get isNotificationsLoading => _isNotificationsLoading;
-
   Timer? _notificationPollTimer;
-  Future<void>? _notificationRefreshInFlight;
   final Map<String, Future<List<SalesInvoice>>> _collectionInvoiceInFlight = {};
   final Map<String, Future<List<CollectionPayment>>>
   _collectionPaymentInFlight = {};
@@ -764,8 +754,6 @@ class AppState with ChangeNotifier {
   static const String _documentDbCachePrefix = 'document_cache';
   static const Duration _sellingTrendCacheTtl = Duration(hours: 12);
   static const Duration _sellingTrendRemoteTimeout = Duration(seconds: 45);
-  static const String _prefsClearedNotificationsKey = 'cleared_notifications';
-  static const String _prefsReadNotificationsKey = 'read_notifications';
   static const String _prefsApprovalNotificationCountKey =
       'approval_notification_count';
 
@@ -1255,8 +1243,6 @@ class AppState with ChangeNotifier {
       if (key == _prefsFrappeConfigKey && keepSiteSelection) continue;
       if (key == _prefsFrappeSiteHistoryKey && keepSiteSelection) continue;
       if (key.startsWith(_prefsSummaryCacheKey) ||
-          key.startsWith(_prefsClearedNotificationsKey) ||
-          key.startsWith(_prefsReadNotificationsKey) ||
           key == _prefsUserRoleKey ||
           key == _prefsFrappeConfigKey ||
           key == _prefsFrappeSiteHistoryKey) {
@@ -1303,8 +1289,6 @@ class AppState with ChangeNotifier {
     _stockReconciliations = [];
     _inventory = [];
     _warehouses = [];
-    _notifications = [];
-
     _salesOrderSummary = const DocumentSummary();
     _deliveryNoteSummary = const DocumentSummary();
     _salesInvoiceSummary = const DocumentSummary();
@@ -1347,7 +1331,6 @@ class AppState with ChangeNotifier {
     _isMoreMaterialRequestsLoading = false;
     _isStockEntriesLoading = false;
     _isInventoryLoading = false;
-    _isNotificationsLoading = false;
     _isOrderSummaryLoading = false;
 
     _hasMoreSalesOrders = true;
@@ -1400,7 +1383,6 @@ class AppState with ChangeNotifier {
     _purchaseApprovalTodoCount = 0;
     _summarySyncStatus = SummarySyncStatus.idle;
     _summaryProcessedRows = 0;
-    _notificationRefreshInFlight = null;
     _doctypeSubmitPermissionCache.clear();
     _documentCache.clear();
     _approvalTodoSnapshot = const [];
@@ -1711,20 +1693,6 @@ class AppState with ChangeNotifier {
     ];
     _salesOrderApprovalTodoCount = _sampleApprovalTodos.length;
     _purchaseApprovalTodoCount = 1;
-
-    _notifications = [
-      AppNotification(
-        id: 'sample-approval',
-        title: 'Approval sample menunggu',
-        description: '2 dokumen contoh perlu ditinjau.',
-        type: NotificationType.action,
-        timeString: 'Baru saja',
-        documentType: 'Sales Order',
-        documentName: 'SO-SAMPLE-0002',
-        source: 'sample',
-        createdAt: DateTime.now(),
-      ),
-    ];
   }
 
   Future<void> logout() async {
@@ -1732,7 +1700,6 @@ class AppState with ChangeNotifier {
     await _visitLocationService.stopTracking();
     _activeSalesVisit = null;
     _latestVisitLocation = null;
-    _notifications = [];
     _mobileCompatibilityWarning = null;
     _mobileBoot = null;
     _salesOrderApprovalTodoCount = 0;
@@ -1793,7 +1760,6 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> _refreshNotificationTick() async {
-    await refreshNotifications(silent: true);
     await _refreshApprovalTodoSystemNotification();
   }
 
@@ -1819,232 +1785,15 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> refreshNotifications({bool silent = false}) async {
-    if (!_isAuthenticated || _currentUser == null) return;
-    if (_isSampleMode) {
-      notifyListeners();
-      return;
-    }
-    final inFlight = _notificationRefreshInFlight;
-    if (inFlight != null) {
-      await inFlight;
-      return;
-    }
-
     if (!silent) {
-      _isNotificationsLoading = true;
       notifyListeners();
     }
-
-    final operation = () async {
-      await _frappeService.ensureLoggedIn();
-      _notifications = await _fetchNotificationsFromFrappe();
-    }();
-    _notificationRefreshInFlight = operation;
-    try {
-      await operation;
-    } catch (_) {
-      // Keep previous notifications on transient errors.
-    } finally {
-      if (_notificationRefreshInFlight == operation) {
-        _notificationRefreshInFlight = null;
-      }
-      if (!silent) {
-        _isNotificationsLoading = false;
-      }
-      notifyListeners();
-    }
-  }
-
-  Future<void> markAllNotificationsRead() async {
-    final unread = _notifications.where((n) => !n.isRead).toList();
-    if (unread.isEmpty) return;
-    final sp = await SharedPreferences.getInstance();
-    final readIds = await _loadReadNotificationIds(sp);
-    readIds.addAll(unread.map((notification) => notification.id));
-
-    for (final notification in unread) {
-      if (notification.source != 'notification_log') continue;
-      try {
-        await _frappeService.updateDocument(
-          'Notification Log',
-          notification.id,
-          {'read': 1},
-        );
-      } catch (_) {}
-    }
-    await sp.setStringList(_readNotificationPrefsKey, readIds.toList()..sort());
-
-    _notifications = _notifications
-        .map((n) => n.copyWith(isRead: true))
-        .toList();
-    notifyListeners();
-  }
-
-  Future<void> clearNotifications() async {
-    if (_notifications.isEmpty) return;
-    final sp = await SharedPreferences.getInstance();
-    final dismissed = await _loadClearedNotificationIds(sp);
-    dismissed.addAll(_notifications.map((item) => item.id));
-    await sp.setStringList(
-      _clearedNotificationPrefsKey,
-      dismissed.toList()..sort(),
-    );
-    _notifications = [];
-    notifyListeners();
-  }
-
-  Future<void> markNotificationRead(String id) async {
-    final index = _notifications.indexWhere((n) => n.id == id);
-    if (index < 0 || _notifications[index].isRead) return;
-
-    final notification = _notifications[index];
-    final sp = await SharedPreferences.getInstance();
-    final readIds = await _loadReadNotificationIds(sp);
-    readIds.add(notification.id);
-    if (notification.source == 'notification_log') {
-      try {
-        await _frappeService.updateDocument(
-          'Notification Log',
-          notification.id,
-          {'read': 1},
-        );
-      } catch (_) {}
-    }
-    await sp.setStringList(_readNotificationPrefsKey, readIds.toList()..sort());
-
-    _notifications[index] = notification.copyWith(isRead: true);
-    notifyListeners();
-  }
-
-  Future<List<AppNotification>> _fetchNotificationsFromFrappe() async {
-    final user = _currentUser!;
-    final merged = <String, AppNotification>{};
-
-    Future<void> loadNotificationLogs() async {
-      try {
-        final rows = await _fetchAllResourcePages(
-          doctype: 'Notification Log',
-          fields: const [
-            'name',
-            'subject',
-            'email_content',
-            'document_type',
-            'document_name',
-            'read',
-            'creation',
-            'modified',
-            'type',
-          ],
-          orderBy: 'modified desc',
-          maxRows: null,
-          filters: [
-            ['for_user', '=', user],
-          ],
-        );
-        for (final row in rows) {
-          final item = AppNotification.fromNotificationLog(row);
-          if (item.id.isNotEmpty) merged[item.id] = item;
-        }
-      } catch (_) {
-        final rows = await _fetchAllResourcePages(
-          doctype: 'Notification Log',
-          fields: const [
-            'name',
-            'subject',
-            'email_content',
-            'document_type',
-            'document_name',
-            'read',
-            'creation',
-            'modified',
-            'type',
-          ],
-          orderBy: 'modified desc',
-          maxRows: null,
-        );
-        for (final row in rows) {
-          final item = AppNotification.fromNotificationLog(row);
-          if (item.id.isNotEmpty) merged[item.id] = item;
-        }
-      }
-    }
-
-    Future<void> loadActivityLogs() async {
-      try {
-        final rows = await _fetchAllResourcePages(
-          doctype: 'Activity Log',
-          fields: const [
-            'name',
-            'subject',
-            'content',
-            'operation',
-            'reference_doctype',
-            'reference_name',
-            'creation',
-            'modified',
-          ],
-          orderBy: 'creation desc',
-          maxRows: null,
-        );
-        for (final row in rows) {
-          final item = AppNotification.fromActivityLog(row);
-          if (item.id.isNotEmpty) merged[item.id] = item;
-        }
-      } catch (_) {}
-    }
-
-    await loadNotificationLogs();
-    await loadActivityLogs();
-
-    final list = merged.values.toList()
-      ..sort((a, b) {
-        final aTime = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bTime = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return bTime.compareTo(aTime);
-      });
-
-    final dismissed = await _loadClearedNotificationIds();
-    final readIds = await _loadReadNotificationIds();
-    return list
-        .where((item) => !dismissed.contains(item.id))
-        .map(
-          (item) =>
-              readIds.contains(item.id) ? item.copyWith(isRead: true) : item,
-        )
-        .toList();
-  }
-
-  String get _clearedNotificationPrefsKey {
-    final site = _frappeService.baseUrl.trim();
-    final user = _currentUser?.trim() ?? '';
-    return '$_prefsClearedNotificationsKey::$site::$user';
-  }
-
-  String get _readNotificationPrefsKey {
-    final site = _frappeService.baseUrl.trim();
-    final user = _currentUser?.trim() ?? '';
-    return '$_prefsReadNotificationsKey::$site::$user';
   }
 
   String get _approvalNotificationCountPrefsKey {
     final site = _frappeService.baseUrl.trim();
     final user = _currentUser?.trim() ?? '';
     return '$_prefsApprovalNotificationCountKey::$site::$user';
-  }
-
-  Future<Set<String>> _loadClearedNotificationIds([
-    SharedPreferences? prefs,
-  ]) async {
-    final sp = prefs ?? await SharedPreferences.getInstance();
-    return sp.getStringList(_clearedNotificationPrefsKey)?.toSet() ??
-        <String>{};
-  }
-
-  Future<Set<String>> _loadReadNotificationIds([
-    SharedPreferences? prefs,
-  ]) async {
-    final sp = prefs ?? await SharedPreferences.getInstance();
-    return sp.getStringList(_readNotificationPrefsKey)?.toSet() ?? <String>{};
   }
 
   @override

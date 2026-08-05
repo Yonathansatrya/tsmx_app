@@ -1,10 +1,10 @@
 package com.tmsxhub
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.Notification
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -17,24 +17,52 @@ class MainActivity : FlutterActivity() {
     private val methodChannelName = "com.tmsxhub/notifications"
     private val approvalChannelId = "approval_todo"
     private var permissionResult: MethodChannel.Result? = null
+    private var notificationChannel: MethodChannel? = null
+    private var pendingTapPayload: Map<String, String>? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         createNotificationChannel()
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, methodChannelName)
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "requestPermission" -> requestNotificationPermission(result)
-                    "showNotification" -> {
-                        val id = call.argument<Int>("id") ?: 1001
-                        val title = call.argument<String>("title") ?: "TMSX Hub"
-                        val body = call.argument<String>("body") ?: ""
-                        showNotification(id, title, body)
-                        result.success(null)
-                    }
-                    else -> result.notImplemented()
+        notificationChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            methodChannelName,
+        )
+        captureNotificationIntent(intent, emitImmediately = false)
+        notificationChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "requestPermission" -> requestNotificationPermission(result)
+                "showNotification" -> {
+                    val id = call.argument<Int>("id") ?: 1001
+                    val title = call.argument<String>("title") ?: "TMSX Hub"
+                    val body = call.argument<String>("body") ?: ""
+                    val target = call.argument<String>("target") ?: ""
+                    showNotification(id, title, body, target)
+                    result.success(null)
                 }
+                "consumeInitialTapPayload" -> {
+                    result.success(pendingTapPayload)
+                    pendingTapPayload = null
+                }
+                else -> result.notImplemented()
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        captureNotificationIntent(intent, emitImmediately = true)
+    }
+
+    private fun captureNotificationIntent(intent: Intent?, emitImmediately: Boolean) {
+        val target = intent?.getStringExtra("notification_target") ?: return
+        if (target.isBlank()) return
+        val payload = mapOf("target" to target)
+        if (emitImmediately) {
+            notificationChannel?.invokeMethod("onNotificationTap", payload)
+        } else {
+            pendingTapPayload = payload
+        }
     }
 
     private fun requestNotificationPermission(result: MethodChannel.Result) {
@@ -80,7 +108,7 @@ class MainActivity : FlutterActivity() {
         manager.createNotificationChannel(channel)
     }
 
-    private fun showNotification(id: Int, title: String, body: String) {
+    private fun showNotification(id: Int, title: String, body: String, target: String) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -89,6 +117,7 @@ class MainActivity : FlutterActivity() {
 
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("notification_target", target)
         }
         val pendingIntent = PendingIntent.getActivity(
             this,
