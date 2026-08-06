@@ -3532,21 +3532,7 @@ class AppState with ChangeNotifier {
   }
 
   Future<List<Map<String, dynamic>>> fetchSpgSellingItems(String query) {
-    final normalized = query.trim();
-    return _fetchResourceWithFieldFallback(
-      doctype: 'Item',
-      fields: const ['name', 'item_code', 'item_name', 'stock_uom'],
-      filters: const [],
-      orFilters: normalized.isEmpty
-          ? null
-          : [
-              ['name', 'like', '%$normalized%'],
-              ['item_code', 'like', '%$normalized%'],
-              ['item_name', 'like', '%$normalized%'],
-            ],
-      orderBy: 'name asc',
-      limit: FrappeService.maxPageLength,
-    );
+    return fetchSellableItems(query: query);
   }
 
   Future<Map<String, dynamic>> createSpgDailyReport({
@@ -10257,6 +10243,57 @@ class AppState with ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  Future<List<Map<String, dynamic>>> fetchSellableItems({
+    String query = '',
+    int limit = FrappeService.maxPageLength,
+  }) async {
+    final normalized = query.trim();
+    if (_isSampleMode) {
+      final needle = normalized.toLowerCase();
+      return _inventory
+          .where((item) {
+            if (needle.isEmpty) return true;
+            return item.sku.toLowerCase().contains(needle) ||
+                item.name.toLowerCase().contains(needle) ||
+                (item.category ?? '').toLowerCase().contains(needle);
+          })
+          .take(limit)
+          .map(
+            (item) => {
+              'name': item.sku,
+              'item_code': item.sku,
+              'item_name': item.name,
+              'item_group': item.category,
+            },
+          )
+          .toList();
+    }
+
+    return _fetchResourceWithFieldFallback(
+      doctype: 'Item',
+      fields: const [
+        'name',
+        'item_code',
+        'item_name',
+        'item_group',
+        'stock_uom',
+      ],
+      filters: [
+        ['disabled', '=', 0],
+        ['is_sales_item', '=', 1],
+      ],
+      orFilters: normalized.isEmpty
+          ? null
+          : [
+              ['name', 'like', '%$normalized%'],
+              ['item_code', 'like', '%$normalized%'],
+              ['item_name', 'like', '%$normalized%'],
+            ],
+      orderBy: 'item_name asc, name asc',
+      limit: limit,
+    );
   }
 
   Future<void> refreshInventoryForCompany(String company) async {

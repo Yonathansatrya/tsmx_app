@@ -1811,24 +1811,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       );
       final itemDataFuture = _loadSelector<List<Map<String, dynamic>>>(
         label: 'Item',
-        load: () async {
-          try {
-            return await appState.frappeService.fetchResource(
-              'Item',
-              fields: const ['name', 'item_name'],
-              filters: const [
-                ['disabled', '=', 0],
-              ],
-              orderBy: 'item_name asc',
-            );
-          } catch (_) {
-            return appState.frappeService.fetchResource(
-              'Item',
-              fields: const ['name'],
-              orderBy: 'name asc',
-            );
-          }
-        },
+        load: () => appState.fetchSellableItems(),
         fallback: const [],
         errors: selectorErrors,
       );
