@@ -133,42 +133,41 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
 
   Future<List<_ItemOption>> _fetchItemOptions(AppState appState) async {
     try {
-      final itemData = await appState.frappeService.fetchResource(
-        'Item',
-        fields: const ['name', 'item_name'],
-        filters: const [
-          ['disabled', '=', 0],
-        ],
-        orderBy: 'item_name asc',
-      );
-      return itemData
-          .map((row) {
-            final code = row['name']?.toString() ?? '';
-            final label = row['item_name']?.toString() ?? code;
-            if (code.isEmpty) return null;
-            return _ItemOption(code: code, label: label);
-          })
-          .whereType<_ItemOption>()
-          .toList();
+      final itemData = await appState.fetchPurchasableItems(limit: 200);
+      return itemData.map(_itemOptionFromRow).whereType<_ItemOption>().toList();
     } catch (_) {
-      try {
-        final itemData = await appState.frappeService.fetchResource(
-          'Item',
-          fields: const ['name'],
-          orderBy: 'name asc',
-        );
-        return itemData
-            .map((row) {
-              final code = row['name']?.toString() ?? '';
-              if (code.isEmpty) return null;
-              return _ItemOption(code: code, label: code);
-            })
-            .whereType<_ItemOption>()
-            .toList();
-      } catch (_) {
-        return [];
-      }
+      return [];
     }
+  }
+
+  _ItemOption? _itemOptionFromRow(Map<String, dynamic> row) {
+    final itemCode = row['item_code']?.toString().trim() ?? '';
+    final name = row['name']?.toString().trim() ?? '';
+    final code = itemCode.isNotEmpty ? itemCode : name;
+    final itemName = row['item_name']?.toString().trim() ?? code;
+    if (code.isEmpty) return null;
+    return _ItemOption(code: code, label: '$itemName ($code)');
+  }
+
+  Future<Iterable<_ItemOption>> _searchItemOptions(String value) async {
+    final query = value.trim();
+    if (query.isEmpty) return _itemOptions.take(20);
+
+    final rows = await context.read<AppState>().fetchPurchasableItems(
+      query: query,
+      limit: 50,
+    );
+    final remoteOptions = rows
+        .map(_itemOptionFromRow)
+        .whereType<_ItemOption>()
+        .toList();
+    if (remoteOptions.isNotEmpty) return remoteOptions;
+
+    final needle = query.toLowerCase();
+    return _itemOptions.where((option) {
+      return option.label.toLowerCase().contains(needle) ||
+          option.code.toLowerCase().contains(needle);
+    });
   }
 
   Future<void> _loadSelectors() async {
@@ -680,17 +679,8 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                     ),
                     const SizedBox(height: 12),
                     Autocomplete<_ItemOption>(
-                      optionsBuilder: (textEditingValue) {
-                        final query = textEditingValue.text.toLowerCase();
-                        if (query.isEmpty) {
-                          return _itemOptions.take(20);
-                        }
-                        return _itemOptions.where((option) {
-                          final label = option.label.toLowerCase();
-                          return label.contains(query) ||
-                              option.code.toLowerCase().contains(query);
-                        });
-                      },
+                      optionsBuilder: (textEditingValue) =>
+                          _searchItemOptions(textEditingValue.text),
                       displayStringForOption: (option) => option.label,
                       onSelected: (option) {
                         setState(() {

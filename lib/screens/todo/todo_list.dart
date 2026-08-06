@@ -72,9 +72,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
           _loading = false;
         });
       }
-      unawaited(
-        _load(silent: cachedRows.isNotEmpty, forceRefresh: cachedRows.isEmpty),
-      );
+      unawaited(_load(silent: cachedRows.isNotEmpty, forceRefresh: true));
       _syncTimer = Timer.periodic(const Duration(minutes: 2), (_) {
         if (mounted) _load(silent: true, forceRefresh: true);
       });

@@ -1758,7 +1758,7 @@ class AppState with ChangeNotifier {
     try {
       final sp = await SharedPreferences.getInstance();
       final previous = sp.getInt(_approvalNotificationCountPrefsKey);
-      final todos = await fetchApprovalTodos(forceRefresh: true);
+      final todos = await fetchApprovalTodos();
       final count = todos.length;
       await sp.setInt(_approvalNotificationCountPrefsKey, count);
       if (count <= 0) return;
@@ -10249,6 +10249,29 @@ class AppState with ChangeNotifier {
     String query = '',
     int limit = FrappeService.maxPageLength,
   }) async {
+    return _fetchItemOptionsByFlag(
+      flagField: 'is_sales_item',
+      query: query,
+      limit: limit,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> fetchPurchasableItems({
+    String query = '',
+    int limit = FrappeService.maxPageLength,
+  }) async {
+    return _fetchItemOptionsByFlag(
+      flagField: 'is_purchase_item',
+      query: query,
+      limit: limit,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchItemOptionsByFlag({
+    required String flagField,
+    String query = '',
+    int limit = FrappeService.maxPageLength,
+  }) async {
     final normalized = query.trim();
     if (_isSampleMode) {
       final needle = normalized.toLowerCase();
@@ -10282,7 +10305,7 @@ class AppState with ChangeNotifier {
       ],
       filters: [
         ['disabled', '=', 0],
-        ['is_sales_item', '=', 1],
+        [flagField, '=', 1],
       ],
       orFilters: normalized.isEmpty
           ? null

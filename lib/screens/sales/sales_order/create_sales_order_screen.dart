@@ -1002,6 +1002,40 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     return trimmed;
   }
 
+  _ItemOption? _itemOptionFromRow(Map<String, dynamic> row) {
+    final itemCode = row['item_code']?.toString().trim() ?? '';
+    final name = row['name']?.toString().trim() ?? '';
+    final code = itemCode.isNotEmpty ? itemCode : name;
+    final itemName = row['item_name']?.toString().trim() ?? code;
+    if (code.isEmpty) return null;
+    return _ItemOption(code: code, name: itemName);
+  }
+
+  Future<Iterable<_ItemOption>> _searchItemOptions(
+    BuildContext context,
+    String value,
+  ) async {
+    final query = value.trim();
+    if (query.isEmpty) return _itemOptions.take(20);
+
+    final remoteRows = await context.read<AppState>().fetchSellableItems(
+      query: query,
+      limit: 50,
+    );
+    final remoteOptions = remoteRows
+        .map(_itemOptionFromRow)
+        .whereType<_ItemOption>()
+        .toList();
+    if (remoteOptions.isNotEmpty) return remoteOptions;
+
+    final needle = query.toLowerCase();
+    return _itemOptions.where((option) {
+      final label = option.label.toLowerCase();
+      return label.contains(needle) ||
+          option.code.toLowerCase().contains(needle);
+    });
+  }
+
   Future<void> _validateItem(String value) async {
     final candidate = _selectedItemCode ?? _normalizeItemCode(value);
     if (candidate.isEmpty) {
@@ -1811,7 +1845,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       );
       final itemDataFuture = _loadSelector<List<Map<String, dynamic>>>(
         label: 'Item',
-        load: () => appState.fetchSellableItems(),
+        load: () => appState.fetchSellableItems(limit: 200),
         fallback: const [],
         errors: selectorErrors,
       );
@@ -1875,12 +1909,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
       final itemData = await itemDataFuture;
       final itemOptions = itemData
-          .map((row) {
-            final code = row['name']?.toString() ?? '';
-            final name = row['item_name']?.toString() ?? code;
-            if (code.isEmpty) return null;
-            return _ItemOption(code: code, name: name);
-          })
+          .map(_itemOptionFromRow)
           .whereType<_ItemOption>()
           .toList();
 
@@ -2771,17 +2800,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                     ),
                     const SizedBox(height: 12),
                     Autocomplete<_ItemOption>(
-                      optionsBuilder: (textEditingValue) {
-                        final query = textEditingValue.text.toLowerCase();
-                        if (query.isEmpty) {
-                          return _itemOptions.take(20);
-                        }
-                        return _itemOptions.where((option) {
-                          final label = option.label.toLowerCase();
-                          return label.contains(query) ||
-                              option.code.toLowerCase().contains(query);
-                        });
-                      },
+                      optionsBuilder: (textEditingValue) =>
+                          _searchItemOptions(context, textEditingValue.text),
                       displayStringForOption: (option) => option.label,
                       onSelected: (option) {
                         setState(() {
@@ -3033,18 +3053,11 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                               ],
                             ),
                             Autocomplete<_ItemOption>(
-                              optionsBuilder: (textEditingValue) {
-                                final query = textEditingValue.text
-                                    .toLowerCase();
-                                if (query.isEmpty) {
-                                  return _itemOptions.take(20);
-                                }
-                                return _itemOptions.where((option) {
-                                  final label = option.label.toLowerCase();
-                                  return label.contains(query) ||
-                                      option.code.toLowerCase().contains(query);
-                                });
-                              },
+                              optionsBuilder: (textEditingValue) =>
+                                  _searchItemOptions(
+                                    context,
+                                    textEditingValue.text,
+                                  ),
                               displayStringForOption: (option) => option.label,
                               onSelected: (option) {
                                 setState(() {

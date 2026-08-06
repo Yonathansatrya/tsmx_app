@@ -33,6 +33,7 @@ class _AppMainScreenState extends State<AppMainScreen> {
   static const _profileTabKey = 'profile';
 
   int _currentIndex = 0;
+  bool _pendingOpenApprovalTodo = false;
   StreamSubscription<Map<String, dynamic>>? _notificationTapSub;
 
   @override
@@ -131,6 +132,12 @@ class _AppMainScreenState extends State<AppMainScreen> {
   void _handleNotificationTap(Map<String, dynamic> payload) {
     if (!mounted) return;
     if (payload['target']?.toString() != 'approval_todo') return;
+    _pendingOpenApprovalTodo = true;
+    _openApprovalTodoTabIfReady();
+  }
+
+  void _openApprovalTodoTabIfReady() {
+    if (!mounted || !_pendingOpenApprovalTodo) return;
     final appState = context.read<AppState>();
     if (!appState.canUseApprovals) return;
     final tabs = _tabs(appState);
@@ -138,6 +145,7 @@ class _AppMainScreenState extends State<AppMainScreen> {
       (tab) => tab.keyName == MobileModule.approvals,
     );
     if (todoIndex < 0) return;
+    _pendingOpenApprovalTodo = false;
     Navigator.of(context).popUntil((route) => route.isFirst);
     setState(() => _currentIndex = todoIndex);
   }
@@ -169,6 +177,12 @@ class _AppMainScreenState extends State<AppMainScreen> {
 
     final tabs = _tabs(appState);
     final selectedIndex = _currentIndex.clamp(0, tabs.length - 1);
+    if (_pendingOpenApprovalTodo &&
+        tabs.any((tab) => tab.keyName == MobileModule.approvals)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openApprovalTodoTabIfReady();
+      });
+    }
     if (selectedIndex != _currentIndex) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() => _currentIndex = selectedIndex);
