@@ -20,7 +20,10 @@ import 'purchase/purchase_receipt/create_purchase_receipt_screen.dart';
 import 'purchase/material_request/create_material_request_screen.dart';
 import 'stock/stock_entry/create_stock_entry_screen.dart';
 import 'sales/sales_order/create_sales_order_screen.dart';
+import 'spg/daily_activity/create_spg_daily_activity_screen.dart';
+import 'spg/daily_report/create_spg_daily_report_screen.dart';
 import 'todo/todo_list.dart';
+import 'visits/customer_visit_tab.dart';
 
 class AppMainScreen extends StatefulWidget {
   const AppMainScreen({super.key});
@@ -277,99 +280,199 @@ class _AppMainScreenState extends State<AppMainScreen> {
     BuildContext context,
     AppState appState,
   ) async {
+    final canCreateSalesOrder = await appState.canCreateDoctype('Sales Order');
+    final canCreateDeliveryNote = await appState.canCreateDoctype(
+      'Delivery Note',
+    );
+    final canCreateSalesInvoice = await appState.canCreateDoctype(
+      'Sales Invoice',
+    );
+    final canCreateSalesVisit = await appState.canCreateDoctype('Sales Visit');
+    final canCreateSpgVisit = await appState.canCreateDoctype('SPG Visit');
+    final canCreateSpgDailyActivity = await appState.canCreateDoctype(
+      'SPG Daily Activity',
+    );
+    final canCreateSpgDailyReport = await appState.canCreateDoctype(
+      'SPG Daily Report',
+    );
+    final canCreatePurchaseOrder = await appState.canCreateDoctype(
+      'Purchase Order',
+    );
+    final canCreatePurchaseReceipt = await appState.canCreateDoctype(
+      'Purchase Receipt',
+    );
+    final canCreatePurchaseInvoice = await appState.canCreateDoctype(
+      'Purchase Invoice',
+    );
+    final canCreateMaterialRequest = await appState.canCreateDoctype(
+      'Material Request',
+    );
+    final canCreateStockEntry = await appState.canCreateDoctype('Stock Entry');
+
+    if (!context.mounted) return;
+
+    final salesActions = <_QuickCreateAction>[
+      if (canCreateSalesOrder)
+        _QuickCreateAction(
+          title: 'Sales Order',
+          subtitle: 'Order customer baru',
+          icon: Icons.point_of_sale_rounded,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CreateSalesOrderScreen()),
+          ),
+        ),
+      if (canCreateSalesVisit)
+        _QuickCreateAction(
+          title: 'Check-in Sales',
+          subtitle: 'Kunjungan customer sales',
+          icon: Icons.add_location_alt_rounded,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const CustomerVisitCheckInScreen(),
+            ),
+          ),
+        ),
+      if (canCreateDeliveryNote)
+        _QuickCreateAction(
+          title: 'Delivery Note',
+          subtitle: 'Dari Sales Order submitted',
+          icon: Icons.local_shipping_outlined,
+          onTap: () => _createDeliveryNoteFromSalesOrder(context),
+        ),
+      if (canCreateSalesInvoice)
+        _QuickCreateAction(
+          title: 'Sales Invoice',
+          subtitle: 'Tagihan dari Sales Order',
+          icon: Icons.receipt_long_outlined,
+          onTap: () => _createSalesInvoiceFromSalesOrder(context),
+        ),
+    ];
+
+    final canUseSpgCreateFallback =
+        appState.canUseSpg &&
+        !canCreateSpgVisit &&
+        !canCreateSpgDailyActivity &&
+        !canCreateSpgDailyReport;
+
+    final spgActions = <_QuickCreateAction>[
+      if (canCreateSpgVisit || canUseSpgCreateFallback)
+        _QuickCreateAction(
+          title: 'Check-in SPG',
+          subtitle: 'Kunjungan customer sesuai schedule',
+          icon: Icons.add_location_alt_rounded,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const CustomerVisitCheckInScreen(spgMode: true),
+            ),
+          ),
+        ),
+      if (canCreateSpgDailyActivity || canUseSpgCreateFallback)
+        _QuickCreateAction(
+          title: 'Report Foto',
+          subtitle: 'Upload foto aktivitas harian',
+          icon: Icons.photo_camera_rounded,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const CreateSpgDailyActivityScreen(),
+            ),
+          ),
+        ),
+      if (canCreateSpgDailyReport || canUseSpgCreateFallback)
+        _QuickCreateAction(
+          title: 'Report Selling',
+          subtitle: 'Input stok awal, akhir, dan sell out',
+          icon: Icons.bar_chart_rounded,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const CreateSpgDailyReportScreen(),
+            ),
+          ),
+        ),
+    ];
+
+    final purchaseActions = <_QuickCreateAction>[
+      if (canCreatePurchaseOrder)
+        _QuickCreateAction(
+          title: 'Purchase Order',
+          subtitle: 'PO supplier',
+          icon: Icons.add_shopping_cart_rounded,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const CreatePurchaseOrderScreen(),
+            ),
+          ),
+        ),
+      if (canCreatePurchaseReceipt)
+        _QuickCreateAction(
+          title: 'Purchase Receipt',
+          subtitle: 'Terima barang',
+          icon: Icons.move_to_inbox_rounded,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const CreatePurchaseReceiptScreen(),
+            ),
+          ),
+        ),
+      if (canCreatePurchaseInvoice)
+        _QuickCreateAction(
+          title: 'Purchase Invoice',
+          subtitle: 'Invoice supplier',
+          icon: Icons.receipt_long_rounded,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const CreatePurchaseInvoiceScreen(),
+            ),
+          ),
+        ),
+      if (canCreateMaterialRequest)
+        _QuickCreateAction(
+          title: 'Material Request',
+          subtitle: 'Kebutuhan barang',
+          icon: Icons.assignment_add,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const CreateMaterialRequestScreen(),
+            ),
+          ),
+        ),
+    ];
+
+    final stockActions = <_QuickCreateAction>[
+      if (canCreateStockEntry)
+        _QuickCreateAction(
+          title: 'Stock Entry',
+          subtitle: 'Transfer, receipt, issue',
+          icon: Icons.inventory_2_outlined,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const CreateStockEntryScreen()),
+          ),
+        ),
+    ];
+
     final groups = <_QuickCreateGroup>[
-      if (appState.isSalesUserRole)
+      if (appState.canUseSales && salesActions.isNotEmpty)
         _QuickCreateGroup(
           title: 'Sales',
           icon: Icons.point_of_sale_rounded,
-          actions: [
-            _QuickCreateAction(
-              title: 'Sales Order',
-              subtitle: 'Order customer baru',
-              icon: Icons.point_of_sale_rounded,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const CreateSalesOrderScreen(),
-                ),
-              ),
-            ),
-            _QuickCreateAction(
-              title: 'Delivery Note',
-              subtitle: 'Dari Sales Order submitted',
-              icon: Icons.local_shipping_outlined,
-              onTap: () => _createDeliveryNoteFromSalesOrder(context),
-            ),
-            _QuickCreateAction(
-              title: 'Sales Invoice',
-              subtitle: 'Tagihan dari Sales Order',
-              icon: Icons.receipt_long_outlined,
-              onTap: () => _createSalesInvoiceFromSalesOrder(context),
-            ),
-          ],
+          actions: salesActions,
         ),
-      if (appState.canUsePurchase)
+      if (appState.canUseSpg && spgActions.isNotEmpty)
+        _QuickCreateGroup(
+          title: 'SPG',
+          icon: Icons.storefront_rounded,
+          actions: spgActions,
+        ),
+      if (appState.canUsePurchase && purchaseActions.isNotEmpty)
         _QuickCreateGroup(
           title: 'Purchase',
           icon: Icons.shopping_bag_rounded,
-          actions: [
-            _QuickCreateAction(
-              title: 'Purchase Order',
-              subtitle: 'PO supplier',
-              icon: Icons.add_shopping_cart_rounded,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const CreatePurchaseOrderScreen(),
-                ),
-              ),
-            ),
-            _QuickCreateAction(
-              title: 'Purchase Receipt',
-              subtitle: 'Terima barang',
-              icon: Icons.move_to_inbox_rounded,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const CreatePurchaseReceiptScreen(),
-                ),
-              ),
-            ),
-            _QuickCreateAction(
-              title: 'Purchase Invoice',
-              subtitle: 'Invoice supplier',
-              icon: Icons.receipt_long_rounded,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const CreatePurchaseInvoiceScreen(),
-                ),
-              ),
-            ),
-            _QuickCreateAction(
-              title: 'Material Request',
-              subtitle: 'Kebutuhan barang',
-              icon: Icons.assignment_add,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const CreateMaterialRequestScreen(),
-                ),
-              ),
-            ),
-          ],
+          actions: purchaseActions,
         ),
-      if (appState.canUseStock)
+      if (appState.canUseStock && stockActions.isNotEmpty)
         _QuickCreateGroup(
           title: 'Stock',
           icon: Icons.inventory_2_rounded,
-          actions: [
-            _QuickCreateAction(
-              title: 'Stock Entry',
-              subtitle: 'Transfer, receipt, issue',
-              icon: Icons.inventory_2_outlined,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const CreateStockEntryScreen(),
-                ),
-              ),
-            ),
-          ],
+          actions: stockActions,
         ),
     ];
     final actionsCount = groups.fold<int>(

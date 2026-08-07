@@ -446,6 +446,7 @@ class _CreateSpgDailyReportScreenState
                   label: 'Stock Awal',
                   controller: row.stockAwal,
                   icon: Icons.login_rounded,
+                  uom: row.uom,
                 ),
               ),
               const SizedBox(width: 8),
@@ -454,6 +455,7 @@ class _CreateSpgDailyReportScreenState
                   label: 'Stock Akhir',
                   controller: row.stockAkhir,
                   icon: Icons.logout_rounded,
+                  uom: row.uom,
                 ),
               ),
             ],
@@ -463,6 +465,7 @@ class _CreateSpgDailyReportScreenState
             label: 'Sell Out',
             controller: row.sellOut,
             icon: Icons.point_of_sale_rounded,
+            uom: row.uom,
           ),
         ],
       ),
@@ -597,12 +600,22 @@ class _CreateSpgDailyReportScreenState
     required String label,
     required TextEditingController controller,
     required IconData icon,
+    required String uom,
   }) {
+    final suffix = uom.trim();
     return TextField(
       controller: controller,
       enabled: !_saving,
       keyboardType: TextInputType.number,
-      decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        suffixText: suffix.isEmpty ? null : '/ $suffix',
+        suffixStyle: const TextStyle(
+          color: AppColors.primary,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
     );
   }
 }
