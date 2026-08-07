@@ -49,15 +49,44 @@ class _CreateSpgDailyActivityScreenState
     });
     try {
       final state = context.read<AppState>();
-      final customers = await state.fetchSpgCustomers();
       final employees = state.mobileAccess.canSelectAnyEmployee
           ? await state.fetchEmployeeOptions()
           : const <Map<String, dynamic>>[];
+      final customers = state.mobileAccess.canSelectAnyEmployee
+          ? const <SpgCustomerOption>[]
+          : await state.fetchScheduledSpgCustomers();
       if (!mounted) return;
       setState(() {
         _customers = customers;
         _employees = employees;
       });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadScheduledCustomersForEmployee() async {
+    final employee = _employee?['name']?.toString().trim() ?? '';
+    if (employee.isEmpty) {
+      setState(() {
+        _customers = const [];
+        _customer = null;
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+      _customer = null;
+    });
+    try {
+      final customers = await context
+          .read<AppState>()
+          .fetchScheduledSpgCustomers(employee: employee);
+      if (!mounted) return;
+      setState(() => _customers = customers);
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
@@ -314,10 +343,14 @@ class _CreateSpgDailyActivityScreenState
   }
 
   Widget _customerSearchField() {
+    final needsEmployee =
+        context.read<AppState>().mobileAccess.canSelectAnyEmployee &&
+        _employee == null;
     return Autocomplete<SpgCustomerOption>(
       displayStringForOption: _customerLabel,
       optionsMaxHeight: 280,
       optionsBuilder: (value) {
+        if (needsEmployee) return const Iterable<SpgCustomerOption>.empty();
         final query = value.text.toLowerCase().trim();
         if (query.isEmpty) return _customers;
         return _customers.where((customer) {
@@ -337,12 +370,14 @@ class _CreateSpgDailyActivityScreenState
         return TextField(
           controller: controller,
           focusNode: focusNode,
-          enabled: !_saving && !_loading,
-          decoration: const InputDecoration(
+          enabled: !_saving && !_loading && !needsEmployee,
+          decoration: InputDecoration(
             labelText: 'Customer',
-            hintText: 'Cari customer',
-            prefixIcon: Icon(Icons.storefront_outlined),
-            suffixIcon: Icon(Icons.search_rounded),
+            hintText: needsEmployee
+                ? 'Pilih employee dulu'
+                : 'Cari customer dari schedule',
+            prefixIcon: const Icon(Icons.storefront_outlined),
+            suffixIcon: const Icon(Icons.search_rounded),
           ),
           onChanged: (text) {
             if (_customer != null && text != selectedLabel) {
@@ -371,7 +406,10 @@ class _CreateSpgDailyActivityScreenState
               userId.contains(query);
         });
       },
-      onSelected: (value) => setState(() => _employee = value),
+      onSelected: (value) {
+        setState(() => _employee = value);
+        _loadScheduledCustomersForEmployee();
+      },
       fieldViewBuilder: (context, controller, focusNode, onSubmit) {
         final selectedLabel = _employee == null
             ? ''
@@ -391,7 +429,11 @@ class _CreateSpgDailyActivityScreenState
           ),
           onChanged: (text) {
             if (_employee != null && text != selectedLabel) {
-              setState(() => _employee = null);
+              setState(() {
+                _employee = null;
+                _customer = null;
+                _customers = const [];
+              });
             }
           },
         );

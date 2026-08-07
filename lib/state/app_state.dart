@@ -3315,6 +3315,10 @@ class AppState with ChangeNotifier {
     }
     await _ensureCurrentEmployee();
     final employee = _currentEmployee?.trim() ?? '';
+    await _ensureSpgCustomerAssigned(
+      customer: customer.trim(),
+      employee: employee,
+    );
     final now = _formatFrappeDateTime(DateTime.now());
     final created = await _frappeService.createDocument('SPG Visit', {
       'customer': customer,
@@ -3456,6 +3460,227 @@ class AppState with ChangeNotifier {
         .toList();
   }
 
+  Future<List<SpgCustomerOption>> fetchScheduledSpgCustomers({
+    String query = '',
+    String? employee,
+  }) async {
+    if (_isSampleMode) {
+      return fetchSpgCustomers(query: query);
+    }
+
+    var selectedEmployee = employee?.trim() ?? '';
+    if (selectedEmployee.isEmpty && !mobileAccess.canSelectAnyEmployee) {
+      await _ensureCurrentEmployee();
+      selectedEmployee = _currentEmployee?.trim() ?? '';
+    }
+    if (selectedEmployee.isEmpty) return const [];
+
+    final today = _formatFrappeDate(DateTime.now());
+    final docs = await _fetchActiveSpgScheduleDocuments(today);
+    if (docs.isEmpty) return const [];
+
+    final customerIds = <String>{};
+    for (final doc in docs) {
+      if (!_spgScheduleHasEmployee(doc, selectedEmployee)) continue;
+      for (final row in _spgScheduleCustomerRows(doc)) {
+        final customer = _firstString(row, const [
+          'customer',
+          'customer_name',
+          'customer_id',
+        ]);
+        if (customer.isNotEmpty) customerIds.add(customer);
+      }
+    }
+    if (customerIds.isEmpty) return const [];
+
+    final normalized = query.trim();
+    final rows = await _fetchResourceWithFieldFallback(
+      doctype: 'Customer',
+      fields: const ['name', 'customer_name', 'primary_address'],
+      filters: [
+        ['name', 'in', customerIds.toList()],
+      ],
+      orFilters: normalized.isEmpty
+          ? null
+          : [
+              ['name', 'like', '%$normalized%'],
+              ['customer_name', 'like', '%$normalized%'],
+            ],
+      orderBy: 'customer_name asc, name asc',
+      limit: customerIds.length,
+    );
+
+    final options =
+        rows
+            .map((row) => SpgCustomerOption.fromJson(row))
+            .where((customer) => customer.id.trim().isNotEmpty)
+            .toList()
+          ..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+    return options;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchActiveSpgScheduleDocuments(
+    String today,
+  ) async {
+    Future<List<Map<String, dynamic>>> fetchScheduleRows({
+      List<List<dynamic>>? filters,
+    }) {
+      return _fetchResourceWithFieldFallback(
+        doctype: 'SPG Schedule',
+        fields: const ['name', 'start_date', 'end_date', 'modified'],
+        filters: filters,
+        orderBy: 'modified desc',
+        limit: 100,
+      );
+    }
+
+    var schedules = await fetchScheduleRows(
+      filters: [
+        ['start_date', '<=', today],
+        ['end_date', '>=', today],
+      ],
+    );
+    if (schedules.isEmpty) {
+      schedules = await fetchScheduleRows();
+    }
+
+    final scheduleNames = schedules
+        .where((row) => _spgScheduleDateMatches(row, today))
+        .map((row) => row['name']?.toString().trim() ?? '')
+        .where((name) => name.isNotEmpty)
+        .toList();
+    if (scheduleNames.isEmpty) return const [];
+
+    final docs = await Future.wait(
+      scheduleNames.map((name) async {
+        try {
+          return await _frappeService.fetchDocument('SPG Schedule', name);
+        } catch (_) {
+          return const <String, dynamic>{};
+        }
+      }),
+    );
+    return docs
+        .where((doc) => doc.isNotEmpty && _spgScheduleDateMatches(doc, today))
+        .toList();
+  }
+
+  bool _spgScheduleDateMatches(Map<String, dynamic> doc, String today) {
+    final todayDate = _parseLooseDate(today);
+    final start = _parseLooseDate(doc['start_date']?.toString() ?? '');
+    final end = _parseLooseDate(doc['end_date']?.toString() ?? '');
+    if (todayDate == null) return true;
+    if (start != null && todayDate.isBefore(start)) return false;
+    if (end != null && todayDate.isAfter(end)) return false;
+    return true;
+  }
+
+  DateTime? _parseLooseDate(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    final iso = RegExp(r'^(\d{4})-(\d{2})-(\d{2})').firstMatch(trimmed);
+    if (iso != null) {
+      return DateTime(
+        int.parse(iso.group(1)!),
+        int.parse(iso.group(2)!),
+        int.parse(iso.group(3)!),
+      );
+    }
+    final local = RegExp(r'^(\d{2})-(\d{2})-(\d{4})').firstMatch(trimmed);
+    if (local != null) {
+      return DateTime(
+        int.parse(local.group(3)!),
+        int.parse(local.group(2)!),
+        int.parse(local.group(1)!),
+      );
+    }
+    return null;
+  }
+
+  Future<void> _ensureSpgCustomerAssigned({
+    required String customer,
+    required String employee,
+  }) async {
+    final assignedCustomers = await fetchScheduledSpgCustomers(
+      employee: employee,
+    );
+    final exists = assignedCustomers.any((option) => option.id == customer);
+    if (!exists) {
+      throw Exception(
+        'Customer tidak ada di SPG Schedule aktif untuk employee ini.',
+      );
+    }
+  }
+
+  bool _spgScheduleHasEmployee(Map<String, dynamic> doc, String employee) {
+    for (final row in _spgScheduleEmployeeRows(doc)) {
+      final rowEmployee = _firstString(row, const [
+        'employee',
+        'employe',
+        'employe_name',
+        'employee_name',
+        'spg',
+        'employee_id',
+      ]);
+      if (rowEmployee == employee) return true;
+    }
+    return false;
+  }
+
+  List<Map<String, dynamic>> _spgScheduleCustomerRows(
+    Map<String, dynamic> doc,
+  ) {
+    return _firstTable(doc, const [
+      'table_bffa',
+      'customer_detail',
+      'customer_details',
+      'customers',
+      'customer_list',
+      'customer_table',
+    ]);
+  }
+
+  List<Map<String, dynamic>> _spgScheduleEmployeeRows(
+    Map<String, dynamic> doc,
+  ) {
+    return _firstTable(doc, const [
+      'table_cylv',
+      'spg',
+      'employee',
+      'employees',
+      'employee_detail',
+      'employee_details',
+      'spg_detail',
+      'spg_details',
+    ]);
+  }
+
+  List<Map<String, dynamic>> _firstTable(
+    Map<String, dynamic> doc,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = doc[key];
+      if (value is! List) continue;
+      final rows = value
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+      if (rows.isNotEmpty) return rows;
+    }
+    return const [];
+  }
+
+  String _firstString(Map<String, dynamic> row, List<String> keys) {
+    for (final key in keys) {
+      final value = row[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return '';
+  }
+
   Future<Map<String, dynamic>> createSpgDailyActivity({
     required String customer,
     required List<String> photoPaths,
@@ -3480,6 +3705,10 @@ class AppState with ChangeNotifier {
     if (photoPaths.isEmpty) {
       throw Exception('Minimal 1 foto aktivitas wajib diambil.');
     }
+    await _ensureSpgCustomerAssigned(
+      customer: customer.trim(),
+      employee: selectedEmployee,
+    );
     final today = _formatFrappeDate(DateTime.now());
     final created = await _frappeService.createDocument('SPG Daily Activity', {
       'employee': selectedEmployee,
@@ -3561,14 +3790,18 @@ class AppState with ChangeNotifier {
     if (customer.trim().isEmpty) {
       throw Exception('Customer wajib dipilih.');
     }
+    await _ensureSpgCustomerAssigned(
+      customer: customer.trim(),
+      employee: selectedEmployee,
+    );
     final rows = sellingItems
         .where((row) => row['item']?.toString().trim().isNotEmpty == true)
         .map(
           (row) => {
             'item': row['item']?.toString().trim() ?? '',
             'uom': row['uom']?.toString().trim() ?? '',
-            'stock_awal': NumParse.asDouble(row['stock_awal']),
-            'stock_akhir': NumParse.asDouble(row['stock_akhir']),
+            'opening_stock': NumParse.asDouble(row['opening_stock']),
+            'closing_stock': NumParse.asDouble(row['closing_stock']),
             'sell_out': NumParse.asDouble(row['sell_out']),
           },
         )

@@ -85,7 +85,20 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
     var nextVisits = visits;
     String? nextError;
     try {
-      nextCustomers = await state.fetchSalesCustomers();
+      if (widget.spgMode) {
+        final scheduledCustomers = await state.fetchScheduledSpgCustomers();
+        nextCustomers = scheduledCustomers
+            .map(
+              (customer) => SalesCustomerOption(
+                id: customer.id,
+                name: customer.name,
+                address: customer.address,
+              ),
+            )
+            .toList();
+      } else {
+        nextCustomers = await state.fetchSalesCustomers();
+      }
     } catch (e) {
       if (widget.shouldShowCheckIn) {
         nextError = _friendlyError(e);

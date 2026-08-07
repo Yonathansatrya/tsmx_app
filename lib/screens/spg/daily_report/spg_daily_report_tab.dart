@@ -370,7 +370,10 @@ class _SpgDailyReportDetailSheet extends StatelessWidget {
                 Expanded(
                   child: _quantityTile(
                     label: 'Stock Awal',
-                    value: row['stock_awal']?.toString() ?? '',
+                    value:
+                        row['opening_stock']?.toString() ??
+                        row['stock_awal']?.toString() ??
+                        '',
                     icon: Icons.login_rounded,
                   ),
                 ),
@@ -378,7 +381,10 @@ class _SpgDailyReportDetailSheet extends StatelessWidget {
                 Expanded(
                   child: _quantityTile(
                     label: 'Stock Akhir',
-                    value: row['stock_akhir']?.toString() ?? '',
+                    value:
+                        row['closing_stock']?.toString() ??
+                        row['stock_akhir']?.toString() ??
+                        '',
                     icon: Icons.logout_rounded,
                   ),
                 ),

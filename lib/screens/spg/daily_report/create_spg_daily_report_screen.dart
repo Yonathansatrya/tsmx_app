@@ -50,7 +50,9 @@ class _CreateSpgDailyReportScreenState
     try {
       final state = context.read<AppState>();
       final results = await Future.wait([
-        state.fetchSpgCustomers(),
+        state.mobileAccess.canSelectAnyEmployee
+            ? Future.value(const <SpgCustomerOption>[])
+            : state.fetchScheduledSpgCustomers(),
         state.fetchSpgSellingItems(''),
         if (state.mobileAccess.canSelectAnyEmployee)
           state.fetchEmployeeOptions(),
@@ -63,6 +65,33 @@ class _CreateSpgDailyReportScreenState
             ? results[2] as List<Map<String, dynamic>>
             : const <Map<String, dynamic>>[];
       });
+    } catch (error) {
+      if (mounted) setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadScheduledCustomersForEmployee() async {
+    final employee = _employee?['name']?.toString().trim() ?? '';
+    if (employee.isEmpty) {
+      setState(() {
+        _customers = const [];
+        _customer = null;
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+      _customer = null;
+    });
+    try {
+      final customers = await context
+          .read<AppState>()
+          .fetchScheduledSpgCustomers(employee: employee);
+      if (!mounted) return;
+      setState(() => _customers = customers);
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
     } finally {
@@ -453,10 +482,14 @@ class _CreateSpgDailyReportScreenState
   }
 
   Widget _customerSearchField() {
+    final needsEmployee =
+        context.read<AppState>().mobileAccess.canSelectAnyEmployee &&
+        _employee == null;
     return Autocomplete<SpgCustomerOption>(
       displayStringForOption: _customerLabel,
       optionsMaxHeight: 280,
       optionsBuilder: (value) {
+        if (needsEmployee) return const Iterable<SpgCustomerOption>.empty();
         final query = value.text.toLowerCase().trim();
         if (query.isEmpty) return _customers;
         return _customers.where((customer) {
@@ -476,12 +509,14 @@ class _CreateSpgDailyReportScreenState
         return TextField(
           controller: controller,
           focusNode: focusNode,
-          enabled: !_saving && !_loading,
-          decoration: const InputDecoration(
+          enabled: !_saving && !_loading && !needsEmployee,
+          decoration: InputDecoration(
             labelText: 'Customer',
-            hintText: 'Cari customer',
-            prefixIcon: Icon(Icons.storefront_outlined),
-            suffixIcon: Icon(Icons.search_rounded),
+            hintText: needsEmployee
+                ? 'Pilih employee dulu'
+                : 'Cari customer dari schedule',
+            prefixIcon: const Icon(Icons.storefront_outlined),
+            suffixIcon: const Icon(Icons.search_rounded),
           ),
           onChanged: (text) {
             if (_customer != null && text != selectedLabel) {
@@ -510,7 +545,10 @@ class _CreateSpgDailyReportScreenState
               userId.contains(query);
         });
       },
-      onSelected: (value) => setState(() => _employee = value),
+      onSelected: (value) {
+        setState(() => _employee = value);
+        _loadScheduledCustomersForEmployee();
+      },
       fieldViewBuilder: (context, controller, focusNode, onSubmit) {
         final selectedLabel = _employee == null
             ? ''
@@ -530,7 +568,11 @@ class _CreateSpgDailyReportScreenState
           ),
           onChanged: (text) {
             if (_employee != null && text != selectedLabel) {
-              setState(() => _employee = null);
+              setState(() {
+                _employee = null;
+                _customer = null;
+                _customers = const [];
+              });
             }
           },
         );
@@ -576,8 +618,8 @@ class _SpgSellingRow {
   Map<String, dynamic> toPayload() => {
     'item': item,
     'uom': uom,
-    'stock_awal': stockAwal.text,
-    'stock_akhir': stockAkhir.text,
+    'opening_stock': stockAwal.text,
+    'closing_stock': stockAkhir.text,
     'sell_out': sellOut.text,
   };
 
