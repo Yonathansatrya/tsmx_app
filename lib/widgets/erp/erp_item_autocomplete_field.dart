@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../theme/app_colors.dart';
@@ -16,6 +18,7 @@ class ErpItemAutocompleteField extends StatefulWidget {
   final ValueChanged<String?> onSelected;
   final InputDecoration decoration;
   final String? Function(String?)? validator;
+  final Future<List<ErpItemOption>> Function(String query)? onSearch;
 
   const ErpItemAutocompleteField({
     super.key,
@@ -25,6 +28,7 @@ class ErpItemAutocompleteField extends StatefulWidget {
     required this.onSelected,
     required this.decoration,
     this.validator,
+    this.onSearch,
   });
 
   @override
@@ -76,6 +80,7 @@ class _ErpItemAutocompleteFieldState extends State<ErpItemAutocompleteField> {
         title: widget.label,
         options: widget.options,
         selectedId: widget.selectedId,
+        onSearch: widget.onSearch,
       ),
     );
     if (selected == null || !mounted) return;
@@ -107,11 +112,13 @@ class _ErpItemSearchSheet extends StatefulWidget {
   final String title;
   final List<ErpItemOption> options;
   final String? selectedId;
+  final Future<List<ErpItemOption>> Function(String query)? onSearch;
 
   const _ErpItemSearchSheet({
     required this.title,
     required this.options,
     required this.selectedId,
+    this.onSearch,
   });
 
   @override
@@ -120,15 +127,57 @@ class _ErpItemSearchSheet extends StatefulWidget {
 
 class _ErpItemSearchSheetState extends State<_ErpItemSearchSheet> {
   final _searchController = TextEditingController();
+  Timer? _searchDebounce;
+  List<ErpItemOption> _remoteOptions = const [];
+  bool _searching = false;
+  int _searchGeneration = 0;
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
+  void _onQueryChanged(String value) {
+    setState(() {});
+    final remoteSearch = widget.onSearch;
+    if (remoteSearch == null) return;
+
+    final query = value.trim();
+    _searchDebounce?.cancel();
+    if (query.isEmpty) {
+      setState(() {
+        _remoteOptions = const [];
+        _searching = false;
+      });
+      return;
+    }
+
+    final generation = ++_searchGeneration;
+    _searchDebounce = Timer(const Duration(milliseconds: 280), () async {
+      if (!mounted) return;
+      setState(() => _searching = true);
+      try {
+        final rows = await remoteSearch(query);
+        if (!mounted || generation != _searchGeneration) return;
+        setState(() => _remoteOptions = rows);
+      } catch (_) {
+        if (!mounted || generation != _searchGeneration) return;
+        setState(() => _remoteOptions = const []);
+      } finally {
+        if (mounted && generation == _searchGeneration) {
+          setState(() => _searching = false);
+        }
+      }
+    });
+  }
+
   List<ErpItemOption> _filteredOptions() {
     final query = _searchController.text.trim().toLowerCase();
+    if (widget.onSearch != null && query.isNotEmpty) {
+      return _remoteOptions.take(80).toList();
+    }
     final source = query.isEmpty
         ? widget.options
         : widget.options.where((option) {
@@ -206,7 +255,7 @@ class _ErpItemSearchSheetState extends State<_ErpItemSearchSheet> {
                   controller: _searchController,
                   autofocus: true,
                   textInputAction: TextInputAction.search,
-                  onChanged: (_) => setState(() {}),
+                  onChanged: _onQueryChanged,
                   decoration: InputDecoration(
                     hintText: 'Cari ${widget.title.toLowerCase()}',
                     prefixIcon: const Icon(Icons.search_rounded),
@@ -230,7 +279,14 @@ class _ErpItemSearchSheetState extends State<_ErpItemSearchSheet> {
                 ),
               ),
               Flexible(
-                child: options.isEmpty
+                child: _searching
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(28),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    : options.isEmpty
                     ? const _EmptySearchResult()
                     : ListView.separated(
                         shrinkWrap: true,

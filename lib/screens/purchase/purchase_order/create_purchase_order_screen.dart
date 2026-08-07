@@ -100,6 +100,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
           ['disabled', '=', 0],
         ],
         orderBy: 'supplier_name asc',
+        limit: 200,
       );
       return supplierData
           .map((row) {
@@ -116,6 +117,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
           'Supplier',
           fields: const ['name'],
           orderBy: 'name asc',
+          limit: 200,
         );
         return supplierData
             .map((row) {
@@ -128,6 +130,58 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
       } catch (_) {
         return [];
       }
+    }
+  }
+
+  _SupplierOption? _supplierOptionFromRow(Map<String, dynamic> row) {
+    final name = row['name']?.toString().trim() ?? '';
+    final label = row['supplier_name']?.toString().trim() ?? name;
+    if (name.isEmpty) return null;
+    return _SupplierOption(id: name, label: label);
+  }
+
+  Future<List<ErpItemOption>> _searchSupplierOptions(String query) async {
+    final normalized = query.trim();
+    if (normalized.isEmpty) return const [];
+    final appState = context.read<AppState>();
+    try {
+      final rows = await appState.frappeService.fetchResource(
+        'Supplier',
+        fields: const ['name', 'supplier_name'],
+        filters: const [
+          ['disabled', '=', 0],
+        ],
+        orFilters: [
+          ['name', 'like', '%$normalized%'],
+          ['supplier_name', 'like', '%$normalized%'],
+        ],
+        orderBy: 'supplier_name asc, name asc',
+        limit: 50,
+      );
+      return rows
+          .map(_supplierOptionFromRow)
+          .whereType<_SupplierOption>()
+          .map(
+            (supplier) => ErpItemOption(id: supplier.id, label: supplier.label),
+          )
+          .toList();
+    } catch (_) {
+      final rows = await appState.frappeService.fetchResource(
+        'Supplier',
+        fields: const ['name'],
+        orFilters: [
+          ['name', 'like', '%$normalized%'],
+        ],
+        orderBy: 'name asc',
+        limit: 50,
+      );
+      return rows
+          .map(_supplierOptionFromRow)
+          .whereType<_SupplierOption>()
+          .map(
+            (supplier) => ErpItemOption(id: supplier.id, label: supplier.label),
+          )
+          .toList();
     }
   }
 
@@ -592,6 +646,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                           _supplierError = null;
                         });
                       },
+                      onSearch: _searchSupplierOptions,
                       validator: (value) =>
                           value == null ? 'Supplier wajib diisi' : null,
                     ),

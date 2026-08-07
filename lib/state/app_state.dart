@@ -1754,12 +1754,17 @@ class AppState with ChangeNotifier {
   }
 
   Future<void> _refreshApprovalTodoSystemNotification() async {
-    if (!_isAuthenticated || _currentUser == null || !canUseApprovals) return;
+    if (_isSampleMode ||
+        !_isAuthenticated ||
+        _currentUser == null ||
+        !canUseApprovals) {
+      return;
+    }
     try {
       final sp = await SharedPreferences.getInstance();
       final previous = sp.getInt(_approvalNotificationCountPrefsKey);
       final todos = await fetchApprovalTodos();
-      final count = todos.length;
+      final count = todos.where((todo) => todo.actions.isNotEmpty).length;
       await sp.setInt(_approvalNotificationCountPrefsKey, count);
       if (count <= 0) return;
       if (previous != null && count <= previous) return;
