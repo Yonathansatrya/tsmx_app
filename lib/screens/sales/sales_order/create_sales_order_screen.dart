@@ -1092,6 +1092,14 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     return null;
   }
 
+  String _selectedCustomerName() {
+    final customer = _selectedCustomerOption();
+    final name = customer?.name.trim() ?? '';
+    final id = _customerCtrl.text.trim();
+    if (name.isEmpty || name == id) return '';
+    return name;
+  }
+
   Future<void> _showCustomerSelectSheet() async {
     String? selectedCustomerId;
     var shouldAddCustomer = false;
@@ -2542,6 +2550,38 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                           ? 'Customer wajib diisi'
                           : null,
                     ),
+                    if (_selectedCustomerName().isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        key: ValueKey(
+                          'customer_name_${_customerCtrl.text.trim()}',
+                        ),
+                        initialValue: _selectedCustomerName(),
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: 'Customer Name',
+                          filled: true,
+                          fillColor: AppColors.background,
+                          prefixIcon: const Icon(Icons.storefront_outlined),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
                     ErpItemAutocompleteField(
                       label: 'Cost Center',
