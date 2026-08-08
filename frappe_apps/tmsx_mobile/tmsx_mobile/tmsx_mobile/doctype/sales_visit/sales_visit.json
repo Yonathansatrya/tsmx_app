@@ -8,6 +8,9 @@
   "field_order": [
     "customer",
     "sales_person",
+    "employee",
+    "employee_checkin_in",
+    "employee_checkin_out",
     "status",
     "address",
     "journey_start_time",
@@ -43,6 +46,28 @@
       "in_standard_filter": 1,
       "label": "Sales Person",
       "options": "Sales Person"
+    },
+    {
+      "fieldname": "employee",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Employee",
+      "options": "Employee"
+    },
+    {
+      "fieldname": "employee_checkin_in",
+      "fieldtype": "Link",
+      "label": "Employee Checkin IN",
+      "options": "Employee Checkin",
+      "read_only": 1
+    },
+    {
+      "fieldname": "employee_checkin_out",
+      "fieldtype": "Link",
+      "label": "Employee Checkin OUT",
+      "options": "Employee Checkin",
+      "read_only": 1
     },
     {
       "default": "Traveling",

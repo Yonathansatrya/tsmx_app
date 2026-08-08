@@ -51,7 +51,7 @@
     },
     {
       "default": "[\"dashboard\"]",
-      "description": "JSON list. Valid modules: dashboard, sales, purchase, stock, warehouse, quality_control, logistics, approvals, finance, accounting, plantation",
+      "description": "JSON list. Valid modules: dashboard, sales, spg, purchase, stock, warehouse, quality_control, logistics, approvals, finance, accounting, plantation",
       "fieldname": "default_modules",
       "fieldtype": "Code",
       "label": "Default Modules",

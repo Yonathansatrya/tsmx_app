@@ -21,7 +21,7 @@
       "reqd": 1
     },
     {
-      "description": "JSON list. Example: [\"dashboard\", \"purchase\", \"approvals\"]. Valid modules: dashboard, sales, purchase, stock, warehouse, quality_control, logistics, approvals, finance, accounting, plantation",
+      "description": "JSON list. Example: [\"dashboard\", \"spg\"]. Valid modules: dashboard, sales, spg, purchase, stock, warehouse, quality_control, logistics, approvals, finance, accounting, plantation",
       "fieldname": "modules",
       "fieldtype": "Code",
       "in_list_view": 1,

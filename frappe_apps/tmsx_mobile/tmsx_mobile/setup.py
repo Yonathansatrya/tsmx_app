@@ -37,17 +37,19 @@ MOBILE_ROLES = [
     "Plantation Admin",
     "Plantation Manager",
     "Plantation Supervisor",
+    "SPG",
 ]
 
 DEFAULT_ROLE_MODULES = {
-    "Administrator": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
-    "System Manager": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
-    "Developer": ["dashboard", "sales", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
-    "Admin Sales": ["dashboard", "sales", "approvals"],
-    "Sales Admin": ["dashboard", "sales", "approvals"],
-    "Sales Manager": ["dashboard", "sales", "approvals"],
+    "Administrator": ["dashboard", "sales", "spg", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
+    "System Manager": ["dashboard", "sales", "spg", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
+    "Developer": ["dashboard", "sales", "spg", "purchase", "stock", "warehouse", "logistics", "finance", "accounting", "approvals"],
+    "Admin Sales": ["dashboard", "sales", "spg", "approvals"],
+    "Sales Admin": ["dashboard", "sales", "spg", "approvals"],
+    "Sales Manager": ["dashboard", "sales", "spg", "approvals"],
     "Sales User": ["dashboard", "sales"],
     "Sales": ["dashboard", "sales"],
+    "SPG": ["dashboard", "spg"],
     "Collection Admin": ["dashboard", "sales", "approvals"],
     "Collection Manager": ["dashboard", "sales", "approvals"],
     "Collection User": ["dashboard", "sales"],
@@ -147,6 +149,10 @@ WORKSPACE_LINK_GROUPS = [
         "icon": "sales",
         "links": [
             ("Sales Visit", "DocType", "Sales Visit"),
+            ("SPG Visit", "DocType", "SPG Visit"),
+            ("SPG Daily Activity", "DocType", "SPG Daily Activity"),
+            ("SPG Daily Report", "DocType", "SPG Daily Report"),
+            ("SPG Schedule", "DocType", "SPG Schedule"),
             ("Sales Order", "DocType", "Sales Order"),
             ("Sales Invoice", "DocType", "Sales Invoice"),
             ("Delivery Note", "DocType", "Delivery Note"),
@@ -220,6 +226,7 @@ WORKSPACE_LINK_GROUPS = [
 def after_install():
     setup_mobile_roles()
     setup_mobile_custom_fields()
+    setup_sales_visit_doctype()
     setup_noo_request_doctype()
     setup_promo_request_doctype()
     setup_mobile_permissions()
@@ -289,6 +296,17 @@ def setup_mobile_custom_fields():
                 "insert_after": "custom_longitude",
             },
         )
+
+    if frappe.db.exists("DocType", "Sales Order"):
+        _ensure_custom_field(
+            "Sales Order",
+            {
+                "fieldname": "noted",
+                "label": "Noted",
+                "fieldtype": "Small Text",
+                "insert_after": "represents_company",
+            },
+        )
     frappe.db.commit()
 
 
@@ -311,6 +329,60 @@ def _ensure_custom_field(doctype, values):
     for key, value in values.items():
         setattr(doc, key, value)
     doc.insert(ignore_permissions=True)
+
+
+def setup_sales_visit_doctype():
+    """Keep Sales Visit compatible with Employee Checkin based mobile visits."""
+    if not frappe.db.exists("DocType", "Sales Visit"):
+        return
+
+    doc = frappe.get_doc("DocType", "Sales Visit")
+    changed = False
+    fields = {field.fieldname: field for field in doc.fields or []}
+    desired = [
+        {
+            "fieldname": "employee",
+            "label": "Employee",
+            "fieldtype": "Link",
+            "options": "Employee",
+            "insert_after": "sales_person",
+        },
+        {
+            "fieldname": "employee_checkin_in",
+            "label": "Employee Checkin IN",
+            "fieldtype": "Link",
+            "options": "Employee Checkin",
+            "read_only": 1,
+            "insert_after": "employee",
+        },
+        {
+            "fieldname": "employee_checkin_out",
+            "label": "Employee Checkin OUT",
+            "fieldtype": "Link",
+            "options": "Employee Checkin",
+            "read_only": 1,
+            "insert_after": "employee_checkin_in",
+        },
+    ]
+    for field_values in desired:
+        fieldname = field_values["fieldname"]
+        if fieldname in fields:
+            field = fields[fieldname]
+            for key, value in field_values.items():
+                if key == "insert_after":
+                    continue
+                if getattr(field, key, None) != value:
+                    setattr(field, key, value)
+                    changed = True
+            continue
+        doc.append("fields", field_values)
+        fields[fieldname] = doc.fields[-1]
+        changed = True
+
+    if changed:
+        doc.save(ignore_permissions=True)
+        frappe.clear_cache(doctype="Sales Visit")
+        frappe.db.commit()
 
 
 def setup_noo_request_doctype():
@@ -376,6 +448,7 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
     "Sales": {
         "Company": {"read": 1, "select": 1},
         "Customer": {"read": 1, "select": 1},
+        "Address": {"read": 1, "select": 1},
         "Customer Group": {"read": 1, "select": 1},
         "Territory": {"read": 1, "select": 1},
         "Employee": {"read": 1, "select": 1},
@@ -393,6 +466,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Sales Invoice": {"read": 1, "select": 1},
         "Sales Invoice Item": {"read": 1, "select": 1},
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Employee Checkin": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1},
         "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1},
         "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1},
         "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1},
@@ -401,6 +476,7 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
     "Sales User": {
         "Company": {"read": 1, "select": 1},
         "Customer": {"read": 1, "select": 1},
+        "Address": {"read": 1, "select": 1},
         "Customer Group": {"read": 1, "select": 1},
         "Territory": {"read": 1, "select": 1},
         "Employee": {"read": 1, "select": 1},
@@ -418,6 +494,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Sales Invoice": {"read": 1, "select": 1},
         "Sales Invoice Item": {"read": 1, "select": 1},
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Employee Checkin": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1},
         "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1},
         "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1},
         "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1},
@@ -426,6 +504,7 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
     "Sales Manager": {
         "Company": {"read": 1, "select": 1},
         "Customer": {"read": 1, "select": 1},
+        "Address": {"read": 1, "select": 1},
         "Customer Group": {"read": 1, "select": 1},
         "Territory": {"read": 1, "select": 1},
         "Employee": {"read": 1, "select": 1},
@@ -437,6 +516,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Delivery Note": {"read": 1, "select": 1},
         "Sales Invoice": {"read": 1, "select": 1},
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Employee Checkin": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1},
         "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
         "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
         "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1, "report": 1},
@@ -445,6 +526,7 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
     "Sales Admin": {
         "Company": {"read": 1, "select": 1},
         "Customer": {"read": 1, "select": 1},
+        "Address": {"read": 1, "select": 1},
         "Customer Group": {"read": 1, "select": 1},
         "Territory": {"read": 1, "select": 1},
         "Employee": {"read": 1, "select": 1},
@@ -456,6 +538,8 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Delivery Note": {"read": 1, "select": 1},
         "Sales Invoice": {"read": 1, "select": 1},
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Employee Checkin": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
         "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
         "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
         "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
@@ -464,6 +548,7 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
     "Admin Sales": {
         "Company": {"read": 1, "select": 1},
         "Customer": {"read": 1, "select": 1},
+        "Address": {"read": 1, "select": 1},
         "Customer Group": {"read": 1, "select": 1},
         "Territory": {"read": 1, "select": 1},
         "Employee": {"read": 1, "select": 1},
@@ -475,10 +560,30 @@ MOBILE_ROLE_DOCTYPE_PERMISSIONS = {
         "Delivery Note": {"read": 1, "select": 1},
         "Sales Invoice": {"read": 1, "select": 1},
         "Payment Entry": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "Employee Checkin": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
         "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
         "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
         "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
         "Promo Request Item": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
+    },
+    "SPG": {
+        "Company": {"read": 1, "select": 1},
+        "Customer": {"read": 1, "select": 1},
+        "Address": {"read": 1, "select": 1},
+        "Employee": {"read": 1, "select": 1},
+        "Item": {"read": 1, "select": 1},
+        "UOM": {"read": 1, "select": 1},
+        "Employee Checkin": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "File": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "SPG Schedule": {"read": 1, "select": 1},
+        "SPG Schedule Customer": {"read": 1, "select": 1},
+        "SPG Schedule Employee": {"read": 1, "select": 1},
+        "SPG Visit": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "SPG Daily Activity": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "SPG Daily Activity Photo": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "SPG Daily Report": {"read": 1, "select": 1, "create": 1, "write": 1},
+        "SPG Daily Report Item": {"read": 1, "select": 1, "create": 1, "write": 1},
     },
     "Purchase User": {
         "Company": {"read": 1, "select": 1},
@@ -630,10 +735,21 @@ _PRIVILEGED_FINANCE_PERMISSIONS = {
 }
 
 _PRIVILEGED_OPERATION_PERMISSIONS = {
+    "Address": {"read": 1, "select": 1},
+    "Employee Checkin": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+    "File": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
     "Sales Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
     "NOO Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
     "Promo Request": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
     "Promo Request Item": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
+    "SPG Schedule": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+    "SPG Schedule Customer": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
+    "SPG Schedule Employee": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
+    "SPG Visit": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+    "SPG Daily Activity": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+    "SPG Daily Activity Photo": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
+    "SPG Daily Report": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
+    "SPG Daily Report Item": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1},
     "Delivery Activity Log": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
     "Delivery Tracking Point": {"read": 1, "select": 1, "create": 1, "write": 1, "delete": 1, "report": 1},
 }
