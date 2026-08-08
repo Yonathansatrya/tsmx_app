@@ -1,6 +1,8 @@
 import frappe
 
 
+WORKSPACE_LOGO = "/assets/tmsx_mobile/images/logo.png"
+
 MOBILE_ROLES = [
     "Developer",
     "Company Administrator",
@@ -96,7 +98,7 @@ WORKSPACE_SHORTCUTS = [
     {
         "label": "Role Module Mapping",
         "type": "DocType",
-        "link_to": "TMSX Mobile Role Module",
+        "link_to": "TMSX Mobile Settings",
         "color": "Blue",
     },
     {"label": "Users", "type": "DocType", "link_to": "User", "color": "Grey"},
@@ -121,7 +123,7 @@ WORKSPACE_LINK_GROUPS = [
         "icon": "setting-gear",
         "links": [
             ("TMSX Mobile Settings", "DocType", "TMSX Mobile Settings"),
-            ("Role Module Mapping", "DocType", "TMSX Mobile Role Module"),
+            ("Role Module Mapping", "DocType", "TMSX Mobile Settings"),
             ("User", "DocType", "User"),
             ("Role", "DocType", "Role"),
             ("Role Profile", "DocType", "Role Profile"),
@@ -904,6 +906,10 @@ def setup_mobile_workspace():
     workspace.public = 1
     workspace.is_hidden = 0
     workspace.icon = "device-mobile"
+    if workspace.meta.has_field("logo"):
+        workspace.logo = WORKSPACE_LOGO
+    if workspace.meta.has_field("image"):
+        workspace.image = WORKSPACE_LOGO
     workspace.indicator_color = "green"
     workspace.sequence_id = 999
 
@@ -1011,7 +1017,9 @@ def _append_link_group(workspace, group):
 
 def _link_target_exists(link_type, link_to):
     if link_type == "DocType":
-        return frappe.db.exists("DocType", link_to)
+        if not frappe.db.exists("DocType", link_to):
+            return False
+        return not bool(frappe.db.get_value("DocType", link_to, "istable"))
     if link_type == "Report":
         return frappe.db.exists("Report", link_to)
     if link_type == "Page":

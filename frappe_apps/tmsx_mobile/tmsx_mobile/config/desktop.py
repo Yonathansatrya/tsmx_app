@@ -4,7 +4,7 @@ def get_data():
             "module_name": "TMSX Mobile",
             "type": "module",
             "label": "TMSX Mobile",
-            "icon": "octicon octicon-device-mobile",
+            "icon": "/assets/tmsx_mobile/images/logo.png",
             "color": "green",
         }
     ]
