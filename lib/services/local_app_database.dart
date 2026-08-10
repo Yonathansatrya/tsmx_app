@@ -13,6 +13,7 @@ class LocalAppDatabase {
   static const _cacheTable = 'app_kv_cache';
 
   Database? _database;
+  DateTime? _lastExpiredCleanupAt;
 
   Future<Database> get _db async {
     final existing = _database;
@@ -41,7 +42,25 @@ class LocalAppDatabase {
     return db;
   }
 
+  Future<void> cleanupExpired({bool force = false}) async {
+    final now = DateTime.now();
+    final lastCleanup = _lastExpiredCleanupAt;
+    if (!force &&
+        lastCleanup != null &&
+        now.difference(lastCleanup) < const Duration(minutes: 15)) {
+      return;
+    }
+    _lastExpiredCleanupAt = now;
+    final db = await _db;
+    await db.delete(
+      _cacheTable,
+      where: 'expires_at <= ?',
+      whereArgs: [now.millisecondsSinceEpoch],
+    );
+  }
+
   Future<Map<String, dynamic>?> readJson(String key) async {
+    await cleanupExpired();
     final db = await _db;
     final now = DateTime.now().millisecondsSinceEpoch;
     final rows = await db.query(

@@ -2078,6 +2078,8 @@ class _ProofFileTile extends StatelessWidget {
                 aspectRatio: 16 / 9,
                 child: Image.network(
                   imageUrl,
+                  cacheWidth: 900,
+                  filterQuality: FilterQuality.medium,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) => Container(
                     color: AppColors.background,

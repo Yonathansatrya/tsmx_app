@@ -1283,6 +1283,9 @@ class _ReceiptAttachmentTile extends StatelessWidget {
         child: _isImage && url.isNotEmpty
             ? Image.network(
                 url,
+                cacheWidth: 160,
+                cacheHeight: 160,
+                filterQuality: FilterQuality.medium,
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => const Icon(
                   Icons.broken_image_outlined,

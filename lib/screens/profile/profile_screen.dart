@@ -927,6 +927,9 @@ class _ProfileAvatar extends StatelessWidget {
           ? const Icon(Icons.person_rounded, color: AppColors.primary, size: 44)
           : Image.network(
               imageUrl!,
+              cacheWidth: 180,
+              cacheHeight: 180,
+              filterQuality: FilterQuality.medium,
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => const Icon(
                 Icons.person_rounded,

@@ -467,6 +467,7 @@ class AppState with ChangeNotifier {
       : List<ErpApprovalTodo>.unmodifiable(_approvalTodoSnapshot);
 
   Timer? _notificationPollTimer;
+  Future<void>? _notificationTickInFlight;
   final Map<String, Future<List<SalesInvoice>>> _collectionInvoiceInFlight = {};
   final Map<String, Future<List<CollectionPayment>>>
   _collectionPaymentInFlight = {};
@@ -1047,6 +1048,7 @@ class AppState with ChangeNotifier {
     () async {
       await _restoreFrappeConfig();
       await _restoreSummaryCache();
+      unawaited(LocalAppDatabase.instance.cleanupExpired());
       _isInitializing = false;
       notifyListeners();
     }();
@@ -1100,9 +1102,11 @@ class AppState with ChangeNotifier {
     final user = _currentUser;
     final baseUrl = _frappeService.baseUrl;
     try {
-      await Future.wait([if (canUseApprovals) fetchApprovalTodos()]);
+      await Future.wait([
+        if (canUseApprovals) fetchApprovalTodos(),
+        refreshNotifications(silent: true),
+      ]);
       if (!_isSameRuntime(generation, user: user, baseUrl: baseUrl)) return;
-      await refreshNotifications(silent: true);
     } catch (_) {
       // Prefetch failures should not block login.
     }
@@ -1747,10 +1751,24 @@ class AppState with ChangeNotifier {
   void _stopNotificationPolling() {
     _notificationPollTimer?.cancel();
     _notificationPollTimer = null;
+    _notificationTickInFlight = null;
   }
 
   Future<void> _refreshNotificationTick() async {
-    await _refreshApprovalTodoSystemNotification();
+    final inFlight = _notificationTickInFlight;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final request = _refreshApprovalTodoSystemNotification();
+    _notificationTickInFlight = request;
+    try {
+      await request;
+    } finally {
+      if (identical(_notificationTickInFlight, request)) {
+        _notificationTickInFlight = null;
+      }
+    }
   }
 
   Future<void> _refreshApprovalTodoSystemNotification() async {

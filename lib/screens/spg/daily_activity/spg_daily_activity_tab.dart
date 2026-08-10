@@ -320,6 +320,8 @@ class _SpgDailyActivityDetailSheet extends StatelessWidget {
                 child: Image.network(
                   url,
                   height: 220,
+                  cacheWidth: 900,
+                  filterQuality: FilterQuality.medium,
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) =>
                       const ErpEmptyState(title: 'Foto tidak bisa dimuat'),
