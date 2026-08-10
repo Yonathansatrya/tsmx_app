@@ -19,15 +19,26 @@ class DashboardModuleLauncher extends StatelessWidget {
     final appState = context.watch<AppState>();
     final groups = _buildGroups(appState);
     if (groups.isEmpty) return const SizedBox.shrink();
+    final entries = [for (final group in groups) ...group.entries];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (var i = 0; i < groups.length; i++) ...[
-          if (i > 0) const SizedBox(height: 16),
-          _ModuleGroupSection(group: groups[i]),
-        ],
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth >= 360 ? 4 : 3;
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: entries.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 14,
+            crossAxisSpacing: 10,
+            childAspectRatio: 0.86,
+          ),
+          itemBuilder: (context, index) {
+            return _ModuleEntryTile(entry: entries[index]);
+          },
+        );
+      },
     );
   }
 
@@ -67,7 +78,7 @@ class DashboardModuleLauncher extends StatelessWidget {
       final entries = grouped[groupMeta.key];
       if (entries == null || entries.isEmpty) continue;
       entries.sort((a, b) => a.order.compareTo(b.order));
-      groups.add(_ModuleGroup(title: groupMeta.title, entries: entries));
+      groups.add(_ModuleGroup(entries: entries));
     }
 
     return groups;
@@ -152,10 +163,9 @@ class DashboardModuleLauncher extends StatelessWidget {
 }
 
 class _ModuleGroup {
-  final String title;
   final List<_ModuleEntry> entries;
 
-  const _ModuleGroup({required this.title, required this.entries});
+  const _ModuleGroup({required this.entries});
 }
 
 class _ModuleEntry {
@@ -178,45 +188,6 @@ class _ModuleEntry {
   });
 }
 
-class _ModuleGroupSection extends StatelessWidget {
-  final _ModuleGroup group;
-
-  const _ModuleGroupSection({required this.group});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          group.title,
-          style: const TextStyle(
-            color: AppColors.navy,
-            fontSize: 15,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Pilih modul untuk membuka workspace',
-          style: TextStyle(
-            color: AppColors.slate.withValues(alpha: 0.9),
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 10),
-        ...group.entries.map(
-          (entry) => Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _ModuleEntryTile(entry: entry),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _ModuleEntryTile extends StatelessWidget {
   final _ModuleEntry entry;
 
@@ -224,82 +195,56 @@ class _ModuleEntryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: () {
-          Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => entry.screen));
-        },
+    final colors = _moduleColors(entry.entry.routeKey);
+    return Tooltip(
+      message: entry.subtitle,
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.softGreen,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    entry.entry.meta.icon,
-                    color: AppColors.primary,
-                    size: 24,
-                  ),
+        child: InkWell(
+          onTap: () {
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => entry.screen));
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: colors.background,
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: colors.background.withValues(alpha: 0.36),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        entry.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.navy,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        entry.subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.slate,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
+                child: Icon(
+                  entry.entry.meta.icon,
+                  color: colors.foreground,
+                  size: 25,
                 ),
-                if (entry.badgeLabel.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  _ModuleBadge(
-                    label: entry.badgeLabel,
-                    color: entry.badgeColor,
-                  ),
-                ],
-                const SizedBox(width: 8),
-                const Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  color: AppColors.slate,
-                  size: 16,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                entry.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 11,
+                  height: 1.12,
+                  fontWeight: FontWeight.w900,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -307,26 +252,33 @@ class _ModuleEntryTile extends StatelessWidget {
   }
 }
 
-class _ModuleBadge extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _ModuleBadge({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    constraints: const BoxConstraints(maxWidth: 88),
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: color.withValues(alpha: 0.16)),
-    ),
-    child: Text(
-      label,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w900),
-    ),
-  );
+({Color background, Color foreground}) _moduleColors(String routeKey) {
+  switch (routeKey) {
+    case MobileModule.sales:
+      return (background: const Color(0xFF16A34A), foreground: Colors.white);
+    case MobileModule.spg:
+      return (background: const Color(0xFF059669), foreground: Colors.white);
+    case MobileModule.purchase:
+      return (background: const Color(0xFF22C55E), foreground: Colors.white);
+    case MobileModule.stock:
+      return (background: const Color(0xFF0284C7), foreground: Colors.white);
+    case MobileModule.warehouse:
+      return (background: const Color(0xFF4F46E5), foreground: Colors.white);
+    case MobileModule.qualityControl:
+      return (background: const Color(0xFF0EA5E9), foreground: Colors.white);
+    case MobileModule.logistics:
+      return (background: const Color(0xFFEA580C), foreground: Colors.white);
+    case 'logistics.tracking':
+      return (background: const Color(0xFFF59E0B), foreground: Colors.white);
+    case 'logistics.delivery':
+      return (background: const Color(0xFF16A34A), foreground: Colors.white);
+    case MobileModule.finance:
+      return (background: const Color(0xFF2563EB), foreground: Colors.white);
+    case MobileModule.accounting:
+      return (background: const Color(0xFF0891B2), foreground: Colors.white);
+    case MobileModule.plantation:
+      return (background: const Color(0xFF22C55E), foreground: Colors.white);
+    default:
+      return (background: AppColors.primary, foreground: Colors.white);
+  }
 }

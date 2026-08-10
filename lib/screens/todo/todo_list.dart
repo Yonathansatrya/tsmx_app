@@ -176,14 +176,39 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
         color: AppColors.background,
         child: Column(
           children: [
-            Material(
-              color: AppColors.white,
-              child: TabBar(
-                controller: _tabController,
-                tabs: [
-                  Tab(text: 'Todo (${_rows.length})'),
-                  if (widget.showHistoryTab) const Tab(text: 'Riwayat'),
-                ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+              child: Container(
+                height: 50,
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: AppColors.cardShadow,
+                ),
+                child: TabBar(
+                  controller: _tabController,
+                  dividerColor: Colors.transparent,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  indicator: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  labelColor: AppColors.white,
+                  unselectedLabelColor: AppColors.slate,
+                  labelStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  tabs: [
+                    Tab(text: 'Todo (${_rows.length})'),
+                    if (widget.showHistoryTab) const Tab(text: 'Riwayat'),
+                  ],
+                ),
               ),
             ),
             Expanded(child: content),
@@ -196,6 +221,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
       appBar: AppBar(
         backgroundColor: AppColors.white,
         surfaceTintColor: Colors.transparent,
+        toolbarHeight: 72,
         title: Text(
           widget.title,
           style: const TextStyle(
@@ -210,12 +236,34 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
             icon: const Icon(Icons.sync_rounded),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            Tab(text: 'Todo (${_rows.length})'),
-            if (widget.showHistoryTab) const Tab(text: 'Riwayat'),
-          ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(58),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                labelColor: AppColors.white,
+                unselectedLabelColor: AppColors.slate,
+                tabs: [
+                  Tab(text: 'Todo (${_rows.length})'),
+                  if (widget.showHistoryTab) const Tab(text: 'Riwayat'),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
       body: content,
@@ -323,27 +371,32 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
             filled: true,
             fillColor: AppColors.white,
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(18),
               borderSide: const BorderSide(color: AppColors.border),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(18),
               borderSide: const BorderSide(color: AppColors.border),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(18),
               borderSide: const BorderSide(color: AppColors.primary),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 15,
             ),
             isDense: true,
           ),
         ),
         const SizedBox(height: 12),
         Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(color: AppColors.border),
+            boxShadow: AppColors.cardShadow,
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -358,15 +411,15 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                       filled: true,
                       fillColor: AppColors.background,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide.none,
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         borderSide: const BorderSide(color: AppColors.primary),
                       ),
                       isDense: true,
@@ -423,7 +476,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
             },
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         ErpStatusChipBar<String?>(
           selected: _statusQuickFilter,
           onSelected: (status) => setState(() => _statusQuickFilter = status),
@@ -442,7 +495,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
             ),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 10),
         Row(
           children: [
             const Icon(
@@ -611,89 +664,113 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     padding: const EdgeInsets.only(bottom: 10),
     child: InkWell(
       onTap: () => _selectApproval(row),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(22),
       child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: _cardDecoration(),
+        padding: const EdgeInsets.all(16),
+        decoration: _cardDecoration(accent: _approvalAccent(row.doctype)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: AppColors.softGreen,
-                  foregroundColor: AppColors.primary,
-                  child: Icon(_approvalIcon(row.doctype)),
+                Builder(
+                  builder: (context) {
+                    final accent = _approvalAccent(row.doctype);
+                    return Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: accent.withValues(alpha: 0.13),
+                        borderRadius: BorderRadius.circular(17),
+                      ),
+                      child: Icon(_approvalIcon(row.doctype), color: accent),
+                    );
+                  },
                 ),
-                const SizedBox(width: 11),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                  child: Builder(
+                    builder: (context) {
+                      final accent = _approvalAccent(row.doctype);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Flexible(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.softGreen,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                row.moduleLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: accent.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    row.moduleLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: accent,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
                                 ),
                               ),
+                              const SizedBox(width: 8),
+                              ErpStatusBadge(
+                                statusText: row.workflowState.isEmpty
+                                    ? row.status
+                                    : row.workflowState,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            row.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.navy,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          ErpStatusBadge(
-                            statusText: row.workflowState.isEmpty
-                                ? row.status
-                                : row.workflowState,
+                          const SizedBox(height: 4),
+                          Text(
+                            row.partyLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: AppColors.slate,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        row.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.navy,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        row.partyLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.slate,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.slate),
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.slate,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -701,15 +778,18 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                 _approvalMetaPill(
                   icon: Icons.payments_outlined,
                   label: _approvalAmount(row),
+                  color: _approvalAccent(row.doctype),
                 ),
                 if (row.date.isNotEmpty)
                   _approvalMetaPill(
                     icon: Icons.event_available_rounded,
                     label: row.date,
+                    color: const Color(0xFF0EA5E9),
                   ),
                 _approvalMetaPill(
                   icon: Icons.task_alt_rounded,
                   label: '${row.actions.length} action',
+                  color: const Color(0xFF6366F1),
                 ),
               ],
             ),
@@ -719,30 +799,33 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     ),
   );
 
-  Widget _approvalMetaPill({required IconData icon, required String label}) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.border),
+  Widget _approvalMetaPill({
+    required IconData icon,
+    required String label,
+    Color color = AppColors.primary,
+  }) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.09),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: color.withValues(alpha: 0.18)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: AppColors.primary),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.navy,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      );
+      ],
+    ),
+  );
 
   IconData _approvalIcon(String doctype) => switch (doctype) {
     'Sales Order' => Icons.point_of_sale_rounded,
@@ -751,6 +834,15 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     'Material Request' => Icons.assignment_turned_in_rounded,
     'Journal Entry' => Icons.auto_stories_rounded,
     _ => Icons.approval_outlined,
+  };
+
+  Color _approvalAccent(String doctype) => switch (doctype) {
+    'Sales Order' => const Color(0xFF16A34A),
+    'Purchase Order' => const Color(0xFFF97316),
+    'Purchase Invoice' => const Color(0xFF3B82F6),
+    'Material Request' => const Color(0xFF6366F1),
+    'Journal Entry' => const Color(0xFF0EA5E9),
+    _ => AppColors.primary,
   };
 
   String _approvalAmount(ErpApprovalTodo row) {
@@ -965,12 +1057,21 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     ),
   );
 
-  BoxDecoration _cardDecoration() => BoxDecoration(
-    color: AppColors.white,
-    borderRadius: BorderRadius.circular(16),
-    border: Border.all(color: AppColors.border),
-    boxShadow: AppColors.cardShadow,
-  );
+  BoxDecoration _cardDecoration({Color? accent}) {
+    final color = accent ?? AppColors.primary;
+    return BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: color.withValues(alpha: 0.13)),
+      boxShadow: [
+        BoxShadow(
+          color: color.withValues(alpha: 0.07),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+  }
 
   String _plainText(String value) => value
       .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
@@ -1004,10 +1105,10 @@ class _ApprovalFilterButton extends StatelessWidget {
       color: enabled
           ? AppColors.softGreen
           : AppColors.background.withValues(alpha: 0.8),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: SizedBox(
           height: 48,
           child: Column(
@@ -1121,11 +1222,11 @@ class _ApprovalTodoSummaryCard extends StatelessWidget {
   };
 
   Color _color(String doctype) => switch (doctype) {
-    'Purchase Order' => AppColors.primary,
-    'Purchase Invoice' => AppColors.warning,
-    'Material Request' => AppColors.success,
-    'Journal Entry' => AppColors.primaryLight,
-    'Sales Order' => AppColors.navy,
+    'Purchase Order' => const Color(0xFFF97316),
+    'Purchase Invoice' => const Color(0xFF3B82F6),
+    'Material Request' => const Color(0xFF6366F1),
+    'Journal Entry' => const Color(0xFF0EA5E9),
+    'Sales Order' => const Color(0xFF16A34A),
     _ => AppColors.slate,
   };
 
@@ -1142,22 +1243,41 @@ class _ApprovalTodoSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final doctypes = summary.visibleDoctypes;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.white, Color(0xFFEFFCFB)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFF14B8A6).withValues(alpha: 0.16),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF14B8A6).withValues(alpha: 0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              CircleAvatar(
-                backgroundColor: AppColors.softGreen,
-                foregroundColor: AppColors.primary,
-                child: const Icon(Icons.checklist_rounded),
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF14B8A6).withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.checklist_rounded,
+                  color: Color(0xFF14B8A6),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1183,7 +1303,7 @@ class _ApprovalTodoSummaryCard extends StatelessWidget {
             ],
           ),
           if (doctypes.isNotEmpty) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -1359,18 +1479,23 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
       appBar: AppBar(
         backgroundColor: AppColors.white,
         surfaceTintColor: Colors.transparent,
+        toolbarHeight: 72,
         title: const Text(
           'Detail Approval',
-          style: TextStyle(
-            color: AppColors.primary,
-            fontWeight: FontWeight.w900,
-          ),
+          style: TextStyle(color: AppColors.navy, fontWeight: FontWeight.w900),
         ),
         actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: _loading || _processing ? null : _loadDetail,
-            icon: const Icon(Icons.sync_rounded),
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: IconButton.filledTonal(
+              tooltip: 'Refresh',
+              onPressed: _loading || _processing ? null : _loadDetail,
+              icon: const Icon(Icons.sync_rounded),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.softGreen,
+                foregroundColor: AppColors.primary,
+              ),
+            ),
           ),
         ],
       ),
@@ -1378,7 +1503,7 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
         onRefresh: _loadDetail,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
           children: [
             _detailHeader(),
             if (_loading) ...[
@@ -1421,19 +1546,27 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
   }
 
   Widget _detailHeader() => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: _cardDecoration(),
+    padding: const EdgeInsets.all(18),
+    decoration: _cardDecoration(accent: _detailAccent(widget.approval.doctype)),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: AppColors.softGreen,
-              foregroundColor: AppColors.primary,
-              child: Icon(_detailIcon(widget.approval.doctype)),
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: _detailAccent(
+                  widget.approval.doctype,
+                ).withValues(alpha: 0.13),
+                borderRadius: BorderRadius.circular(19),
+              ),
+              child: Icon(
+                _detailIcon(widget.approval.doctype),
+                color: _detailAccent(widget.approval.doctype),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1451,13 +1584,15 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.softGreen,
+                          color: _detailAccent(
+                            widget.approval.doctype,
+                          ).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
                           widget.approval.moduleLabel,
-                          style: const TextStyle(
-                            color: AppColors.primary,
+                          style: TextStyle(
+                            color: _detailAccent(widget.approval.doctype),
                             fontSize: 10,
                             fontWeight: FontWeight.w900,
                           ),
@@ -1498,14 +1633,24 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
           ),
         ),
         const SizedBox(height: 12),
-        Text(
-          widget.approval.doctype == 'Material Request'
-              ? '${formatErpCurrency(widget.approval.amount)} qty'
-              : 'Rp ${formatErpCurrency(widget.approval.amount)}',
-          style: const TextStyle(
-            color: AppColors.primary,
-            fontSize: 18,
-            fontWeight: FontWeight.w900,
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _detailAccent(
+              widget.approval.doctype,
+            ).withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Text(
+            widget.approval.doctype == 'Material Request'
+                ? '${formatErpCurrency(widget.approval.amount)} qty'
+                : 'Rp ${formatErpCurrency(widget.approval.amount)}',
+            style: TextStyle(
+              color: _detailAccent(widget.approval.doctype),
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -1517,14 +1662,17 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
               _detailMetaPill(
                 icon: Icons.event_available_rounded,
                 label: widget.approval.date,
+                color: const Color(0xFF0EA5E9),
               ),
             _detailMetaPill(
               icon: Icons.task_alt_rounded,
               label: '${widget.approval.actions.length} action tersedia',
+              color: const Color(0xFF6366F1),
             ),
             _detailMetaPill(
               icon: Icons.description_outlined,
               label: docStatusLabel(widget.approval.docStatus),
+              color: _detailAccent(widget.approval.doctype),
             ),
           ],
         ),
@@ -1541,30 +1689,42 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
     _ => Icons.approval_outlined,
   };
 
-  Widget _detailMetaPill({required IconData icon, required String label}) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.border),
+  Color _detailAccent(String doctype) => switch (doctype) {
+    'Sales Order' => const Color(0xFF16A34A),
+    'Purchase Order' => const Color(0xFFF97316),
+    'Purchase Invoice' => const Color(0xFF3B82F6),
+    'Material Request' => const Color(0xFF6366F1),
+    'Journal Entry' => const Color(0xFF0EA5E9),
+    _ => AppColors.primary,
+  };
+
+  Widget _detailMetaPill({
+    required IconData icon,
+    required String label,
+    Color color = AppColors.primary,
+  }) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.09),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: color.withValues(alpha: 0.18)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: AppColors.primary),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.navy,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      );
+      ],
+    ),
+  );
 
   List<Widget> _documentInfoRows(Map<String, dynamic> detail) {
     final partnerLabel = widget.approval.doctype == 'Sales Order'
@@ -1616,7 +1776,7 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
     required String title,
     required List<Widget> children,
   }) => Container(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(18),
     decoration: _cardDecoration(),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1628,22 +1788,26 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
             fontWeight: FontWeight.w900,
           ),
         ),
-        const Divider(height: 22),
+        const Divider(height: 24),
         ...children,
       ],
     ),
   );
 
   Widget _detailRow(String label, String value) => Padding(
-    padding: const EdgeInsets.only(bottom: 9),
+    padding: const EdgeInsets.only(bottom: 10),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SizedBox(
-          width: 115,
+          width: 116,
           child: Text(
             label,
-            style: const TextStyle(color: AppColors.slate, fontSize: 11),
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         Expanded(
@@ -1691,31 +1855,53 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
 
   Widget _itemRow(Map<String, dynamic> item) => Padding(
     padding: const EdgeInsets.only(bottom: 12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          _text(item['item_name']).isEmpty
-              ? _text(item['item_code'])
-              : _text(item['item_name']),
-          style: const TextStyle(
-            color: AppColors.navy,
-            fontWeight: FontWeight.w800,
+    child: Container(
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _text(item['item_name']).isEmpty
+                ? _text(item['item_code'])
+                : _text(item['item_name']),
+            style: const TextStyle(
+              color: AppColors.navy,
+              fontWeight: FontWeight.w900,
+            ),
           ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          '${_number(item['qty'])} ${_text(item['uom'])} x '
-          'Rp ${formatErpCurrency(NumParse.asDouble(item['rate']))} = '
-          'Rp ${formatErpCurrency(NumParse.asDouble(item['amount']))}',
-          style: const TextStyle(color: AppColors.slate, fontSize: 11),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _detailMetaPill(
+                icon: Icons.inventory_2_outlined,
+                label: '${_number(item['qty'])} ${_text(item['uom'])}',
+              ),
+              _detailMetaPill(
+                icon: Icons.sell_outlined,
+                label:
+                    'Rp ${formatErpCurrency(NumParse.asDouble(item['rate']))}',
+              ),
+              _detailMetaPill(
+                icon: Icons.payments_outlined,
+                label:
+                    'Rp ${formatErpCurrency(NumParse.asDouble(item['amount']))}',
+              ),
+            ],
+          ),
+        ],
+      ),
     ),
   );
 
   Widget _decisionCard() => Container(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(18),
     decoration: _cardDecoration(),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1729,31 +1915,41 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
           'Periksa detail, lalu pilih action sesuai Workflow ERPNext.',
           style: TextStyle(color: AppColors.slate, fontSize: 11),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
         if (_processing)
           const LinearProgressIndicator()
         else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: widget.approval.actions.map((action) {
-              final reject = _isRejectAction(action);
-              return reject
-                  ? OutlinedButton.icon(
-                      onPressed: () => _chooseAction(action),
-                      icon: const Icon(Icons.close_rounded),
-                      label: Text(action),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.danger,
+          ...widget.approval.actions.map((action) {
+            final reject = _isRejectAction(action);
+            final button = reject
+                ? OutlinedButton.icon(
+                    onPressed: () => _chooseAction(action),
+                    icon: const Icon(Icons.close_rounded),
+                    label: Text(action),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.danger,
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                    )
-                  : FilledButton.icon(
-                      onPressed: () => _chooseAction(action),
-                      icon: const Icon(Icons.check_rounded),
-                      label: Text(action),
-                    );
-            }).toList(),
-          ),
+                    ),
+                  )
+                : FilledButton.icon(
+                    onPressed: () => _chooseAction(action),
+                    icon: const Icon(Icons.check_rounded),
+                    label: Text(action),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  );
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: button,
+            );
+          }),
       ],
     ),
   );
@@ -1872,12 +2068,21 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
     ),
   );
 
-  BoxDecoration _cardDecoration() => BoxDecoration(
-    color: AppColors.white,
-    borderRadius: BorderRadius.circular(16),
-    border: Border.all(color: AppColors.border),
-    boxShadow: AppColors.cardShadow,
-  );
+  BoxDecoration _cardDecoration({Color? accent}) {
+    final color = accent ?? AppColors.primary;
+    return BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: color.withValues(alpha: 0.13)),
+      boxShadow: [
+        BoxShadow(
+          color: color.withValues(alpha: 0.07),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+  }
 
   List<Map<String, dynamic>> _mapRows(dynamic value) {
     if (value is! List) return const [];
@@ -2426,7 +2631,7 @@ class _SalesOrderApprovalHistoryDetailPageState
 
   BoxDecoration _cardDecoration() => BoxDecoration(
     color: AppColors.white,
-    borderRadius: BorderRadius.circular(16),
+    borderRadius: BorderRadius.circular(22),
     border: Border.all(color: AppColors.border),
     boxShadow: AppColors.cardShadow,
   );
@@ -2970,7 +3175,7 @@ class _SalesOrderApprovalDetailPageState
 
   BoxDecoration _cardDecoration() => BoxDecoration(
     color: AppColors.white,
-    borderRadius: BorderRadius.circular(16),
+    borderRadius: BorderRadius.circular(22),
     border: Border.all(color: AppColors.border),
     boxShadow: AppColors.cardShadow,
   );

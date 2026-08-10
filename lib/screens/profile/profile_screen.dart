@@ -21,6 +21,11 @@ class _ProfileScreenState extends State<ProfileScreen>
   static final Uri _appUpdateUri = Uri.parse(
     'https://play.google.com/apps/internaltest/4701248966857234954',
   );
+  static const Color _accentTeal = Color(0xFF14B8A6);
+  static const Color _accentBlue = Color(0xFF3B82F6);
+  static const Color _accentPurple = Color(0xFF6366F1);
+  static const Color _accentOrange = Color(0xFFF97316);
+  static const Color _accentSky = Color(0xFF0EA5E9);
 
   final ImagePicker _imagePicker = ImagePicker();
   final _passwordFormKey = GlobalKey<FormState>();
@@ -192,51 +197,65 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        toolbarHeight: 64,
+        toolbarHeight: 76,
         backgroundColor: AppColors.white,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         automaticallyImplyLeading: widget.showBackButton,
         leading: widget.showBackButton
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-                onPressed: () => Navigator.pop(context),
+            ? Padding(
+                padding: const EdgeInsets.only(left: 10),
+                child: IconButton.filledTonal(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 17),
+                  onPressed: () => Navigator.pop(context),
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppColors.background,
+                    foregroundColor: AppColors.primary,
+                  ),
+                ),
               )
             : null,
+        leadingWidth: widget.showBackButton ? 58 : null,
         title: const Text(
           'Profil Saya',
-          style: TextStyle(color: AppColors.navy, fontWeight: FontWeight.w900),
+          style: TextStyle(
+            color: AppColors.navy,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
         ),
         centerTitle: false,
       ),
       body: Column(
         children: [
           Container(
-            margin: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+            height: 68,
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               color: AppColors.white,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(color: AppColors.border),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryDark.withValues(alpha: 0.04),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+              boxShadow: AppColors.cardShadow,
             ),
             child: TabBar(
               controller: _tabController,
               dividerColor: Colors.transparent,
               indicatorSize: TabBarIndicatorSize.tab,
               indicator: BoxDecoration(
-                color: AppColors.softGreen,
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(20),
               ),
-              labelColor: AppColors.primary,
+              labelColor: AppColors.white,
               unselectedLabelColor: AppColors.slate,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w900),
+              labelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
               tabs: const [
                 Tab(
                   icon: Icon(Icons.person_outline_rounded),
@@ -262,7 +281,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       onRefresh: _loadProfile,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+        padding: const EdgeInsets.fromLTRB(16, 2, 16, 30),
         children: [
           _buildIdentityCard(appState),
           if (_loadingProfile) ...[
@@ -281,6 +300,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             title: 'Informasi Akun',
             subtitle: 'Data utama akun ERPNext',
             icon: Icons.account_circle_outlined,
+            accent: _accentBlue,
             children: [
               _DetailRow(
                 icon: Icons.person_outline_rounded,
@@ -346,7 +366,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               elevation: 0,
               minimumSize: const Size.fromHeight(50),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
               ),
             ),
             icon: const Icon(Icons.system_update_alt_rounded),
@@ -362,7 +382,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               foregroundColor: AppColors.primary,
               minimumSize: const Size.fromHeight(50),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
               ),
               side: BorderSide(
                 color: AppColors.primary.withValues(alpha: 0.22),
@@ -383,7 +403,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               elevation: 0,
               minimumSize: const Size.fromHeight(50),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(18),
                 side: const BorderSide(color: Color(0xFFFECACA)),
               ),
             ),
@@ -431,16 +451,20 @@ class _ProfileScreenState extends State<ProfileScreen>
     final email = _profileValue('email', fallback: appState.currentUser);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.white, Color(0xFFEFFCFB)],
+        ),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: _accentTeal.withValues(alpha: 0.16)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryDark.withValues(alpha: 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: _accentTeal.withValues(alpha: 0.11),
+            blurRadius: 26,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -450,13 +474,18 @@ class _ProfileScreenState extends State<ProfileScreen>
           Stack(
             clipBehavior: Clip.none,
             children: [
-              _ProfileAvatar(imageUrl: _absoluteImageUrl(appState)),
+              _ProfileAvatar(
+                imageUrl: _absoluteImageUrl(appState),
+                accent: _accentTeal,
+              ),
               Positioned(
                 right: -4,
                 bottom: -4,
                 child: Material(
-                  color: AppColors.white,
+                  color: _accentTeal,
                   shape: const CircleBorder(),
+                  elevation: 8,
+                  shadowColor: _accentTeal.withValues(alpha: 0.28),
                   child: InkWell(
                     customBorder: const CircleBorder(),
                     onTap: _uploadingImage ? null : _chooseProfilePhoto,
@@ -470,7 +499,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                             )
                           : const Icon(
                               Icons.camera_alt_rounded,
-                              color: AppColors.primary,
+                              color: AppColors.white,
                               size: 18,
                             ),
                     ),
@@ -510,15 +539,20 @@ class _ProfileScreenState extends State<ProfileScreen>
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    _IdentityBadge(label: appState.userRole),
+                    _IdentityBadge(
+                      label: appState.userRole,
+                      color: _accentPurple,
+                    ),
                     if (appState.selectedSiteName.trim().isNotEmpty)
                       _IdentityBadge(
                         label: appState.selectedSiteName,
                         icon: Icons.business_rounded,
+                        color: _accentBlue,
                       ),
                     _IdentityBadge(
                       label: appState.isAuthenticated ? 'Aktif' : 'Tidak Aktif',
                       icon: Icons.verified_rounded,
+                      color: AppColors.success,
                     ),
                   ],
                 ),
@@ -536,6 +570,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       title: 'Informasi Karyawan',
       subtitle: appState.currentEmployee ?? 'Data Employee',
       icon: Icons.business_center_outlined,
+      accent: _accentPurple,
       children: [
         _DetailRow(
           icon: Icons.person_pin_outlined,
@@ -579,6 +614,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           ? appState.salesIdentityError!
           : 'Akun sudah terhubung ke Sales Person',
       icon: hasError ? Icons.warning_amber_rounded : Icons.handshake_outlined,
+      accent: hasError ? AppColors.warning : _accentOrange,
       action: IconButton(
         tooltip: 'Cek ulang mapping',
         onPressed: appState.resolveCurrentSalesIdentity,
@@ -607,25 +643,25 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _buildSecurityTab() {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 30),
       children: [
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: _accentPurple.withValues(alpha: 0.16)),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primaryDark.withValues(alpha: 0.04),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
+                color: _accentPurple.withValues(alpha: 0.10),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
               ),
             ],
           ),
           child: const Row(
             children: [
-              _SecurityIcon(),
+              _SecurityIcon(color: _accentPurple),
               SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -659,6 +695,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           title: 'Ubah Password',
           subtitle: 'Pastikan password baru aman dan mudah Anda ingat',
           icon: Icons.lock_reset_rounded,
+          accent: _accentPurple,
           children: [
             Form(
               key: _passwordFormKey,
@@ -722,7 +759,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.surfaceMuted,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(18),
                       border: Border.all(color: AppColors.border),
                     ),
                     child: SwitchListTile.adaptive(
@@ -752,7 +789,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       backgroundColor: AppColors.primary,
                       minimumSize: const Size.fromHeight(50),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(18),
                       ),
                     ),
                     icon: _changingPassword
@@ -780,6 +817,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           title: 'Tips Keamanan',
           subtitle: 'Panduan singkat menjaga akun tetap aman',
           icon: Icons.verified_user_outlined,
+          accent: _accentSky,
           children: const [
             _DetailRow(
               icon: Icons.password_rounded,
@@ -909,8 +947,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 
 class _ProfileAvatar extends StatelessWidget {
   final String? imageUrl;
+  final Color accent;
 
-  const _ProfileAvatar({required this.imageUrl});
+  const _ProfileAvatar({required this.imageUrl, required this.accent});
 
   @override
   Widget build(BuildContext context) {
@@ -919,23 +958,27 @@ class _ProfileAvatar extends StatelessWidget {
       height: 82,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: AppColors.softGreen,
-        shape: BoxShape.circle,
+        color: accent.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(color: AppColors.white, width: 3),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.20),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: imageUrl == null
-          ? const Icon(Icons.person_rounded, color: AppColors.primary, size: 44)
+          ? Icon(Icons.person_rounded, color: accent, size: 44)
           : Image.network(
               imageUrl!,
               cacheWidth: 180,
               cacheHeight: 180,
               filterQuality: FilterQuality.medium,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const Icon(
-                Icons.person_rounded,
-                color: AppColors.primary,
-                size: 44,
-              ),
+              errorBuilder: (_, _, _) =>
+                  Icon(Icons.person_rounded, color: accent, size: 44),
             ),
     );
   }
@@ -944,29 +987,34 @@ class _ProfileAvatar extends StatelessWidget {
 class _IdentityBadge extends StatelessWidget {
   final String label;
   final IconData? icon;
+  final Color color;
 
-  const _IdentityBadge({required this.label, this.icon});
+  const _IdentityBadge({
+    required this.label,
+    this.icon,
+    this.color = AppColors.primary,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.softGreen,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 13, color: AppColors.primary),
+            Icon(icon, size: 13, color: color),
             const SizedBox(width: 4),
           ],
           Text(
             label,
-            style: const TextStyle(
-              color: AppColors.primary,
+            style: TextStyle(
+              color: color,
               fontSize: 11,
               fontWeight: FontWeight.w900,
             ),
@@ -981,6 +1029,7 @@ class _SectionCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
+  final Color accent;
   final Widget? action;
   final List<Widget> children;
 
@@ -989,17 +1038,25 @@ class _SectionCard extends StatelessWidget {
     required this.subtitle,
     required this.icon,
     required this.children,
+    this.accent = AppColors.primary,
     this.action,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: accent.withValues(alpha: 0.14)),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -1009,10 +1066,10 @@ class _SectionCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(12),
+                  color: accent.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(icon, color: AppColors.primary, size: 21),
+                child: Icon(icon, color: accent, size: 21),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -1041,9 +1098,9 @@ class _SectionCard extends StatelessWidget {
               ?action,
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           const Divider(height: 1),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           ...children,
         ],
       ),
@@ -1067,7 +1124,7 @@ class _DetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 11),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         border: isLast
             ? null
@@ -1075,7 +1132,15 @@ class _DetailRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 19, color: AppColors.slate),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, size: 17, color: AppColors.slate),
+          ),
           const SizedBox(width: 11),
           Expanded(
             child: Text(
@@ -1113,7 +1178,7 @@ class _ErrorCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFFEF2F2),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: const Color(0xFFFECACA)),
       ),
       child: Row(
@@ -1151,7 +1216,7 @@ class _PhotoSourceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       tileColor: AppColors.surfaceMuted,
       leading: Icon(icon, color: AppColors.primary),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
@@ -1202,7 +1267,7 @@ class _PasswordField extends StatelessWidget {
         filled: true,
         fillColor: AppColors.surfaceMuted,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide.none,
         ),
       ),
@@ -1211,7 +1276,9 @@ class _PasswordField extends StatelessWidget {
 }
 
 class _SecurityIcon extends StatelessWidget {
-  const _SecurityIcon();
+  final Color color;
+
+  const _SecurityIcon({this.color = AppColors.primary});
 
   @override
   Widget build(BuildContext context) {
@@ -1219,14 +1286,10 @@ class _SecurityIcon extends StatelessWidget {
       width: 48,
       height: 48,
       decoration: BoxDecoration(
-        color: AppColors.softGreen,
-        borderRadius: BorderRadius.circular(15),
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(18),
       ),
-      child: const Icon(
-        Icons.security_rounded,
-        color: AppColors.primary,
-        size: 26,
-      ),
+      child: Icon(Icons.security_rounded, color: color, size: 26),
     );
   }
 }

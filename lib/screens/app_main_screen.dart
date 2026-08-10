@@ -12,6 +12,7 @@ import '../utils/erp_format.dart';
 import '../config/mobile_role_registry.dart';
 import 'auth/login_screen.dart';
 import 'profile/profile_screen.dart';
+import 'shared/module_screen_registry.dart';
 
 import 'tabs/dashboard_tab.dart';
 import 'purchase/purchase_order/create_purchase_order_screen.dart';
@@ -62,11 +63,21 @@ class _AppMainScreenState extends State<AppMainScreen> {
 
   int _totalTodoCount(AppState appState) => appState.approvalTodoCount;
 
+  List<ModuleLaunchEntry> _workspaceEntries(AppState appState) {
+    return ModuleScreenRegistry.launchEntriesFor(
+      appState.mobileAccess.enabledModules,
+    );
+  }
+
   List<_MainTabItem> _tabs(AppState appState) {
+    final workspaceEntries = _workspaceEntries(appState);
+    final singleWorkspace = workspaceEntries.length == 1;
     final tabs = <_MainTabItem>[
       _MainTabItem(
         keyName: MobileModule.dashboard,
-        child: const DashboardTab(),
+        child: singleWorkspace
+            ? workspaceEntries.single.screen
+            : const DashboardTab(),
         destination: NavigationDestination(
           icon: const Icon(Icons.home_outlined),
           selectedIcon: const Icon(Icons.home_rounded),
@@ -180,6 +191,8 @@ class _AppMainScreenState extends State<AppMainScreen> {
 
     final tabs = _tabs(appState);
     final selectedIndex = _currentIndex.clamp(0, tabs.length - 1);
+    final workspaceEntries = _workspaceEntries(appState);
+    final singleWorkspace = selectedIndex == 0 && workspaceEntries.length == 1;
     if (_pendingOpenApprovalTodo &&
         tabs.any((tab) => tab.keyName == MobileModule.approvals)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -192,8 +205,16 @@ class _AppMainScreenState extends State<AppMainScreen> {
       });
     }
     final selectedTab = tabs[selectedIndex];
-    final showShellAppBar = selectedTab.keyName != _profileTabKey;
-    final showCreateFab = selectedTab.keyName == MobileModule.dashboard;
+    if (singleWorkspace) {
+      return KeyedSubtree(
+        key: ValueKey(selectedTab.keyName),
+        child: selectedTab.child,
+      );
+    }
+    final showShellAppBar =
+        selectedTab.keyName != _profileTabKey && !singleWorkspace;
+    final showCreateFab =
+        selectedTab.keyName == MobileModule.dashboard && !singleWorkspace;
 
     return PopScope(
       canPop: selectedIndex == 0,
@@ -206,31 +227,29 @@ class _AppMainScreenState extends State<AppMainScreen> {
         backgroundColor: AppColors.background,
         appBar: showShellAppBar
             ? AppBar(
-                toolbarHeight: 68,
+                toolbarHeight: 76,
                 backgroundColor: AppColors.white,
                 elevation: 0,
                 surfaceTintColor: Colors.transparent,
                 centerTitle: false,
-                titleSpacing: 16,
+                titleSpacing: 18,
                 title: _TmsxHeaderTitle(appState: appState),
                 actions: [
                   if (appState.canUseApprovals)
-                    IconButton(
+                    _TopBarActionButton(
                       tooltip: _totalTodoCount(appState) > 0
                           ? '${_totalTodoCount(appState)} approval menunggu'
                           : 'Tidak ada approval menunggu',
-                      onPressed: () {
+                      icon: Icons.assignment_turned_in_outlined,
+                      count: _totalTodoCount(appState),
+                      onTap: () {
                         final todoIndex = tabs.indexWhere(
                           (tab) => tab.keyName == MobileModule.approvals,
                         );
                         if (todoIndex >= 0) _changeTab(todoIndex);
                       },
-                      icon: _todoIcon(
-                        Icons.assignment_turned_in_outlined,
-                        _totalTodoCount(appState),
-                      ),
                     ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 18),
                 ],
               )
             : null,
@@ -250,7 +269,7 @@ class _AppMainScreenState extends State<AppMainScreen> {
         ),
         floatingActionButton: showCreateFab
             ? Padding(
-                padding: const EdgeInsets.only(bottom: 2),
+                padding: const EdgeInsets.only(bottom: 8),
                 child: _CreateButton(
                   onTap: () => _showQuickCreateSheet(context, appState),
                 ),
@@ -1060,9 +1079,20 @@ class _TmsxHeaderTitle extends StatelessWidget {
     return Row(
       children: [
         Container(
-          width: 50,
-          height: 50,
-          padding: const EdgeInsets.all(6),
+          width: 46,
+          height: 46,
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryDark.withValues(alpha: 0.05),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
           child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
         ),
         const SizedBox(width: 12),
@@ -1100,6 +1130,78 @@ class _TmsxHeaderTitle extends StatelessWidget {
   }
 }
 
+class _TopBarActionButton extends StatelessWidget {
+  final String tooltip;
+  final IconData icon;
+  final int count;
+  final VoidCallback onTap;
+
+  const _TopBarActionButton({
+    required this.tooltip,
+    required this.icon,
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryDark.withValues(alpha: 0.05),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, color: AppColors.primary, size: 22),
+              if (count > 0)
+                Positioned(
+                  right: -5,
+                  top: -5,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 18),
+                    height: 18,
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.danger,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: AppColors.white, width: 1.5),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      count > 99 ? '99+' : '$count',
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TmsxBottomNav extends StatelessWidget {
   final List<_MainTabItem> tabs;
   final int selectedIndex;
@@ -1127,36 +1229,34 @@ class _TmsxBottomNav extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        minimum: EdgeInsets.fromLTRB(14, 3, 14, bottomPadding > 0 ? 6 : 10),
-        child: SizedBox(
-          height: 58,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.border),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryDark.withValues(alpha: 0.07),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                for (var index = 0; index < tabs.length; index++)
-                  Expanded(
-                    child: _TmsxBottomNavItem(
-                      tab: tabs[index],
-                      selected: index == selectedIndex,
-                      compact: tabs.length >= 4,
-                      onTap: () => onSelected(index),
-                    ),
+        minimum: EdgeInsets.fromLTRB(18, 4, 18, bottomPadding > 0 ? 8 : 14),
+        child: Container(
+          height: 62,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.white.withValues(alpha: 0.96),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.white),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryDark.withValues(alpha: 0.11),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              for (var index = 0; index < tabs.length; index++)
+                Expanded(
+                  child: _TmsxBottomNavItem(
+                    tab: tabs[index],
+                    selected: index == selectedIndex,
+                    compact: tabs.length >= 4,
+                    onTap: () => onSelected(index),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),
@@ -1239,20 +1339,35 @@ class _TmsxBottomNavItem extends StatelessWidget {
           margin: EdgeInsets.symmetric(horizontal: compact ? 1 : 2),
           padding: EdgeInsets.symmetric(
             horizontal: compact ? 3 : 7,
-            vertical: 4,
+            vertical: 5,
           ),
           decoration: BoxDecoration(
             color: selected
-                ? AppColors.softGreen.withValues(alpha: 0.78)
+                ? AppColors.softGreen.withValues(alpha: 0.95)
                 : Colors.transparent,
-            borderRadius: BorderRadius.circular(15),
+            borderRadius: BorderRadius.circular(18),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _BottomNavIcon(icon: icon, color: color, count: tab.badgeCount),
-              const SizedBox(height: 2),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: selected ? 30 : 26,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                alignment: Alignment.center,
+                child: _BottomNavIcon(
+                  icon: icon,
+                  color: selected ? AppColors.white : color,
+                  count: tab.badgeCount,
+                  size: selected ? 18 : 21,
+                ),
+              ),
+              const SizedBox(height: 3),
               Flexible(
                 child: Text(
                   label,
@@ -1278,16 +1393,18 @@ class _BottomNavIcon extends StatelessWidget {
   final IconData icon;
   final Color color;
   final int count;
+  final double size;
 
   const _BottomNavIcon({
     required this.icon,
     required this.color,
     required this.count,
+    required this.size,
   });
 
   @override
   Widget build(BuildContext context) {
-    final iconWidget = Icon(icon, color: color, size: 22);
+    final iconWidget = Icon(icon, color: color, size: size);
     if (count <= 0) return iconWidget;
     return Badge.count(
       count: count,
