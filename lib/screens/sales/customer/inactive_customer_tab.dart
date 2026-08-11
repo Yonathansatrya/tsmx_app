@@ -463,20 +463,16 @@ class _DocumentTypeSheetState extends State<_DocumentTypeSheet> {
             ),
             const SizedBox(height: 10),
             ...filtered.map(
-              (option) => CheckboxListTile(
-                value: _selected.contains(option.$1),
-                onChanged: (_) => _toggle(option.$1),
-                title: Text(
-                  option.$1,
-                  style: const TextStyle(
-                    color: AppColors.navy,
-                    fontWeight: FontWeight.w900,
-                  ),
+              (option) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SalesPickerOptionTile(
+                  title: option.$1,
+                  subtitle: option.$2,
+                  icon: Icons.description_outlined,
+                  selected: _selected.contains(option.$1),
+                  accent: _inactiveGreen,
+                  onTap: () => _toggle(option.$1),
                 ),
-                subtitle: Text(option.$2),
-                controlAffinity: ListTileControlAffinity.leading,
-                contentPadding: EdgeInsets.zero,
-                activeColor: AppColors.primary,
               ),
             ),
             const SizedBox(height: 8),

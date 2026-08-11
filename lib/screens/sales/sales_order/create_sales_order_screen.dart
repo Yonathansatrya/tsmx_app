@@ -11,6 +11,7 @@ import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_item_autocomplete_field.dart';
+import '../shared/sales_ui.dart';
 
 class CreateSalesOrderScreen extends StatefulWidget {
   final String? editOrderId;
@@ -4111,23 +4112,25 @@ class _CustomerHistorySheetState extends State<_CustomerHistorySheet>
                         Text('${row.date} | ${row.status}'),
                         const SizedBox(height: 8),
                         if (items is List)
-                          ...items.map(
-                            (item) => ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                item is Map
-                                    ? item['item_name']?.toString() ??
-                                          item['item_code']?.toString() ??
-                                          'Item'
-                                    : 'Item',
+                          ...items.map((item) {
+                            final title = item is Map
+                                ? item['item_name']?.toString() ??
+                                      item['item_code']?.toString() ??
+                                      'Item'
+                                : 'Item';
+                            final qty = item is Map
+                                ? 'Qty ${item['qty']?.toString() ?? '0'}'
+                                : '';
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: SalesPickerOptionTile(
+                                title: title,
+                                subtitle: qty,
+                                icon: Icons.inventory_2_rounded,
+                                onTap: () {},
                               ),
-                              trailing: Text(
-                                item is Map
-                                    ? 'x${item['qty']?.toString() ?? '0'}'
-                                    : '',
-                              ),
-                            ),
-                          ),
+                            );
+                          }),
                       ],
                     ),
                   ),
@@ -4159,18 +4162,17 @@ class _CustomerHistorySheetState extends State<_CustomerHistorySheet>
             child: Text('Belum ada transaksi customer ini.'),
           ),
         ...rows.map(
-          (row) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            onTap: () => _showDetail(row),
-            title: Text(row.id),
-            subtitle: Text(
-              '${row.date} | ${row.status}'
-              '${row.itemsCount > 0 ? ' | Qty ${row.itemsCount}' : ''}'
-              '${row.outstanding > 0 ? ' | Outstanding Rp ${row.outstanding.toStringAsFixed(0)}' : ''}',
-            ),
-            trailing: Text(
-              'Rp ${row.total.toStringAsFixed(0)}',
-              style: const TextStyle(fontWeight: FontWeight.w800),
+          (row) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SalesPickerOptionTile(
+              title: row.id,
+              subtitle:
+                  '${row.date} | ${row.status}'
+                  '${row.itemsCount > 0 ? ' | Qty ${row.itemsCount}' : ''}'
+                  '${row.outstanding > 0 ? ' | Outstanding Rp ${row.outstanding.toStringAsFixed(0)}' : ''}'
+                  ' | Rp ${row.total.toStringAsFixed(0)}',
+              icon: Icons.receipt_long_rounded,
+              onTap: () => _showDetail(row),
             ),
           ),
         ),
@@ -4325,17 +4327,48 @@ class _AttachmentCard extends StatelessWidget {
             ],
           ),
           ...photos.asMap().entries.map(
-            (entry) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.image_outlined),
-              title: Text(
-                entry.value.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: IconButton(
-                onPressed: () => onRemove(entry.key),
-                icon: const Icon(Icons.close_rounded),
+            (entry) => Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.image_outlined,
+                        color: AppColors.primary,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        entry.value.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => onRemove(entry.key),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

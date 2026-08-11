@@ -1148,42 +1148,15 @@ class _AttendanceTabState extends State<AttendanceTab> {
                                 ),
                                 itemCount: filtered.length,
                                 separatorBuilder: (context, index) =>
-                                    const Divider(
-                                      height: 1,
-                                      color: AppColors.border,
-                                    ),
+                                    const SizedBox(height: 8),
                                 itemBuilder: (context, index) {
                                   final row = filtered[index];
-                                  return ListTile(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    leading: const CircleAvatar(
-                                      backgroundColor: AppColors.softGreen,
-                                      foregroundColor: AppColors.primary,
-                                      child: Icon(Icons.storefront_outlined),
-                                    ),
-                                    title: Text(
-                                      row.name,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w900,
-                                      ),
-                                    ),
-                                    subtitle: row.id == row.name
-                                        ? null
-                                        : Text(
-                                            row.id,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                    trailing: customer?.id == row.id
-                                        ? const Icon(
-                                            Icons.check_circle_rounded,
-                                            color: AppColors.success,
-                                          )
-                                        : null,
+                                  return SalesPickerOptionTile(
+                                    title: row.name,
+                                    subtitle: row.id == row.name ? '' : row.id,
+                                    icon: Icons.storefront_outlined,
+                                    selected: customer?.id == row.id,
+                                    accent: _visitGreen,
                                     onTap: () =>
                                         Navigator.pop(sheetContext, row),
                                   );

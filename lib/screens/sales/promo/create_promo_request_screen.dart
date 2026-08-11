@@ -1160,34 +1160,15 @@ class _LinkSearchSheetState extends State<_LinkSearchSheet> {
     }
     return ListView.separated(
       itemCount: _rows.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final row = _rows[index];
         final title = widget.titleBuilder(row);
         final subtitle = widget.subtitleBuilder?.call(row) ?? '';
-        return ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.softGreen,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(widget.icon, color: AppColors.primary),
-          ),
-          title: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.navy,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          subtitle: subtitle.isEmpty
-              ? null
-              : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+        return SalesPickerOptionTile(
+          title: title,
+          subtitle: subtitle,
+          icon: widget.icon,
           onTap: () => Navigator.of(context).pop(row),
         );
       },
@@ -1369,40 +1350,16 @@ class _ItemSearchSheetState extends State<_ItemSearchSheet> {
     }
     return ListView.separated(
       itemCount: _items.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final item = _items[index];
         final name = _text(item['name']);
         final itemName = _text(item['item_name'], fallback: name);
         final uom = _text(item['stock_uom']);
-        return ListTile(
-          contentPadding: EdgeInsets.zero,
-          leading: Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppColors.softGreen,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.inventory_2_rounded,
-              color: AppColors.primary,
-            ),
-          ),
-          title: Text(
-            itemName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.navy,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          subtitle: Text(
-            [name, uom].where((value) => value.isNotEmpty).join(' - '),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+        return SalesPickerOptionTile(
+          title: itemName,
+          subtitle: [name, uom].where((value) => value.isNotEmpty).join(' - '),
+          icon: Icons.inventory_2_rounded,
           onTap: () => Navigator.of(context).pop(item),
         );
       },
