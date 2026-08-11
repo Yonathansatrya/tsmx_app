@@ -175,12 +175,9 @@ class _WarehouseQcEvidenceScreenState extends State<WarehouseQcEvidenceScreen> {
                   'Gunakan foto yang jelas dan fokus pada kondisi barang atau hasil pengujian.',
             ),
             warehouseSectionGap,
-            TextField(
+            WarehouseSearchField(
               controller: _search,
-              decoration: const InputDecoration(
-                labelText: 'Cari inspeksi, item, atau referensi',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
+              hintText: 'Cari inspeksi, item, atau referensi',
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<int>(

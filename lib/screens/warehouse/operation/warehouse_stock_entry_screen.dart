@@ -260,9 +260,9 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
                 ),
                 const SizedBox(height: 8),
                 if (_rows.isEmpty)
-                  const Card(
+                  const WarehouseModernCard(
                     child: Padding(
-                      padding: EdgeInsets.all(18),
+                      padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text(
                         'Belum ada item. Tekan Tambah untuk memilih item.',
                         textAlign: TextAlign.center,
@@ -276,19 +276,10 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
                   ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.danger.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(
-                        color: AppColors.danger,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                  WarehouseInfoPanel(
+                    icon: Icons.error_outline_rounded,
+                    color: AppColors.danger,
+                    message: _error!,
                   ),
                 ],
                 const SizedBox(height: 18),
@@ -338,35 +329,13 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
           onChanged(next.name);
           field.didChange(next.name);
         },
-        borderRadius: BorderRadius.circular(12),
-        child: InputDecorator(
-          decoration: InputDecoration(
-            labelText: label,
-            prefixIcon: const Icon(Icons.warehouse_outlined),
-            suffixIcon: const Icon(Icons.search_rounded),
-            errorText: field.errorText,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                selected?.name ?? 'Pilih atau cari gudang',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: selected == null ? AppColors.slate : AppColors.navy,
-                  fontWeight: selected == null
-                      ? FontWeight.w500
-                      : FontWeight.w800,
-                ),
-              ),
-              if (selected != null && _warehouseSubtitle(selected).isNotEmpty)
-                Text(
-                  _warehouseSubtitle(selected),
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.slate, fontSize: 11),
-                ),
-            ],
-          ),
+        borderRadius: BorderRadius.circular(18),
+        child: WarehouseSelectTile(
+          label: label,
+          value: selected?.name ?? 'Pilih atau cari gudang',
+          subtitle: selected == null ? null : _warehouseSubtitle(selected),
+          icon: Icons.warehouse_outlined,
+          errorText: field.errorText,
         ),
       ),
     );
@@ -563,26 +532,50 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
 
   Widget _itemCard(int index, _WarehouseOperationRow row) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
-    child: Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        leading: CircleAvatar(
-          backgroundColor: AppColors.softGreen,
-          foregroundColor: AppColors.primary,
-          child: Text('${index + 1}'),
-        ),
-        title: Text(
-          row.item.name,
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        subtitle: Text('${row.item.sku} | Qty ${row.qty}'),
-        trailing: IconButton(
-          tooltip: 'Hapus item',
-          onPressed: () => setState(() => _rows.removeAt(index)),
-          icon: const Icon(Icons.delete_outline_rounded),
-        ),
+    child: WarehouseModernCard(
+      child: InkWell(
         onTap: () => _askQuantity(row.item, existingIndex: index),
+        borderRadius: BorderRadius.circular(18),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: AppColors.softGreen,
+              foregroundColor: AppColors.primary,
+              child: Text('${index + 1}'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    row.item.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${row.item.sku} | Qty ${row.qty}',
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Hapus item',
+              onPressed: () => setState(() => _rows.removeAt(index)),
+              icon: const Icon(Icons.delete_outline_rounded),
+            ),
+          ],
+        ),
       ),
     ),
   );

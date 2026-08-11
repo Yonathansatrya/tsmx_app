@@ -110,12 +110,9 @@ class _WarehouseRejectMonitoringScreenState
                   'Daftar ini berisi hasil inspeksi yang ditolak dan perlu ditindaklanjuti.',
             ),
             warehouseSectionGap,
-            TextField(
+            WarehouseSearchField(
               controller: _search,
-              decoration: const InputDecoration(
-                labelText: 'Cari item, inspeksi, atau referensi',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
+              hintText: 'Cari item, inspeksi, atau referensi',
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(

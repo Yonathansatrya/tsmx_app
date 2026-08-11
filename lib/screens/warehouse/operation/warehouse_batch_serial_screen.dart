@@ -113,12 +113,9 @@ class _BatchViewState extends State<_BatchView> {
             ],
           ),
           const SizedBox(height: 12),
-          TextField(
+          WarehouseSearchField(
             controller: _search,
-            decoration: const InputDecoration(
-              labelText: 'Cari nomor batch atau item',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
+            hintText: 'Cari nomor batch atau item',
           ),
           if (_loading) ...[
             const SizedBox(height: 12),
@@ -252,12 +249,9 @@ class _SerialViewState extends State<_SerialView> {
             icon: Icons.numbers_rounded,
           ),
           warehouseSectionGap,
-          TextField(
+          WarehouseSearchField(
             controller: _search,
-            decoration: const InputDecoration(
-              labelText: 'Cari serial, item, atau batch',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
+            hintText: 'Cari serial, item, atau batch',
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(

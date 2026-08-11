@@ -107,12 +107,9 @@ class _WarehouseIncomingQcScreenState extends State<WarehouseIncomingQcScreen> {
                   'Data berasal dari Quality Inspection bertipe Incoming. Gunakan referensi Purchase Receipt untuk melacak penerimaan.',
             ),
             warehouseSectionGap,
-            TextField(
+            WarehouseSearchField(
               controller: _search,
-              decoration: const InputDecoration(
-                labelText: 'Cari item, inspeksi, atau penerimaan',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
+              hintText: 'Cari item, inspeksi, atau penerimaan',
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(

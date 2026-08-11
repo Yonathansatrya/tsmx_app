@@ -95,12 +95,9 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
                 'Umur dihitung dari penerimaan terakhir dalam 365 hari. Item tanpa penerimaan pada periode tersebut ditandai >365 hari.',
           ),
           warehouseSectionGap,
-          TextField(
+          WarehouseSearchField(
             controller: _search,
-            decoration: const InputDecoration(
-              labelText: 'Cari item atau kode',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
+            hintText: 'Cari item atau kode',
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(

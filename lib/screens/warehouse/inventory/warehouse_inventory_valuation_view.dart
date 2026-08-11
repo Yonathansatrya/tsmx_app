@@ -107,12 +107,9 @@ class _WarehouseInventoryValuationViewState
             ),
           ],
           warehouseSectionGap,
-          TextField(
+          WarehouseSearchField(
             controller: _search,
-            decoration: const InputDecoration(
-              labelText: 'Cari item atau kode',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
+            hintText: 'Cari item atau kode',
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(

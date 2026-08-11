@@ -86,12 +86,9 @@ class _WarehouseOperationHistoryScreenState
               icon: Icons.history_rounded,
             ),
             const SizedBox(height: 14),
-            TextField(
+            WarehouseSearchField(
               controller: _search,
-              decoration: const InputDecoration(
-                labelText: 'Cari nomor dokumen atau gudang',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
+              hintText: 'Cari nomor dokumen atau gudang',
             ),
             const SizedBox(height: 10),
             SingleChildScrollView(
@@ -112,12 +109,10 @@ class _WarehouseOperationHistoryScreenState
             ],
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: const TextStyle(
-                  color: AppColors.danger,
-                  fontWeight: FontWeight.w800,
-                ),
+              WarehouseInfoPanel(
+                icon: Icons.error_outline_rounded,
+                color: AppColors.danger,
+                message: _error!,
               ),
             ],
             warehouseSectionGap,
@@ -183,46 +178,86 @@ class _WarehouseOperationHistoryScreenState
 
   Widget _stockEntryCard(StockEntry row) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
-    child: Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(14),
-        leading: CircleAvatar(
-          backgroundColor: AppColors.softGreen,
-          foregroundColor: AppColors.primary,
-          child: Icon(_iconForType(row.stockEntryType)),
-        ),
-        title: Text(
-          row.id,
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        subtitle: Text(
-          '${row.stockEntryType} | ${row.date}\n${_warehouseRoute(row)}',
-        ),
-        isThreeLine: true,
-        trailing: ErpStatusBadge(statusText: row.statusText),
+    child: WarehouseModernCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            backgroundColor: AppColors.softGreen,
+            foregroundColor: AppColors.primary,
+            child: Icon(_iconForType(row.stockEntryType)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.id,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${row.stockEntryType} | ${row.date}\n${_warehouseRoute(row)}',
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ErpStatusBadge(statusText: row.statusText),
+        ],
       ),
     ),
   );
 
   Widget _reconciliationCard(StockReconciliationSummary row) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
-    child: Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(14),
-        leading: const CircleAvatar(
-          backgroundColor: AppColors.softGreen,
-          foregroundColor: AppColors.primary,
-          child: Icon(Icons.inventory_outlined),
-        ),
-        title: Text(
-          row.id,
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        subtitle: Text('Stock Opname | ${row.date}\n${row.company}'),
-        isThreeLine: true,
-        trailing: ErpStatusBadge(statusText: row.statusText),
+    child: WarehouseModernCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const CircleAvatar(
+            backgroundColor: AppColors.softGreen,
+            foregroundColor: AppColors.primary,
+            child: Icon(Icons.inventory_outlined),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.id,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Stock Opname | ${row.date}\n${row.company}',
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ErpStatusBadge(statusText: row.statusText),
+        ],
       ),
     ),
   );

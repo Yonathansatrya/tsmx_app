@@ -86,12 +86,9 @@ class _WarehouseDeadStockViewState extends State<WarehouseDeadStockView> {
                 'Nilai modal tertahan: Rp ${formatErpCurrency(totalValue)}. Pergerakan diperiksa maksimal 365 hari terakhir.',
           ),
           warehouseSectionGap,
-          TextField(
+          WarehouseSearchField(
             controller: _search,
-            decoration: const InputDecoration(
-              labelText: 'Cari item atau kode',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
+            hintText: 'Cari item atau kode',
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(

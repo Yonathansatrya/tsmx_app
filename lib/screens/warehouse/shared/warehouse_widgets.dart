@@ -143,6 +143,188 @@ class WarehouseMetricTile extends StatelessWidget {
   );
 }
 
+class WarehouseModernCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final Color color;
+  final Color borderColor;
+
+  const WarehouseModernCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(14),
+    this.color = AppColors.white,
+    this.borderColor = AppColors.border,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: padding,
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: borderColor),
+      boxShadow: AppColors.cardShadow,
+    ),
+    child: child,
+  );
+}
+
+class WarehouseSearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hintText;
+  final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
+  final bool autofocus;
+
+  const WarehouseSearchField({
+    super.key,
+    required this.controller,
+    required this.hintText,
+    this.onSubmitted,
+    this.onChanged,
+    this.autofocus = false,
+  });
+
+  @override
+  Widget build(BuildContext context) => TextField(
+    controller: controller,
+    autofocus: autofocus,
+    textInputAction: TextInputAction.search,
+    onSubmitted: onSubmitted,
+    onChanged: onChanged,
+    decoration: InputDecoration(
+      hintText: hintText,
+      prefixIcon: const Icon(Icons.search_rounded),
+      filled: true,
+      fillColor: AppColors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+      ),
+    ),
+  );
+}
+
+class WarehouseSelectTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final String? subtitle;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final String? errorText;
+
+  const WarehouseSelectTile({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.subtitle,
+    this.onTap,
+    this.errorText,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: errorText == null ? AppColors.border : AppColors.danger,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.softGreen,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(icon, color: AppColors.primary, size: 20),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    if (subtitle?.isNotEmpty == true) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (onTap != null)
+                const Icon(Icons.search_rounded, color: AppColors.slate),
+            ],
+          ),
+        ),
+      ),
+      if (errorText != null) ...[
+        const SizedBox(height: 5),
+        Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Text(
+            errorText!,
+            style: const TextStyle(
+              color: AppColors.danger,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ],
+    ],
+  );
+}
+
 class WarehouseActionGridCard extends StatelessWidget {
   final String title;
   final String subtitle;

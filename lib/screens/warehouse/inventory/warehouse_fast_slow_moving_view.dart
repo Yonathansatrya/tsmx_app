@@ -90,12 +90,9 @@ class _WarehouseFastSlowMovingViewState
                 'Fast moving memiliki qty keluar minimal sebesar rata-rata. Slow moving berada di bawah rata-rata, termasuk yang belum bergerak.',
           ),
           warehouseSectionGap,
-          TextField(
+          WarehouseSearchField(
             controller: _search,
-            decoration: const InputDecoration(
-              labelText: 'Cari item atau kode',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
+            hintText: 'Cari item atau kode',
           ),
           const SizedBox(height: 10),
           DropdownButtonFormField<String>(

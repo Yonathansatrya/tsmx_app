@@ -173,9 +173,9 @@ class _WarehouseStockOpnameScreenState
                 ),
                 const SizedBox(height: 8),
                 if (_rows.isEmpty)
-                  const Card(
+                  const WarehouseModernCard(
                     child: Padding(
-                      padding: EdgeInsets.all(18),
+                      padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text(
                         'Belum ada item dihitung. Pilih Tambah Item lalu masukkan stok fisik.',
                         textAlign: TextAlign.center,
@@ -222,27 +222,12 @@ class _WarehouseStockOpnameScreenState
     final selected = _selectedWarehouse;
     return InkWell(
       onTap: _showWarehousePicker,
-      borderRadius: BorderRadius.circular(12),
-      child: InputDecorator(
-        decoration: const InputDecoration(
-          labelText: 'Gudang yang dihitung',
-          prefixIcon: Icon(Icons.warehouse_outlined),
-          suffixIcon: Icon(Icons.search_rounded),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              selected?.name ?? 'Pilih gudang',
-              style: const TextStyle(fontWeight: FontWeight.w900),
-            ),
-            if (selected?.company.isNotEmpty == true)
-              Text(
-                selected!.company,
-                style: const TextStyle(color: AppColors.slate, fontSize: 11),
-              ),
-          ],
-        ),
+      borderRadius: BorderRadius.circular(18),
+      child: WarehouseSelectTile(
+        label: 'Gudang yang dihitung',
+        value: selected?.name ?? 'Pilih gudang',
+        subtitle: selected?.company,
+        icon: Icons.warehouse_outlined,
       ),
     );
   }
@@ -276,8 +261,9 @@ class _WarehouseStockOpnameScreenState
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,43 +287,75 @@ class _WarehouseStockOpnameScreenState
 
   Widget _itemCard(int index, _StockOpnameRow row) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
-    child: Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+    child: WarehouseModernCard(
+      child: InkWell(
         onTap: () => _askPhysicalQty(row.item, existingIndex: index),
-        leading: CircleAvatar(
-          backgroundColor: row.difference == 0
-              ? AppColors.softGreen
-              : AppColors.warning.withValues(alpha: 0.12),
-          foregroundColor: row.difference == 0
-              ? AppColors.success
-              : AppColors.warning,
-          child: Text('${index + 1}'),
-        ),
-        title: Text(
-          row.item.name,
-          style: const TextStyle(fontWeight: FontWeight.w900),
-        ),
-        subtitle: Text(
-          '${row.item.sku}\nSistem ${row.systemQty} | Fisik ${row.physicalQty}',
-        ),
-        isThreeLine: true,
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        borderRadius: BorderRadius.circular(18),
+        child: Row(
           children: [
-            Text(
-              _signed(row.difference),
-              style: TextStyle(
+            CircleAvatar(
+              backgroundColor: row.difference == 0
+                  ? AppColors.softGreen
+                  : AppColors.warning.withValues(alpha: 0.12),
+              foregroundColor: row.difference == 0
+                  ? AppColors.success
+                  : AppColors.warning,
+              child: Text('${index + 1}'),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    row.item.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${row.item.sku} | Sistem ${row.systemQty} | Fisik ${row.physicalQty}',
+                    style: const TextStyle(
+                      color: AppColors.slate,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _signed(row.difference),
+                  style: TextStyle(
+                    color: row.difference == 0
+                        ? AppColors.success
+                        : AppColors.warning,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const Text(
+                  'Selisih',
+                  style: TextStyle(color: AppColors.slate, fontSize: 10),
+                ),
+              ],
+            ),
+            IconButton(
+              tooltip: 'Hapus item',
+              onPressed: () => setState(() => _rows.removeAt(index)),
+              icon: Icon(
+                Icons.close_rounded,
                 color: row.difference == 0
                     ? AppColors.success
                     : AppColors.warning,
-                fontWeight: FontWeight.w900,
               ),
-            ),
-            const Text(
-              'Selisih',
-              style: TextStyle(color: AppColors.slate, fontSize: 10),
             ),
           ],
         ),

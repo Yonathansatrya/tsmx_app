@@ -120,12 +120,9 @@ class _WarehouseProductionQcScreenState
                   'Data berasal dari Quality Inspection dengan tipe In Process.',
             ),
             warehouseSectionGap,
-            TextField(
+            WarehouseSearchField(
               controller: _search,
-              decoration: const InputDecoration(
-                labelText: 'Cari item, inspeksi, atau referensi',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
+              hintText: 'Cari item, inspeksi, atau referensi',
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(

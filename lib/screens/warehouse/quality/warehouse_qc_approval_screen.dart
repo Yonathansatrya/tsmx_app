@@ -161,12 +161,9 @@ class _WarehouseQcApprovalScreenState extends State<WarehouseQcApprovalScreen> {
                   'Approval akan submit Quality Inspection sesuai hasil Accepted atau Rejected yang sudah ditentukan.',
             ),
             warehouseSectionGap,
-            TextField(
+            WarehouseSearchField(
               controller: _search,
-              decoration: const InputDecoration(
-                labelText: 'Cari inspeksi, item, atau referensi',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
+              hintText: 'Cari inspeksi, item, atau referensi',
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(

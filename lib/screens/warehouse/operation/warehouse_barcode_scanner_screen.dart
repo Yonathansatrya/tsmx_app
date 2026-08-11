@@ -349,16 +349,12 @@ class _WarehouseBarcodeScannerScreenState
   Widget _manualInput() => Row(
     children: [
       Expanded(
-        child: TextField(
+        child: WarehouseSearchField(
           controller: _manualCode,
-          textInputAction: TextInputAction.search,
           onSubmitted: (value) {
             if (value.trim().isNotEmpty) _findCode(value);
           },
-          decoration: const InputDecoration(
-            labelText: 'Masukkan Item Code manual',
-            prefixIcon: Icon(Icons.keyboard_outlined),
-          ),
+          hintText: 'Masukkan item code manual',
         ),
       ),
       const SizedBox(width: 8),
