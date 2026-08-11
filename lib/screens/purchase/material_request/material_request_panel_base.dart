@@ -16,6 +16,7 @@ import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../purchase/material_request/create_material_request_screen.dart';
 import '../../purchase/purchase_order/create_purchase_order_screen.dart';
 import '../shared/buying_document_detail_sheet.dart';
+import '../shared/purchase_ui.dart';
 
 enum _MaterialRequestFocusFilter {
   all,
@@ -27,7 +28,14 @@ enum _MaterialRequestFocusFilter {
 }
 
 class MaterialRequestPanel extends StatefulWidget {
-  const MaterialRequestPanel({super.key});
+  final bool canCreateMaterialRequest;
+  final bool canCreatePurchaseOrder;
+
+  const MaterialRequestPanel({
+    super.key,
+    this.canCreateMaterialRequest = true,
+    this.canCreatePurchaseOrder = true,
+  });
 
   @override
   State<MaterialRequestPanel> createState() => _MaterialRequestPanelState();
@@ -39,8 +47,9 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
   _MaterialRequestFocusFilter _focusFilter = _MaterialRequestFocusFilter.all;
   Timer? _searchDebounce;
 
-  static const _chips = <ErpStatusChip<String?>>[
-    ErpStatusChip(label: 'Semua', value: null),
+  static const _allStatusFilter = '__all__';
+  static const _chips = <ErpStatusChip<String>>[
+    ErpStatusChip(label: 'Semua', value: _allStatusFilter),
     ErpStatusChip(label: 'Draft', value: 'Draft'),
     ErpStatusChip(label: 'Pending', value: 'Pending'),
     ErpStatusChip(label: 'Partly Ordered', value: 'Partially Ordered'),
@@ -452,32 +461,19 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
         _PlanningCard(
           items: planningItems,
           onPick: (item) => _openCreate(item: item),
-          onCreateMaterialRequest: _createDraftMrFor,
-          onCreatePurchaseOrder: _openDraftPoFor,
+          onCreateMaterialRequest: widget.canCreateMaterialRequest
+              ? _createDraftMrFor
+              : null,
+          onCreatePurchaseOrder: widget.canCreatePurchaseOrder
+              ? _openDraftPoFor
+              : null,
         ),
 
         const SizedBox(height: 12),
 
-        TextField(
+        PurchaseSearchField(
           onChanged: _searchChanged,
-          decoration: InputDecoration(
-            hintText: 'Cari MR, tipe, company, atau item...',
-            prefixIcon: const Icon(Icons.search_rounded, size: 20),
-            filled: true,
-            fillColor: AppColors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: AppColors.primary.withValues(alpha: 0.1),
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: AppColors.primary.withValues(alpha: 0.1),
-              ),
-            ),
-          ),
+          hintText: 'Cari MR, tipe, company, atau item...',
         ),
 
         if (appState.materialRequestsError != null) ...[
@@ -487,21 +483,24 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
 
         const SizedBox(height: 10),
 
-        ErpStatusChipBar<String?>(
+        ErpStatusChipBar<String>(
           chips: _chips,
-          selected: _statusFilter,
+          selected: _statusFilter ?? _allStatusFilter,
           onSelected: (value) {
-            setState(() => _statusFilter = value);
+            final status = value == _allStatusFilter ? null : value;
+            setState(() => _statusFilter = status);
             context.read<AppState>().setMaterialRequestQuery(
               search: _search,
-              status: value,
+              status: status,
             );
           },
         ),
 
         const SizedBox(height: 12),
 
-        if (filtered.isEmpty && !appState.isMaterialRequestsLoading)
+        if (filtered.isEmpty &&
+            !appState.isMaterialRequestsLoading &&
+            appState.materialRequestsError == null)
           ErpEmptyState(
             title: _focusFilter == _MaterialRequestFocusFilter.all
                 ? 'Belum ada request'
@@ -513,8 +512,9 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
             (doc) =>
                 _MaterialRequestCard(doc: doc, onTap: () => _openDetail(doc)),
           ),
-        if (appState.hasMoreMaterialRequests ||
-            appState.isMoreMaterialRequestsLoading) ...[
+        if (appState.materialRequestsError == null &&
+            (appState.hasMoreMaterialRequests ||
+                appState.isMoreMaterialRequestsLoading)) ...[
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
@@ -1014,8 +1014,8 @@ class _MaterialRequestApprovalInfoCard extends StatelessWidget {
 class _PlanningCard extends StatelessWidget {
   final List<InventoryItem> items;
   final ValueChanged<InventoryItem> onPick;
-  final ValueChanged<InventoryItem> onCreateMaterialRequest;
-  final ValueChanged<InventoryItem> onCreatePurchaseOrder;
+  final ValueChanged<InventoryItem>? onCreateMaterialRequest;
+  final ValueChanged<InventoryItem>? onCreatePurchaseOrder;
 
   const _PlanningCard({
     required this.items,
@@ -1166,31 +1166,28 @@ class _PlanningCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
+                        if (onCreateMaterialRequest != null)
+                          OutlinedButton.icon(
                             onPressed: () => onPick(item),
                             icon: const Icon(Icons.edit_note_rounded, size: 18),
                             label: const Text('Form MR'),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () => onCreateMaterialRequest(item),
+                        if (onCreateMaterialRequest != null)
+                          OutlinedButton.icon(
+                            onPressed: () => onCreateMaterialRequest!(item),
                             icon: const Icon(Icons.assignment_add, size: 18),
                             label: const Text('Draft MR'),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: () => onCreatePurchaseOrder(item),
+                        if (onCreatePurchaseOrder != null)
+                          FilledButton.icon(
+                            onPressed: () => onCreatePurchaseOrder!(item),
                             icon: const Icon(Icons.add_shopping_cart, size: 18),
                             label: const Text('Draft PO'),
                           ),
-                        ),
                       ],
                     ),
                   ],

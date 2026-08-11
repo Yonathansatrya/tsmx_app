@@ -5,13 +5,16 @@ import '../../models/purchase_order.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/erp_format.dart';
-import '../../widgets/erp/erp_empty_state.dart';
-import '../../widgets/erp/erp_status_badge.dart';
 
 class PurchaseOverviewTab extends StatelessWidget {
   final ValueChanged<int> onMenuSelected;
+  final List<PurchaseOverviewAction> actions;
 
-  const PurchaseOverviewTab({super.key, required this.onMenuSelected});
+  const PurchaseOverviewTab({
+    super.key,
+    required this.onMenuSelected,
+    this.actions = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -51,14 +54,24 @@ class PurchaseOverviewTab extends StatelessWidget {
       },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 104),
         children: [
           _PurchaseHeroCard(
             outstandingPo: outstandingPo,
             approvalCount: state.purchaseApprovalTodoCount,
             overdueInvoices: overdueInvoices,
             outstandingDebt: outstandingDebt,
-            onApprovalTap: () => onMenuSelected(5),
+          ),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            _PurchaseShortcutGrid(actions: actions),
+          ],
+          const SizedBox(height: 18),
+          _PurchaseMetricGrid(
+            outstandingPo: outstandingPo,
+            approvalCount: state.purchaseApprovalTodoCount,
+            overdueInvoices: overdueInvoices,
+            outstandingDebt: outstandingDebt,
           ),
           const SizedBox(height: 16),
           if (receiptIssues > 0) ...[
@@ -66,92 +79,32 @@ class PurchaseOverviewTab extends StatelessWidget {
               icon: Icons.rule_folder_outlined,
               message:
                   '$receiptIssues receipt memiliki rejected qty atau selisih quantity.',
-              onTap: () => onMenuSelected(2),
+              onTap: () {
+                final receiptAction = actions.where((a) => a.key == 'pr');
+                if (receiptAction.isNotEmpty) receiptAction.first.onTap();
+              },
             ),
-            const SizedBox(height: 16),
           ],
-          const _SectionHeader(
-            title: 'Outstanding Purchase Order',
-            subtitle: 'PO aktif yang perlu dipantau penerimaan atau penagihan',
-            icon: Icons.pending_actions_rounded,
-          ),
-
-          const SizedBox(height: 10),
-
-          _OutstandingPoSection(
-            orders: state.purchaseOrders,
-            onViewAll: () => onMenuSelected(1),
-          ),
-
-          const SizedBox(height: 18),
-
-          const _SectionHeader(
-            title: 'Purchase Order Terbaru',
-            subtitle: 'Dokumen terakhir yang perlu dipantau',
-            icon: Icons.history_rounded,
-          ),
-
-          const SizedBox(height: 10),
-
-          if (state.purchaseOrders.isEmpty)
-            const ErpEmptyState(
-              title: 'Belum ada Purchase Order',
-              message: 'Tekan Buat Purchase Order untuk mulai.',
-            )
-          else
-            ...state.purchaseOrders.take(5).map(_recentPoCard),
         ],
       ),
     );
   }
+}
 
-  Widget _recentPoCard(PurchaseOrder po) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-          boxShadow: AppColors.cardShadow,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    po.id,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.navy,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${po.vendor} - ${po.eta}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.slate,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            ErpStatusBadge(statusText: po.statusText),
-          ],
-        ),
-      ),
-    );
-  }
+class PurchaseOverviewAction {
+  final String key;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const PurchaseOverviewAction({
+    required this.key,
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
 }
 
 class _PurchaseHeroCard extends StatelessWidget {
@@ -159,304 +112,298 @@ class _PurchaseHeroCard extends StatelessWidget {
   final int approvalCount;
   final int overdueInvoices;
   final double outstandingDebt;
-  final VoidCallback onApprovalTap;
 
   const _PurchaseHeroCard({
     required this.outstandingPo,
     required this.approvalCount,
     required this.overdueInvoices,
     required this.outstandingDebt,
-    required this.onApprovalTap,
   });
 
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(
       color: AppColors.white,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: AppColors.border),
       boxShadow: [
         BoxShadow(
-          color: AppColors.primaryDark.withValues(alpha: 0.04),
-          blurRadius: 18,
-          offset: const Offset(0, 8),
+          color: const Color(0xFF22C55E).withValues(alpha: 0.10),
+          blurRadius: 24,
+          offset: const Offset(0, 14),
         ),
       ],
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    child: Row(
+      children: [
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Purchase Workspace',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'PO, receipt, invoice supplier, dan request barang.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 12.5,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 14),
+        Transform.rotate(
+          angle: -0.14,
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: const Color(0xFF22C55E),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF22C55E).withValues(alpha: 0.28),
+                  blurRadius: 22,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.shopping_bag_rounded,
+              color: AppColors.white,
+              size: 30,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _PurchaseShortcutGrid extends StatelessWidget {
+  final List<PurchaseOverviewAction> actions;
+
+  const _PurchaseShortcutGrid({required this.actions});
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 4,
+      mainAxisSpacing: 14,
+      crossAxisSpacing: 10,
+      childAspectRatio: 0.82,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: actions.map((action) {
+        return _PurchaseShortcutTile(action: action);
+      }).toList(),
+    );
+  }
+}
+
+class _PurchaseShortcutTile extends StatelessWidget {
+  final PurchaseOverviewAction action;
+
+  const _PurchaseShortcutTile({required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: action.label,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: action.onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: action.color,
+                  borderRadius: BorderRadius.circular(17),
+                  boxShadow: [
+                    BoxShadow(
+                      color: action.color.withValues(alpha: 0.30),
+                      blurRadius: 18,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Icon(action.icon, color: AppColors.white, size: 26),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                action.label,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 11,
+                  height: 1.05,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PurchaseMetricGrid extends StatelessWidget {
+  final int outstandingPo;
+  final int approvalCount;
+  final int overdueInvoices;
+  final double outstandingDebt;
+
+  const _PurchaseMetricGrid({
+    required this.outstandingPo,
+    required this.approvalCount,
+    required this.overdueInvoices,
+    required this.outstandingDebt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
       children: [
         Row(
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.softGreen,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(
-                Icons.shopping_bag_rounded,
+            Expanded(
+              child: _HeroMetric(
+                label: 'Open PO',
+                value: '$outstandingPo',
+                icon: Icons.pending_actions_rounded,
                 color: AppColors.primary,
               ),
             ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Purchase Workspace',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppColors.navy,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'PO, receipt, invoice supplier, dan request barang',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: AppColors.slate,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            TextButton.icon(
-              onPressed: onApprovalTap,
-              icon: const Icon(Icons.fact_check_outlined, size: 16),
-              label: Text('$approvalCount'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                backgroundColor: AppColors.softGreen,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: _HeroMetric(label: 'Open PO', value: '$outstandingPo'),
-            ),
+            const SizedBox(width: 10),
             Expanded(
               child: _HeroMetric(
                 label: 'Overdue PI',
                 value: '$overdueInvoices',
+                icon: Icons.warning_amber_rounded,
+                color: AppColors.warning,
               ),
             ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _HeroMetric(
+                label: 'Approval',
+                value: '$approvalCount',
+                icon: Icons.fact_check_outlined,
+                color: const Color(0xFF2563EB),
+              ),
+            ),
+            const SizedBox(width: 10),
             Expanded(
               child: _HeroMetric(
                 label: 'Outstanding',
                 value: 'Rp ${formatErpCurrency(outstandingDebt)}',
+                icon: Icons.payments_outlined,
+                color: const Color(0xFF0891B2),
                 compact: true,
               ),
             ),
           ],
         ),
       ],
-    ),
-  );
+    );
+  }
 }
 
 class _HeroMetric extends StatelessWidget {
   final String label;
   final String value;
+  final IconData icon;
+  final Color color;
   final bool compact;
 
   const _HeroMetric({
     required this.label,
     required this.value,
+    required this.icon,
+    required this.color,
     this.compact = false,
   });
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        value,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: AppColors.navy,
-          fontSize: compact ? 12 : 20,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-      const SizedBox(height: 2),
-      Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: AppColors.slate,
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    ],
-  );
-}
-
-class _OutstandingPoSection extends StatelessWidget {
-  final List<PurchaseOrder> orders;
-  final VoidCallback onViewAll;
-
-  const _OutstandingPoSection({required this.orders, required this.onViewAll});
-
-  bool _isOutstanding(PurchaseOrder order) =>
-      order.statusKey != PurchaseOrderStatusKey.completed &&
-      order.statusKey != PurchaseOrderStatusKey.cancelled &&
-      order.statusKey != PurchaseOrderStatusKey.closed;
-
-  @override
-  Widget build(BuildContext context) {
-    final outstanding = orders.where(_isOutstanding).take(5).toList();
-    if (outstanding.isEmpty) {
-      return const ErpEmptyState(
-        title: 'Tidak ada outstanding PO',
-        message: 'Semua PO pada periode ini sudah selesai atau ditutup.',
-      );
-    }
-
-    return Column(
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: AppColors.border),
+      boxShadow: AppColors.cardShadow,
+    ),
+    child: Row(
       children: [
-        ...outstanding.map(
-          (po) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: po.isOverdue
-                      ? AppColors.danger.withValues(alpha: 0.25)
-                      : AppColors.border,
-                ),
-                boxShadow: AppColors.cardShadow,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          po.id,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.navy,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${po.vendor} - ${po.statusText}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.slate,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        if (po.isOverdue) ...[
-                          const SizedBox(height: 4),
-                          const Text(
-                            'ETA overdue',
-                            style: TextStyle(
-                              color: AppColors.danger,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ErpStatusBadge(statusText: po.statusText),
-                ],
-              ),
-            ),
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(14),
           ),
+          child: Icon(icon, color: color, size: 20),
         ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: onViewAll,
-            icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-            label: const Text('Lihat semua PO'),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: compact ? 13 : 17,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  const _SectionHeader({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      CircleAvatar(
-        backgroundColor: AppColors.softGreen,
-        foregroundColor: AppColors.primary,
-        child: Icon(icon),
-      ),
-      const SizedBox(width: 12),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                color: AppColors.navy,
-                fontSize: 17,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                color: AppColors.slate,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    ],
+    ),
   );
 }
 

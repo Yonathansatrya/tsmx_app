@@ -15,13 +15,21 @@ import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../purchase/purchase_order/create_purchase_order_screen.dart';
 import '../shared/buying_document_detail_sheet.dart';
+import '../shared/purchase_ui.dart';
 
-enum _PurchaseSortOption { newestEta, oldestEta, valueHigh, valueLow }
+enum _PurchaseSortOption { newest, oldestEta, valueHigh, valueLow }
 
 enum _PoDocStatusFilter { all, draft, submitted, cancelled }
 
 class PurchaseOrderPanel extends StatefulWidget {
-  const PurchaseOrderPanel({super.key});
+  final bool canCreatePurchaseReceipt;
+  final bool canCreatePurchaseInvoice;
+
+  const PurchaseOrderPanel({
+    super.key,
+    this.canCreatePurchaseReceipt = true,
+    this.canCreatePurchaseInvoice = true,
+  });
 
   @override
   State<PurchaseOrderPanel> createState() => _PurchaseOrderPanelState();
@@ -31,7 +39,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
   final TextEditingController _searchController = TextEditingController();
   String _search = '';
   PurchaseOrderStatusKey? _statusFilter;
-  _PurchaseSortOption _sortOption = _PurchaseSortOption.newestEta;
+  _PurchaseSortOption _sortOption = _PurchaseSortOption.newest;
   String _advancedSupplier = '';
   String _advancedItem = '';
   String _advancedWarehouse = '';
@@ -122,7 +130,10 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
 
     filtered.sort((a, b) {
       return switch (_sortOption) {
-        _PurchaseSortOption.newestEta => _compareDateDesc(a.eta, b.eta),
+        _PurchaseSortOption.newest => _compareDateDesc(
+          a.modified.isNotEmpty ? a.modified : a.eta,
+          b.modified.isNotEmpty ? b.modified : b.eta,
+        ),
         _PurchaseSortOption.oldestEta => _compareDateAsc(a.eta, b.eta),
         _PurchaseSortOption.valueHigh => b.totalValue.compareTo(a.totalValue),
         _PurchaseSortOption.valueLow => a.totalValue.compareTo(b.totalValue),
@@ -176,7 +187,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
 
   String _sortLabel(_PurchaseSortOption option) {
     return switch (option) {
-      _PurchaseSortOption.newestEta => 'ETA terbaru',
+      _PurchaseSortOption.newest => 'Newest',
       _PurchaseSortOption.oldestEta => 'ETA terlama',
       _PurchaseSortOption.valueHigh => 'Nilai tertinggi',
       _PurchaseSortOption.valueLow => 'Nilai terendah',
@@ -326,13 +337,13 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
               filled: true,
               onPressed: () => _submitPo(detail.id),
             ),
-          if (canReceive)
+          if (canReceive && widget.canCreatePurchaseReceipt)
             erpActionButton(
               label: 'Create Purchase Receipt',
               icon: Icons.inventory_2_outlined,
               onPressed: () => _createPr(detail.id),
             ),
-          if (canBill)
+          if (canBill && widget.canCreatePurchaseInvoice)
             erpActionButton(
               label: 'Create Purchase Invoice',
               icon: Icons.receipt_outlined,
@@ -647,27 +658,10 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
 
         const SizedBox(height: 12),
 
-        TextField(
+        PurchaseSearchField(
           controller: _searchController,
           onChanged: _searchChanged,
-          decoration: InputDecoration(
-            hintText: 'Cari PO atau supplier...',
-            prefixIcon: const Icon(Icons.search_rounded, size: 20),
-            filled: true,
-            fillColor: AppColors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: AppColors.primary.withValues(alpha: 0.1),
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: AppColors.primary.withValues(alpha: 0.1),
-              ),
-            ),
-          ),
+          hintText: 'Cari PO atau supplier...',
         ),
 
         if (appState.purchaseOrdersError != null) ...[
@@ -686,7 +680,7 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
               _searchController.clear();
               _search = '';
               _statusFilter = null;
-              _sortOption = _PurchaseSortOption.newestEta;
+              _sortOption = _PurchaseSortOption.newest;
               _advancedSupplier = '';
               _advancedItem = '';
               _advancedWarehouse = '';
@@ -788,14 +782,7 @@ class _PurchaseOrderQuickFilters extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
-        boxShadow: AppColors.cardShadow,
-      ),
+    return PurchaseFilterSurface(
       child: Row(
         children: [
           Expanded(

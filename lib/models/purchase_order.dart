@@ -44,6 +44,7 @@ class PurchaseOrder {
   final double perReceived;
   final double perBilled;
   final String eta;
+  final String modified;
   final int itemsCount;
   final double totalValue;
   final List<PurchaseOrderItem> items;
@@ -58,6 +59,7 @@ class PurchaseOrder {
     this.perReceived = 0,
     this.perBilled = 0,
     required this.eta,
+    this.modified = '',
     required this.itemsCount,
     required this.totalValue,
     this.items = const [],
@@ -89,6 +91,7 @@ class PurchaseOrder {
     double? perReceived,
     double? perBilled,
     String? eta,
+    String? modified,
     int? itemsCount,
     double? totalValue,
     List<PurchaseOrderItem>? items,
@@ -103,6 +106,7 @@ class PurchaseOrder {
       perReceived: perReceived ?? this.perReceived,
       perBilled: perBilled ?? this.perBilled,
       eta: eta ?? this.eta,
+      modified: modified ?? this.modified,
       itemsCount: itemsCount ?? this.itemsCount,
       totalValue: totalValue ?? this.totalValue,
       items: items ?? this.items,
@@ -165,6 +169,7 @@ class PurchaseOrder {
       perReceived: NumParse.asDouble(json['per_received']),
       perBilled: NumParse.asDouble(json['per_billed']),
       eta: eta,
+      modified: json['modified']?.toString() ?? '',
       itemsCount: itemsCount,
       totalValue: totalValue,
       items: items,

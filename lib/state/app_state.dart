@@ -5312,8 +5312,10 @@ class AppState with ChangeNotifier {
     required String namingSeries,
     required DateTime requiredBy,
     String? warehouse,
+    String? company,
     double? rate,
     DateTime? transactionDate,
+    String? noted,
   }) async {
     await _frappeService.ensureLoggedIn();
 
@@ -5342,6 +5344,11 @@ class AppState with ChangeNotifier {
           .split('T')
           .first,
       'schedule_date': scheduleDate,
+      if (company != null && company.trim().isNotEmpty)
+        'company': company.trim(),
+      if (noted != null && noted.trim().isNotEmpty) 'noted': noted.trim(),
+      if (warehouse != null && warehouse.trim().isNotEmpty)
+        'set_warehouse': warehouse.trim(),
       'items': orderItems,
     };
 
@@ -5359,10 +5366,12 @@ class AppState with ChangeNotifier {
     String? itemCode,
     double? qty,
     String? warehouse,
+    String? company,
     double? rate,
     List<Map<String, dynamic>>? items,
     DateTime? transactionDate,
     DateTime? requiredBy,
+    String? noted,
   }) async {
     await _frappeService.ensureLoggedIn();
 
@@ -5373,6 +5382,11 @@ class AppState with ChangeNotifier {
         'transaction_date': transactionDate.toIso8601String().split('T').first,
       if (requiredBy != null)
         'schedule_date': requiredBy.toIso8601String().split('T').first,
+      if (company != null && company.trim().isNotEmpty)
+        'company': company.trim(),
+      if (noted != null) 'noted': noted.trim(),
+      if (warehouse != null && warehouse.trim().isNotEmpty)
+        'set_warehouse': warehouse.trim(),
       if (items != null)
         'items': items
       else if (itemCode != null && itemCode.trim().isNotEmpty && qty != null)
@@ -7935,6 +7949,7 @@ class AppState with ChangeNotifier {
       _materialRequestsError = null;
     } catch (err) {
       if (version != _materialRequestQueryVersion) return;
+      _hasMoreMaterialRequests = false;
       _materialRequestsError = err.toString();
     } finally {
       if (version == _materialRequestQueryVersion) {
@@ -8103,7 +8118,10 @@ class AppState with ChangeNotifier {
       _materialRequestsError = null;
     } catch (err) {
       if (version != _materialRequestQueryVersion) return;
-      _materialRequestsError = err.toString();
+      _hasMoreMaterialRequests = false;
+      if (_materialRequests.isEmpty) {
+        _materialRequestsError = err.toString();
+      }
     } finally {
       if (version == _materialRequestQueryVersion) {
         _isMoreMaterialRequestsLoading = false;
@@ -10550,13 +10568,19 @@ class AppState with ChangeNotifier {
           .toList();
     }
 
-    return _fetchResourceWithFieldFallback(
+    final fetchLimit = normalized.isEmpty
+        ? limit
+        : (limit < FrappeService.maxPageLength
+              ? FrappeService.maxPageLength
+              : limit);
+    final rows = await _fetchResourceWithFieldFallback(
       doctype: 'Item',
       fields: const [
         'name',
         'item_code',
         'item_name',
         'item_group',
+        'purchase_uom',
         'stock_uom',
       ],
       filters: [
@@ -10571,8 +10595,22 @@ class AppState with ChangeNotifier {
               ['item_name', 'like', '%$normalized%'],
             ],
       orderBy: 'item_name asc, name asc',
-      limit: limit,
+      limit: fetchLimit,
     );
+    if (normalized.isEmpty) return rows.take(limit).toList();
+
+    final needle = normalized.toLowerCase();
+    return rows
+        .where((row) {
+          return (row['name']?.toString().toLowerCase().contains(needle) ??
+                  false) ||
+              (row['item_code']?.toString().toLowerCase().contains(needle) ??
+                  false) ||
+              (row['item_name']?.toString().toLowerCase().contains(needle) ??
+                  false);
+        })
+        .take(limit)
+        .toList();
   }
 
   Future<void> refreshInventoryForCompany(String company) async {
@@ -10978,6 +11016,7 @@ class AppState with ChangeNotifier {
         'net_total',
         'grand_total',
         'creation',
+        'modified',
       ],
       limit: _documentPageSize,
       limitStart: limitStart,

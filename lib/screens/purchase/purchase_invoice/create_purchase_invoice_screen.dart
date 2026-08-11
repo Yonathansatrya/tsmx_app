@@ -5,6 +5,7 @@ import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_item_autocomplete_field.dart';
+import '../shared/purchase_ui.dart';
 
 class CreatePurchaseInvoiceScreen extends StatefulWidget {
   const CreatePurchaseInvoiceScreen({super.key});
@@ -308,55 +309,33 @@ class _CreatePurchaseInvoiceScreenState
   }
 
   Widget _stockSettingsCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Stock Settings',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.slate,
-            ),
-          ),
+    return PurchaseCreateSection(
+      title: 'Stock Settings',
+      subtitle: 'Atur update stok jika invoice langsung menerima barang.',
+      icon: Icons.warehouse_outlined,
+      accentColor: const Color(0xFF0EA5E9),
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Update Stock'),
+          subtitle: const Text('Aktifkan jika invoice langsung menambah stok'),
+          value: _updateStock,
+          onChanged: (value) => setState(() => _updateStock = value),
+        ),
+        if (_updateStock) ...[
           const SizedBox(height: 8),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Update Stock'),
-            subtitle: const Text(
-              'Aktifkan jika invoice langsung menambah stok',
-            ),
-            value: _updateStock,
-            onChanged: (value) => setState(() => _updateStock = value),
+          ErpItemAutocompleteField(
+            label: 'Warehouse',
+            selectedId: _selectedWarehouse,
+            decoration: _decoration('Warehouse'),
+            options: _warehouseSearchOptions(),
+            onSelected: (value) => setState(() => _selectedWarehouse = value),
+            validator: (value) => _updateStock && value == null
+                ? 'Warehouse wajib dipilih'
+                : null,
           ),
-          if (_updateStock) ...[
-            const SizedBox(height: 8),
-            ErpItemAutocompleteField(
-              label: 'Warehouse',
-              selectedId: _selectedWarehouse,
-              decoration: _decoration('Warehouse'),
-              options: _warehouseSearchOptions(),
-              onSelected: (value) => setState(() => _selectedWarehouse = value),
-              validator: (value) => _updateStock && value == null
-                  ? 'Warehouse wajib dipilih'
-                  : null,
-            ),
-          ],
         ],
-      ),
+      ],
     );
   }
 
@@ -428,6 +407,13 @@ class _CreatePurchaseInvoiceScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  const PurchaseCreateHeader(
+                    title: 'Buat Purchase Invoice',
+                    subtitle: 'Catat tagihan supplier dan nilai pembelian.',
+                    icon: Icons.request_quote_outlined,
+                    accentColor: Color(0xFF0EA5E9),
+                  ),
+                  const SizedBox(height: 16),
                   if (_loadError != null) ...[
                     Card(
                       color: Colors.red.shade50,
@@ -444,14 +430,9 @@ class _CreatePurchaseInvoiceScreenState
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: AppColors.cardShadow,
                     ),
                     padding: const EdgeInsets.all(14),
                     child: Column(
@@ -460,9 +441,9 @@ class _CreatePurchaseInvoiceScreenState
                         const Text(
                           'Purchase Invoice Info',
                           style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.slate,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.navy,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -527,14 +508,9 @@ class _CreatePurchaseInvoiceScreenState
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppColors.border),
+                      boxShadow: AppColors.cardShadow,
                     ),
                     padding: const EdgeInsets.all(14),
                     child: Column(
@@ -543,9 +519,9 @@ class _CreatePurchaseInvoiceScreenState
                         const Text(
                           'Item Details',
                           style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.slate,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.navy,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -666,30 +642,11 @@ class _CreatePurchaseInvoiceScreenState
             ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
-        child: ElevatedButton(
-          onPressed: _saving || _loading || _loadError != null ? null : _save,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            elevation: 2,
-          ),
-          child: _saving
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text(
-                  'Save Purchase Invoice',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                ),
+        child: PurchasePrimaryActionButton(
+          label: 'Save Purchase Invoice',
+          icon: Icons.save_alt_rounded,
+          isLoading: _saving,
+          onPressed: _loading || _loadError != null ? null : _save,
         ),
       ),
     );
@@ -725,9 +682,16 @@ class _AdditionalInvoiceItemCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

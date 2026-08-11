@@ -5,6 +5,7 @@ import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_item_autocomplete_field.dart';
+import '../shared/purchase_ui.dart';
 
 class CreatePurchaseReceiptScreen extends StatefulWidget {
   const CreatePurchaseReceiptScreen({super.key});
@@ -366,36 +367,11 @@ class _CreatePurchaseReceiptScreenState
     required List<Widget> children,
     IconData? icon,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: AppColors.cardShadow,
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 18, color: AppColors.primary),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.slate,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
+    return PurchaseCreateSection(
+      title: title,
+      icon: icon ?? Icons.inventory_2_outlined,
+      accentColor: const Color(0xFF2563EB),
+      children: children,
     );
   }
 
@@ -487,6 +463,13 @@ class _CreatePurchaseReceiptScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const PurchaseCreateHeader(
+                      title: 'Buat Purchase Receipt',
+                      subtitle: 'Catat penerimaan barang dari supplier.',
+                      icon: Icons.local_shipping_outlined,
+                      accentColor: Color(0xFF2563EB),
+                    ),
+                    const SizedBox(height: 16),
                     _sectionCard(
                       title: 'Receipt Information',
                       icon: Icons.receipt_long_outlined,
@@ -657,30 +640,11 @@ class _CreatePurchaseReceiptScreenState
             ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
-        child: ElevatedButton(
-          onPressed: _saving || _loading || _error != null ? null : _save,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            elevation: 2,
-          ),
-          child: _saving
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text(
-                  'Save Purchase Receipt',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                ),
+        child: PurchasePrimaryActionButton(
+          label: 'Save Purchase Receipt',
+          icon: Icons.save_alt_rounded,
+          isLoading: _saving,
+          onPressed: _loading || _error != null ? null : _save,
         ),
       ),
     );
@@ -705,7 +669,7 @@ class _ReceiptSummaryCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.primary.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
       ),
       padding: const EdgeInsets.all(14),
@@ -786,9 +750,16 @@ class _AdditionalReceiptItemCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

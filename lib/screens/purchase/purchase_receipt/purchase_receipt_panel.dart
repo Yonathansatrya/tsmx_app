@@ -17,6 +17,7 @@ import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../shared/buying_document_detail_sheet.dart';
+import '../shared/purchase_ui.dart';
 
 enum _ReceiptIssueFilter { all, withIssue, rejected, variance }
 
@@ -364,26 +365,9 @@ class _PurchaseReceiptPanelState extends State<PurchaseReceiptPanel> {
           onSelected: (filter) => setState(() => _issueFilter = filter),
         ),
         const SizedBox(height: 12),
-        TextField(
+        PurchaseSearchField(
           onChanged: _searchChanged,
-          decoration: InputDecoration(
-            hintText: 'Cari PR atau supplier',
-            prefixIcon: const Icon(Icons.search_rounded, size: 20),
-            filled: true,
-            fillColor: AppColors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: AppColors.primary.withValues(alpha: 0.1),
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: AppColors.primary.withValues(alpha: 0.1),
-              ),
-            ),
-          ),
+          hintText: 'Cari receipt atau supplier',
         ),
         if (appState.purchaseReceiptsError != null) ...[
           const SizedBox(height: 10),

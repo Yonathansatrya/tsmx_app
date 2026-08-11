@@ -53,6 +53,10 @@ class _PurchaseMainScreenState extends State<PurchaseMainScreen> {
   Widget _buildRoleScreen(_PurchaseDoctypePermissions permissions) {
     final entries = _buildMenuEntries(permissions);
     if (entries.isEmpty) return const _NoPurchaseAccessScreen();
+    final indexByKey = {
+      for (var index = 0; index < entries.length; index++)
+        entries[index].key: index,
+    };
 
     return RoleMainScreen(
       title: 'Purchase',
@@ -61,12 +65,77 @@ class _PurchaseMainScreenState extends State<PurchaseMainScreen> {
         await state.loadBuyingFilterOptions();
       },
       screensBuilder: (onMenuSelected) => entries
-          .map((entry) => entry.builder(onMenuSelected))
+          .map((entry) {
+            if (entry.key == 'home') {
+              return PurchaseOverviewTab(
+                onMenuSelected: onMenuSelected,
+                actions: _buildOverviewActions(
+                  onMenuSelected,
+                  indexByKey,
+                  entries,
+                ),
+              );
+            }
+            return entry.builder(onMenuSelected);
+          })
           .toList(growable: false),
       floatingActionButtonBuilder: (context, currentIndex) =>
           _buildPurchaseFab(context, currentIndex, entries),
       destinations: entries.map((entry) => entry.destination).toList(),
     );
+  }
+
+  List<PurchaseOverviewAction> _buildOverviewActions(
+    ValueChanged<int> onMenuSelected,
+    Map<String, int> indexByKey,
+    List<_PurchaseMenuEntry> entries,
+  ) {
+    final byKey = {for (final entry in entries) entry.key: entry};
+
+    PurchaseOverviewAction? actionFor(
+      String key,
+      String label,
+      IconData icon,
+      Color color,
+    ) {
+      final index = indexByKey[key];
+      final entry = byKey[key];
+      if (index == null || entry == null) return null;
+      return PurchaseOverviewAction(
+        key: key,
+        label: label,
+        icon: icon,
+        color: color,
+        onTap: () => onMenuSelected(index),
+      );
+    }
+
+    return [
+      actionFor(
+        'po',
+        'PO',
+        Icons.shopping_bag_rounded,
+        const Color(0xFF22C55E),
+      ),
+      actionFor(
+        'pr',
+        'Receipt',
+        Icons.move_to_inbox_rounded,
+        const Color(0xFF2563EB),
+      ),
+      actionFor(
+        'pi',
+        'Invoice',
+        Icons.receipt_long_rounded,
+        const Color(0xFF0891B2),
+      ),
+      actionFor(
+        'mr',
+        'Request',
+        Icons.assignment_turned_in_rounded,
+        const Color(0xFFF59E0B),
+      ),
+    ].whereType<PurchaseOverviewAction>().toList(growable: false);
   }
 
   List<_PurchaseMenuEntry> _buildMenuEntries(
@@ -101,9 +170,12 @@ class _PurchaseMainScreenState extends State<PurchaseMainScreen> {
             selectedIcon: Icon(Icons.shopping_bag_rounded),
             label: 'PO',
           ),
-          builder: (_) => const _PurchasePane(
+          builder: (_) => _PurchasePane(
             doctypeKey: 'po',
-            child: PurchaseOrderPanel(),
+            child: PurchaseOrderPanel(
+              canCreatePurchaseReceipt: permissions.canCreatePurchaseReceipt,
+              canCreatePurchaseInvoice: permissions.canCreatePurchaseInvoice,
+            ),
           ),
           canCreate: permissions.canCreatePurchaseOrder,
         ),
@@ -152,9 +224,12 @@ class _PurchaseMainScreenState extends State<PurchaseMainScreen> {
             selectedIcon: Icon(Icons.assignment_turned_in_rounded),
             label: 'Request',
           ),
-          builder: (_) => const _PurchasePane(
+          builder: (_) => _PurchasePane(
             doctypeKey: 'mr',
-            child: MaterialRequestPanel(),
+            child: MaterialRequestPanel(
+              canCreateMaterialRequest: permissions.canCreateMaterialRequest,
+              canCreatePurchaseOrder: permissions.canCreatePurchaseOrder,
+            ),
           ),
           canCreate: permissions.canCreateMaterialRequest,
         ),

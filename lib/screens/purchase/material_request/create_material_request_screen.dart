@@ -6,6 +6,7 @@ import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_item_autocomplete_field.dart';
+import '../shared/purchase_ui.dart';
 
 class CreateMaterialRequestScreen extends StatefulWidget {
   final InventoryItem? initialItem;
@@ -315,36 +316,11 @@ class _CreateMaterialRequestScreenState
     required List<Widget> children,
     IconData? icon,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: AppColors.cardShadow,
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 18, color: AppColors.primary),
-                const SizedBox(width: 8),
-              ],
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.slate,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...children,
-        ],
-      ),
+    return PurchaseCreateSection(
+      title: title,
+      icon: icon ?? Icons.assignment_outlined,
+      accentColor: const Color(0xFFF59E0B),
+      children: children,
     );
   }
 
@@ -420,6 +396,13 @@ class _CreateMaterialRequestScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    const PurchaseCreateHeader(
+                      title: 'Buat Material Request',
+                      subtitle: 'Ajukan kebutuhan material sesuai warehouse.',
+                      icon: Icons.assignment_outlined,
+                      accentColor: Color(0xFFF59E0B),
+                    ),
+                    const SizedBox(height: 16),
                     if (widget.initialItem != null) ...[
                       _InfoCard(initialItem: widget.initialItem),
                       const SizedBox(height: 16),
@@ -575,30 +558,11 @@ class _CreateMaterialRequestScreenState
             ),
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.all(16),
-        child: ElevatedButton(
-          onPressed: _saving || _loading || _error != null ? null : _save,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            elevation: 2,
-          ),
-          child: _saving
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text(
-                  'Save Material Request',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                ),
+        child: PurchasePrimaryActionButton(
+          label: 'Save Material Request',
+          icon: Icons.save_alt_rounded,
+          isLoading: _saving,
+          onPressed: _loading || _error != null ? null : _save,
         ),
       ),
     );
@@ -616,7 +580,7 @@ class _InfoCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.softGreen,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.14)),
       ),
       child: Row(
@@ -655,7 +619,7 @@ class _SummaryCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.primary.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
       ),
       padding: const EdgeInsets.all(14),
@@ -741,9 +705,16 @@ class _AdditionalItemCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
