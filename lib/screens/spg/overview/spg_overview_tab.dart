@@ -10,59 +10,73 @@ class SpgOverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 104),
       children: [
-        const _WorkspaceHeader(),
-        const SizedBox(height: 14),
-        _PrimaryActionCard(
-          icon: Icons.location_on_outlined,
-          title: 'Absensi',
-          subtitle: 'Mulai dan selesaikan absensi customer.',
-          actionLabel: 'Buka',
-          onTap: () => onMenuSelected(1),
+        const _SpgHeroCard(),
+        const SizedBox(height: 18),
+        GridView.count(
+          crossAxisCount: 3,
+          mainAxisSpacing: 14,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.78,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            _SpgShortcutTile(
+              icon: Icons.location_on_rounded,
+              label: 'Absensi',
+              color: AppColors.primary,
+              onTap: () => onMenuSelected(1),
+            ),
+            _SpgShortcutTile(
+              icon: Icons.photo_camera_rounded,
+              label: 'Foto',
+              color: const Color(0xFF2563EB),
+              onTap: () => onMenuSelected(2),
+            ),
+            _SpgShortcutTile(
+              icon: Icons.bar_chart_rounded,
+              label: 'Selling',
+              color: const Color(0xFF0891B2),
+              onTap: () => onMenuSelected(3),
+            ),
+          ],
         ),
-        const SizedBox(height: 12),
-        _ReportActionCard(
-          icon: Icons.photo_camera_outlined,
-          title: 'Report Foto',
-          subtitle: 'Upload beberapa foto aktivitas customer.',
-          onTap: () => onMenuSelected(2),
-        ),
-        const SizedBox(height: 10),
-        _ReportActionCard(
-          icon: Icons.bar_chart_outlined,
-          title: 'Report Selling',
-          subtitle: 'Catat stock awal, stock akhir, dan sell out.',
-          onTap: () => onMenuSelected(3),
+        const SizedBox(height: 18),
+        _FocusCard(
+          title: 'Aktivitas Hari Ini',
+          subtitle:
+              'Gunakan menu sesuai kebutuhan: absensi, foto aktivitas, atau laporan selling.',
+          icon: Icons.task_alt_rounded,
+          color: const Color(0xFF22C55E),
         ),
       ],
     );
   }
 }
 
-class _WorkspaceHeader extends StatelessWidget {
-  const _WorkspaceHeader();
+class _SpgHeroCard extends StatelessWidget {
+  const _SpgHeroCard();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.border),
-        boxShadow: AppColors.cardShadow,
-      ),
-      child: const Row(
-        children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: AppColors.softGreen,
-            foregroundColor: AppColors.primary,
-            child: Icon(Icons.storefront_outlined),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 14),
           ),
-          SizedBox(width: 12),
-          Expanded(
+        ],
+      ),
+      child: Row(
+        children: [
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -70,20 +84,45 @@ class _WorkspaceHeader extends StatelessWidget {
                   'SPG Workspace',
                   style: TextStyle(
                     color: AppColors.navy,
-                    fontSize: 16,
+                    fontSize: 19,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                SizedBox(height: 3),
+                SizedBox(height: 6),
                 Text(
-                  'Absensi, foto aktivitas, dan laporan selling harian.',
+                  'Absensi, foto aktivitas, dan report selling harian.',
                   style: TextStyle(
                     color: AppColors.slate,
-                    fontSize: 12,
+                    fontSize: 12.5,
+                    height: 1.35,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(width: 14),
+          Transform.rotate(
+            angle: -0.16,
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: const Color(0xFF059669),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF059669).withValues(alpha: 0.28),
+                    blurRadius: 22,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.storefront_rounded,
+                color: AppColors.white,
+                size: 30,
+              ),
             ),
           ),
         ],
@@ -92,86 +131,59 @@ class _WorkspaceHeader extends StatelessWidget {
   }
 }
 
-class _PrimaryActionCard extends StatelessWidget {
+class _SpgShortcutTile extends StatelessWidget {
   final IconData icon;
-  final String title;
-  final String subtitle;
-  final String actionLabel;
+  final String label;
+  final Color color;
   final VoidCallback onTap;
 
-  const _PrimaryActionCard({
+  const _SpgShortcutTile({
     required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.actionLabel,
+    required this.label,
+    required this.color,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.primary,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
+    return Tooltip(
+      message: label,
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 58,
+                height: 58,
                 decoration: BoxDecoration(
-                  color: AppColors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: AppColors.white),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: AppColors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: AppColors.white.withValues(alpha: 0.78),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  color: color,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.32),
+                      blurRadius: 18,
+                      offset: const Offset(0, 10),
                     ),
                   ],
                 ),
+                child: Icon(icon, color: AppColors.white, size: 28),
               ),
-              const SizedBox(width: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  actionLabel,
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
+              const SizedBox(height: 9),
+              Text(
+                label,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 12,
+                  height: 1.05,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ],
@@ -182,76 +194,67 @@ class _PrimaryActionCard extends StatelessWidget {
   }
 }
 
-class _ReportActionCard extends StatelessWidget {
-  final IconData icon;
+class _FocusCard extends StatelessWidget {
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final IconData icon;
+  final Color color;
 
-  const _ReportActionCard({
-    required this.icon,
+  const _FocusCard({
     required this.title,
     required this.subtitle,
-    required this.onTap,
+    required this.icon,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.border),
-            boxShadow: AppColors.cardShadow,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: color),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(14),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-                child: Icon(icon, color: AppColors.primary),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: AppColors.navy,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.slate,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.slate),
-            ],
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

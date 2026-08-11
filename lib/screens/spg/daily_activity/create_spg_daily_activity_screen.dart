@@ -197,99 +197,118 @@ class _CreateSpgDailyActivityScreenState
   }
 
   Widget _headerCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: const [
-            CircleAvatar(
-              backgroundColor: AppColors.softGreen,
-              foregroundColor: AppColors.primary,
-              child: Icon(Icons.photo_camera_outlined),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2563EB).withValues(alpha: 0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFFDBEAFE),
+              borderRadius: BorderRadius.circular(16),
             ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'SPG Daily Activity',
-                    style: TextStyle(
-                      color: AppColors.navy,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  SizedBox(height: 3),
-                  Text(
-                    'Upload beberapa foto aktivitas customer.',
-                    style: TextStyle(
-                      color: AppColors.slate,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
+            child: const Icon(
+              Icons.photo_camera_outlined,
+              color: Color(0xFF2563EB),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'SPG Daily Activity',
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Upload beberapa foto aktivitas customer.',
+                  style: TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 12,
+                    height: 1.3,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _formCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (context
-                .watch<AppState>()
-                .mobileAccess
-                .canSelectAnyEmployee) ...[
-              _employeeSearchField(),
-              const SizedBox(height: 12),
-            ],
-            _customerSearchField(),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (context.watch<AppState>().mobileAccess.canSelectAnyEmployee) ...[
+            _employeeSearchField(),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _saving ? null : _pickFromCamera,
-                    icon: const Icon(Icons.photo_camera_rounded),
-                    label: const Text('Kamera'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _saving ? null : _pickMultiple,
-                    icon: const Icon(Icons.collections_rounded),
-                    label: const Text('Galeri'),
-                  ),
-                ),
-              ],
-            ),
-            if (_photos.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _photoPreviewGrid(),
-            ],
-            const SizedBox(height: 12),
-            TextField(
-              controller: _notes,
-              minLines: 3,
-              maxLines: 5,
-              enabled: !_saving,
-              decoration: const InputDecoration(
-                labelText: 'Notes',
-                prefixIcon: Icon(Icons.notes_rounded),
-              ),
-            ),
           ],
-        ),
+          _customerSearchField(),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : _pickFromCamera,
+                  icon: const Icon(Icons.photo_camera_rounded),
+                  label: const Text('Kamera'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : _pickMultiple,
+                  icon: const Icon(Icons.collections_rounded),
+                  label: const Text('Galeri'),
+                ),
+              ),
+            ],
+          ),
+          if (_photos.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _photoPreviewGrid(),
+          ],
+          const SizedBox(height: 12),
+          TextField(
+            controller: _notes,
+            minLines: 3,
+            maxLines: 5,
+            enabled: !_saving,
+            decoration: const InputDecoration(
+              labelText: 'Notes',
+              prefixIcon: Icon(Icons.notes_rounded),
+            ),
+          ),
+        ],
       ),
     );
   }

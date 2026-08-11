@@ -59,10 +59,11 @@ class _SpgDailyReportTabState extends State<SpgDailyReportTab> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
             children: [
-              const CollectionSectionHeader(
+              const _SpgListHeader(
                 title: 'SPG Daily Report',
                 subtitle: 'Riwayat stock awal, stock akhir, dan sell out',
                 icon: Icons.bar_chart_outlined,
+                color: Color(0xFF0891B2),
               ),
               if (_loading) ...[
                 const SizedBox(height: 12),
@@ -85,11 +86,11 @@ class _SpgDailyReportTabState extends State<SpgDailyReportTab> {
           bottom: 16,
           child: FloatingActionButton.extended(
             heroTag: 'create-spg-daily-report',
-            backgroundColor: AppColors.primary,
+            backgroundColor: const Color(0xFF0891B2),
             foregroundColor: AppColors.white,
             onPressed: _openCreate,
             icon: const Icon(Icons.add_chart_rounded),
-            label: const Text('Selling'),
+            label: const Text('Report Selling'),
           ),
         ),
       ],
@@ -105,31 +106,38 @@ class _SpgDailyReportTabState extends State<SpgDailyReportTab> {
     final date =
         row['report_date']?.toString() ?? row['modified']?.toString() ?? '-';
     return Material(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(18),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(24),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(24),
         onTap: name.isEmpty ? null : () => _showDetail(name),
         child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(color: AppColors.border),
-            boxShadow: AppColors.cardShadow,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0891B2).withValues(alpha: 0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 48,
+                height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(14),
+                  color: const Color(0xFFE0F2FE),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
                   Icons.bar_chart_outlined,
-                  color: AppColors.primary,
+                  color: Color(0xFF0891B2),
                 ),
               ),
               const SizedBox(width: 12),
@@ -143,7 +151,7 @@ class _SpgDailyReportTabState extends State<SpgDailyReportTab> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: AppColors.navy,
-                        fontSize: 14,
+                        fontSize: 15,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -159,7 +167,22 @@ class _SpgDailyReportTabState extends State<SpgDailyReportTab> {
                       ),
                     ),
                     const SizedBox(height: 9),
-                    _MetaPill(icon: Icons.calendar_today_outlined, label: date),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _MetaPill(
+                          icon: Icons.calendar_today_outlined,
+                          label: date,
+                          color: const Color(0xFF0891B2),
+                        ),
+                        _MetaPill(
+                          icon: Icons.inventory_2_outlined,
+                          label: 'Selling',
+                          color: AppColors.primary,
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -193,22 +216,27 @@ class _SpgDailyReportTabState extends State<SpgDailyReportTab> {
 class _MetaPill extends StatelessWidget {
   final IconData icon;
   final String label;
+  final Color color;
 
-  const _MetaPill({required this.icon, required this.label});
+  const _MetaPill({
+    required this.icon,
+    required this.label,
+    this.color = AppColors.primary,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 13, color: AppColors.primary),
+          Icon(icon, size: 13, color: color),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
@@ -220,6 +248,72 @@ class _MetaPill extends StatelessWidget {
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpgListHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+
+  const _SpgListHeader({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.border),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 12,
+                    height: 1.3,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
