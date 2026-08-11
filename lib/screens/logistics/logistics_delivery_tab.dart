@@ -241,13 +241,10 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
             outstandingValue: outstandingValue,
           ),
           const SizedBox(height: 14),
-          TextField(
+          LogisticsSearchField(
             controller: _search,
             onChanged: _searchChanged,
-            decoration: const InputDecoration(
-              labelText: 'Cari Delivery Note atau customer',
-              prefixIcon: Icon(Icons.search_rounded),
-            ),
+            hintText: 'Cari Delivery Note atau customer',
           ),
           const SizedBox(height: 10),
           _DeliveryScopeSelector(
@@ -324,14 +321,14 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(22),
         child: InkWell(
           onTap: () => _openDetail(row),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(22),
           child: Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(22),
               border: Border.all(color: AppColors.border),
               boxShadow: AppColors.cardShadow,
             ),
@@ -673,21 +670,31 @@ class _LogisticsDeliveryDetailScreenState
               ),
             ),
             const SizedBox(height: 14),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : () => _run(widget.onUploadPhoto),
-              icon: _busy
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add_a_photo_outlined),
-              label: const Text('Upload Foto Bukti / POD'),
-            ),
-            const SizedBox(height: 8),
-            FilledButton.icon(
-              onPressed: _busy ? null : () => _run(widget.onCaptureSignature),
-              icon: const Icon(Icons.draw_rounded),
-              label: const Text('Tanda Tangan Customer'),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _busy ? null : () => _run(widget.onUploadPhoto),
+                    icon: _busy
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add_a_photo_outlined),
+                    label: const Text('Foto POD'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _busy
+                        ? null
+                        : () => _run(widget.onCaptureSignature),
+                    icon: const Icon(Icons.draw_rounded),
+                    label: const Text('Tanda Tangan'),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             _DriverTrackingCard(

@@ -86,33 +86,6 @@ class LogisticsOverviewTab extends StatelessWidget {
           ),
           logisticsSectionGap,
           const LogisticsSectionHeader(
-            title: 'Aksi Cepat',
-            subtitle: 'Akses cepat untuk pekerjaan harian logistics',
-            icon: Icons.touch_app_rounded,
-          ),
-          const SizedBox(height: 12),
-          LogisticsActionCard(
-            title: 'Tracking Armada',
-            subtitle:
-                '$submitted pengiriman berjalan, $completed sudah selesai',
-            icon: Icons.route_rounded,
-            onTap: () => onMenuSelected(1),
-            status: submitted > 0 ? 'Pantau' : 'Siap',
-            color: AppColors.primary,
-          ),
-          LogisticsActionCard(
-            title: 'Delivery Monitoring',
-            subtitle:
-                '${outstandingRows.length} outstanding, upload POD dan tanda tangan customer',
-            icon: Icons.assignment_turned_in_rounded,
-            onTap: () => onMenuSelected(2),
-            status: outstandingRows.isEmpty ? 'Aman' : 'Cek',
-            color: outstandingRows.isEmpty
-                ? AppColors.success
-                : AppColors.warning,
-          ),
-          logisticsSectionGap,
-          const LogisticsSectionHeader(
             title: 'Ringkasan Kerja',
             subtitle: 'Prioritas yang perlu dicek hari ini',
             icon: Icons.fact_check_outlined,

@@ -135,18 +135,9 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
             onChanged: (scope) => setState(() => _scope = scope),
           ),
           const SizedBox(height: 12),
-          TextField(
+          LogisticsSearchField(
             controller: _search,
-            decoration: InputDecoration(
-              labelText: 'Cari Delivery Note atau customer',
-              prefixIcon: const Icon(Icons.search_rounded),
-              suffixIcon: _search.text.trim().isEmpty
-                  ? null
-                  : IconButton(
-                      onPressed: _search.clear,
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-            ),
+            hintText: 'Cari Delivery Note atau customer',
           ),
           const SizedBox(height: 12),
           if (visibleDocs.isEmpty && !state.isDeliveryNotesLoading)
@@ -205,15 +196,16 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
       padding: const EdgeInsets.only(bottom: 9),
       child: Material(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(22),
         child: InkWell(
           onTap: () => _openTrackingDetail(context, doc),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(22),
           child: Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(22),
               border: Border.all(color: AppColors.border),
+              boxShadow: AppColors.cardShadow,
             ),
             child: Row(
               children: [
@@ -596,14 +588,7 @@ class _LogisticsTrackingDetailScreen extends StatelessWidget {
         child: ListView(
           padding: logisticsPagePadding,
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.border),
-                boxShadow: AppColors.cardShadow,
-              ),
+            LogisticsModernCard(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -646,15 +631,9 @@ class _LogisticsTrackingDetailScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.12),
-                ),
-              ),
+            LogisticsModernCard(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderColor: AppColors.primary.withValues(alpha: 0.12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
