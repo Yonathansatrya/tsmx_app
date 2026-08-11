@@ -1,10 +1,10 @@
-import '../../visits/customer_visit_tab.dart';
+import '../../visits/attendance_tab.dart';
 
-class SalesVisitTab extends CustomerVisitTab {
+class SalesVisitTab extends AttendanceTab {
   const SalesVisitTab({super.key, super.showCheckIn, super.showHistory})
     : super(spgMode: false);
 }
 
-class SalesVisitCheckInScreen extends CustomerVisitCheckInScreen {
+class SalesVisitCheckInScreen extends AttendanceCheckInScreen {
   const SalesVisitCheckInScreen({super.key}) : super(spgMode: false);
 }

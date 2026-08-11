@@ -158,54 +158,115 @@ class _CustomerPaymentScheduleTabState
             ...sorted.map(
               (row) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Card(
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 7,
-                    ),
-                    leading: CircleAvatar(
-                      backgroundColor: _isDue(row)
-                          ? AppColors.warning.withValues(alpha: 0.12)
-                          : AppColors.softGreen,
-                      foregroundColor: _isDue(row)
-                          ? AppColors.warning
-                          : AppColors.primary,
-                      child: Icon(
-                        _isDue(row)
-                            ? Icons.notification_important_outlined
-                            : Icons.event_available_outlined,
-                      ),
-                    ),
-                    title: Text(
-                      row.customer,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    subtitle: Text(
-                      'Tanggal janji: ${row.collectionDueDate}\nInvoice: ${row.id}',
-                    ),
-                    isThreeLine: true,
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        CollectionStatusChip(
-                          label: _isDue(row) ? 'Jatuh Tempo' : 'Terjadwal',
-                          color: _isDue(row)
-                              ? AppColors.warning
-                              : AppColors.primary,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Rp ${formatErpCurrency(row.outstandingAmount)}',
-                          style: const TextStyle(fontWeight: FontWeight.w900),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                child: _PaymentScheduleCard(row: row, due: _isDue(row)),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentScheduleCard extends StatelessWidget {
+  const _PaymentScheduleCard({required this.row, required this.due});
+
+  final SalesInvoice row;
+  final bool due;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = due ? AppColors.warning : AppColors.primary;
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: color.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.07),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(
+              due
+                  ? Icons.notification_important_outlined
+                  : Icons.event_available_outlined,
+              color: color,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.customer,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  row.id,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    CollectionStatusChip(
+                      label: due ? 'Jatuh Tempo' : 'Terjadwal',
+                      color: color,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        row.collectionDueDate,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'Rp ${formatErpCurrency(row.outstandingAmount)}',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );

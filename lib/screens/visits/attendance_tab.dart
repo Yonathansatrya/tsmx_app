@@ -11,9 +11,13 @@ import '../../theme/app_colors.dart';
 import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_error_box.dart';
 import '../../widgets/erp/erp_section_widgets.dart';
+import '../sales/shared/sales_ui.dart';
 
-class CustomerVisitTab extends StatefulWidget {
-  const CustomerVisitTab({
+const Color _visitGreen = Color(0xFF16A34A);
+const Color _visitTeal = Color(0xFF14B8A6);
+
+class AttendanceTab extends StatefulWidget {
+  const AttendanceTab({
     super.key,
     this.showCheckIn = true,
     this.showHistory = true,
@@ -28,11 +32,11 @@ class CustomerVisitTab extends StatefulWidget {
   bool get shouldShowHistory => showHistory ?? true;
 
   @override
-  State<CustomerVisitTab> createState() => _CustomerVisitTabState();
+  State<AttendanceTab> createState() => _AttendanceTabState();
 }
 
-class CustomerVisitCheckInScreen extends StatelessWidget {
-  const CustomerVisitCheckInScreen({super.key, this.spgMode = false});
+class AttendanceCheckInScreen extends StatelessWidget {
+  const AttendanceCheckInScreen({super.key, this.spgMode = false});
 
   final bool spgMode;
 
@@ -41,11 +45,11 @@ class CustomerVisitCheckInScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: Text(spgMode ? 'Check-in SPG' : 'Check-in Kunjungan'),
+        title: Text(spgMode ? 'Check-in SPG' : 'Absensi'),
         backgroundColor: AppColors.background,
         foregroundColor: AppColors.navy,
       ),
-      body: CustomerVisitTab(
+      body: AttendanceTab(
         showCheckIn: true,
         showHistory: false,
         spgMode: spgMode,
@@ -54,7 +58,7 @@ class CustomerVisitCheckInScreen extends StatelessWidget {
   }
 }
 
-class _CustomerVisitTabState extends State<CustomerVisitTab> {
+class _AttendanceTabState extends State<AttendanceTab> {
   final picker = ImagePicker();
   List<SalesCustomerOption> customers = const [];
   List<SalesVisit> visits = const [];
@@ -244,10 +248,13 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
         children: [
           if (widget.shouldShowCheckIn) ...[
-            const CollectionSectionHeader(
-              title: 'Check-in Customer',
-              subtitle: 'Pilih customer, validasi radius, foto, lalu check-in',
-              icon: Icons.location_on_outlined,
+            SalesHeroCard(
+              title: 'Absensi',
+              subtitle: widget.spgMode
+                  ? 'Pilih customer schedule, validasi radius, foto, lalu check-in'
+                  : 'Validasi lokasi, ambil foto, lalu check-in customer',
+              icon: Icons.location_on_rounded,
+              accent: _visitGreen,
             ),
             const SizedBox(height: 12),
             _stepPanel(active),
@@ -275,10 +282,12 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
             if (widget.shouldShowCheckIn) const SizedBox(height: 18),
             CollectionSectionHeader(
               title: widget.shouldShowCheckIn
-                  ? 'Riwayat Check-in'
-                  : 'Data Kunjungan',
+                  ? 'Riwayat Absensi'
+                  : widget.spgMode
+                  ? 'Data Absensi'
+                  : 'Data Absensi',
               subtitle: widget.shouldShowCheckIn
-                  ? 'Kunjungan yang selesai terakhir'
+                  ? 'Aktivitas check-in yang selesai terakhir'
                   : 'Ketuk baris untuk melihat detail waktu dan lokasi',
               icon: Icons.history_rounded,
             ),
@@ -288,7 +297,15 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
               const SizedBox(height: 8),
             ],
             if (history.isEmpty)
-              const ErpEmptyState(title: 'Belum ada riwayat check-in')
+              ErpEmptyState(
+                title: widget.spgMode
+                    ? 'Belum ada riwayat check-in'
+                    : 'Belum ada absensi',
+                message: widget.spgMode
+                    ? 'Pull down to refresh or adjust filters.'
+                    : 'Tekan tombol Absensi untuk mulai check-in.',
+                icon: Icons.assignment_turned_in_outlined,
+              )
             else
               ...history.map(_visitTile),
             if (hasMoreHistory) ...[
@@ -313,11 +330,12 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
           bottom: 16,
           child: FloatingActionButton.extended(
             heroTag: 'create-sales-visit',
-            backgroundColor: AppColors.primary,
+            backgroundColor: _visitGreen,
             foregroundColor: AppColors.white,
+            elevation: 12,
             onPressed: _openCreateVisit,
             icon: const Icon(Icons.add_location_alt_rounded),
-            label: const Text('+ Kunjungan'),
+            label: const Text('+ Absensi'),
           ),
         ),
       ],
@@ -327,7 +345,7 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
   Future<void> _openCreateVisit() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => CustomerVisitCheckInScreen(spgMode: widget.spgMode),
+        builder: (_) => AttendanceCheckInScreen(spgMode: widget.spgMode),
       ),
     );
     if (mounted) await _load();
@@ -340,137 +358,131 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
     required bool canCheckIn,
   }) {
     final allowedRadius = target?.geofenceRadius ?? 50;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            InkWell(
-              onTap: loadingLocation ? null : _showCustomerSelectSheet,
-              borderRadius: BorderRadius.circular(12),
-              child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Customer',
-                  prefixIcon: Icon(Icons.storefront_outlined),
-                  suffixIcon: Icon(Icons.search_rounded),
-                ),
-                child: Text(
-                  customer == null
-                      ? 'Pilih atau cari customer'
-                      : customer!.name,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: customer == null ? AppColors.slate : AppColors.navy,
-                    fontWeight: FontWeight.w800,
-                  ),
+    return SalesInfoCard(
+      accent: _visitGreen,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: loadingLocation ? null : _showCustomerSelectSheet,
+            borderRadius: BorderRadius.circular(18),
+            child: InputDecorator(
+              decoration: const InputDecoration(
+                labelText: 'Customer',
+                prefixIcon: Icon(Icons.storefront_outlined),
+                suffixIcon: Icon(Icons.search_rounded),
+              ),
+              child: Text(
+                customer == null ? 'Pilih atau cari customer' : customer!.name,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: customer == null ? AppColors.slate : AppColors.navy,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
-            if (loadingLocation) const LinearProgressIndicator(),
-            if (target != null) ...[
-              const SizedBox(height: 12),
-              CollectionInfoPanel(
-                title: target!.displayAddress,
-                message:
-                    'Radius check-in ${allowedRadius.toStringAsFixed(0)} meter.',
-                icon: Icons.map_outlined,
+          ),
+          if (loadingLocation) const LinearProgressIndicator(),
+          if (target != null) ...[
+            const SizedBox(height: 12),
+            CollectionInfoPanel(
+              title: target!.displayAddress,
+              message:
+                  'Radius check-in ${allowedRadius.toStringAsFixed(0)} meter.',
+              icon: Icons.map_outlined,
+            ),
+          ],
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: loading
+                ? null
+                : () => _runAction(
+                    () => context.read<AppState>().getCurrentVisitLocation(),
+                  ),
+            icon: const Icon(Icons.my_location_rounded),
+            label: const Text('Ambil Lokasi Sekarang'),
+          ),
+          if (point != null) ...[
+            const SizedBox(height: 10),
+            CollectionInfoPanel(
+              title: canCheckIn ? 'Lokasi valid' : 'Validasi radius',
+              message: _checkInHint(
+                point: point,
+                distance: distance,
+                allowedRadius: allowedRadius,
+              ),
+              icon: canCheckIn
+                  ? Icons.check_circle_outline_rounded
+                  : Icons.location_searching_rounded,
+              color: canCheckIn ? AppColors.success : AppColors.warning,
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: loading
+                      ? null
+                      : () => _pickVisitPhoto(CameraDevice.front),
+                  icon: const Icon(Icons.photo_camera_front_rounded),
+                  label: const Text('Selfie'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: loading
+                      ? null
+                      : () => _pickVisitPhoto(CameraDevice.rear),
+                  icon: const Icon(Icons.camera_alt_rounded),
+                  label: const Text('Kamera'),
+                ),
               ),
             ],
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: loading
-                  ? null
-                  : () => _runAction(
-                      () => context.read<AppState>().getCurrentVisitLocation(),
-                    ),
-              icon: const Icon(Icons.my_location_rounded),
-              label: const Text('Ambil Lokasi Sekarang'),
-            ),
-            if (point != null) ...[
-              const SizedBox(height: 10),
-              CollectionInfoPanel(
-                title: canCheckIn ? 'Lokasi valid' : 'Validasi radius',
-                message: _checkInHint(
-                  point: point,
-                  distance: distance,
-                  allowedRadius: allowedRadius,
-                ),
-                icon: canCheckIn
-                    ? Icons.check_circle_outline_rounded
-                    : Icons.location_searching_rounded,
-                color: canCheckIn ? AppColors.success : AppColors.warning,
-              ),
-            ],
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: loading
-                        ? null
-                        : () => _pickVisitPhoto(CameraDevice.front),
-                    icon: const Icon(Icons.photo_camera_front_rounded),
-                    label: const Text('Selfie'),
+          ),
+          if (photo != null) ...[
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                children: [
+                  Image.file(
+                    File(photo!.path),
+                    width: double.infinity,
+                    height: 180,
+                    fit: BoxFit.cover,
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: loading
-                        ? null
-                        : () => _pickVisitPhoto(CameraDevice.rear),
-                    icon: const Icon(Icons.camera_alt_rounded),
-                    label: const Text('Kamera'),
-                  ),
-                ),
-              ],
-            ),
-            if (photo != null) ...[
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Stack(
-                  children: [
-                    Image.file(
-                      File(photo!.path),
-                      width: double.infinity,
-                      height: 180,
-                      fit: BoxFit.cover,
-                    ),
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Material(
-                        color: AppColors.navy.withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(999),
-                        child: IconButton(
-                          tooltip: 'Hapus foto',
-                          onPressed: () => setState(() => photo = null),
-                          icon: const Icon(
-                            Icons.close_rounded,
-                            color: AppColors.white,
-                          ),
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Material(
+                      color: AppColors.navy.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(999),
+                      child: IconButton(
+                        tooltip: 'Hapus foto',
+                        onPressed: () => setState(() => photo = null),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: AppColors.white,
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ],
-            const SizedBox(height: 14),
-            FilledButton.icon(
-              onPressed: loading || !canCheckIn
-                  ? null
-                  : _checkInSelectedCustomer,
-              icon: const Icon(Icons.login_rounded),
-              label: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 11),
-                child: Text('Check-in'),
+                  ),
+                ],
               ),
             ),
           ],
-        ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: loading || !canCheckIn ? null : _checkInSelectedCustomer,
+            icon: const Icon(Icons.login_rounded),
+            label: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 11),
+              child: Text('Check-in'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -480,59 +492,83 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
     VisitLocationPoint? point,
     double? distance,
   ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              _visitCustomerLabel(visit),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+    return SalesInfoCard(
+      accent: _visitGreen,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            _visitCustomerLabel(visit),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          CollectionInfoPanel(
+            title: 'Sedang check-in',
+            message: point == null
+                ? 'Tekan checkout saat aktivitas selesai.'
+                : 'Akurasi ${point.accuracy.toStringAsFixed(0)} m'
+                      '${distance == null ? '' : ' | Jarak ${distance.toStringAsFixed(0)} m'}',
+            icon: Icons.storefront_rounded,
+            color: AppColors.success,
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: loading ? null : () => _confirmCheckOut(visit),
+            icon: const Icon(Icons.logout_rounded),
+            label: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 11),
+              child: Text('Check-out'),
             ),
-            const SizedBox(height: 8),
-            CollectionInfoPanel(
-              title: 'Sedang check-in',
-              message: point == null
-                  ? 'Tekan checkout saat aktivitas selesai.'
-                  : 'Akurasi ${point.accuracy.toStringAsFixed(0)} m'
-                        '${distance == null ? '' : ' | Jarak ${distance.toStringAsFixed(0)} m'}',
-              icon: Icons.storefront_rounded,
-              color: AppColors.success,
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: loading ? null : () => _confirmCheckOut(visit),
-              icon: const Icon(Icons.logout_rounded),
-              label: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 11),
-                child: Text('Check-out'),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _activeSummaryTile(SalesVisit visit) => Card(
-    color: AppColors.softGreen,
-    child: ListTile(
-      leading: const CircleAvatar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: AppColors.white,
-        child: Icon(Icons.location_on_rounded),
-      ),
-      title: Text(
-        _visitCustomerLabel(visit),
-        style: const TextStyle(fontWeight: FontWeight.w900),
-      ),
-      subtitle: const Text('Kunjungan aktif. Selesaikan dari dashboard Sales.'),
-      trailing: const Text(
-        'ACTIVE',
-        style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w900),
-      ),
-      onTap: () => _showVisitDetail(visit),
+  Widget _activeSummaryTile(SalesVisit visit) => SalesInfoCard(
+    accent: _visitGreen,
+    onTap: () => _showVisitDetail(visit),
+    child: Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: _visitGreen,
+            borderRadius: BorderRadius.circular(15),
+          ),
+          child: const Icon(Icons.location_on_rounded, color: AppColors.white),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _visitCustomerLabel(visit),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                widget.spgMode
+                    ? 'Absensi aktif. Selesaikan dari dashboard.'
+                    : 'Absensi aktif. Selesaikan dari dashboard Sales.',
+                style: const TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        _visitStatusPill('ACTIVE'),
+      ],
     ),
   );
 
@@ -540,96 +576,107 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
     final customerLabel = _visitCustomerLabel(visit);
     final customerCode = visit.customer.trim();
     final timeText = _visitTimeText(visit);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => _showVisitDetail(visit),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const CircleAvatar(
-                radius: 22,
-                backgroundColor: AppColors.softGreen,
-                foregroundColor: AppColors.primary,
-                child: Icon(Icons.storefront_outlined),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      customerLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.navy,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    if (customerCode.isNotEmpty &&
-                        customerCode != customerLabel) ...[
-                      const SizedBox(height: 3),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(22),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: () => _showVisitDetail(visit),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: SalesUi.cardDecoration(accent: _visitGreen),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: _visitGreen.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(
+                    Icons.storefront_outlined,
+                    color: _visitGreen,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
                       Text(
-                        customerCode,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.slate,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                    if (!widget.spgMode &&
-                        visit.salesPerson.trim().isNotEmpty) ...[
-                      const SizedBox(height: 5),
-                      Text(
-                        visit.salesPerson,
+                        customerLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: AppColors.navy,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                    ],
-                    if (timeText.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        timeText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.slate,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                      if (customerCode.isNotEmpty &&
+                          customerCode != customerLabel) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          customerCode,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
+                      ],
+                      if (!widget.spgMode &&
+                          visit.salesPerson.trim().isNotEmpty) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          visit.salesPerson,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.navy,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      if (timeText.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          timeText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    _visitStatusPill(visit.status),
+                    const SizedBox(height: 8),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.slate,
+                    ),
                   ],
                 ),
-              ),
-              const SizedBox(width: 8),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  _visitStatusPill(visit.status),
-                  const SizedBox(height: 8),
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.slate,
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -676,6 +723,7 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
       ),
       child: Text(
         label,
@@ -722,56 +770,55 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  CollectionSectionHeader(
+                  SalesHeroCard(
                     title: customerLabel,
                     subtitle: visit.id,
-                    icon: Icons.storefront_outlined,
+                    icon: Icons.storefront_rounded,
+                    accent: _visitGreen,
                   ),
                   const SizedBox(height: 12),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        children: [
-                          _detailRow('Status', visit.status),
-                          _detailRow('Customer ID', visit.customer),
-                          if (!widget.spgMode)
-                            _detailRow('Sales Person', visit.salesPerson),
-                          _detailRow('Employee', visit.employee),
-                          _detailRow(
-                            'Employee Checkin IN',
-                            visit.employeeCheckinIn,
+                  SalesInfoCard(
+                    accent: _visitGreen,
+                    child: Column(
+                      children: [
+                        _detailRow('Status', visit.status),
+                        _detailRow('Customer ID', visit.customer),
+                        if (!widget.spgMode)
+                          _detailRow('Sales Person', visit.salesPerson),
+                        _detailRow('Employee', visit.employee),
+                        _detailRow(
+                          'Employee Checkin IN',
+                          visit.employeeCheckinIn,
+                        ),
+                        _detailRow(
+                          'Employee Checkin OUT',
+                          visit.employeeCheckinOut,
+                        ),
+                        _detailRow('Check-in', visit.checkInTime),
+                        _detailRow('Check-out', visit.checkOutTime),
+                        _detailRow('Alamat', visit.address),
+                        _detailRow(
+                          'Jarak Check-in',
+                          visit.checkInDistance <= 0
+                              ? ''
+                              : '${visit.checkInDistance.toStringAsFixed(0)} m',
+                        ),
+                        _detailRow(
+                          'Koordinat Check-in',
+                          _coordinate(
+                            visit.checkInLatitude,
+                            visit.checkInLongitude,
                           ),
-                          _detailRow(
-                            'Employee Checkin OUT',
-                            visit.employeeCheckinOut,
+                        ),
+                        _detailRow(
+                          'Koordinat Check-out',
+                          _coordinate(
+                            visit.checkOutLatitude,
+                            visit.checkOutLongitude,
                           ),
-                          _detailRow('Check-in', visit.checkInTime),
-                          _detailRow('Check-out', visit.checkOutTime),
-                          _detailRow('Alamat', visit.address),
-                          _detailRow(
-                            'Jarak Check-in',
-                            visit.checkInDistance <= 0
-                                ? ''
-                                : '${visit.checkInDistance.toStringAsFixed(0)} m',
-                          ),
-                          _detailRow(
-                            'Koordinat Check-in',
-                            _coordinate(
-                              visit.checkInLatitude,
-                              visit.checkInLongitude,
-                            ),
-                          ),
-                          _detailRow(
-                            'Koordinat Check-out',
-                            _coordinate(
-                              visit.checkOutLatitude,
-                              visit.checkOutLongitude,
-                            ),
-                          ),
-                          _detailRow('Catatan', visit.notes),
-                        ],
-                      ),
+                        ),
+                        _detailRow('Catatan', visit.notes),
+                      ],
                     ),
                   ),
                 ],
@@ -825,55 +872,52 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
     final step = active == null || active.employeeCheckinIn.trim().isEmpty
         ? 1
         : 2;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            for (var index = 1; index <= 2; index++) ...[
-              Expanded(
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 15,
-                      backgroundColor: index <= step
-                          ? AppColors.primary
-                          : AppColors.surfaceMuted,
-                      foregroundColor: index <= step
-                          ? AppColors.white
-                          : AppColors.slate,
-                      child: Text(
-                        '$index',
-                        style: const TextStyle(fontWeight: FontWeight.w900),
-                      ),
+    return SalesInfoCard(
+      accent: _visitTeal,
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          for (var index = 1; index <= 2; index++) ...[
+            Expanded(
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    radius: 15,
+                    backgroundColor: index <= step
+                        ? _visitTeal
+                        : AppColors.surfaceMuted,
+                    foregroundColor: index <= step
+                        ? AppColors.white
+                        : AppColors.slate,
+                    child: Text(
+                      '$index',
+                      style: const TextStyle(fontWeight: FontWeight.w900),
                     ),
-                    const SizedBox(height: 5),
-                    Text(
-                      switch (index) {
-                        1 => 'Check-in',
-                        _ => 'Check-out',
-                      },
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: index <= step
-                            ? AppColors.primary
-                            : AppColors.slate,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                      ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    switch (index) {
+                      1 => 'Check-in',
+                      _ => 'Check-out',
+                    },
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: index <= step ? _visitTeal : AppColors.slate,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              if (index < 2)
-                Container(
-                  width: 52,
-                  height: 2,
-                  color: index < step ? AppColors.primary : AppColors.border,
-                ),
-            ],
+            ),
+            if (index < 2)
+              Container(
+                width: 52,
+                height: 2,
+                color: index < step ? _visitTeal : AppColors.border,
+              ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -898,12 +942,12 @@ class _CustomerVisitTabState extends State<CustomerVisitTab> {
           'Dekati hingga maksimal ${allowedRadius.toStringAsFixed(0)} m.';
     }
     return 'Anda berada ${distance.toStringAsFixed(0)} m dari customer dan '
-        'sudah masuk radius kunjungan.';
+        'sudah masuk radius absensi.';
   }
 
   Future<void> _confirmCheckOut(SalesVisit visit) async {
     final confirmed = await _confirmAction(
-      title: 'Selesaikan kunjungan?',
+      title: 'Selesaikan absensi?',
       message: 'Pastikan seluruh aktivitas di ${visit.customer} sudah selesai.',
       actionLabel: 'Check-out',
     );

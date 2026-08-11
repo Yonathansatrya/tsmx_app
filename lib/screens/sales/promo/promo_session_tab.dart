@@ -6,6 +6,10 @@ import '../../../theme/app_colors.dart';
 import 'create_promo_request_screen.dart';
 import '../shared/sales_ui.dart';
 
+const Color _promoOrange = Color(0xFFEA580C);
+const Color _promoTeal = Color(0xFF14B8A6);
+const Color _promoGreen = Color(0xFF16A34A);
+
 class PromoSessionTab extends StatefulWidget {
   const PromoSessionTab({super.key});
 
@@ -38,6 +42,7 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
                 subtitle:
                     'Pantau promo sebelum diproses menjadi Promotional Scheme.',
                 icon: Icons.local_offer_rounded,
+                accent: _promoOrange,
                 trailing: IconButton.filledTonal(
                   tooltip: 'Refresh',
                   onPressed: _isLoading ? null : _loadRequests,
@@ -68,8 +73,9 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
           bottom: 16,
           child: FloatingActionButton.extended(
             heroTag: 'create-promo-session',
-            backgroundColor: AppColors.primary,
+            backgroundColor: _promoOrange,
             foregroundColor: AppColors.white,
+            elevation: 12,
             onPressed: _openCreate,
             icon: const Icon(Icons.add_rounded),
             label: const Text(
@@ -232,6 +238,7 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: SalesInfoCard(
+        accent: _promoOrange,
         onTap: () => _showDetail(row),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -240,13 +247,10 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AppColors.softGreen,
+                color: _promoOrange.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(
-                Icons.local_offer_rounded,
-                color: AppColors.primary,
-              ),
+              child: const Icon(Icons.local_offer_rounded, color: _promoOrange),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -331,14 +335,15 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
     final color = isRejected
         ? AppColors.danger
         : isApproved
-        ? AppColors.success
-        : AppColors.warning;
+        ? _promoGreen
+        : _promoOrange;
     final bg = color.withValues(alpha: 0.12);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
       ),
       child: Text(
         status,
@@ -388,10 +393,12 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
                     title: _target(row, fallback: name),
                     subtitle: name,
                     icon: Icons.local_offer_rounded,
+                    accent: _promoOrange,
                     trailing: _statusChip(status),
                   ),
                   SalesUi.gap(),
                   SalesInfoCard(
+                    accent: _promoTeal,
                     child: Column(
                       children: [
                         _detailRow('Tanggal', _formatDate(row['request_date'])),

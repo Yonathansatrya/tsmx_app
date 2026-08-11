@@ -22,6 +22,10 @@ enum _DailySalesDocType { salesOrder, deliveryNote, salesInvoice }
 
 enum _DailySalesSort { itemGroup, qty, amount }
 
+const Color _salesGreen = Color(0xFF16A34A);
+const Color _salesTeal = Color(0xFF14B8A6);
+const Color _salesBlue = Color(0xFF3B82F6);
+
 class SalesOverviewTab extends StatefulWidget {
   final ValueChanged<int> onMenuSelected;
   final ValueChanged<int>? onOrderTabSelected;
@@ -430,7 +434,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Selesaikan kunjungan?'),
+        title: const Text('Selesaikan absensi?'),
         content: Text('Checkout dari ${visit.customer}?'),
         actions: [
           TextButton(
@@ -825,13 +829,6 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       child: ListView(
         padding: SalesUi.screenPadding,
         children: [
-          SalesHeroCard(
-            title: 'Sales Workspace',
-            subtitle: 'Pantau order, stok, customer, collection, dan visit',
-            icon: Icons.point_of_sale_rounded,
-          ),
-
-          SalesUi.gap(14),
           _SalesOverviewFilterCard(
             date: _filterDate,
             selectedCompany: _selectedCompany,
@@ -884,6 +881,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
             SalesUi.gap(18),
             SalesInfoCard(
               padding: const EdgeInsets.all(14),
+              accent: _salesGreen,
               child: Column(
                 children: [
                   CollectionSectionHeader(
@@ -922,6 +920,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
             SalesUi.gap(18),
             SalesInfoCard(
               padding: const EdgeInsets.all(14),
+              accent: _salesGreen,
               child: Column(
                 children: [
                   CollectionSectionHeader(
@@ -985,17 +984,18 @@ class _SalesVisitActionCard extends StatelessWidget {
     final activeVisit = active;
     return SalesInfoCard(
       padding: const EdgeInsets.all(14),
+      accent: _salesGreen,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           CollectionSectionHeader(
-            title: 'Check-in Kunjungan',
+            title: 'Absensi',
             subtitle: activeVisit == null
-                ? 'Mulai kunjungan customer dari dashboard'
+                ? 'Mulai check-in customer dari dashboard'
                 : 'Sedang aktif di ${activeVisit.customer}',
             icon: Icons.location_on_rounded,
             trailing: IconButton.filledTonal(
-              tooltip: 'Data Kunjungan',
+              tooltip: 'Data Absensi',
               onPressed: onOpenHistory,
               icon: const Icon(Icons.history_rounded),
             ),
@@ -1009,23 +1009,32 @@ class _SalesVisitActionCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: activeVisit == null
                     ? AppColors.background
-                    : AppColors.softGreen,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.border),
+                    : _salesGreen.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: activeVisit == null
+                      ? AppColors.border
+                      : _salesGreen.withValues(alpha: 0.20),
+                ),
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    backgroundColor: activeVisit == null
-                        ? AppColors.surfaceMuted
-                        : AppColors.primary,
-                    foregroundColor: activeVisit == null
-                        ? AppColors.slate
-                        : AppColors.white,
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: activeVisit == null
+                          ? AppColors.surfaceMuted
+                          : _salesGreen,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
                     child: Icon(
                       activeVisit == null
                           ? Icons.storefront_outlined
                           : Icons.near_me_rounded,
+                      color: activeVisit == null
+                          ? AppColors.slate
+                          : AppColors.white,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -1045,7 +1054,7 @@ class _SalesVisitActionCard extends StatelessWidget {
                         const SizedBox(height: 3),
                         Text(
                           activeVisit == null
-                              ? 'Tekan Check-in untuk mulai kunjungan.'
+                              ? 'Tekan Check-in untuk mulai absensi.'
                               : 'Check-in: ${activeVisit.checkInTime.isEmpty ? '-' : activeVisit.checkInTime}',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -1164,12 +1173,13 @@ class _SalesOverviewFilterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return SalesInfoCard(
       padding: const EdgeInsets.all(14),
+      accent: _salesTeal,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Row(
             children: [
-              Icon(Icons.tune_rounded, color: AppColors.primary),
+              Icon(Icons.tune_rounded, color: _salesTeal),
               SizedBox(width: 8),
               Text(
                 'Filter Sales Overview',
@@ -1294,6 +1304,7 @@ class _DailySalesReportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return SalesInfoCard(
       padding: const EdgeInsets.all(14),
+      accent: _salesBlue,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1303,13 +1314,10 @@ class _DailySalesReportCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(14),
+                  color: _salesBlue.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(
-                  Icons.summarize_rounded,
-                  color: AppColors.primary,
-                ),
+                child: const Icon(Icons.summarize_rounded, color: _salesBlue),
               ),
 
               const SizedBox(width: 10),
@@ -1422,17 +1430,17 @@ class _DailyDocChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? AppColors.primary : AppColors.softGreen,
-      borderRadius: BorderRadius.circular(8),
+      color: selected ? _salesBlue : _salesBlue.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
           height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _salesBlue.withValues(alpha: 0.24)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1449,7 +1457,7 @@ class _DailyDocChip extends StatelessWidget {
               Text(
                 label,
                 style: TextStyle(
-                  color: selected ? AppColors.white : AppColors.primary,
+                  color: selected ? AppColors.white : _salesBlue,
                   fontWeight: FontWeight.w900,
                   fontSize: 12,
                 ),
@@ -1474,8 +1482,8 @@ class _DailySortSelector extends StatelessWidget {
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: AppColors.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _salesBlue.withValues(alpha: 0.14)),
       ),
       child: Row(
         children: [
@@ -1515,11 +1523,11 @@ class _DailySortChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Material(
-        color: selected ? AppColors.primary : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
+        color: selected ? _salesBlue : Colors.transparent,
+        borderRadius: BorderRadius.circular(13),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(13),
           child: Container(
             height: 34,
             alignment: Alignment.center,
@@ -1573,8 +1581,8 @@ class _DailyItemSummaryTable extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.background,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _salesBlue.withValues(alpha: 0.14)),
       ),
       child: Column(
         children: [
@@ -1628,7 +1636,7 @@ class _DailySummaryRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: total ? AppColors.softGreen : Colors.transparent,
+        color: total ? _salesBlue.withValues(alpha: 0.10) : Colors.transparent,
         border: const Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(
@@ -1658,8 +1666,8 @@ class _DailyCustomerSalesCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _salesBlue.withValues(alpha: 0.12)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1704,7 +1712,7 @@ class _DailyCustomerSalesCard extends StatelessWidget {
             'Total : Rp ${formatErpCurrency(customer.totalAmount)}',
             textAlign: TextAlign.right,
             style: const TextStyle(
-              color: AppColors.primary,
+              color: _salesBlue,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -1738,9 +1746,9 @@ class _TopCustomerCard extends StatelessWidget {
           CircleAvatar(
             radius: 18,
             backgroundColor: row.rank <= 3
-                ? AppColors.accentYellow.withValues(alpha: 0.35)
-                : AppColors.softGreen,
-            foregroundColor: AppColors.primaryDark,
+                ? _salesGreen.withValues(alpha: 0.16)
+                : _salesGreen.withValues(alpha: 0.10),
+            foregroundColor: _salesGreen,
             child: Text(
               '${row.rank}',
               style: const TextStyle(fontWeight: FontWeight.w900),
@@ -1779,7 +1787,7 @@ class _TopCustomerCard extends StatelessWidget {
             'Rp ${formatErpCurrency(row.amount)}',
             textAlign: TextAlign.right,
             style: const TextStyle(
-              color: AppColors.primary,
+              color: _salesGreen,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -1805,9 +1813,9 @@ class _CollectionRankingRow extends StatelessWidget {
         children: [
           CircleAvatar(
             backgroundColor: row.rank <= 3
-                ? AppColors.accentYellow.withValues(alpha: 0.35)
-                : AppColors.softGreen,
-            foregroundColor: AppColors.primaryDark,
+                ? _salesGreen.withValues(alpha: 0.16)
+                : _salesGreen.withValues(alpha: 0.10),
+            foregroundColor: _salesGreen,
             child: Text(
               '${row.rank}',
               style: const TextStyle(fontWeight: FontWeight.w900),
@@ -1828,7 +1836,7 @@ class _CollectionRankingRow extends StatelessWidget {
           Text(
             'Rp ${formatErpCurrency(row.amount)}',
             style: const TextStyle(
-              color: AppColors.primary,
+              color: _salesGreen,
               fontWeight: FontWeight.w900,
             ),
           ),

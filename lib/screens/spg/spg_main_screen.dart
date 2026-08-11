@@ -23,7 +23,7 @@ class SpgMainScreen extends StatelessWidget {
         NavigationDestination(
           icon: Icon(Icons.location_on_outlined),
           selectedIcon: Icon(Icons.location_on_rounded),
-          label: 'Kunjungan',
+          label: 'Absensi',
         ),
         NavigationDestination(
           icon: Icon(Icons.photo_camera_outlined),

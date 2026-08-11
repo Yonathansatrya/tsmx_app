@@ -179,7 +179,7 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
           destination: const NavigationDestination(
             icon: Icon(Icons.location_on_outlined),
             selectedIcon: Icon(Icons.location_on_rounded),
-            label: 'Kunjungan',
+            label: 'Absensi',
           ),
           builder: (_) => const SalesVisitTab(showCheckIn: false),
         ),
@@ -241,9 +241,17 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
         return FloatingActionButton.extended(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.white,
+          elevation: 10,
+          extendedPadding: const EdgeInsets.symmetric(horizontal: 18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           onPressed: () => _openCreateSalesOrder(context),
           icon: const Icon(Icons.add_rounded),
-          label: const Text('Buat SO'),
+          label: const Text(
+            'Buat SO',
+            style: TextStyle(fontWeight: FontWeight.w900),
+          ),
         );
       },
     );

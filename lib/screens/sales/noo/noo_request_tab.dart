@@ -6,6 +6,9 @@ import '../../../theme/app_colors.dart';
 import '../shared/sales_ui.dart';
 import 'create_noo_request_screen.dart';
 
+const Color _nooGreen = Color(0xFF16A34A);
+const Color _nooOrange = Color(0xFFF59E0B);
+
 class NooRequestTab extends StatefulWidget {
   const NooRequestTab({super.key});
 
@@ -48,6 +51,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
                 subtitle:
                     'Pantau pengajuan outlet baru sebelum menjadi Customer.',
                 icon: Icons.person_add_alt_1_rounded,
+                accent: _nooGreen,
                 trailing: IconButton.filledTonal(
                   tooltip: 'Refresh',
                   onPressed: _isLoading ? null : _loadRequests,
@@ -80,8 +84,9 @@ class _NooRequestTabState extends State<NooRequestTab> {
           bottom: 16,
           child: FloatingActionButton.extended(
             heroTag: 'create-noo-request',
-            backgroundColor: AppColors.primary,
+            backgroundColor: _nooGreen,
             foregroundColor: AppColors.white,
+            elevation: 12,
             onPressed: _openCreate,
             icon: const Icon(Icons.add_rounded),
             label: const Text(
@@ -292,12 +297,10 @@ class _NooRequestTabState extends State<NooRequestTab> {
           fontSize: 11,
           fontWeight: FontWeight.w900,
         ),
-        selectedColor: AppColors.primary,
+        selectedColor: _nooGreen,
         backgroundColor: AppColors.softGreen,
         side: BorderSide(
-          color: selected
-              ? AppColors.primary
-              : AppColors.primary.withValues(alpha: 0.12),
+          color: selected ? _nooGreen : _nooGreen.withValues(alpha: 0.12),
         ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
@@ -318,6 +321,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: SalesInfoCard(
+        accent: _nooGreen,
         onTap: () => _showDetail(row),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,12 +330,12 @@ class _NooRequestTabState extends State<NooRequestTab> {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: AppColors.softGreen,
+                color: _nooGreen.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(
                 Icons.store_mall_directory_rounded,
-                color: AppColors.primary,
+                color: _nooGreen,
               ),
             ),
             const SizedBox(width: 12),
@@ -360,16 +364,16 @@ class _NooRequestTabState extends State<NooRequestTab> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '$name • $date',
+                    '$name - $date',
                     style: const TextStyle(
-                      color: AppColors.primary,
+                      color: _nooGreen,
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '$salesPerson • $company',
+                    '$salesPerson - $company',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -437,12 +441,13 @@ class _NooRequestTabState extends State<NooRequestTab> {
         lower.contains('approved') || lower.contains('created customer');
     final color = isRejected
         ? AppColors.danger
-        : (isApproved ? AppColors.success : AppColors.warning);
+        : (isApproved ? _nooGreen : _nooOrange);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
       ),
       child: Text(
         status,
@@ -490,6 +495,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
                     title: _text(row['customer_name'], fallback: '-'),
                     subtitle: _text(row['name']),
                     icon: Icons.store_mall_directory_rounded,
+                    accent: _nooGreen,
                     trailing: _statusChip(
                       _text(row['status'], fallback: 'Pending Approval'),
                     ),
@@ -501,7 +507,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
                       icon: const Icon(Icons.edit_rounded),
                       label: const Text('Edit Pengajuan'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: _nooGreen,
                         foregroundColor: AppColors.white,
                         minimumSize: const Size.fromHeight(48),
                         shape: RoundedRectangleBorder(
@@ -512,6 +518,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
                     SalesUi.gap(),
                   ],
                   SalesInfoCard(
+                    accent: _nooGreen,
                     child: Column(
                       children: [
                         _detailRow('Tanggal', _formatDate(row['request_date'])),

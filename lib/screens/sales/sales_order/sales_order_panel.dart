@@ -22,6 +22,10 @@ enum _OrderSortOption { newest, oldest, valueHigh, valueLow }
 
 enum _DocStatusFilter { all, draft, submitted, cancelled }
 
+const Color _soGreen = Color(0xFF16A34A);
+const Color _soTeal = Color(0xFF14B8A6);
+const Color _soBlue = Color(0xFF3B82F6);
+
 class SalesOrderPanel extends StatefulWidget {
   const SalesOrderPanel({super.key});
 
@@ -361,6 +365,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
                 subtitle: i.itemCode,
                 qty: '${i.qty}',
                 rate: 'Rp ${formatErpCurrency(i.rate)}',
+                discount: 'Rp ${formatErpCurrency(i.discountAmount)}',
                 amount: 'Rp ${formatErpCurrency(i.qty * i.rate)}',
                 note: i.warehouse,
               ),
@@ -720,6 +725,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
           selectedMonth: appState.sellingPeriodMonth,
           sourceLabel: 'Sumber: Sales Analytics ERPNext',
           isLoading: appState.isOrderSummaryLoading,
+          accent: _soGreen,
         ),
 
         const SizedBox(height: 12),
@@ -728,20 +734,31 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
           controller: _searchController,
           onChanged: _searchChanged,
           decoration: InputDecoration(
-            hintText: 'Search SO or customer…',
-            prefixIcon: const Icon(Icons.search_rounded, size: 20),
+            hintText: 'Search SO or customer...',
+            prefixIcon: const Icon(
+              Icons.search_rounded,
+              size: 20,
+              color: AppColors.navy,
+            ),
             filled: true,
             fillColor: AppColors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(
-                color: AppColors.primary.withValues(alpha: 0.1),
-              ),
+              borderRadius: BorderRadius.circular(22),
+              borderSide: BorderSide(color: _soGreen.withValues(alpha: 0.12)),
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(22),
+              borderSide: BorderSide(color: _soGreen.withValues(alpha: 0.12)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(22),
               borderSide: BorderSide(
-                color: AppColors.primary.withValues(alpha: 0.1),
+                color: _soGreen.withValues(alpha: 0.45),
+                width: 1.4,
               ),
             ),
           ),
@@ -855,18 +872,40 @@ class _SalesOrderQuickFilters extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
-        boxShadow: AppColors.cardShadow,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _soTeal.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: _soTeal.withValues(alpha: 0.08),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Expanded(
             child: DropdownButtonFormField<_OrderSortOption>(
               initialValue: sortOption,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Urutkan',
-                prefixIcon: Icon(Icons.sort_rounded, size: 18),
+                prefixIcon: const Icon(Icons.sort_rounded, size: 18),
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                  borderSide: BorderSide(
+                    color: _soTeal.withValues(alpha: 0.30),
+                  ),
+                ),
               ),
               items: _OrderSortOption.values.map((option) {
                 return DropdownMenuItem<_OrderSortOption>(
@@ -883,12 +922,14 @@ class _SalesOrderQuickFilters extends StatelessWidget {
           _SalesFilterButton(
             icon: Icons.tune_rounded,
             label: advancedCount > 0 ? 'Filter $advancedCount' : 'Filter',
+            color: _soTeal,
             onTap: onAdvancedFilters,
           ),
           const SizedBox(width: 8),
           _SalesFilterButton(
             icon: Icons.restart_alt_rounded,
             label: 'Reset',
+            color: _soBlue,
             onTap: onReset,
           ),
         ],
@@ -901,33 +942,35 @@ class _SalesFilterButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final Color color;
 
   const _SalesFilterButton({
     required this.icon,
     required this.label,
     required this.onTap,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.softGreen,
-      borderRadius: BorderRadius.circular(14),
+      color: color.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         child: SizedBox(
-          width: 64,
+          width: 68,
           height: 56,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: AppColors.primary, size: 18),
+              Icon(icon, color: color, size: 18),
               const SizedBox(height: 2),
               Text(
                 label,
-                style: const TextStyle(
-                  color: AppColors.primary,
+                style: TextStyle(
+                  color: color,
                   fontSize: 10,
                   fontWeight: FontWeight.w900,
                 ),

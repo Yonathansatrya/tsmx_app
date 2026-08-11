@@ -24,7 +24,7 @@ import 'sales/sales_order/create_sales_order_screen.dart';
 import 'spg/daily_activity/create_spg_daily_activity_screen.dart';
 import 'spg/daily_report/create_spg_daily_report_screen.dart';
 import 'todo/todo_list.dart';
-import 'visits/customer_visit_tab.dart';
+import 'visits/attendance_tab.dart';
 
 class AppMainScreen extends StatefulWidget {
   const AppMainScreen({super.key});
@@ -343,12 +343,10 @@ class _AppMainScreenState extends State<AppMainScreen> {
       if (canCreateSalesVisit)
         _QuickCreateAction(
           title: 'Check-in Sales',
-          subtitle: 'Kunjungan customer sales',
+          subtitle: 'Absensi customer sales',
           icon: Icons.add_location_alt_rounded,
           onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const CustomerVisitCheckInScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const AttendanceCheckInScreen()),
           ),
         ),
       if (canCreateDeliveryNote)
@@ -377,11 +375,11 @@ class _AppMainScreenState extends State<AppMainScreen> {
       if (canCreateSpgVisit || canUseSpgCreateFallback)
         _QuickCreateAction(
           title: 'Check-in SPG',
-          subtitle: 'Kunjungan customer sesuai schedule',
+          subtitle: 'Absensi customer sesuai schedule',
           icon: Icons.add_location_alt_rounded,
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => const CustomerVisitCheckInScreen(spgMode: true),
+              builder: (_) => const AttendanceCheckInScreen(spgMode: true),
             ),
           ),
         ),

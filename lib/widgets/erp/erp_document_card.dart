@@ -38,19 +38,21 @@ class ErpDocumentCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(22),
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: 0.12),
+            ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primaryDark.withValues(alpha: 0.04),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
+                color: AppColors.primaryDark.withValues(alpha: 0.07),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
@@ -61,11 +63,11 @@ class ErpDocumentCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 42,
-                    height: 42,
+                    width: 46,
+                    height: 46,
                     decoration: BoxDecoration(
-                      color: AppColors.softGreen,
-                      borderRadius: BorderRadius.circular(14),
+                      color: AppColors.primary.withValues(alpha: 0.11),
+                      borderRadius: BorderRadius.circular(17),
                     ),
                     child: const Icon(
                       Icons.description_outlined,
@@ -84,7 +86,7 @@ class ErpDocumentCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             fontFamily: 'HankenGrotesk',
-                            fontSize: 14,
+                            fontSize: 15,
                             fontWeight: FontWeight.w900,
                             color: AppColors.navy,
                           ),
@@ -114,15 +116,27 @@ class ErpDocumentCard extends StatelessWidget {
                           onDelete != null) ...[
                         const SizedBox(height: 4),
                         SizedBox(
-                          width: 34,
-                          height: 34,
+                          width: 36,
+                          height: 36,
                           child: PopupMenuButton<String>(
                             tooltip: 'Actions',
                             padding: EdgeInsets.zero,
-                            icon: const Icon(
-                              Icons.more_horiz_rounded,
-                              color: AppColors.slate,
-                              size: 20,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            color: AppColors.white,
+                            icon: Container(
+                              width: 30,
+                              height: 30,
+                              decoration: BoxDecoration(
+                                color: AppColors.background,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.more_horiz_rounded,
+                                color: AppColors.slate,
+                                size: 19,
+                              ),
                             ),
                             onSelected: (value) {
                               if (value == 'edit') onEdit?.call();
@@ -211,12 +225,15 @@ class ErpDocumentCard extends StatelessWidget {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
+                    horizontal: 12,
+                    vertical: 9,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.primary.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                    ),
                   ),
                   child: Text(
                     trailing!,

@@ -538,6 +538,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   @override
   void initState() {
     super.initState();
+    _itemTextController = TextEditingController();
     _qtyCtrl.addListener(_onPricingInputChanged);
     _rateCtrl.addListener(_calculateTotal);
     _discountCtrl.addListener(_calculateTotal);
@@ -562,6 +563,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     _rateCtrl.dispose();
     _discountCtrl.dispose();
     _notedCtrl.dispose();
+    _itemTextController?.dispose();
     for (final row in _additionalItems) {
       row.dispose();
     }
@@ -726,8 +728,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         if (effectiveRate > 0) 'net_rate': effectiveRate,
         if (rowAmount > 0) 'amount': rowAmount,
         if (rowAmount > 0) 'net_amount': rowAmount,
-        if (discountAmount != null && discountAmount > 0)
-          'discount_amount': discountAmount,
+        'discount_amount': discount,
         if (originalRate <= 0 && pricing != null && pricing.priceListRate > 0)
           'price_list_rate': pricing.priceListRate,
         if ((discountAmount == null || discountAmount <= 0) &&
@@ -995,9 +996,13 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   String _normalizeItemCode(String rawText) {
     final trimmed = rawText.trim();
     if (trimmed.isEmpty) return '';
-    final match = RegExp(r'\(([^)]+)\)\$').firstMatch(trimmed);
+    final match = RegExp(r'\(([^)]+)\)$').firstMatch(trimmed);
     if (match != null) {
       return match.group(1)!.trim();
+    }
+    final dashIndex = trimmed.lastIndexOf(' - ');
+    if (dashIndex >= 0 && dashIndex + 3 < trimmed.length) {
+      return trimmed.substring(dashIndex + 3).trim();
     }
     return trimmed;
   }
@@ -1036,27 +1041,315 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     });
   }
 
-  Future<void> _validateItem(String value) async {
-    final candidate = _selectedItemCode ?? _normalizeItemCode(value);
-    if (candidate.isEmpty) {
-      setState(() => _itemError = null);
-      return;
-    }
+  Future<_ItemOption?> _showItemSelectSheet({
+    required String title,
+    String? selectedCode,
+  }) async {
+    final result = await showModalBottomSheet<_ItemOption>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        var query = '';
+        Future<List<_ItemOption>> loadOptions() async {
+          final options = await _searchItemOptions(sheetContext, query);
+          return options.toList();
+        }
 
-    setState(() => _isValidatingItem = true);
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: 12,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 12,
+                ),
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.84,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(26),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryDark.withValues(alpha: 0.16),
+                        blurRadius: 26,
+                        offset: const Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.border,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 10, 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: AppColors.softGreen,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Icon(
+                                Icons.inventory_2_rounded,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.navy,
+                                    ),
+                                  ),
+                                  const Text(
+                                    'Cari nama atau kode item yang boleh dijual.',
+                                    style: TextStyle(
+                                      color: AppColors.slate,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Tutup',
+                              onPressed: () => Navigator.pop(sheetContext),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: TextField(
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: 'Search item name or item code',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            filled: true,
+                            fillColor: AppColors.background,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 14,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.28,
+                                ),
+                              ),
+                            ),
+                          ),
+                          onChanged: (value) =>
+                              setSheetState(() => query = value),
+                        ),
+                      ),
+                      Flexible(
+                        child: FutureBuilder<List<_ItemOption>>(
+                          future: loadOptions(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                    ConnectionState.waiting &&
+                                query.trim().isNotEmpty) {
+                              return const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(28),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final items =
+                                snapshot.data ?? const <_ItemOption>[];
+                            if (items.isEmpty) {
+                              return const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(28),
+                                  child: Text(
+                                    'Item tidak ditemukan',
+                                    style: TextStyle(
+                                      color: AppColors.slate,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return ListView.separated(
+                              shrinkWrap: true,
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                              itemCount: items.length,
+                              separatorBuilder: (context, index) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, index) {
+                                final item = items[index];
+                                final selected = item.code == selectedCode;
+                                return Material(
+                                  color: selected
+                                      ? AppColors.softGreen
+                                      : AppColors.background,
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(18),
+                                    onTap: () =>
+                                        Navigator.pop(sheetContext, item),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(
+                                          color: selected
+                                              ? AppColors.primary.withValues(
+                                                  alpha: 0.28,
+                                                )
+                                              : AppColors.border,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 38,
+                                            height: 38,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                            ),
+                                            child: const Icon(
+                                              Icons.inventory_2_rounded,
+                                              color: AppColors.primary,
+                                              size: 20,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  item.name,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    color: AppColors.navy,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  item.code,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    color: AppColors.slate,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          if (selected)
+                                            const Icon(
+                                              Icons.check_circle_rounded,
+                                              color: AppColors.success,
+                                            )
+                                          else
+                                            const Icon(
+                                              Icons.chevron_right_rounded,
+                                              color: AppColors.slate,
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    return result;
+  }
+
+  Future<void> _selectPrimaryItem() async {
+    final option = await _showItemSelectSheet(
+      title: 'Pilih Item',
+      selectedCode: _selectedItemCode,
+    );
+    if (option == null || !mounted) return;
+    setState(() {
+      _selectedItemCode = option.code;
+      _initialItemText = option.label;
+      _itemTextController?.text = option.label;
+      _itemError = null;
+      _rateCtrl.clear();
+      _isValidatingItem = true;
+    });
     try {
-      final appState = context.read<AppState>();
-      await appState.frappeService.fetchDocument('Item', candidate);
-      if (!mounted) return;
-      setState(() => _itemError = null);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _itemError = 'Item tidak ditemukan');
+      await _loadItemInsight(option.code, applyPrice: true);
     } finally {
-      if (mounted) {
-        setState(() => _isValidatingItem = false);
-      }
+      if (mounted) setState(() => _isValidatingItem = false);
     }
+  }
+
+  Future<void> _selectAdditionalItem(_AdditionalItemRow row) async {
+    final option = await _showItemSelectSheet(
+      title: 'Pilih Item Tambahan',
+      selectedCode: row.itemCode,
+    );
+    if (option == null || !mounted) return;
+    setState(() {
+      row.itemCode = option.code;
+      row.itemTextController.text = option.label;
+      row.rateController.clear();
+    });
+    await _loadItemInsight(option.code, applyPrice: true, row: row);
   }
 
   List<_CustomerOption> _filteredCustomers(String query) {
@@ -1230,42 +1523,104 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                                 ),
                                 itemCount: customers.length,
                                 separatorBuilder: (context, index) =>
-                                    const Divider(
-                                      height: 1,
-                                      color: AppColors.border,
-                                    ),
+                                    const SizedBox(height: 8),
                                 itemBuilder: (context, index) {
                                   final customer = customers[index];
                                   final selected =
                                       customer.id == _customerCtrl.text.trim();
-                                  return ListTile(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    title: Text(
-                                      customer.name,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w900,
+                                  return Material(
+                                    color: selected
+                                        ? AppColors.softGreen
+                                        : AppColors.background,
+                                    borderRadius: BorderRadius.circular(18),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(18),
+                                      onTap: () {
+                                        Navigator.pop(
+                                          sheetContext,
+                                          customer.id,
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                            18,
+                                          ),
+                                          border: Border.all(
+                                            color: selected
+                                                ? AppColors.primary.withValues(
+                                                    alpha: 0.28,
+                                                  )
+                                                : AppColors.border,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 38,
+                                              height: 38,
+                                              decoration: BoxDecoration(
+                                                color: AppColors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                              ),
+                                              child: const Icon(
+                                                Icons.storefront_rounded,
+                                                color: AppColors.primary,
+                                                size: 20,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    customer.name,
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      color: AppColors.navy,
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                    ),
+                                                  ),
+                                                  if (customer.name !=
+                                                      customer.id) ...[
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      customer.id,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                        color: AppColors.slate,
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                            if (selected)
+                                              const Icon(
+                                                Icons.check_circle_rounded,
+                                                color: AppColors.success,
+                                              )
+                                            else
+                                              const Icon(
+                                                Icons.chevron_right_rounded,
+                                                color: AppColors.slate,
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                    subtitle: customer.name == customer.id
-                                        ? null
-                                        : Text(
-                                            customer.id,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                    trailing: selected
-                                        ? const Icon(
-                                            Icons.check_circle_rounded,
-                                            color: AppColors.success,
-                                          )
-                                        : null,
-                                    onTap: () {
-                                      Navigator.pop(sheetContext, customer.id);
-                                    },
                                   );
                                 },
                               ),
@@ -2059,6 +2414,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     for (final item in order.items.skip(1)) {
       final row = _AdditionalItemRow(
         itemCode: item.itemCode,
+        itemLabel: item.itemCode.isNotEmpty
+            ? '${item.itemName} - ${item.itemCode}'
+            : item.itemName,
         qty: item.qty.toString(),
         rate: item.rate > 0 ? _formatRupiah(item.rate) : '',
         discount: item.discountAmount > 0
@@ -2116,7 +2474,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           }
         }
         _initialItemText = firstItem.itemCode.isNotEmpty
-            ? '${firstItem.itemName} (${firstItem.itemCode})'
+            ? '${firstItem.itemName} - ${firstItem.itemCode}'
             : firstItem.itemName;
         _itemTextController?.text = _initialItemText!;
       }
@@ -2839,95 +3197,63 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Autocomplete<_ItemOption>(
-                      optionsBuilder: (textEditingValue) =>
-                          _searchItemOptions(context, textEditingValue.text),
-                      displayStringForOption: (option) => option.label,
-                      onSelected: (option) {
-                        setState(() {
-                          _selectedItemCode = option.code;
-                          _itemTextController?.text = option.label;
-                          _itemError = null;
-                          _rateCtrl.clear();
-                        });
-                        _loadItemInsight(option.code, applyPrice: true);
-                      },
-                      fieldViewBuilder:
-                          (
-                            context,
-                            textEditingController,
-                            focusNode,
-                            onSubmit,
-                          ) {
-                            _itemTextController ??= textEditingController;
-                            if (_initialItemText != null &&
-                                textEditingController.text.isEmpty) {
-                              textEditingController.text = _initialItemText!;
-                            }
-                            return TextFormField(
-                              controller: textEditingController,
-                              focusNode: focusNode,
-                              onChanged: (value) {
-                                final code = _normalizeItemCode(value);
-                                if (_selectedItemCode != null &&
-                                    code != _selectedItemCode) {
-                                  setState(() => _selectedItemCode = null);
-                                }
-                                if (value.contains('(') &&
-                                    value.endsWith(')') &&
-                                    code.isNotEmpty) {
-                                  setState(() => _selectedItemCode = code);
-                                }
-                                _validateItem(value);
-                              },
-                              decoration: InputDecoration(
-                                labelText: 'Nama Item / Kode',
-                                hintText: 'Cari dengan nama atau kode',
-                                filled: true,
-                                fillColor: AppColors.background,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.2,
-                                    ),
+                    TextFormField(
+                      controller: _itemTextController,
+                      readOnly: true,
+                      onTap: _selectPrimaryItem,
+                      decoration: InputDecoration(
+                        labelText: 'Nama Item / Kode',
+                        hintText: 'Pilih atau search item',
+                        prefixIcon: const Icon(Icons.inventory_2_rounded),
+                        suffixIcon: _isValidatingItem
+                            ? const Padding(
+                                padding: EdgeInsets.all(8),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
                                   ),
                                 ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                                suffixIcon: _isValidatingItem
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(8),
-                                        child: SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        ),
-                                      )
-                                    : _itemError == null &&
-                                          (_itemTextController
-                                                  ?.text
-                                                  .isNotEmpty ??
-                                              false)
-                                    ? const Icon(
-                                        Icons.check_circle,
-                                        color: Colors.green,
-                                      )
-                                    : null,
-                                errorText: _itemError,
+                              )
+                            : IconButton(
+                                tooltip: 'Search item',
+                                onPressed: _selectPrimaryItem,
+                                icon: const Icon(Icons.search_rounded),
                               ),
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
-                                  return 'Item wajib diisi';
-                                }
-                                return null;
-                              },
-                            );
-                          },
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.16),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.10),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(
+                            color: AppColors.primary.withValues(alpha: 0.36),
+                            width: 1.4,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                        errorText: _itemError,
+                      ),
+                      validator: (v) {
+                        if ((_selectedItemCode ?? '').trim().isEmpty) {
+                          return 'Item wajib dipilih';
+                        }
+                        return null;
+                      },
                     ),
 
                     const SizedBox(height: 12),
@@ -3092,78 +3418,56 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                                 ),
                               ],
                             ),
-                            Autocomplete<_ItemOption>(
-                              optionsBuilder: (textEditingValue) =>
-                                  _searchItemOptions(
-                                    context,
-                                    textEditingValue.text,
+                            TextFormField(
+                              controller: row.itemTextController,
+                              readOnly: true,
+                              onTap: () => _selectAdditionalItem(row),
+                              decoration: InputDecoration(
+                                labelText: 'Nama Item / Kode',
+                                hintText: 'Pilih atau search item',
+                                prefixIcon: const Icon(
+                                  Icons.inventory_2_rounded,
+                                ),
+                                suffixIcon: IconButton(
+                                  tooltip: 'Search item',
+                                  onPressed: () => _selectAdditionalItem(row),
+                                  icon: const Icon(Icons.search_rounded),
+                                ),
+                                filled: true,
+                                fillColor: AppColors.white,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.16,
+                                    ),
                                   ),
-                              displayStringForOption: (option) => option.label,
-                              onSelected: (option) {
-                                setState(() {
-                                  row.itemCode = option.code;
-                                  row.itemTextController?.text = option.label;
-                                  row.rateController.clear();
-                                });
-                                _loadItemInsight(
-                                  option.code,
-                                  applyPrice: true,
-                                  row: row,
-                                );
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.10,
+                                    ),
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(18),
+                                  borderSide: BorderSide(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.36,
+                                    ),
+                                    width: 1.4,
+                                  ),
+                                ),
+                              ),
+                              validator: (value) {
+                                if (row.itemCode == null ||
+                                    row.itemCode!.trim().isEmpty) {
+                                  return 'Item wajib dipilih';
+                                }
+                                return null;
                               },
-                              fieldViewBuilder:
-                                  (
-                                    context,
-                                    textEditingController,
-                                    focusNode,
-                                    onSubmit,
-                                  ) {
-                                    row.itemTextController =
-                                        textEditingController;
-                                    if (row.itemCode != null &&
-                                        textEditingController.text.isEmpty) {
-                                      final currentOption = _itemOptions
-                                          .firstWhere(
-                                            (option) =>
-                                                option.code == row.itemCode,
-                                            orElse: () => _ItemOption(
-                                              code: row.itemCode ?? '',
-                                              name: row.itemCode ?? '',
-                                            ),
-                                          );
-                                      textEditingController.text =
-                                          currentOption.label;
-                                    }
-                                    return TextFormField(
-                                      controller: textEditingController,
-                                      focusNode: focusNode,
-                                      onChanged: (value) {
-                                        final code = _normalizeItemCode(value);
-                                        if (row.itemCode != null &&
-                                            code != row.itemCode) {
-                                          setState(() => row.itemCode = null);
-                                        }
-                                      },
-                                      decoration: InputDecoration(
-                                        labelText: 'Nama Item / Kode',
-                                        hintText: 'Cari dengan nama atau kode',
-                                        filled: true,
-                                        fillColor: AppColors.white,
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                      validator: (value) {
-                                        if (row.itemCode == null ||
-                                            row.itemCode!.trim().isEmpty) {
-                                          return 'Item wajib dipilih';
-                                        }
-                                        return null;
-                                      },
-                                    );
-                                  },
                             ),
                             const SizedBox(height: 10),
                             TextFormField(
@@ -3378,7 +3682,7 @@ class _ItemOption {
 
   _ItemOption({required this.code, required this.name});
 
-  String get label => '$name ($code)';
+  String get label => '$name - $code';
 }
 
 class _CustomerOption {
@@ -3406,22 +3710,25 @@ class _AdditionalItemRow {
   final TextEditingController qtyController;
   final TextEditingController rateController;
   final TextEditingController discountController;
-  TextEditingController? itemTextController;
+  final TextEditingController itemTextController;
 
   _AdditionalItemRow({
     this.itemCode,
+    String itemLabel = '',
     String qty = '1',
     String rate = '',
     String discount = '0',
     this.warehouse,
   }) : qtyController = TextEditingController(text: qty),
        rateController = TextEditingController(text: rate),
-       discountController = TextEditingController(text: discount);
+       discountController = TextEditingController(text: discount),
+       itemTextController = TextEditingController(text: itemLabel);
 
   void dispose() {
     qtyController.dispose();
     rateController.dispose();
     discountController.dispose();
+    itemTextController.dispose();
   }
 }
 

@@ -16,8 +16,8 @@ class SpgOverviewTab extends StatelessWidget {
         const SizedBox(height: 14),
         _PrimaryActionCard(
           icon: Icons.location_on_outlined,
-          title: 'Check-in Kunjungan',
-          subtitle: 'Mulai dan selesaikan kunjungan customer.',
+          title: 'Absensi',
+          subtitle: 'Mulai dan selesaikan absensi customer.',
           actionLabel: 'Buka',
           onTap: () => onMenuSelected(1),
         ),
@@ -76,7 +76,7 @@ class _WorkspaceHeader extends StatelessWidget {
                 ),
                 SizedBox(height: 3),
                 Text(
-                  'Kunjungan, foto aktivitas, dan laporan selling harian.',
+                  'Absensi, foto aktivitas, dan laporan selling harian.',
                   style: TextStyle(
                     color: AppColors.slate,
                     fontSize: 12,

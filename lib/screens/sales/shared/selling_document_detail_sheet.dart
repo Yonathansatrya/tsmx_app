@@ -27,6 +27,7 @@ class SellingDetailItem {
   final String subtitle;
   final String qty;
   final String rate;
+  final String discount;
   final String amount;
   final String note;
 
@@ -35,6 +36,7 @@ class SellingDetailItem {
     this.subtitle = '',
     this.qty = '',
     this.rate = '',
+    this.discount = '',
     this.amount = '',
     this.note = '',
   });
@@ -65,7 +67,7 @@ void showSellingDocumentDetailSheet({
           return Container(
             decoration: const BoxDecoration(
               color: AppColors.background,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
             ),
             child: SingleChildScrollView(
               controller: scrollController,
@@ -133,13 +135,13 @@ class _SellingDetailHeader extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryDark.withValues(alpha: 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: AppColors.primaryDark.withValues(alpha: 0.06),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -151,7 +153,7 @@ class _SellingDetailHeader extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: AppColors.softGreen,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(icon, color: AppColors.primary),
           ),
@@ -186,11 +188,22 @@ class _SellingDetailHeader extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            onPressed: onClose,
-            icon: const Icon(Icons.close_rounded),
-            color: AppColors.slate,
-            tooltip: 'Tutup',
+          Material(
+            color: AppColors.background,
+            borderRadius: BorderRadius.circular(14),
+            child: InkWell(
+              onTap: onClose,
+              borderRadius: BorderRadius.circular(14),
+              child: const SizedBox(
+                width: 38,
+                height: 38,
+                child: Icon(
+                  Icons.close_rounded,
+                  color: AppColors.slate,
+                  size: 20,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -215,8 +228,10 @@ class _SellingMetricGrid extends StatelessWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: AppColors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.08),
+              ),
             ),
             child: Row(
               children: [
@@ -225,7 +240,7 @@ class _SellingMetricGrid extends StatelessWidget {
                   height: 34,
                   decoration: BoxDecoration(
                     color: AppColors.softGreen,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(metric.icon, color: AppColors.primary, size: 18),
                 ),
@@ -278,8 +293,15 @@ class _SellingInfoCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         children: infos
@@ -333,8 +355,8 @@ class _SellingItemsSection extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
         ),
         child: const Row(
           children: [
@@ -406,8 +428,15 @@ class _SellingItemCard extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -447,25 +476,61 @@ class _SellingItemCard extends StatelessWidget {
               ),
             ],
           ),
-          if (item.amount.isNotEmpty || item.note.isNotEmpty) ...[
+          if (item.discount.isNotEmpty ||
+              item.amount.isNotEmpty ||
+              item.note.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Row(
-              children: [
-                if (item.amount.isNotEmpty)
-                  Expanded(
-                    child: _ItemStat(label: 'Amount', value: item.amount),
-                  ),
-                if (item.amount.isNotEmpty && item.note.isNotEmpty)
-                  const SizedBox(width: 8),
-                if (item.note.isNotEmpty)
-                  Expanded(
-                    child: _ItemStat(label: 'Info', value: item.note),
-                  ),
-              ],
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final tileWidth = (constraints.maxWidth - 8) / 2;
+                return Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _ItemStatTile(
+                      width: tileWidth,
+                      label: 'Diskon',
+                      value: item.discount.isEmpty ? '0' : item.discount,
+                    ),
+                    if (item.amount.isNotEmpty)
+                      _ItemStatTile(
+                        width: tileWidth,
+                        label: 'Amount',
+                        value: item.amount,
+                      ),
+                    if (item.note.isNotEmpty)
+                      _ItemStatTile(
+                        width: tileWidth,
+                        label: 'Info',
+                        value: item.note,
+                      ),
+                  ],
+                );
+              },
             ),
           ],
         ],
       ),
+    );
+  }
+}
+
+class _ItemStatTile extends StatelessWidget {
+  final double width;
+  final String label;
+  final String value;
+
+  const _ItemStatTile({
+    required this.width,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: width,
+      child: _ItemStat(label: label, value: value),
     );
   }
 }
@@ -482,7 +547,8 @@ class _ItemStat extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
         color: AppColors.background,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.06)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

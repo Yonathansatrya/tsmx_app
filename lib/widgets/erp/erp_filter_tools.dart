@@ -72,16 +72,16 @@ class ErpPeriodFilterCard extends StatelessWidget {
     ]..sort();
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryDark.withValues(alpha: 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: AppColors.primaryDark.withValues(alpha: 0.08),
+            blurRadius: 26,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -90,13 +90,13 @@ class ErpPeriodFilterCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 42,
-                height: 42,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(15),
                 ),
-                child: Icon(icon, color: AppColors.primary),
+                child: Icon(icon, color: AppColors.primary, size: 23),
               ),
               const SizedBox(width: 11),
               Expanded(
@@ -134,7 +134,7 @@ class ErpPeriodFilterCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 360;

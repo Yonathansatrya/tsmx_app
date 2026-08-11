@@ -14,6 +14,7 @@ class DocumentTrendCard extends StatelessWidget {
   final String valueSuffix;
   final String sourceLabel;
   final bool isLoading;
+  final Color accent;
 
   const DocumentTrendCard({
     super.key,
@@ -26,6 +27,7 @@ class DocumentTrendCard extends StatelessWidget {
     this.valueSuffix = '',
     this.sourceLabel = '',
     this.isLoading = false,
+    this.accent = AppColors.primary,
   });
 
   @override
@@ -46,9 +48,15 @@ class DocumentTrendCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
-        boxShadow: AppColors.cardShadow,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: accent.withValues(alpha: 0.14)),
+        boxShadow: [
+          BoxShadow(
+            color: accent.withValues(alpha: 0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,13 +67,10 @@ class DocumentTrendCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(13),
+                  color: accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(17),
                 ),
-                child: const Icon(
-                  Icons.show_chart_rounded,
-                  color: AppColors.primary,
-                ),
+                child: Icon(Icons.show_chart_rounded, color: accent),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -121,6 +126,7 @@ class DocumentTrendCard extends StatelessWidget {
                   : 'Total bulan ini',
               valuePrefix: valuePrefix,
               valueSuffix: valueSuffix,
+              accent: accent,
             ),
         ],
       ),
@@ -161,6 +167,7 @@ class _DocumentTrendLineChart extends StatefulWidget {
   final String periodLabel;
   final String valuePrefix;
   final String valueSuffix;
+  final Color accent;
 
   const _DocumentTrendLineChart({
     required this.points,
@@ -169,6 +176,7 @@ class _DocumentTrendLineChart extends StatefulWidget {
     required this.periodLabel,
     required this.valuePrefix,
     required this.valueSuffix,
+    required this.accent,
   });
 
   @override
@@ -223,7 +231,8 @@ class _DocumentTrendLineChartState extends State<_DocumentTrendLineChart> {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: AppColors.background,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: widget.accent.withValues(alpha: 0.08)),
           ),
           child: Column(
             children: [
@@ -263,6 +272,7 @@ class _DocumentTrendLineChartState extends State<_DocumentTrendLineChart> {
                               points: widget.points,
                               maxValue: widget.maxValue,
                               selectedIndex: _selectedIndex,
+                              accent: widget.accent,
                             ),
                           ),
                           if (selected != null && selectedOffset != null)
@@ -308,8 +318,8 @@ class _DocumentTrendLineChartState extends State<_DocumentTrendLineChart> {
                       ),
                       Text(
                         '${widget.valuePrefix}${formatErpCurrency(selected.value)}${widget.valueSuffix}',
-                        style: const TextStyle(
-                          color: AppColors.primary,
+                        style: TextStyle(
+                          color: widget.accent,
                           fontSize: 13,
                           fontWeight: FontWeight.w900,
                         ),
@@ -341,8 +351,9 @@ class _DocumentTrendLineChartState extends State<_DocumentTrendLineChart> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            color: AppColors.softGreen,
-            borderRadius: BorderRadius.circular(14),
+            color: widget.accent.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: widget.accent.withValues(alpha: 0.10)),
           ),
           child: Row(
             children: [
@@ -358,8 +369,8 @@ class _DocumentTrendLineChartState extends State<_DocumentTrendLineChart> {
               ),
               Text(
                 '${widget.valuePrefix}${formatErpCurrency(widget.total)}${widget.valueSuffix}',
-                style: const TextStyle(
-                  color: AppColors.primary,
+                style: TextStyle(
+                  color: widget.accent,
                   fontSize: 13,
                   fontWeight: FontWeight.w900,
                 ),
@@ -493,17 +504,19 @@ class _DocumentTrendLinePainter extends CustomPainter {
   final List<DocumentTrendPoint> points;
   final double maxValue;
   final int? selectedIndex;
+  final Color accent;
 
   const _DocumentTrendLinePainter({
     required this.points,
     required this.maxValue,
+    required this.accent,
     this.selectedIndex,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final gridPaint = Paint()
-      ..color = AppColors.primary.withValues(alpha: 0.08)
+      ..color = accent.withValues(alpha: 0.08)
       ..strokeWidth = 1;
     for (var i = 0; i <= 3; i++) {
       final y = size.height * i / 3;
@@ -524,48 +537,31 @@ class _DocumentTrendLinePainter extends CustomPainter {
     }
     fillPath.lineTo(chartPoints.last.dx, size.height);
     fillPath.close();
-    final fillPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          AppColors.primary.withValues(alpha: 0.18),
-          AppColors.primary.withValues(alpha: 0.02),
-        ],
-      ).createShader(Offset.zero & size);
+    final fillPaint = Paint()..color = accent.withValues(alpha: 0.08);
     canvas.drawPath(fillPath, fillPaint);
 
     final linePath = Path()..moveTo(chartPoints.first.dx, chartPoints.first.dy);
     for (var i = 1; i < chartPoints.length; i++) {
-      final previous = chartPoints[i - 1];
       final current = chartPoints[i];
-      final midX = (previous.dx + current.dx) / 2;
-      linePath.cubicTo(
-        midX,
-        previous.dy,
-        midX,
-        current.dy,
-        current.dx,
-        current.dy,
-      );
+      linePath.lineTo(current.dx, current.dy);
     }
 
     final linePaint = Paint()
-      ..color = AppColors.primary
+      ..color = accent
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
     canvas.drawPath(linePath, linePaint);
 
-    final dotPaint = Paint()..color = AppColors.primary;
+    final dotPaint = Paint()..color = accent;
     final dotBorderPaint = Paint()..color = AppColors.white;
     for (var i = 0; i < chartPoints.length; i++) {
       final point = chartPoints[i];
       final selected = selectedIndex == i;
       if (selected) {
         final selectedLinePaint = Paint()
-          ..color = AppColors.primary.withValues(alpha: 0.18)
+          ..color = accent.withValues(alpha: 0.18)
           ..strokeWidth = 1.4;
         canvas.drawLine(
           Offset(point.dx, 0),
@@ -582,7 +578,8 @@ class _DocumentTrendLinePainter extends CustomPainter {
   bool shouldRepaint(covariant _DocumentTrendLinePainter oldDelegate) {
     return oldDelegate.points != points ||
         oldDelegate.maxValue != maxValue ||
-        oldDelegate.selectedIndex != selectedIndex;
+        oldDelegate.selectedIndex != selectedIndex ||
+        oldDelegate.accent != accent;
   }
 }
 

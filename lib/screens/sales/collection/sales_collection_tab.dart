@@ -58,7 +58,7 @@ class _SalesCollectionTabState extends State<SalesCollectionTab> {
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
                 child: Column(
                   children: [
                     ErpPeriodFilterCard(
@@ -202,11 +202,18 @@ class _CollectionAgingFilterPanel extends StatelessWidget {
       duration: const Duration(milliseconds: 180),
       opacity: applyDateFilter ? 1 : 0.78,
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         decoration: BoxDecoration(
           color: AppColors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryDark.withValues(alpha: 0.07),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -241,8 +248,12 @@ class _CollectionAgingFilterPanel extends StatelessWidget {
                     ],
                   ),
                 ),
-                Switch(
+                Switch.adaptive(
                   value: applyDateFilter,
+                  activeThumbColor: AppColors.white,
+                  activeTrackColor: AppColors.primary,
+                  inactiveThumbColor: AppColors.white,
+                  inactiveTrackColor: AppColors.border,
                   onChanged: onApplyDateFilterChanged,
                 ),
               ],
@@ -275,19 +286,21 @@ class _CollectionAgingFilterPanel extends StatelessWidget {
             const SizedBox(height: 10),
             Material(
               color: AppColors.surfaceMuted,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(18),
               child: InkWell(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
                 onTap: onPickRange,
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
-                    vertical: 12,
+                    vertical: 13,
                   ),
                   decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                    ),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                   child: Row(
                     children: [
@@ -332,13 +345,13 @@ class _CollectionIconTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 36,
-      height: 36,
+      width: 42,
+      height: 42,
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Icon(icon, color: color, size: 19),
+      child: Icon(icon, color: color, size: 21),
     );
   }
 }
@@ -358,16 +371,18 @@ class _FilterChipButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: selected ? AppColors.primary : AppColors.softGreen,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
         child: Container(
-          height: 40,
+          height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.primary.withValues(alpha: selected ? 0 : 0.18),
+            ),
           ),
           child: Text(
             label,

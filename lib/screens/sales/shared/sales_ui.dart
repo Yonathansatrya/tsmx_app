@@ -14,12 +14,24 @@ class SalesUi {
   );
   static const EdgeInsets cardPadding = EdgeInsets.all(16);
 
-  static BoxDecoration cardDecoration({Color color = AppColors.white}) {
+  static BoxDecoration cardDecoration({
+    Color color = AppColors.white,
+    Color? accent,
+  }) {
+    final shadowColor = accent ?? AppColors.primaryDark;
     return BoxDecoration(
       color: color,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(color: AppColors.border),
-      boxShadow: AppColors.cardShadow,
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(
+        color: accent?.withValues(alpha: 0.14) ?? AppColors.border,
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: shadowColor.withValues(alpha: accent == null ? 0.06 : 0.08),
+          blurRadius: 22,
+          offset: const Offset(0, 10),
+        ),
+      ],
     );
   }
 
@@ -79,12 +91,14 @@ class SalesInfoCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
+  final Color? accent;
 
   const SalesInfoCard({
     super.key,
     required this.child,
     this.padding = SalesUi.cardPadding,
     this.onTap,
+    this.accent,
   });
 
   @override
@@ -92,14 +106,14 @@ class SalesInfoCard extends StatelessWidget {
     final content = Container(
       width: double.infinity,
       padding: padding,
-      decoration: SalesUi.cardDecoration(),
+      decoration: SalesUi.cardDecoration(accent: accent),
       child: child,
     );
     if (onTap == null) return content;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(24),
         onTap: onTap,
         child: content,
       ),
@@ -116,11 +130,18 @@ class SalesPillTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.32)),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.07),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: TabBar(
         controller: controller,
@@ -130,14 +151,21 @@ class SalesPillTabBar extends StatelessWidget {
         indicatorSize: TabBarIndicatorSize.tab,
         indicator: BoxDecoration(
           color: AppColors.primary,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.22),
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         labelColor: AppColors.white,
         unselectedLabelColor: AppColors.slate,
         labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
         unselectedLabelStyle: const TextStyle(
           fontSize: 12,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
         ),
         tabs: tabs,
       ),
@@ -150,6 +178,7 @@ class SalesHeroCard extends StatelessWidget {
   final String subtitle;
   final IconData icon;
   final Widget? trailing;
+  final Color accent;
 
   const SalesHeroCard({
     super.key,
@@ -157,6 +186,7 @@ class SalesHeroCard extends StatelessWidget {
     required this.subtitle,
     required this.icon,
     this.trailing,
+    this.accent = AppColors.primary,
   });
 
   @override
@@ -165,13 +195,13 @@ class SalesHeroCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: accent.withValues(alpha: 0.14)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryDark.withValues(alpha: 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: accent.withValues(alpha: 0.10),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -182,10 +212,10 @@ class SalesHeroCard extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: AppColors.softGreen,
-              borderRadius: BorderRadius.circular(15),
+              color: accent.withValues(alpha: 0.13),
+              borderRadius: BorderRadius.circular(18),
             ),
-            child: Icon(icon, color: AppColors.primary, size: 24),
+            child: Icon(icon, color: accent, size: 24),
           ),
           const SizedBox(width: 12),
           Expanded(

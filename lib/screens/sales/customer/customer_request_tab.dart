@@ -19,7 +19,7 @@ class CustomerRequestTab extends StatelessWidget {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 2),
               child: SalesPillTabBar(
                 tabs: const [
                   Tab(text: 'Inactive'),

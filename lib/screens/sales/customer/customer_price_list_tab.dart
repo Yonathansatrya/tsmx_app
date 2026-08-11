@@ -12,6 +12,10 @@ import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../shared/sales_ui.dart';
 
+const Color _priceTeal = Color(0xFF14B8A6);
+const Color _priceBlue = Color(0xFF3B82F6);
+const Color _priceGreen = Color(0xFF16A34A);
+
 class CustomerPriceListTab extends StatefulWidget {
   const CustomerPriceListTab({super.key});
 
@@ -108,7 +112,7 @@ class _CustomerPriceListTabState extends State<CustomerPriceListTab> {
       useSafeArea: true,
       backgroundColor: AppColors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (context) => _CustomerSelectSheet(
         customers: _customers,
@@ -147,6 +151,7 @@ class _CustomerPriceListTabState extends State<CustomerPriceListTab> {
             icon: Icons.price_check_rounded,
             title: 'Price List Customer',
             subtitle: 'Pilih customer untuk cek harga item yang tersedia.',
+            accent: _priceTeal,
             trailing: IconButton.filledTonal(
               tooltip: 'Refresh',
               onPressed: _loadingCustomers || _loadingPrices
@@ -300,12 +305,14 @@ class _PriceListSummary extends StatelessWidget {
             icon: Icons.sell_outlined,
             label: 'Price List',
             value: priceList.isEmpty ? '-' : priceList,
+            color: _priceTeal,
           ),
           const SizedBox(width: 8),
           _SummaryTile(
             icon: Icons.group_work_rounded,
             label: 'Group',
             value: customerGroup.isEmpty ? '-' : customerGroup,
+            color: _priceGreen,
           ),
           const SizedBox(width: 8),
           _SummaryTile(
@@ -313,6 +320,7 @@ class _PriceListSummary extends StatelessWidget {
             label: 'Item',
             value: itemCount.toString(),
             footer: currency,
+            color: _priceBlue,
           ),
         ],
       ),
@@ -325,12 +333,14 @@ class _SummaryTile extends StatelessWidget {
   final String label;
   final String value;
   final String footer;
+  final Color color;
 
   const _SummaryTile({
     required this.icon,
     required this.label,
     required this.value,
     this.footer = '',
+    required this.color,
   });
 
   @override
@@ -339,20 +349,21 @@ class _SummaryTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.softGreen,
-          borderRadius: BorderRadius.circular(14),
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: color.withValues(alpha: 0.14)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 18, color: AppColors.primary),
+            Icon(icon, size: 18, color: color),
             const SizedBox(height: 8),
             Text(
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.primary,
+              style: TextStyle(
+                color: color,
                 fontSize: 13,
                 fontWeight: FontWeight.w900,
               ),
@@ -384,6 +395,7 @@ class _CustomerItemPriceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SalesInfoCard(
+      accent: _priceTeal,
       padding: const EdgeInsets.all(14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -392,12 +404,12 @@ class _CustomerItemPriceCard extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: AppColors.softGreen,
+              color: _priceTeal.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(
               Icons.inventory_2_outlined,
-              color: AppColors.primary,
+              color: _priceTeal,
               size: 22,
             ),
           ),
@@ -447,7 +459,7 @@ class _CustomerItemPriceCard extends StatelessWidget {
               Text(
                 priceLabel,
                 style: const TextStyle(
-                  color: AppColors.primary,
+                  color: _priceTeal,
                   fontSize: 13,
                   fontWeight: FontWeight.w900,
                 ),
@@ -583,9 +595,11 @@ class _CustomerSelectSheetState extends State<_CustomerSelectSheet> {
                 ),
               ),
               const SizedBox(height: 16),
-              const SalesSectionTitle(
+              const SalesHeroCard(
                 title: 'Pilih Customer',
                 subtitle: 'Cari berdasarkan nama atau kode customer.',
+                icon: Icons.storefront_rounded,
+                accent: _priceTeal,
               ),
               const SizedBox(height: 12),
               TextField(
@@ -607,32 +621,75 @@ class _CustomerSelectSheetState extends State<_CustomerSelectSheet> {
                     : ListView.separated(
                         controller: scrollController,
                         itemCount: rows.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
                           final customer = rows[index];
                           final selected = widget.selected?.id == customer.id;
-                          return ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: CircleAvatar(
-                              backgroundColor: AppColors.softGreen,
-                              child: Icon(
-                                selected
-                                    ? Icons.check_rounded
-                                    : Icons.storefront_rounded,
-                                color: AppColors.primary,
+                          return Material(
+                            color: selected
+                                ? _priceTeal.withValues(alpha: 0.10)
+                                : AppColors.surfaceMuted,
+                            borderRadius: BorderRadius.circular(18),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(18),
+                              onTap: () => Navigator.pop(context, customer),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 42,
+                                      height: 42,
+                                      decoration: BoxDecoration(
+                                        color: _priceTeal.withValues(
+                                          alpha: selected ? 0.16 : 0.10,
+                                        ),
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                      child: Icon(
+                                        selected
+                                            ? Icons.check_rounded
+                                            : Icons.storefront_rounded,
+                                        color: _priceTeal,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            customer.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: AppColors.navy,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            customer.id,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: AppColors.slate,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: AppColors.slate,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            title: Text(
-                              customer.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.navy,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            subtitle: Text(customer.id),
-                            onTap: () => Navigator.pop(context, customer),
                           );
                         },
                       ),

@@ -9,6 +9,11 @@ import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../shared/sales_ui.dart';
 
+const Color _inactiveGreen = Color(0xFF16A34A);
+const Color _inactiveTeal = Color(0xFF14B8A6);
+const Color _inactiveBlue = Color(0xFF3B82F6);
+const Color _inactiveOrange = Color(0xFFF59E0B);
+
 class InactiveCustomerTab extends StatefulWidget {
   const InactiveCustomerTab({super.key});
 
@@ -65,6 +70,7 @@ class _InactiveCustomerTabState extends State<InactiveCustomerTab> {
               title: 'Inactive Customer',
               subtitle: 'Customer tanpa SO atau SI dalam periode tertentu',
               icon: Icons.person_off_rounded,
+              accent: _inactiveGreen,
               trailing: state.isInactiveCustomersLoading
                   ? const SizedBox(
                       width: 20,
@@ -290,18 +296,21 @@ class _InactiveCustomerSummary extends StatelessWidget {
             label: 'Inactive',
             value: total.toString(),
             icon: Icons.person_off_rounded,
+            color: _inactiveGreen,
           ),
           const SizedBox(width: 10),
           _SummaryMetric(
             label: 'Tampil',
             value: visible.toString(),
             icon: Icons.visibility_rounded,
+            color: _inactiveTeal,
           ),
           const SizedBox(width: 10),
           _SummaryMetric(
             label: 'Dokumen',
             value: _documentTypeLabel(documentTypes),
             icon: Icons.date_range_rounded,
+            color: _inactiveBlue,
           ),
         ],
       ),
@@ -507,11 +516,13 @@ class _SummaryMetric extends StatelessWidget {
     required this.label,
     required this.value,
     required this.icon,
+    required this.color,
   });
 
   final String label;
   final String value;
   final IconData icon;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -519,20 +530,21 @@ class _SummaryMetric extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppColors.softGreen,
-          borderRadius: BorderRadius.circular(16),
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: color.withValues(alpha: 0.14)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: AppColors.primary, size: 18),
+            Icon(icon, color: color, size: 18),
             const SizedBox(height: 8),
             Text(
               value,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.primary,
+              style: TextStyle(
+                color: color,
                 fontSize: 14,
                 fontWeight: FontWeight.w900,
               ),
@@ -571,6 +583,7 @@ class _InactiveCustomerCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: SalesInfoCard(
+        accent: _inactiveGreen,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -627,13 +640,16 @@ class _InactiveCustomerCard extends StatelessWidget {
                     vertical: 7,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.warning.withValues(alpha: 0.12),
+                    color: _inactiveOrange.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: _inactiveOrange.withValues(alpha: 0.16),
+                    ),
                   ),
                   child: Text(
                     '${customer.daysSinceLastOrder} hari',
                     style: const TextStyle(
-                      color: AppColors.warning,
+                      color: _inactiveOrange,
                       fontSize: 11,
                       fontWeight: FontWeight.w900,
                     ),

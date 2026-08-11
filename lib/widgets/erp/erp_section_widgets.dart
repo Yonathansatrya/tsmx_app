@@ -18,25 +18,28 @@ class CollectionSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
+    padding: const EdgeInsets.only(bottom: 12),
     child: Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 38,
-          height: 38,
+          width: 44,
+          height: 44,
           decoration: BoxDecoration(
-            color: AppColors.softGreen,
-            borderRadius: BorderRadius.circular(12),
+            color: AppColors.primary.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: Icon(icon, color: AppColors.primary, size: 21),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: AppColors.navy,
                   fontSize: 16,
@@ -45,12 +48,18 @@ class CollectionSectionHeader extends StatelessWidget {
               ),
               Text(
                 subtitle,
-                style: const TextStyle(color: AppColors.slate, fontSize: 12),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
         ),
-        ?trailing,
+        if (trailing != null) ...[const SizedBox(width: 10), trailing!],
       ],
     ),
   );
@@ -75,9 +84,15 @@ class CollectionMetricCard extends StatelessWidget {
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: AppColors.white,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppColors.border),
-      boxShadow: AppColors.cardShadow,
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: color.withValues(alpha: 0.14)),
+      boxShadow: [
+        BoxShadow(
+          color: color.withValues(alpha: 0.10),
+          blurRadius: 24,
+          offset: const Offset(0, 10),
+        ),
+      ],
     ),
     child: Row(
       children: [
@@ -85,8 +100,8 @@ class CollectionMetricCard extends StatelessWidget {
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(13),
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Icon(icon, color: color, size: 22),
         ),
@@ -107,7 +122,11 @@ class CollectionMetricCard extends StatelessWidget {
               ),
               Text(
                 label,
-                style: const TextStyle(color: AppColors.slate, fontSize: 11),
+                style: const TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
@@ -133,16 +152,24 @@ class CollectionInfoPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
+    padding: const EdgeInsets.all(15),
     decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.07),
-      borderRadius: BorderRadius.circular(14),
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(20),
       border: Border.all(color: color.withValues(alpha: 0.18)),
     ),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: color, size: 22),
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppColors.white.withValues(alpha: 0.82),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Icon(icon, color: color, size: 19),
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -177,10 +204,11 @@ class CollectionStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
     decoration: BoxDecoration(
       color: color.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: color.withValues(alpha: 0.14)),
     ),
     child: Text(
       label,
