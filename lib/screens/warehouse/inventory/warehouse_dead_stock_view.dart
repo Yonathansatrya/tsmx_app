@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/stock_ledger_movement.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../utils/erp_format.dart';
-import '../../widgets/erp/erp_empty_state.dart';
-import 'warehouse_widgets.dart';
+import '../../../models/stock_ledger_movement.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../utils/erp_format.dart';
+import '../../../widgets/erp/erp_empty_state.dart';
+import '../shared/warehouse_widgets.dart';
 
 class WarehouseDeadStockView extends StatefulWidget {
   const WarehouseDeadStockView({super.key});

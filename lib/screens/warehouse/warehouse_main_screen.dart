@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../shared/role_main_screen.dart';
-import 'warehouse_inventory_tab.dart';
-import 'warehouse_operations_tab.dart';
-import 'warehouse_overview_tab.dart';
-import 'warehouse_quality_tab.dart';
+import 'inventory/warehouse_inventory_tab.dart';
+import 'operation/warehouse_operations_tab.dart';
+import 'overview/warehouse_overview_tab.dart';
+import 'quality/warehouse_quality_tab.dart';
 
 class WarehouseMainScreen extends StatefulWidget {
   final int initialTabIndex;

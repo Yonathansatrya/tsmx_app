@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/inventory_item.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import 'warehouse_widgets.dart';
+import '../../../models/inventory_item.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../shared/warehouse_widgets.dart';
 
 class WarehouseBarcodeScannerScreen extends StatefulWidget {
   const WarehouseBarcodeScannerScreen({super.key});

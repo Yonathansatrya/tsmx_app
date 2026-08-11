@@ -1,28 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/stock_ledger_movement.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../utils/erp_format.dart';
-import '../../widgets/erp/erp_empty_state.dart';
-import 'warehouse_widgets.dart';
+import '../../../models/stock_ledger_movement.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../widgets/erp/erp_empty_state.dart';
+import '../shared/warehouse_widgets.dart';
 
-enum _AgingBucket { all, fresh, medium, old, veryOld }
+enum _MovementFilter { all, fast, slow }
 
-class WarehouseStockAgingView extends StatefulWidget {
-  const WarehouseStockAgingView({super.key});
+class WarehouseFastSlowMovingView extends StatefulWidget {
+  const WarehouseFastSlowMovingView({super.key});
 
   @override
-  State<WarehouseStockAgingView> createState() =>
-      _WarehouseStockAgingViewState();
+  State<WarehouseFastSlowMovingView> createState() =>
+      _WarehouseFastSlowMovingViewState();
 }
 
-class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
+class _WarehouseFastSlowMovingViewState
+    extends State<WarehouseFastSlowMovingView> {
   final _search = TextEditingController();
-  List<StockAgingItem> _rows = const [];
-  _AgingBucket _bucket = _AgingBucket.all;
+  List<StockMovementVelocityItem> _rows = const [];
+  _MovementFilter _filter = _MovementFilter.all;
   String? _warehouse;
+  int _periodDays = 30;
   bool _loading = true;
   String? _error;
 
@@ -45,7 +46,8 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
       _error = null;
     });
     try {
-      _rows = await context.read<AppState>().fetchStockAging(
+      _rows = await context.read<AppState>().fetchStockMovementVelocity(
+        periodDays: _periodDays,
         forceRefresh: forceRefresh,
       );
     } catch (error) {
@@ -58,10 +60,8 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
   @override
   Widget build(BuildContext context) {
     final rows = _filteredRows();
-    final oldCount = _rows.where((row) => row.ageDays > 90).length;
-    final oldValue = _rows
-        .where((row) => row.ageDays > 90)
-        .fold<double>(0, (sum, row) => sum + row.stockValue);
+    final movingRows = _rows.where((row) => row.outgoingQuantity > 0).length;
+    final idleRows = _rows.length - movingRows;
     final warehouses = _rows.map((row) => row.warehouse).toSet().toList()
       ..sort();
     return RefreshIndicator(
@@ -71,28 +71,23 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
         padding: warehousePagePadding,
         children: [
           const WarehouseSectionHeader(
-            title: 'Stock Aging',
-            subtitle: 'Umur stok berdasarkan tanggal barang masuk terakhir',
-            icon: Icons.timelapse_rounded,
+            title: 'Fast & Slow Moving',
+            subtitle: 'Analisis pergerakan barang keluar per gudang',
+            icon: Icons.speed_rounded,
           ),
           warehouseSectionGap,
           Row(
             children: [
-              Expanded(child: _metric('Stok >90 hari', '$oldCount')),
+              Expanded(child: _metric('Stok bergerak', '$movingRows')),
               const SizedBox(width: 10),
-              Expanded(
-                child: _metric(
-                  'Nilai >90 hari',
-                  'Rp ${formatErpCurrency(oldValue)}',
-                ),
-              ),
+              Expanded(child: _metric('Belum bergerak', '$idleRows')),
             ],
           ),
           const SizedBox(height: 10),
           const WarehouseInfoPanel(
             icon: Icons.info_outline_rounded,
             message:
-                'Umur dihitung dari penerimaan terakhir dalam 365 hari. Item tanpa penerimaan pada periode tersebut ditandai >365 hari.',
+                'Fast moving memiliki qty keluar minimal sebesar rata-rata. Slow moving berada di bawah rata-rata, termasuk yang belum bergerak.',
           ),
           warehouseSectionGap,
           TextField(
@@ -124,15 +119,30 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
             ),
           ),
           const SizedBox(height: 10),
+          DropdownButtonFormField<int>(
+            initialValue: _periodDays,
+            decoration: const InputDecoration(
+              labelText: 'Periode analisis',
+              prefixIcon: Icon(Icons.date_range_outlined),
+            ),
+            items: const [
+              DropdownMenuItem(value: 30, child: Text('30 hari terakhir')),
+              DropdownMenuItem(value: 90, child: Text('90 hari terakhir')),
+            ],
+            onChanged: (value) {
+              if (value == null || value == _periodDays) return;
+              setState(() => _periodDays = value);
+              _load();
+            },
+          ),
+          const SizedBox(height: 10),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _chip('Semua', _AgingBucket.all),
-                _chip('0-30 hari', _AgingBucket.fresh),
-                _chip('31-60 hari', _AgingBucket.medium),
-                _chip('61-90 hari', _AgingBucket.old),
-                _chip('>90 hari', _AgingBucket.veryOld),
+                _chip('Semua', _MovementFilter.all),
+                _chip('Fast moving', _MovementFilter.fast),
+                _chip('Slow moving', _MovementFilter.slow),
               ],
             ),
           ),
@@ -152,53 +162,64 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
           ],
           warehouseSectionGap,
           WarehouseSectionHeader(
-            title: 'Daftar Umur Stok',
+            title: 'Peringkat Pergerakan',
             subtitle: '${rows.length} baris stok ditampilkan',
-            icon: Icons.list_alt_rounded,
+            icon: Icons.format_list_numbered_rounded,
           ),
           const SizedBox(height: 12),
           if (rows.isEmpty && !_loading)
             const ErpEmptyState(
-              title: 'Data stock aging tidak ditemukan',
+              title: 'Data pergerakan tidak ditemukan',
               message: 'Ubah filter atau tarik ke bawah untuk refresh.',
             )
           else
-            ...rows.map(_agingCard),
+            ...rows.asMap().entries.map(
+              (entry) => _movementCard(entry.key + 1, entry.value),
+            ),
         ],
       ),
     );
   }
 
-  Widget _chip(String label, _AgingBucket value) => Padding(
+  Widget _chip(String label, _MovementFilter value) => Padding(
     padding: const EdgeInsets.only(right: 8),
     child: ChoiceChip(
       label: Text(label),
-      selected: _bucket == value,
-      onSelected: (_) => setState(() => _bucket = value),
+      selected: _filter == value,
+      onSelected: (_) => setState(() => _filter = value),
     ),
   );
 
-  List<StockAgingItem> _filteredRows() {
+  List<StockMovementVelocityItem> _filteredRows() {
     final query = _search.text.trim().toLowerCase();
+    final averageOutgoing = _rows.isEmpty
+        ? 0.0
+        : _rows.fold<double>(0, (sum, row) => sum + row.outgoingQuantity) /
+              _rows.length;
     final rows = _rows.where((row) {
-      return (_warehouse == null || row.warehouse == _warehouse) &&
+      final matchesMovement = switch (_filter) {
+        _MovementFilter.fast =>
+          row.outgoingQuantity > 0 && row.outgoingQuantity >= averageOutgoing,
+        _MovementFilter.slow =>
+          row.outgoingQuantity == 0 || row.outgoingQuantity < averageOutgoing,
+        _ => true,
+      };
+      return matchesMovement &&
+          (_warehouse == null || row.warehouse == _warehouse) &&
           (query.isEmpty ||
               row.itemCode.toLowerCase().contains(query) ||
-              row.itemName.toLowerCase().contains(query)) &&
-          _matchesBucket(row.ageDays);
-    }).toList()..sort((a, b) => b.ageDays.compareTo(a.ageDays));
+              row.itemName.toLowerCase().contains(query));
+    }).toList();
+    rows.sort((a, b) {
+      if (_filter == _MovementFilter.slow) {
+        return a.outgoingQuantity.compareTo(b.outgoingQuantity);
+      }
+      return b.outgoingQuantity.compareTo(a.outgoingQuantity);
+    });
     return rows;
   }
 
-  bool _matchesBucket(int days) => switch (_bucket) {
-    _AgingBucket.fresh => days <= 30,
-    _AgingBucket.medium => days >= 31 && days <= 60,
-    _AgingBucket.old => days >= 61 && days <= 90,
-    _AgingBucket.veryOld => days > 90,
-    _ => true,
-  };
-
-  Widget _agingCard(StockAgingItem row) => Padding(
+  Widget _movementCard(int rank, StockMovementVelocityItem row) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
     child: Container(
       padding: const EdgeInsets.all(14),
@@ -215,14 +236,13 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
             height: 46,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: _color(row.ageDays).withValues(alpha: 0.1),
+              color: _movementColor(row).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(13),
             ),
             child: Text(
-              row.ageDays > 365 ? '>365' : '${row.ageDays}',
+              '#$rank',
               style: TextStyle(
-                color: _color(row.ageDays),
-                fontSize: 11,
+                color: _movementColor(row),
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -248,24 +268,13 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  'Qty ${row.quantity} x Rp ${formatErpCurrency(row.valuationRate)} = Rp ${formatErpCurrency(row.stockValue)}',
-                  style: const TextStyle(
-                    color: AppColors.primary,
+                  'Keluar ${_formatQty(row.outgoingQuantity)} | ${row.transactionCount} transaksi | Stok ${row.currentQuantity}',
+                  style: TextStyle(
+                    color: _movementColor(row),
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                if (row.valuationRate <= 0) ...[
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Harga belum tersedia',
-                    style: TextStyle(
-                      color: AppColors.danger,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -287,11 +296,9 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
       children: [
         Text(
           value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
           style: const TextStyle(
             color: AppColors.navy,
-            fontSize: 15,
+            fontSize: 16,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -303,12 +310,12 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
     ),
   );
 
-  Color _color(int days) {
-    if (days > 90) return AppColors.danger;
-    if (days > 60) return AppColors.warning;
-    if (days > 30) return const Color(0xFFCA8A04);
-    return AppColors.success;
-  }
+  Color _movementColor(StockMovementVelocityItem row) =>
+      row.outgoingQuantity > 0 ? AppColors.success : AppColors.warning;
+
+  String _formatQty(double value) => value == value.roundToDouble()
+      ? '${value.toInt()}'
+      : value.toStringAsFixed(2);
 
   String _friendlyError(Object error) => error
       .toString()

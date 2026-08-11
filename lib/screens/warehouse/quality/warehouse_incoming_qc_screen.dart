@@ -2,22 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/quality_inspection_record.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../widgets/erp/erp_empty_state.dart';
-import 'warehouse_widgets.dart';
+import '../../../models/quality_inspection_record.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../widgets/erp/erp_empty_state.dart';
+import '../shared/warehouse_widgets.dart';
 
-class WarehouseProductionQcScreen extends StatefulWidget {
-  const WarehouseProductionQcScreen({super.key});
+class WarehouseIncomingQcScreen extends StatefulWidget {
+  const WarehouseIncomingQcScreen({super.key});
 
   @override
-  State<WarehouseProductionQcScreen> createState() =>
-      _WarehouseProductionQcScreenState();
+  State<WarehouseIncomingQcScreen> createState() =>
+      _WarehouseIncomingQcScreenState();
 }
 
-class _WarehouseProductionQcScreenState
-    extends State<WarehouseProductionQcScreen> {
+class _WarehouseIncomingQcScreenState extends State<WarehouseIncomingQcScreen> {
   final _search = TextEditingController();
   List<QualityInspectionRecord> _rows = const [];
   String? _status;
@@ -44,7 +43,7 @@ class _WarehouseProductionQcScreenState
       _error = null;
     });
     try {
-      _rows = await context.read<AppState>().fetchProductionQualityInspections(
+      _rows = await context.read<AppState>().fetchIncomingQualityInspections(
         periodDays: _periodDays,
         forceRefresh: forceRefresh,
       );
@@ -67,7 +66,7 @@ class _WarehouseProductionQcScreenState
         backgroundColor: AppColors.white,
         surfaceTintColor: Colors.transparent,
         title: const Text(
-          'QC Hasil Produksi',
+          'QC Incoming Barang',
           style: TextStyle(
             color: AppColors.primary,
             fontWeight: FontWeight.w900,
@@ -81,35 +80,23 @@ class _WarehouseProductionQcScreenState
           padding: warehousePagePadding,
           children: [
             const WarehouseSectionHeader(
-              title: 'QC Dalam Proses',
-              subtitle: 'Pantau kualitas item selama proses produksi',
-              icon: Icons.precision_manufacturing_outlined,
+              title: 'Inspeksi Barang Masuk',
+              subtitle: 'Pantau kualitas barang sebelum diterima',
+              icon: Icons.move_to_inbox_rounded,
             ),
             warehouseSectionGap,
             Row(
               children: [
                 Expanded(
-                  child: _metric(
-                    label: 'Diterima',
-                    value: '$accepted',
-                    color: AppColors.success,
-                  ),
+                  child: _metric('Diterima', '$accepted', AppColors.success),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _metric(
-                    label: 'Menunggu',
-                    value: '$pending',
-                    color: AppColors.warning,
-                  ),
+                  child: _metric('Menunggu', '$pending', AppColors.warning),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _metric(
-                    label: 'Ditolak',
-                    value: '$rejected',
-                    color: AppColors.danger,
-                  ),
+                  child: _metric('Ditolak', '$rejected', AppColors.danger),
                 ),
               ],
             ),
@@ -117,13 +104,13 @@ class _WarehouseProductionQcScreenState
             const WarehouseInfoPanel(
               icon: Icons.info_outline_rounded,
               message:
-                  'Data berasal dari Quality Inspection dengan tipe In Process.',
+                  'Data berasal dari Quality Inspection bertipe Incoming. Gunakan referensi Purchase Receipt untuk melacak penerimaan.',
             ),
             warehouseSectionGap,
             TextField(
               controller: _search,
               decoration: const InputDecoration(
-                labelText: 'Cari item, inspeksi, atau referensi',
+                labelText: 'Cari item, inspeksi, atau penerimaan',
                 prefixIcon: Icon(Icons.search_rounded),
               ),
             ),
@@ -175,16 +162,16 @@ class _WarehouseProductionQcScreenState
             ],
             warehouseSectionGap,
             WarehouseSectionHeader(
-              title: 'Daftar QC Produksi',
+              title: 'Daftar QC Incoming',
               subtitle: '${rows.length} inspeksi ditampilkan',
               icon: Icons.list_alt_rounded,
             ),
             const SizedBox(height: 12),
             if (rows.isEmpty && !_loading)
               const ErpEmptyState(
-                title: 'QC hasil produksi tidak ditemukan',
+                title: 'QC incoming tidak ditemukan',
                 message:
-                    'Pastikan Quality Inspection menggunakan tipe In Process.',
+                    'Pastikan Quality Inspection menggunakan tipe Incoming.',
               )
             else
               ...rows.map(_inspectionCard),
@@ -270,6 +257,18 @@ class _WarehouseProductionQcScreenState
                       ),
                     ),
                   ],
+                  if (row.remarks.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      row.remarks,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -301,11 +300,7 @@ class _WarehouseProductionQcScreenState
     );
   }
 
-  Widget _metric({
-    required String label,
-    required String value,
-    required Color color,
-  }) => Container(
+  Widget _metric(String label, String value, Color color) => Container(
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: AppColors.white,

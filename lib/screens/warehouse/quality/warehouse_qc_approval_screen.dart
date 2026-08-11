@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/quality_inspection_record.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../widgets/erp/erp_empty_state.dart';
-import 'warehouse_widgets.dart';
+import '../../../models/quality_inspection_record.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../widgets/erp/erp_empty_state.dart';
+import '../shared/warehouse_widgets.dart';
 
 class WarehouseQcApprovalScreen extends StatefulWidget {
   const WarehouseQcApprovalScreen({super.key});

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/inventory_item.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import 'warehouse_widgets.dart';
+import '../../../models/inventory_item.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../shared/warehouse_widgets.dart';
 
 class WarehouseOverviewTab extends StatelessWidget {
   final ValueChanged<int> onMenuSelected;
@@ -33,109 +33,73 @@ class WarehouseOverviewTab extends StatelessWidget {
             warehouses: state.warehouses.length,
             lowStock: lowStock,
           ),
-          warehouseSectionGap,
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
-                child: _MetricCard(
+                child: WarehouseMetricTile(
                   label: 'Gudang',
                   value: '${state.warehouses.length}',
                   icon: Icons.warehouse_outlined,
+                  color: warehousePurple,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _MetricCard(
+                child: WarehouseMetricTile(
                   label: 'Peringatan stok',
                   value: '$lowStock',
                   icon: Icons.warning_amber_rounded,
-                  color: lowStock > 0 ? AppColors.warning : AppColors.success,
+                  color: lowStock > 0 ? warehouseOrange : warehouseGreen,
                 ),
               ),
             ],
           ),
           warehouseSectionGap,
-          const WarehouseSectionHeader(
-            title: 'Menu Utama',
-            subtitle: 'Pilih area kerja sesuai kebutuhan',
-            icon: Icons.apps_rounded,
+          const Text(
+            'Menu Gudang',
+            style: TextStyle(
+              color: AppColors.navy,
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+            ),
           ),
-          const SizedBox(height: 12),
-          WarehouseActionCard(
-            title: 'Operasi Gudang',
-            subtitle: 'Transfer, penerimaan, pengeluaran, dan stock opname',
-            icon: Icons.swap_horiz_rounded,
-            onTap: () => onMenuSelected(1),
-          ),
-          WarehouseActionCard(
-            title: 'Monitoring Stok',
-            subtitle: 'Cek stok realtime dan peringatan stok minimum',
-            icon: Icons.inventory_2_rounded,
-            onTap: () => onMenuSelected(2),
-          ),
-          WarehouseActionCard(
-            title: 'Quality Control',
-            subtitle: 'Incoming QC, hasil produksi, reject, dan approval',
-            icon: Icons.fact_check_rounded,
-            onTap: () => onMenuSelected(3),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: WarehouseActionGridCard(
+                  title: 'Operasi',
+                  subtitle: 'Transfer dan stock opname',
+                  icon: Icons.swap_horiz_rounded,
+                  color: warehouseOrange,
+                  onTap: () => onMenuSelected(1),
+                ),
+              ),
+              Expanded(
+                child: WarehouseActionGridCard(
+                  title: 'Stok',
+                  subtitle: 'Realtime, valuasi, aging',
+                  icon: Icons.inventory_2_rounded,
+                  color: warehouseGreen,
+                  onTap: () => onMenuSelected(2),
+                ),
+              ),
+              Expanded(
+                child: WarehouseActionGridCard(
+                  title: 'QC',
+                  subtitle: 'Inspection dan approval',
+                  icon: Icons.fact_check_rounded,
+                  color: warehouseBlue,
+                  onTap: () => onMenuSelected(3),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
-}
-
-class _MetricCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _MetricCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.color = AppColors.primary,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppColors.border),
-      boxShadow: AppColors.cardShadow,
-    ),
-    child: Row(
-      children: [
-        CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.1),
-          foregroundColor: color,
-          child: Icon(icon),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              Text(
-                label,
-                style: const TextStyle(color: AppColors.slate, fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
 }
 
 class _WarehouseHeroCard extends StatelessWidget {
@@ -148,16 +112,16 @@ class _WarehouseHeroCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryDark.withValues(alpha: 0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: AppColors.primaryDark.withValues(alpha: 0.05),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -168,12 +132,19 @@ class _WarehouseHeroCard extends StatelessWidget {
             width: 46,
             height: 46,
             decoration: BoxDecoration(
-              color: AppColors.softGreen,
-              borderRadius: BorderRadius.circular(15),
+              color: warehouseGreen,
+              borderRadius: BorderRadius.circular(17),
+              boxShadow: [
+                BoxShadow(
+                  color: warehouseGreen.withValues(alpha: 0.22),
+                  blurRadius: 16,
+                  offset: const Offset(0, 9),
+                ),
+              ],
             ),
             child: const Icon(
               Icons.warehouse_rounded,
-              color: AppColors.primary,
+              color: AppColors.white,
               size: 24,
             ),
           ),
@@ -183,7 +154,7 @@ class _WarehouseHeroCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Warehouse Workspace',
+                  'Warehouse',
                   style: TextStyle(
                     color: AppColors.navy,
                     fontSize: 17,

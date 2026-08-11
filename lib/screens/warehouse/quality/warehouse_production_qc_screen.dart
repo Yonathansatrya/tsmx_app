@@ -2,21 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/quality_inspection_record.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../widgets/erp/erp_empty_state.dart';
-import 'warehouse_widgets.dart';
+import '../../../models/quality_inspection_record.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../widgets/erp/erp_empty_state.dart';
+import '../shared/warehouse_widgets.dart';
 
-class WarehouseIncomingQcScreen extends StatefulWidget {
-  const WarehouseIncomingQcScreen({super.key});
+class WarehouseProductionQcScreen extends StatefulWidget {
+  const WarehouseProductionQcScreen({super.key});
 
   @override
-  State<WarehouseIncomingQcScreen> createState() =>
-      _WarehouseIncomingQcScreenState();
+  State<WarehouseProductionQcScreen> createState() =>
+      _WarehouseProductionQcScreenState();
 }
 
-class _WarehouseIncomingQcScreenState extends State<WarehouseIncomingQcScreen> {
+class _WarehouseProductionQcScreenState
+    extends State<WarehouseProductionQcScreen> {
   final _search = TextEditingController();
   List<QualityInspectionRecord> _rows = const [];
   String? _status;
@@ -43,7 +44,7 @@ class _WarehouseIncomingQcScreenState extends State<WarehouseIncomingQcScreen> {
       _error = null;
     });
     try {
-      _rows = await context.read<AppState>().fetchIncomingQualityInspections(
+      _rows = await context.read<AppState>().fetchProductionQualityInspections(
         periodDays: _periodDays,
         forceRefresh: forceRefresh,
       );
@@ -66,7 +67,7 @@ class _WarehouseIncomingQcScreenState extends State<WarehouseIncomingQcScreen> {
         backgroundColor: AppColors.white,
         surfaceTintColor: Colors.transparent,
         title: const Text(
-          'QC Incoming Barang',
+          'QC Hasil Produksi',
           style: TextStyle(
             color: AppColors.primary,
             fontWeight: FontWeight.w900,
@@ -80,23 +81,35 @@ class _WarehouseIncomingQcScreenState extends State<WarehouseIncomingQcScreen> {
           padding: warehousePagePadding,
           children: [
             const WarehouseSectionHeader(
-              title: 'Inspeksi Barang Masuk',
-              subtitle: 'Pantau kualitas barang sebelum diterima',
-              icon: Icons.move_to_inbox_rounded,
+              title: 'QC Dalam Proses',
+              subtitle: 'Pantau kualitas item selama proses produksi',
+              icon: Icons.precision_manufacturing_outlined,
             ),
             warehouseSectionGap,
             Row(
               children: [
                 Expanded(
-                  child: _metric('Diterima', '$accepted', AppColors.success),
+                  child: _metric(
+                    label: 'Diterima',
+                    value: '$accepted',
+                    color: AppColors.success,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _metric('Menunggu', '$pending', AppColors.warning),
+                  child: _metric(
+                    label: 'Menunggu',
+                    value: '$pending',
+                    color: AppColors.warning,
+                  ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _metric('Ditolak', '$rejected', AppColors.danger),
+                  child: _metric(
+                    label: 'Ditolak',
+                    value: '$rejected',
+                    color: AppColors.danger,
+                  ),
                 ),
               ],
             ),
@@ -104,13 +117,13 @@ class _WarehouseIncomingQcScreenState extends State<WarehouseIncomingQcScreen> {
             const WarehouseInfoPanel(
               icon: Icons.info_outline_rounded,
               message:
-                  'Data berasal dari Quality Inspection bertipe Incoming. Gunakan referensi Purchase Receipt untuk melacak penerimaan.',
+                  'Data berasal dari Quality Inspection dengan tipe In Process.',
             ),
             warehouseSectionGap,
             TextField(
               controller: _search,
               decoration: const InputDecoration(
-                labelText: 'Cari item, inspeksi, atau penerimaan',
+                labelText: 'Cari item, inspeksi, atau referensi',
                 prefixIcon: Icon(Icons.search_rounded),
               ),
             ),
@@ -162,16 +175,16 @@ class _WarehouseIncomingQcScreenState extends State<WarehouseIncomingQcScreen> {
             ],
             warehouseSectionGap,
             WarehouseSectionHeader(
-              title: 'Daftar QC Incoming',
+              title: 'Daftar QC Produksi',
               subtitle: '${rows.length} inspeksi ditampilkan',
               icon: Icons.list_alt_rounded,
             ),
             const SizedBox(height: 12),
             if (rows.isEmpty && !_loading)
               const ErpEmptyState(
-                title: 'QC incoming tidak ditemukan',
+                title: 'QC hasil produksi tidak ditemukan',
                 message:
-                    'Pastikan Quality Inspection menggunakan tipe Incoming.',
+                    'Pastikan Quality Inspection menggunakan tipe In Process.',
               )
             else
               ...rows.map(_inspectionCard),
@@ -257,18 +270,6 @@ class _WarehouseIncomingQcScreenState extends State<WarehouseIncomingQcScreen> {
                       ),
                     ),
                   ],
-                  if (row.remarks.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      row.remarks,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.slate,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -300,7 +301,11 @@ class _WarehouseIncomingQcScreenState extends State<WarehouseIncomingQcScreen> {
     );
   }
 
-  Widget _metric(String label, String value, Color color) => Container(
+  Widget _metric({
+    required String label,
+    required String value,
+    required Color color,
+  }) => Container(
     padding: const EdgeInsets.all(12),
     decoration: BoxDecoration(
       color: AppColors.white,

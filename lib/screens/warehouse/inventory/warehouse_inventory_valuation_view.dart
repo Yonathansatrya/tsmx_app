@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/inventory_item.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import '../../utils/erp_format.dart';
-import '../../widgets/erp/erp_empty_state.dart';
-import 'warehouse_widgets.dart';
+import '../../../models/inventory_item.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../../../utils/erp_format.dart';
+import '../../../widgets/erp/erp_empty_state.dart';
+import '../shared/warehouse_widgets.dart';
 
 enum _ValuationSort { highestValue, lowestValue, highestQty, itemName }
 

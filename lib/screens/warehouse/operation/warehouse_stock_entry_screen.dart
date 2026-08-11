@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/inventory_item.dart';
-import '../../models/warehouse_info.dart';
-import '../../state/app_state.dart';
-import '../../theme/app_colors.dart';
-import 'warehouse_widgets.dart';
+import '../../../models/inventory_item.dart';
+import '../../../models/warehouse_info.dart';
+import '../../../state/app_state.dart';
+import '../../../theme/app_colors.dart';
+import '../shared/warehouse_widgets.dart';
 
 enum WarehouseOperation {
   transfer(
