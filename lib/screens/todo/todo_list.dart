@@ -17,7 +17,14 @@ import '../../widgets/erp/erp_workflow_helper.dart';
 
 enum _ApprovalTodoSortOption { newest, oldest, amountHigh, amountLow }
 
-const _allDoctypesFilterValue = '__all_doctypes__';
+enum _ApprovalReviewFilter {
+  todo,
+  done,
+  submitted,
+  approved,
+  rejected,
+  cancelled,
+}
 
 class SalesOrderApprovalScreen extends StatefulWidget {
   final bool embedded;
@@ -38,10 +45,8 @@ class SalesOrderApprovalScreen extends StatefulWidget {
       _SalesOrderApprovalScreenState();
 }
 
-class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
-    with SingleTickerProviderStateMixin {
+class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
   final _search = TextEditingController();
-  late final TabController _tabController;
   List<ErpApprovalTodo> _rows = const [];
   List<SalesOrderApprovalHistory> _history = const [];
   Timer? _syncTimer;
@@ -51,15 +56,12 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   String? _historyError;
   String? _doctypeQuickFilter;
   String? _statusQuickFilter;
+  _ApprovalReviewFilter _reviewFilter = _ApprovalReviewFilter.todo;
   _ApprovalTodoSortOption _sortOption = _ApprovalTodoSortOption.newest;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(
-      length: widget.showHistoryTab ? 2 : 1,
-      vsync: this,
-    );
     _search.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -88,7 +90,6 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     _syncTimer?.cancel();
     _search.removeListener(_onSearchChanged);
     _search.dispose();
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -167,54 +168,9 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
 
   @override
   Widget build(BuildContext context) {
-    final content = TabBarView(
-      controller: _tabController,
-      children: [_todoTab(), if (widget.showHistoryTab) _historyTab()],
-    );
+    final content = _approvalList();
     if (widget.embedded) {
-      return ColoredBox(
-        color: AppColors.background,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-              child: Container(
-                height: 50,
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: AppColors.cardShadow,
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  dividerColor: Colors.transparent,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  indicator: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  labelColor: AppColors.white,
-                  unselectedLabelColor: AppColors.slate,
-                  labelStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                  tabs: [
-                    Tab(text: 'Todo (${_rows.length})'),
-                    if (widget.showHistoryTab) const Tab(text: 'Riwayat'),
-                  ],
-                ),
-              ),
-            ),
-            Expanded(child: content),
-          ],
-        ),
-      );
+      return ColoredBox(color: AppColors.background, child: content);
     }
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -236,41 +192,12 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
             icon: const Icon(Icons.sync_rounded),
           ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(58),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: AppColors.background,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: TabBar(
-                controller: _tabController,
-                dividerColor: Colors.transparent,
-                indicatorSize: TabBarIndicatorSize.tab,
-                indicator: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                labelColor: AppColors.white,
-                unselectedLabelColor: AppColors.slate,
-                tabs: [
-                  Tab(text: 'Todo (${_rows.length})'),
-                  if (widget.showHistoryTab) const Tab(text: 'Riwayat'),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
       body: content,
     );
   }
 
-  Widget _todoTab() {
+  Widget _approvalList() {
     final query = _search.text.trim().toLowerCase();
     final baseRows = _rows.where((row) {
       final matchType =
@@ -284,9 +211,12 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
           row.workflowState.toLowerCase().contains(query);
       return matchType && matchSearch;
     }).toList();
+    final historyGroups = _filteredHistoryGroups(query);
     final statusOptions = _approvalStatusOptions(baseRows);
     final statusCounts = _approvalStatusCounts(baseRows);
-    final doctypeOptions = _approvalDoctypeOptions(_rows);
+    final doctypeOptions = _approvalDoctypeOptions(_rows, _history);
+    final allHistoryGroups = _groupedHistory();
+    final reviewTabs = _availableReviewFilters(allHistoryGroups);
     final rows = baseRows.where((row) {
       return _statusQuickFilter == null ||
           _approvalStatus(row).toLowerCase() ==
@@ -294,25 +224,37 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     }).toList();
     rows.sort(_compareApprovalTodos);
     final summary = _ApprovalTodoSummary.from(_rows);
+    final visibleCount = _reviewFilter == _ApprovalReviewFilter.todo
+        ? rows.length
+        : historyGroups.length;
+    final totalCount = _reviewFilter == _ApprovalReviewFilter.todo
+        ? _rows.length
+        : _reviewCount(_reviewFilter, allHistoryGroups);
     return RefreshIndicator(
       onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
         children: [
-          _ApprovalTodoSummaryCard(
-            summary: summary,
-            selectedDoctype: _doctypeQuickFilter,
-            onSelected: (doctype) => setState(() {
-              _doctypeQuickFilter = _doctypeQuickFilter == doctype
-                  ? null
-                  : doctype;
-            }),
+          _ApprovalTodoSummaryCard(summary: summary),
+          const SizedBox(height: 12),
+          _ApprovalReviewTabBar(
+            selected: _reviewFilter,
+            tabs: reviewTabs,
+            countFor: (filter) => _reviewCount(filter, allHistoryGroups),
+            labelFor: _reviewFilterLabel,
+            onChanged: (filter) {
+              setState(() {
+                _reviewFilter = filter;
+                _statusQuickFilter = null;
+              });
+            },
           ),
           const SizedBox(height: 12),
           _approvalSearchBox(
-            visibleCount: rows.length,
-            totalCount: _rows.length,
+            visibleCount: visibleCount,
+            totalCount: totalCount,
+            summary: summary,
             statusOptions: statusOptions,
             statusCounts: statusCounts,
             allStatusCount: baseRows.length,
@@ -326,15 +268,32 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
             const SizedBox(height: 12),
             _errorBox(_error!),
           ],
+          if (_historyError != null &&
+              _reviewFilter != _ApprovalReviewFilter.todo) ...[
+            const SizedBox(height: 12),
+            _errorBox(_historyError!),
+          ],
           const SizedBox(height: 16),
-          if (rows.isEmpty && !_loading)
+          if (_reviewFilter == _ApprovalReviewFilter.todo &&
+              rows.isEmpty &&
+              !_loading)
             const ErpEmptyState(
               title: 'Todo approval sudah kosong',
               message:
                   'Hanya action Workflow yang tersedia untuk role login yang ditampilkan.',
             )
-          else
+          else if (_reviewFilter == _ApprovalReviewFilter.todo)
             ...rows.map(_approvalCard),
+          if (_reviewFilter != _ApprovalReviewFilter.todo &&
+              historyGroups.isEmpty &&
+              !_loading)
+            const ErpEmptyState(
+              title: 'Belum ada approval selesai',
+              message:
+                  'Dokumen yang sudah pernah di-approve/reject dari aplikasi akan muncul di sini.',
+            )
+          else if (_reviewFilter != _ApprovalReviewFilter.todo)
+            ...historyGroups.map(_historyGroupCard),
         ],
       ),
     );
@@ -343,6 +302,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
   Widget _approvalSearchBox({
     required int visibleCount,
     required int totalCount,
+    required _ApprovalTodoSummary summary,
     required List<String> statusOptions,
     required Map<String, int> statusCounts,
     required int allStatusCount,
@@ -352,44 +312,13 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
         _search.text.trim().isNotEmpty ||
         _doctypeQuickFilter != null ||
         _statusQuickFilter != null ||
+        _reviewFilter != _ApprovalReviewFilter.todo ||
         _sortOption != _ApprovalTodoSortOption.newest;
+    final selectedDoctype = doctypeOptions.contains(_doctypeQuickFilter)
+        ? _doctypeQuickFilter
+        : null;
     return Column(
       children: [
-        TextField(
-          controller: _search,
-          textInputAction: TextInputAction.search,
-          decoration: InputDecoration(
-            hintText: 'Search SO or customer...',
-            prefixIcon: const Icon(Icons.search_rounded),
-            suffixIcon: _search.text.trim().isEmpty
-                ? null
-                : IconButton(
-                    tooltip: 'Bersihkan pencarian',
-                    onPressed: _search.clear,
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-            filled: true,
-            fillColor: AppColors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.primary),
-            ),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 15,
-            ),
-            isDense: true,
-          ),
-        ),
-        const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -401,6 +330,93 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
           child: LayoutBuilder(
             builder: (context, constraints) {
               final compact = constraints.maxWidth < 390;
+              final searchField = TextField(
+                controller: _search,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: 'Search SO or customer...',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _search.text.trim().isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Bersihkan pencarian',
+                          onPressed: _search.clear,
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                  filled: true,
+                  fillColor: AppColors.background,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: AppColors.primary),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 15,
+                  ),
+                  isDense: true,
+                ),
+              );
+              final doctypeField = DropdownButtonFormField<String?>(
+                initialValue: selectedDoctype,
+                isExpanded: true,
+                decoration: InputDecoration(
+                  labelText: 'Tipe dokumen',
+                  prefixIcon: Icon(
+                    selectedDoctype == null
+                        ? Icons.list_alt_rounded
+                        : _approvalIcon(selectedDoctype),
+                    size: 18,
+                    color: selectedDoctype == null
+                        ? AppColors.primary
+                        : _approvalAccent(selectedDoctype),
+                  ),
+                  filled: true,
+                  fillColor: AppColors.background,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: AppColors.primary),
+                  ),
+                  isDense: true,
+                ),
+                items: [
+                  DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text(
+                      'Semua dokumen (${summary.total})',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  ...doctypeOptions.map(
+                    (doctype) => DropdownMenuItem<String?>(
+                      value: doctype,
+                      child: Text(
+                        '${_approvalShortLabel(doctype)} - $doctype (${summary.countFor(doctype)})',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: (doctype) =>
+                    setState(() => _doctypeQuickFilter = doctype),
+              );
               final sortField =
                   DropdownButtonFormField<_ApprovalTodoSortOption>(
                     initialValue: _sortOption,
@@ -442,16 +458,6 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                 children: [
                   Expanded(
                     child: _ApprovalFilterButton(
-                      icon: Icons.tune_rounded,
-                      label: _doctypeQuickFilter == null
-                          ? 'Filter'
-                          : 'Filter 1',
-                      onTap: () => _openDoctypeFilter(doctypeOptions),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _ApprovalFilterButton(
                       icon: Icons.restart_alt_rounded,
                       label: 'Reset',
                       onTap: hasActiveFilter ? _resetApprovalFilters : null,
@@ -460,41 +466,50 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
                 ],
               );
 
-              if (compact) {
-                return Column(
-                  children: [sortField, const SizedBox(height: 10), actions],
-                );
-              }
-
-              return Row(
+              return Column(
                 children: [
-                  Expanded(child: sortField),
-                  const SizedBox(width: 10),
-                  SizedBox(width: 150, child: actions),
+                  searchField,
+                  const SizedBox(height: 12),
+                  doctypeField,
+                  const SizedBox(height: 10),
+                  if (compact) ...[
+                    sortField,
+                    const SizedBox(height: 10),
+                    actions,
+                  ] else
+                    Row(
+                      children: [
+                        Expanded(child: sortField),
+                        const SizedBox(width: 10),
+                        SizedBox(width: 110, child: actions),
+                      ],
+                    ),
                 ],
               );
             },
           ),
         ),
-        const SizedBox(height: 14),
-        ErpStatusChipBar<String?>(
-          selected: _statusQuickFilter,
-          onSelected: (status) => setState(() => _statusQuickFilter = status),
-          chips: [
-            ErpStatusChip<String?>(
-              label: 'All',
-              value: null,
-              count: allStatusCount,
-            ),
-            ...statusOptions.map(
-              (status) => ErpStatusChip<String?>(
-                label: status,
-                value: status,
-                count: statusCounts[status] ?? 0,
+        if (_reviewFilter == _ApprovalReviewFilter.todo) ...[
+          const SizedBox(height: 14),
+          ErpStatusChipBar<String?>(
+            selected: _statusQuickFilter,
+            onSelected: (status) => setState(() => _statusQuickFilter = status),
+            chips: [
+              ErpStatusChip<String?>(
+                label: 'All',
+                value: null,
+                count: allStatusCount,
               ),
-            ),
-          ],
-        ),
+              ...statusOptions.map(
+                (status) => ErpStatusChip<String?>(
+                  label: status,
+                  value: status,
+                  count: statusCounts[status] ?? 0,
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 10),
         Row(
           children: [
@@ -525,140 +540,10 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
       _search.clear();
       _doctypeQuickFilter = null;
       _statusQuickFilter = null;
+      _reviewFilter = _ApprovalReviewFilter.todo;
       _sortOption = _ApprovalTodoSortOption.newest;
     });
   }
-
-  Future<void> _openDoctypeFilter(List<String> doctypeOptions) async {
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Filter tipe dokumen',
-                style: TextStyle(
-                  color: AppColors.navy,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                leading: const Icon(Icons.list_alt_rounded),
-                title: const Text('Semua dokumen'),
-                trailing: _doctypeQuickFilter == null
-                    ? const Icon(Icons.check_rounded, color: AppColors.primary)
-                    : null,
-                onTap: () => Navigator.pop(context, _allDoctypesFilterValue),
-              ),
-              ...doctypeOptions.map(
-                (doctype) => ListTile(
-                  leading: Icon(_approvalIcon(doctype)),
-                  title: Text(doctype),
-                  trailing: _doctypeQuickFilter == doctype
-                      ? const Icon(
-                          Icons.check_rounded,
-                          color: AppColors.primary,
-                        )
-                      : null,
-                  onTap: () => Navigator.pop(context, doctype),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (!mounted) return;
-    if (selected == null) return;
-    setState(() {
-      _doctypeQuickFilter = selected == _allDoctypesFilterValue
-          ? null
-          : selected;
-    });
-  }
-
-  Widget _historyTab() => RefreshIndicator(
-    onRefresh: () => _load(forceRefresh: true),
-    child: ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-      children: [
-        _summaryCard(
-          icon: Icons.history_rounded,
-          title: 'Riwayat Keputusan',
-          message:
-              'Log approve dan reject yang dilakukan melalui ${context.watch<AppState>().appDisplayName}.',
-        ),
-        if (_loading) ...[
-          const SizedBox(height: 12),
-          const LinearProgressIndicator(),
-        ],
-        if (_historyError != null) ...[
-          const SizedBox(height: 12),
-          _errorBox(_historyError!),
-        ],
-        const SizedBox(height: 16),
-        if (_history.isEmpty && !_loading)
-          const ErpEmptyState(
-            title: 'Belum ada riwayat approval',
-            message:
-                'Riwayat akan muncul setelah approve atau reject dilakukan dari aplikasi.',
-          )
-        else
-          ..._groupedHistory().map(_historyGroupCard),
-      ],
-    ),
-  );
-
-  Widget _summaryCard({
-    required IconData icon,
-    required String title,
-    required String message,
-  }) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: _cardDecoration(),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        CircleAvatar(
-          backgroundColor: AppColors.softGreen,
-          foregroundColor: AppColors.primary,
-          child: Icon(icon),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  color: AppColors.navy,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                message,
-                style: const TextStyle(color: AppColors.slate, fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
 
   Widget _approvalCard(ErpApprovalTodo row) => Padding(
     padding: const EdgeInsets.only(bottom: 10),
@@ -855,6 +740,15 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     return 'Rp ${formatErpCurrency(row.amount)}';
   }
 
+  String _approvalShortLabel(String doctype) => switch (doctype) {
+    'Purchase Order' => 'PO',
+    'Purchase Invoice' => 'PI',
+    'Material Request' => 'MR',
+    'Journal Entry' => 'JE',
+    'Sales Order' => 'SO',
+    _ => doctype,
+  };
+
   int _compareApprovalTodos(ErpApprovalTodo a, ErpApprovalTodo b) {
     return switch (_sortOption) {
       _ApprovalTodoSortOption.newest => _compareDateDesc(a.date, b.date),
@@ -913,10 +807,117 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen>
     return counts;
   }
 
-  List<String> _approvalDoctypeOptions(List<ErpApprovalTodo> rows) {
-    final doctypes = rows.map((row) => row.doctype).toSet().toList();
+  List<String> _approvalDoctypeOptions(
+    List<ErpApprovalTodo> rows,
+    List<SalesOrderApprovalHistory> history,
+  ) {
+    final doctypes = {
+      ...rows.map((row) => row.doctype),
+      ...history.map((row) => row.doctype),
+    }.where((doctype) => doctype.trim().isNotEmpty).toList();
     doctypes.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return doctypes;
+  }
+
+  List<_ApprovalHistoryGroup> _filteredHistoryGroups(String query) {
+    final groups = _groupedHistory().where((group) {
+      if (!_historyGroupMatchesReviewFilter(group, _reviewFilter)) {
+        return false;
+      }
+      final matchType =
+          _doctypeQuickFilter == null || group.doctype == _doctypeQuickFilter;
+      if (!matchType) return false;
+      if (query.isEmpty) return true;
+      final latest = group.latest;
+      return group.documentName.toLowerCase().contains(query) ||
+          group.doctype.toLowerCase().contains(query) ||
+          latest.actor.toLowerCase().contains(query) ||
+          latest.content.toLowerCase().contains(query) ||
+          latest.createdAt.toLowerCase().contains(query);
+    }).toList();
+    groups.sort((a, b) {
+      return switch (_sortOption) {
+        _ApprovalTodoSortOption.newest => b.latest.createdAt.compareTo(
+          a.latest.createdAt,
+        ),
+        _ApprovalTodoSortOption.oldest => a.latest.createdAt.compareTo(
+          b.latest.createdAt,
+        ),
+        _ApprovalTodoSortOption.amountHigh ||
+        _ApprovalTodoSortOption.amountLow => b.latest.createdAt.compareTo(
+          a.latest.createdAt,
+        ),
+      };
+    });
+    return groups;
+  }
+
+  List<_ApprovalReviewFilter> _availableReviewFilters(
+    List<_ApprovalHistoryGroup> historyGroups,
+  ) {
+    final filters = <_ApprovalReviewFilter>[_ApprovalReviewFilter.todo];
+    if (historyGroups.isNotEmpty) filters.add(_ApprovalReviewFilter.done);
+    for (final filter in const [
+      _ApprovalReviewFilter.submitted,
+      _ApprovalReviewFilter.approved,
+      _ApprovalReviewFilter.rejected,
+      _ApprovalReviewFilter.cancelled,
+    ]) {
+      if (_reviewCount(filter, historyGroups) > 0) filters.add(filter);
+    }
+    if (!filters.contains(_reviewFilter)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !filters.contains(_reviewFilter)) {
+          setState(() => _reviewFilter = _ApprovalReviewFilter.todo);
+        }
+      });
+    }
+    return filters;
+  }
+
+  int _reviewCount(
+    _ApprovalReviewFilter filter,
+    List<_ApprovalHistoryGroup> historyGroups,
+  ) {
+    if (filter == _ApprovalReviewFilter.todo) return _rows.length;
+    return historyGroups
+        .where((group) => _historyGroupMatchesReviewFilter(group, filter))
+        .length;
+  }
+
+  bool _historyGroupMatchesReviewFilter(
+    _ApprovalHistoryGroup group,
+    _ApprovalReviewFilter filter,
+  ) {
+    if (filter == _ApprovalReviewFilter.todo) return false;
+    if (filter == _ApprovalReviewFilter.done) return true;
+    return _historyReviewFilter(group) == filter;
+  }
+
+  _ApprovalReviewFilter _historyReviewFilter(_ApprovalHistoryGroup group) {
+    final content = _plainText(group.latest.content).toLowerCase();
+    if (content.contains('reject') ||
+        content.contains('return') ||
+        content.contains('tolak')) {
+      return _ApprovalReviewFilter.rejected;
+    }
+    if (content.contains('cancel') || content.contains('batal')) {
+      return _ApprovalReviewFilter.cancelled;
+    }
+    if (content.contains('submit')) return _ApprovalReviewFilter.submitted;
+    if (content.contains('approve')) return _ApprovalReviewFilter.approved;
+    return _ApprovalReviewFilter.done;
+  }
+
+  String _reviewFilterLabel(_ApprovalReviewFilter filter) {
+    return switch (filter) {
+      _ApprovalReviewFilter.todo => 'To-do',
+      _ApprovalReviewFilter.done => 'Done',
+      _ApprovalReviewFilter.submitted => 'Submitted',
+      _ApprovalReviewFilter.approved => 'Approved',
+      _ApprovalReviewFilter.rejected => 'Rejected',
+      _ApprovalReviewFilter.cancelled => 'Cancelled',
+    };
   }
 
   Widget _historyGroupCard(_ApprovalHistoryGroup group) {
@@ -1138,6 +1139,127 @@ class _ApprovalFilterButton extends StatelessWidget {
   }
 }
 
+class _ApprovalReviewTabBar extends StatelessWidget {
+  const _ApprovalReviewTabBar({
+    required this.selected,
+    required this.tabs,
+    required this.countFor,
+    required this.labelFor,
+    required this.onChanged,
+  });
+
+  final _ApprovalReviewFilter selected;
+  final List<_ApprovalReviewFilter> tabs;
+  final int Function(_ApprovalReviewFilter filter) countFor;
+  final String Function(_ApprovalReviewFilter filter) labelFor;
+  final ValueChanged<_ApprovalReviewFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tabs.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final tab = tabs[index];
+          return _ApprovalReviewTabButton(
+            label: labelFor(tab),
+            count: countFor(tab),
+            selected: selected == tab,
+            onTap: () => onChanged(tab),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ApprovalReviewTabButton extends StatelessWidget {
+  const _ApprovalReviewTabButton({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final int count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.primary : AppColors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 92),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected
+                  ? AppColors.primary
+                  : AppColors.primary.withValues(alpha: 0.16),
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.14),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? AppColors.white : AppColors.slate,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? AppColors.white.withValues(alpha: 0.18)
+                      : AppColors.softGreen,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: selected
+                        ? AppColors.white.withValues(alpha: 0.24)
+                        : AppColors.primary.withValues(alpha: 0.16),
+                  ),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    color: selected ? AppColors.white : AppColors.primary,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SalesOrderApprovalDetailPage extends StatefulWidget {
   final SalesOrderApproval approval;
   final FutureOr<void> Function() onChanged;
@@ -1203,45 +1325,11 @@ class _ApprovalTodoSummary {
 
 class _ApprovalTodoSummaryCard extends StatelessWidget {
   final _ApprovalTodoSummary summary;
-  final String? selectedDoctype;
-  final ValueChanged<String> onSelected;
 
-  const _ApprovalTodoSummaryCard({
-    required this.summary,
-    required this.selectedDoctype,
-    required this.onSelected,
-  });
-
-  IconData _icon(String doctype) => switch (doctype) {
-    'Purchase Order' => Icons.shopping_bag_rounded,
-    'Purchase Invoice' => Icons.receipt_long_rounded,
-    'Material Request' => Icons.assignment_turned_in_rounded,
-    'Journal Entry' => Icons.auto_stories_rounded,
-    'Sales Order' => Icons.point_of_sale_rounded,
-    _ => Icons.approval_outlined,
-  };
-
-  Color _color(String doctype) => switch (doctype) {
-    'Purchase Order' => const Color(0xFFF97316),
-    'Purchase Invoice' => const Color(0xFF3B82F6),
-    'Material Request' => const Color(0xFF6366F1),
-    'Journal Entry' => const Color(0xFF0EA5E9),
-    'Sales Order' => const Color(0xFF16A34A),
-    _ => AppColors.slate,
-  };
-
-  String _shortLabel(String doctype) => switch (doctype) {
-    'Purchase Order' => 'PO',
-    'Purchase Invoice' => 'PI',
-    'Material Request' => 'MR',
-    'Journal Entry' => 'JE',
-    'Sales Order' => 'SO',
-    _ => doctype,
-  };
+  const _ApprovalTodoSummaryCard({required this.summary});
 
   @override
   Widget build(BuildContext context) {
-    final doctypes = summary.visibleDoctypes;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -1302,37 +1390,6 @@ class _ApprovalTodoSummaryCard extends StatelessWidget {
               ),
             ],
           ),
-          if (doctypes.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: doctypes.map((doctype) {
-                final active = selectedDoctype == doctype;
-                final color = _color(doctype);
-                return ChoiceChip(
-                  selected: active,
-                  onSelected: (_) => onSelected(doctype),
-                  avatar: Icon(
-                    _icon(doctype),
-                    size: 16,
-                    color: active ? AppColors.white : color,
-                  ),
-                  label: Text(
-                    '${_shortLabel(doctype)} ${summary.countFor(doctype)}',
-                  ),
-                  labelStyle: TextStyle(
-                    color: active ? AppColors.white : color,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                  ),
-                  selectedColor: color,
-                  backgroundColor: color.withValues(alpha: 0.08),
-                  side: BorderSide(color: color.withValues(alpha: 0.18)),
-                );
-              }).toList(),
-            ),
-          ],
         ],
       ),
     );
