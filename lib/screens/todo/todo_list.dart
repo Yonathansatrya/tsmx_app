@@ -199,9 +199,25 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
 
   Widget _approvalList() {
     final query = _search.text.trim().toLowerCase();
+    final allHistoryGroups = _groupedHistory();
+    final reviewTabs = _availableReviewFilters(allHistoryGroups);
+    final activeHistoryGroups = allHistoryGroups
+        .where(
+          (group) => _historyGroupMatchesReviewFilter(group, _reviewFilter),
+        )
+        .toList();
+    final doctypeCounts = _reviewFilter == _ApprovalReviewFilter.todo
+        ? _approvalTodoDoctypeCounts(_rows)
+        : _approvalHistoryDoctypeCounts(activeHistoryGroups);
+    final doctypeOptions = _sortedDoctypes(doctypeCounts.keys);
+    final effectiveDoctypeFilter =
+        doctypeCounts.containsKey(_doctypeQuickFilter)
+        ? _doctypeQuickFilter
+        : null;
     final baseRows = _rows.where((row) {
       final matchType =
-          _doctypeQuickFilter == null || row.doctype == _doctypeQuickFilter;
+          effectiveDoctypeFilter == null ||
+          row.doctype == effectiveDoctypeFilter;
       final matchSearch =
           query.isEmpty ||
           row.name.toLowerCase().contains(query) ||
@@ -211,12 +227,12 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
           row.workflowState.toLowerCase().contains(query);
       return matchType && matchSearch;
     }).toList();
-    final historyGroups = _filteredHistoryGroups(query);
+    final historyGroups = _filteredHistoryGroups(
+      query,
+      doctypeFilter: effectiveDoctypeFilter,
+    );
     final statusOptions = _approvalStatusOptions(baseRows);
     final statusCounts = _approvalStatusCounts(baseRows);
-    final doctypeOptions = _approvalDoctypeOptions(_rows, _history);
-    final allHistoryGroups = _groupedHistory();
-    final reviewTabs = _availableReviewFilters(allHistoryGroups);
     final rows = baseRows.where((row) {
       return _statusQuickFilter == null ||
           _approvalStatus(row).toLowerCase() ==
@@ -254,7 +270,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
           _approvalSearchBox(
             visibleCount: visibleCount,
             totalCount: totalCount,
-            summary: summary,
+            doctypeCounts: doctypeCounts,
             statusOptions: statusOptions,
             statusCounts: statusCounts,
             allStatusCount: baseRows.length,
@@ -302,7 +318,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
   Widget _approvalSearchBox({
     required int visibleCount,
     required int totalCount,
-    required _ApprovalTodoSummary summary,
+    required Map<String, int> doctypeCounts,
     required List<String> statusOptions,
     required Map<String, int> statusCounts,
     required int allStatusCount,
@@ -398,7 +414,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
                   DropdownMenuItem<String?>(
                     value: null,
                     child: Text(
-                      'Semua dokumen (${summary.total})',
+                      'Semua dokumen ($totalCount)',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -407,7 +423,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
                     (doctype) => DropdownMenuItem<String?>(
                       value: doctype,
                       child: Text(
-                        '${_approvalShortLabel(doctype)} - $doctype (${summary.countFor(doctype)})',
+                        '${_approvalShortLabel(doctype)} - $doctype (${doctypeCounts[doctype] ?? 0})',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -807,25 +823,47 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
     return counts;
   }
 
-  List<String> _approvalDoctypeOptions(
-    List<ErpApprovalTodo> rows,
-    List<SalesOrderApprovalHistory> history,
+  Map<String, int> _approvalTodoDoctypeCounts(List<ErpApprovalTodo> rows) {
+    final counts = <String, int>{};
+    for (final row in rows) {
+      final doctype = row.doctype.trim();
+      if (doctype.isEmpty) continue;
+      counts[doctype] = (counts[doctype] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  Map<String, int> _approvalHistoryDoctypeCounts(
+    List<_ApprovalHistoryGroup> groups,
   ) {
-    final doctypes = {
-      ...rows.map((row) => row.doctype),
-      ...history.map((row) => row.doctype),
-    }.where((doctype) => doctype.trim().isNotEmpty).toList();
+    final counts = <String, int>{};
+    for (final group in groups) {
+      final doctype = group.doctype.trim();
+      if (doctype.isEmpty) continue;
+      counts[doctype] = (counts[doctype] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  List<String> _sortedDoctypes(Iterable<String> values) {
+    final doctypes = values
+        .map((doctype) => doctype.trim())
+        .where((doctype) => doctype.isNotEmpty)
+        .toSet()
+        .toList();
     doctypes.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return doctypes;
   }
 
-  List<_ApprovalHistoryGroup> _filteredHistoryGroups(String query) {
+  List<_ApprovalHistoryGroup> _filteredHistoryGroups(
+    String query, {
+    required String? doctypeFilter,
+  }) {
     final groups = _groupedHistory().where((group) {
       if (!_historyGroupMatchesReviewFilter(group, _reviewFilter)) {
         return false;
       }
-      final matchType =
-          _doctypeQuickFilter == null || group.doctype == _doctypeQuickFilter;
+      final matchType = doctypeFilter == null || group.doctype == doctypeFilter;
       if (!matchType) return false;
       if (query.isEmpty) return true;
       final latest = group.latest;
