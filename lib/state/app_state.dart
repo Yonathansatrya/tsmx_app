@@ -486,7 +486,7 @@ class AppState with ChangeNotifier {
   static const Duration _approvalTodoCacheTtl = Duration(minutes: 1);
   static const String _approvalTodoDbCachePrefix = 'approval_todo_cache';
   static const Duration _salesVisitCacheTtl = Duration(seconds: 45);
-  static const Duration _collectionCacheTtl = Duration(seconds: 60);
+  static const Duration _collectionCacheTtl = Duration(minutes: 10);
   static const String _collectionDbCachePrefix = 'collection_cache';
   static const Duration _stockReportCacheTtl = Duration(minutes: 2);
   static const String _stockReportDbCachePrefix = 'stock_report_cache';
@@ -2712,16 +2712,7 @@ class AppState with ChangeNotifier {
   };
 
   CollectionPayment _collectionPaymentFromCacheJson(Map<String, dynamic> json) {
-    final references =
-        (json['references'] is List ? json['references'] : const [])
-            .whereType<Map>()
-            .map(
-              (reference) => CollectionPaymentReference.fromJson(
-                Map<String, dynamic>.from(reference),
-              ),
-            )
-            .toList();
-    return CollectionPayment.fromJson(json).copyWithReferences(references);
+    return CollectionPayment.fromJson(json);
   }
 
   String _collectionPaymentsCacheKey({

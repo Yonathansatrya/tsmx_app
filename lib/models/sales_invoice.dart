@@ -142,8 +142,32 @@ class SalesInvoice {
     );
   }
 
-  String get collectionDueDate =>
-      tukarFakturDueDate.trim().isNotEmpty ? tukarFakturDueDate : dueDate;
+  String get collectionDueDate {
+    final invoiceDueDate = DateTime.tryParse(dueDate);
+    final ttDate = DateTime.tryParse(tukarFakturDate);
+    final ttDueDate = DateTime.tryParse(tukarFakturDueDate);
+    if (invoiceDueDate != null && ttDate != null && ttDueDate != null) {
+      final ttTermDays = _dateOnly(
+        ttDueDate,
+      ).difference(_dateOnly(ttDate)).inDays;
+      if (ttTermDays >= 0) {
+        return _formatDate(
+          _dateOnly(invoiceDueDate).add(Duration(days: ttTermDays)),
+        );
+      }
+    }
+    return tukarFakturDueDate.trim().isNotEmpty ? tukarFakturDueDate : dueDate;
+  }
+
+  static DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  static String _formatDate(DateTime value) {
+    final month = value.month.toString().padLeft(2, '0');
+    final day = value.day.toString().padLeft(2, '0');
+    return '${value.year}-$month-$day';
+  }
 
   static String _firstValue(Map<String, dynamic> json, List<String> keys) {
     for (final key in keys) {

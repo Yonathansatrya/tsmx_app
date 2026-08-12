@@ -85,8 +85,10 @@ class _SalesCollectionTabState extends State<SalesCollectionTab> {
                       range: _range,
                       dateBasis: _dateBasis,
                       applyDateFilter: _applyDateFilter,
-                      onDateBasisChanged: (value) =>
-                          setState(() => _dateBasis = value),
+                      onDateBasisChanged: (value) => setState(() {
+                        _dateBasis = value;
+                        _applyDateFilter = true;
+                      }),
                       onApplyDateFilterChanged: (value) =>
                           setState(() => _applyDateFilter = value),
                       onPickRange: _pickRange,
@@ -111,25 +113,19 @@ class _SalesCollectionTabState extends State<SalesCollectionTab> {
           body: TabBarView(
             children: [
               ArAgingTab(
-                key: ValueKey(
-                  'ar-$selectedCompany-${_range.from}-${_range.to}-$_dateBasis-$_applyDateFilter',
-                ),
+                key: ValueKey('ar-$selectedCompany'),
                 range: _range,
                 dateBasis: _dateBasis,
                 applyDateFilter: _applyDateFilter,
               ),
               OutstandingInvoiceTab(
-                key: ValueKey(
-                  'invoice-$selectedCompany-${_range.from}-${_range.to}-$_dateBasis-$_applyDateFilter',
-                ),
+                key: ValueKey('invoice-$selectedCompany'),
                 range: _range,
                 dateBasis: _dateBasis,
                 applyDateFilter: _applyDateFilter,
               ),
               CustomerPaymentScheduleTab(
-                key: ValueKey(
-                  'schedule-$selectedCompany-${_range.from}-${_range.to}-$_dateBasis-$_applyDateFilter',
-                ),
+                key: ValueKey('schedule-$selectedCompany'),
                 range: _range,
                 dateBasis: _dateBasis,
                 applyDateFilter: _applyDateFilter,
@@ -142,13 +138,19 @@ class _SalesCollectionTabState extends State<SalesCollectionTab> {
   }
 
   Future<void> _pickRange() async {
+    if (!_applyDateFilter) {
+      setState(() => _applyDateFilter = true);
+    }
+    final today = DateTime.now();
+    final lastDate = _range.to.isAfter(today) ? _range.to : today;
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now(),
+      lastDate: lastDate,
       initialDateRange: DateTimeRange(start: _range.from, end: _range.to),
     );
     if (picked == null) return;
+    if (!mounted) return;
     setState(() {
       _range = DateRangePreset(from: picked.start, to: picked.end);
       _applyDateFilter = true;

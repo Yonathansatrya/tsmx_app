@@ -27,7 +27,8 @@ class OutstandingInvoiceTab extends StatefulWidget {
   State<OutstandingInvoiceTab> createState() => _OutstandingInvoiceTabState();
 }
 
-class _OutstandingInvoiceTabState extends State<OutstandingInvoiceTab> {
+class _OutstandingInvoiceTabState extends State<OutstandingInvoiceTab>
+    with AutomaticKeepAliveClientMixin {
   List<SalesInvoice> invoices = const [];
   bool loading = true;
   String? error;
@@ -53,6 +54,9 @@ class _OutstandingInvoiceTabState extends State<OutstandingInvoiceTab> {
       if (mounted) setState(() => loading = false);
     }
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   List<_CustomerOutstanding> get summaries {
     final grouped = <String, List<SalesInvoice>>{};
@@ -92,6 +96,7 @@ class _OutstandingInvoiceTabState extends State<OutstandingInvoiceTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final rows = summaries;
     final overdue = rows.where((row) => row.overdueTotal > 0).toList()
       ..sort((a, b) => b.overdueTotal.compareTo(a.overdueTotal));
@@ -107,25 +112,17 @@ class _OutstandingInvoiceTabState extends State<OutstandingInvoiceTab> {
             subtitle: 'Lihat customer yang perlu segera ditagih',
             icon: Icons.receipt_long_rounded,
           ),
-          Row(
-            children: [
-              Expanded(
-                child: CollectionMetricCard(
-                  label: 'Total Piutang',
-                  value: 'Rp ${formatErpCurrency(total)}',
-                  icon: Icons.account_balance_wallet_rounded,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: CollectionMetricCard(
-                  label: 'Customer Overdue',
-                  value: '${overdue.length}',
-                  icon: Icons.warning_amber_rounded,
-                  color: AppColors.warning,
-                ),
-              ),
-            ],
+          CollectionMetricCard(
+            label: 'Total Piutang',
+            value: 'Rp ${formatErpCurrency(total)}',
+            icon: Icons.account_balance_wallet_rounded,
+          ),
+          const SizedBox(height: 10),
+          CollectionMetricCard(
+            label: 'Customer Overdue',
+            value: '${overdue.length}',
+            icon: Icons.warning_amber_rounded,
+            color: AppColors.warning,
           ),
           if (loading) ...[
             const SizedBox(height: 12),
@@ -183,77 +180,27 @@ class _PriorityCollectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.warning.withValues(alpha: 0.14)),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.warning.withValues(alpha: 0.08),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final overdueInvoices = row.overdueInvoices.toList()
+      ..sort((a, b) => a.collectionDueDate.compareTo(b.collectionDueDate));
+    return _CustomerCollectionExpansionCard(
+      row: row,
+      invoices: overdueInvoices,
+      icon: Icons.notifications_active_outlined,
+      color: AppColors.warning,
+      amount: row.overdueTotal,
+      amountColor: AppColors.danger,
+      titleMaxLines: 2,
+      subtitle: Wrap(
+        spacing: 6,
+        runSpacing: 6,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: AppColors.warning.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: const Icon(
-              Icons.notifications_active_outlined,
-              color: AppColors.warning,
-              size: 22,
-            ),
+          CollectionStatusChip(
+            label: '${row.overdueCount} invoice',
+            color: AppColors.warning,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  row.customer,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.navy,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    CollectionStatusChip(
-                      label: '${row.overdueCount} invoice',
-                      color: AppColors.warning,
-                    ),
-                    CollectionStatusChip(
-                      label: 'Tertua ${row.oldestOverdueDays} hari',
-                      color: AppColors.danger,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            'Rp ${formatErpCurrency(row.overdueTotal)}',
-            textAlign: TextAlign.right,
-            style: const TextStyle(
-              color: AppColors.danger,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
+          CollectionStatusChip(
+            label: 'Tertua ${row.oldestOverdueDays} hari',
+            color: AppColors.danger,
           ),
         ],
       ),
@@ -261,10 +208,26 @@ class _PriorityCollectionCard extends StatelessWidget {
   }
 }
 
-class _CustomerOutstandingCard extends StatelessWidget {
-  const _CustomerOutstandingCard({required this.row});
+class _CustomerCollectionExpansionCard extends StatelessWidget {
+  const _CustomerCollectionExpansionCard({
+    required this.row,
+    required this.invoices,
+    required this.icon,
+    required this.color,
+    required this.amount,
+    required this.amountColor,
+    required this.subtitle,
+    this.titleMaxLines = 1,
+  });
 
   final _CustomerOutstanding row;
+  final List<SalesInvoice> invoices;
+  final IconData icon;
+  final Color color;
+  final double amount;
+  final Color amountColor;
+  final Widget subtitle;
+  final int titleMaxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -272,11 +235,11 @@ class _CustomerOutstandingCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.1)),
+        border: Border.all(color: color.withValues(alpha: 0.12)),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryDark.withValues(alpha: 0.06),
-            blurRadius: 20,
+            color: color.withValues(alpha: 0.07),
+            blurRadius: 22,
             offset: const Offset(0, 10),
           ),
         ],
@@ -290,18 +253,14 @@ class _CustomerOutstandingCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: AppColors.softGreen,
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(15),
             ),
-            child: const Icon(
-              Icons.storefront_outlined,
-              color: AppColors.primary,
-              size: 22,
-            ),
+            child: Icon(icon, color: color, size: 22),
           ),
           title: Text(
             row.customer,
-            maxLines: 1,
+            maxLines: titleMaxLines,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               color: AppColors.navy,
@@ -309,25 +268,24 @@ class _CustomerOutstandingCard extends StatelessWidget {
             ),
           ),
           subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.only(top: 8),
+            child: subtitle,
+          ),
+          trailing: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 128),
             child: Text(
-              '${row.invoices.length} invoice outstanding',
-              style: const TextStyle(
-                color: AppColors.slate,
+              'Rp ${formatErpCurrency(amount)}',
+              textAlign: TextAlign.right,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: amountColor,
                 fontSize: 12,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w900,
               ),
             ),
           ),
-          trailing: Text(
-            'Rp ${formatErpCurrency(row.total)}',
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          children: row.invoices
+          children: invoices
               .map(
                 (invoice) => Container(
                   margin: const EdgeInsets.only(top: 8),
@@ -360,7 +318,7 @@ class _CustomerOutstandingCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Jatuh tempo ${invoice.dueDate}',
+                              'Jatuh tempo ${invoice.collectionDueDate}',
                               style: const TextStyle(
                                 color: AppColors.slate,
                                 fontSize: 12,
@@ -370,13 +328,19 @@ class _CustomerOutstandingCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      Text(
-                        'Rp ${formatErpCurrency(invoice.outstandingAmount)}',
-                        textAlign: TextAlign.right,
-                        style: const TextStyle(
-                          color: AppColors.navy,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900,
+                      const SizedBox(width: 8),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 112),
+                        child: Text(
+                          'Rp ${formatErpCurrency(invoice.outstandingAmount)}',
+                          textAlign: TextAlign.right,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.navy,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                     ],
@@ -384,6 +348,32 @@ class _CustomerOutstandingCard extends StatelessWidget {
                 ),
               )
               .toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _CustomerOutstandingCard extends StatelessWidget {
+  const _CustomerOutstandingCard({required this.row});
+
+  final _CustomerOutstanding row;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CustomerCollectionExpansionCard(
+      row: row,
+      invoices: row.invoices,
+      icon: Icons.storefront_outlined,
+      color: AppColors.primary,
+      amount: row.total,
+      amountColor: AppColors.primary,
+      subtitle: Text(
+        '${row.invoices.length} invoice outstanding',
+        style: const TextStyle(
+          color: AppColors.slate,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

@@ -210,11 +210,12 @@ class CollectionPayment {
       amount: NumParse.asDouble(json['received_amount'] ?? json['paid_amount']),
       referenceNo: json['reference_no']?.toString() ?? '',
       remarks: json['remarks']?.toString() ?? '',
+      references: _referencesFromJson(json['references']),
     );
   }
 
   CollectionPayment copyWithReferences(
-    List<CollectionPaymentReference> references,
+    Iterable<CollectionPaymentReference> references,
   ) {
     return CollectionPayment(
       id: id,
@@ -224,8 +225,20 @@ class CollectionPayment {
       amount: amount,
       referenceNo: referenceNo,
       remarks: remarks,
-      references: references,
+      references: List<CollectionPaymentReference>.unmodifiable(references),
     );
+  }
+
+  static List<CollectionPaymentReference> _referencesFromJson(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map(
+          (reference) => CollectionPaymentReference.fromJson(
+            Map<String, dynamic>.from(reference),
+          ),
+        )
+        .toList(growable: false);
   }
 
   Iterable<CollectionPaymentReference> get salesInvoiceReferences {

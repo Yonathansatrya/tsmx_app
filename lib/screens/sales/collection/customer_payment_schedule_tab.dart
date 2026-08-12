@@ -28,8 +28,8 @@ class CustomerPaymentScheduleTab extends StatefulWidget {
       _CustomerPaymentScheduleTabState();
 }
 
-class _CustomerPaymentScheduleTabState
-    extends State<CustomerPaymentScheduleTab> {
+class _CustomerPaymentScheduleTabState extends State<CustomerPaymentScheduleTab>
+    with AutomaticKeepAliveClientMixin {
   List<SalesInvoice> invoices = const [];
   bool loading = true;
   String? error;
@@ -55,6 +55,9 @@ class _CustomerPaymentScheduleTabState
       if (mounted) setState(() => loading = false);
     }
   }
+
+  @override
+  bool get wantKeepAlive => true;
 
   bool _isDue(SalesInvoice row) {
     final date = DateTime.tryParse(row.collectionDueDate);
@@ -88,6 +91,7 @@ class _CustomerPaymentScheduleTabState
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final sorted = filteredInvoices.toList()
       ..sort((a, b) => a.collectionDueDate.compareTo(b.collectionDueDate));
     final due = sorted.where(_isDue).length;
@@ -103,7 +107,7 @@ class _CustomerPaymentScheduleTabState
         children: [
           const CollectionSectionHeader(
             title: 'Janji Bayar Customer',
-            subtitle: 'Jadwal bayar mengikuti jatuh tempo invoice customer',
+            subtitle: 'Jadwal bayar mengikuti due date SI dan term TT',
             icon: Icons.event_available_rounded,
           ),
           Row(
