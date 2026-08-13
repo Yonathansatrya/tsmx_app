@@ -358,19 +358,7 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
           if (detail.currency.isNotEmpty)
             SellingDetailInfo(label: 'Currency', value: detail.currency),
         ],
-        items: detail.items
-            .map(
-              (i) => SellingDetailItem(
-                title: i.itemName,
-                subtitle: i.itemCode,
-                qty: '${i.qty}',
-                rate: 'Rp ${formatErpCurrency(i.rate)}',
-                discount: 'Rp ${formatErpCurrency(i.discountAmount)}',
-                amount: 'Rp ${formatErpCurrency(i.qty * i.rate)}',
-                note: i.warehouse,
-              ),
-            )
-            .toList(),
+        items: _aggregateSalesOrderItems(detail.items),
         footer: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -435,6 +423,32 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
     } finally {
       if (mounted) setState(() => _isOpeningDetail = false);
     }
+  }
+
+  List<SellingDetailItem> _aggregateSalesOrderItems(
+    List<SalesOrderItem> items,
+  ) {
+    final buckets = <String, _AggregatedSalesOrderItem>{};
+    final order = <String>[];
+
+    for (final item in items) {
+      final key = item.itemCode.trim().isNotEmpty
+          ? item.itemCode.trim()
+          : item.itemName.trim().toLowerCase();
+      if (key.isEmpty) continue;
+      final existing = buckets[key];
+      if (existing == null) {
+        buckets[key] = _AggregatedSalesOrderItem(item);
+        order.add(key);
+      } else {
+        existing.add(item);
+      }
+    }
+
+    return [
+      for (final key in order)
+        if (buckets[key] != null) buckets[key]!.toDetailItem(),
+    ];
   }
 
   Future<void> _applySoWorkflowAction(String id, String action) async {
@@ -845,6 +859,56 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _AggregatedSalesOrderItem {
+  final String itemCode;
+  final String itemName;
+  final Set<String> warehouses = {};
+  final Set<double> rates = {};
+  final Set<double> discounts = {};
+  int qty = 0;
+  double amount = 0;
+  int rowCount = 0;
+
+  _AggregatedSalesOrderItem(SalesOrderItem item)
+    : itemCode = item.itemCode,
+      itemName = item.itemName {
+    add(item);
+  }
+
+  void add(SalesOrderItem item) {
+    qty += item.qty;
+    amount += item.qty * item.rate;
+    rowCount += 1;
+    rates.add(item.rate);
+    discounts.add(item.discountAmount);
+    final warehouse = item.warehouse.trim();
+    if (warehouse.isNotEmpty) warehouses.add(warehouse);
+  }
+
+  SellingDetailItem toDetailItem() {
+    final warehouseInfo = warehouses.join(', ');
+    final rowInfo = rowCount > 1 ? '$rowCount baris digabung' : '';
+    final note = [
+      if (warehouseInfo.isNotEmpty) warehouseInfo,
+      if (rowInfo.isNotEmpty) rowInfo,
+    ].join(' | ');
+
+    return SellingDetailItem(
+      title: itemName,
+      subtitle: itemCode,
+      qty: '$qty',
+      rate: rates.length == 1
+          ? 'Rp ${formatErpCurrency(rates.first)}'
+          : 'Beragam',
+      discount: discounts.length == 1
+          ? 'Rp ${formatErpCurrency(discounts.first)}'
+          : 'Beragam',
+      amount: 'Rp ${formatErpCurrency(amount)}',
+      note: note,
     );
   }
 }
