@@ -500,7 +500,7 @@ class _SellingItemCard extends StatelessWidget {
                       ),
                     if (item.note.isNotEmpty)
                       _ItemStatTile(
-                        width: tileWidth,
+                        width: constraints.maxWidth,
                         label: 'Info',
                         value: item.note,
                       ),
