@@ -18,6 +18,9 @@ class CreateNooRequestScreen extends StatefulWidget {
 }
 
 class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
+  static const _customerCategoryOptions = ['MT', 'GT'];
+  static const _fallbackCustomerTypeOptions = ['CASH', 'COD', 'CBD'];
+
   final _formKey = GlobalKey<FormState>();
   final _customerNameController = TextEditingController();
   final _mobileNoController = TextEditingController();
@@ -25,15 +28,11 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
 
   String? _selectedCompany;
   String? _selectedSalesPerson;
-  String? _selectedCustomerGroup;
+  String? _customerCategory;
   List<String> _salesPersonOptions = const [];
   bool _salesPersonOptionsRequested = false;
   bool _isLoadingSalesPersons = false;
   String? _salesPersonLoadError;
-  List<String> _customerGroupOptions = const [];
-  bool _customerGroupOptionsRequested = false;
-  bool _isLoadingCustomerGroups = false;
-  String? _customerGroupLoadError;
   List<String> _customerTypeOptions = const [];
   bool _customerTypeOptionsRequested = false;
   bool _isLoadingCustomerTypes = false;
@@ -48,7 +47,7 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
     if (initial == null) return;
     _selectedCompany = _text(initial['company']);
     _selectedSalesPerson = _text(initial['sales_person']);
-    _selectedCustomerGroup = _text(initial['customer_group']);
+    _customerCategory = _text(initial['customer_category']);
     _customerType = _text(initial['customer_type']);
     _customerNameController.text = _text(initial['customer_name']);
     _mobileNoController.text = _text(initial['mobile_no']);
@@ -85,12 +84,6 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
       _customerTypeOptionsRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _loadCustomerTypeOptions(context.read<AppState>());
-      });
-    }
-    if (!_customerGroupOptionsRequested) {
-      _customerGroupOptionsRequested = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _loadCustomerGroupOptions(context.read<AppState>());
       });
     }
 
@@ -166,7 +159,8 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
                 children: [
                   const SalesSectionTitle(
                     title: 'Data Customer',
-                    subtitle: 'Nama outlet, tipe, group, nomor HP, dan alamat.',
+                    subtitle:
+                        'Nama calon customer, kategori, pembayaran, nomor HP, dan alamat.',
                   ),
                   SalesUi.gap(),
                   _textField(
@@ -177,12 +171,35 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
                   ),
                   SalesUi.gap(),
                   DropdownButtonFormField<String>(
+                    initialValue: _validCustomerCategory(_customerCategory),
+                    decoration: _decoration(
+                      'Customer Category',
+                      Icons.category_rounded,
+                    ),
+                    isExpanded: true,
+                    items: _customerCategoryOptions
+                        .map(
+                          (category) => DropdownMenuItem(
+                            value: category,
+                            child: Text(category),
+                          ),
+                        )
+                        .toList(),
+                    hint: const Text('Pilih kategori'),
+                    onChanged: (value) =>
+                        setState(() => _customerCategory = value),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Customer Category wajib dipilih'
+                        : null,
+                  ),
+                  SalesUi.gap(),
+                  DropdownButtonFormField<String>(
                     initialValue: _customerTypeOptions.contains(_customerType)
                         ? _customerType
                         : null,
                     decoration: _decoration(
-                      'Customer Type',
-                      Icons.badge_rounded,
+                      'Tipe Pembayaran',
+                      Icons.payments_rounded,
                     ),
                     isExpanded: true,
                     items: _customerTypeOptions
@@ -199,14 +216,14 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
                         .toList(),
                     hint: Text(
                       _isLoadingCustomerTypes
-                          ? 'Memuat Customer Type...'
-                          : 'Pilih Customer Type',
+                          ? 'Memuat tipe pembayaran...'
+                          : 'Pilih tipe pembayaran',
                     ),
                     onChanged: _isLoadingCustomerTypes
                         ? null
                         : (value) => setState(() => _customerType = value),
                     validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Customer Type wajib dipilih'
+                        ? 'Tipe pembayaran wajib dipilih'
                         : null,
                   ),
                   if (_customerTypeLoadError != null) ...[
@@ -220,20 +237,6 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
                       ),
                     ),
                   ],
-                  SalesUi.gap(),
-                  _customerGroupField(),
-                  if (_customerGroupLoadError != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _customerGroupLoadError!,
-                      style: const TextStyle(
-                        color: AppColors.danger,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                  SalesUi.gap(),
                   _textField(
                     controller: _mobileNoController,
                     label: 'No. HP',
@@ -379,48 +382,6 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
     );
   }
 
-  Widget _customerGroupField() {
-    final selected = _customerGroupOptions.contains(_selectedCustomerGroup)
-        ? _selectedCustomerGroup
-        : null;
-    return DropdownButtonFormField<String>(
-      initialValue: selected,
-      decoration: _decoration('Customer Group', Icons.group_work_rounded)
-          .copyWith(
-            suffixIcon: _isLoadingCustomerGroups
-                ? const Padding(
-                    padding: EdgeInsets.all(14),
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                : null,
-          ),
-      isExpanded: true,
-      items: _customerGroupOptions
-          .map(
-            (group) => DropdownMenuItem(
-              value: group,
-              child: Text(group, maxLines: 1, overflow: TextOverflow.ellipsis),
-            ),
-          )
-          .toList(),
-      hint: Text(
-        _isLoadingCustomerGroups
-            ? 'Memuat Customer Group...'
-            : 'Pilih Customer Group',
-      ),
-      onChanged: _isLoadingCustomerGroups
-          ? null
-          : (value) => setState(() => _selectedCustomerGroup = value),
-      validator: (value) => value == null || value.trim().isEmpty
-          ? 'Customer Group wajib dipilih'
-          : null,
-    );
-  }
-
   Widget _readonlyValue({
     required String label,
     required String value,
@@ -517,7 +478,7 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
         salesPerson: salesPerson,
         customerName: _customerNameController.text,
         customerType: _customerType ?? '',
-        customerGroup: _selectedCustomerGroup,
+        customerCategory: _customerCategory,
         mobileNo: _mobileNoController.text,
         addressLine1: _addressController.text,
       );
@@ -592,64 +553,6 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
     }
   }
 
-  Future<void> _loadCustomerGroupOptions(AppState state) async {
-    setState(() {
-      _isLoadingCustomerGroups = true;
-      _customerGroupLoadError = null;
-    });
-    try {
-      Future<List<Map<String, dynamic>>> fetch({List<List<dynamic>>? filters}) {
-        return state.frappeService.fetchResource(
-          'Customer Group',
-          fields: const ['name'],
-          filters: filters,
-          orderBy: 'name asc',
-          limit: 200,
-        );
-      }
-
-      List<Map<String, dynamic>> rows;
-      try {
-        rows = await fetch(
-          filters: const [
-            ['is_group', '=', 0],
-          ],
-        );
-      } catch (_) {
-        rows = await fetch();
-      }
-
-      final options =
-          rows
-              .map((row) => row['name']?.toString().trim() ?? '')
-              .where((name) => name.isNotEmpty)
-              .toSet()
-              .toList()
-            ..sort();
-      if (!mounted) return;
-      setState(() {
-        _customerGroupOptions = options;
-        _selectedCustomerGroup = options.contains(_selectedCustomerGroup)
-            ? _selectedCustomerGroup
-            : null;
-        if (options.isEmpty) {
-          _customerGroupLoadError =
-              'Customer Group belum tersedia di site aktif.';
-        }
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _customerGroupOptions = const [];
-        _selectedCustomerGroup = null;
-        _customerGroupLoadError =
-            'Customer Group gagal dimuat. Pastikan role punya Read Customer Group.';
-      });
-    } finally {
-      if (mounted) setState(() => _isLoadingCustomerGroups = false);
-    }
-  }
-
   Future<void> _loadCustomerTypeOptions(AppState state) async {
     setState(() {
       _isLoadingCustomerTypes = true;
@@ -671,22 +574,27 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
             ..sort();
       if (!mounted) return;
       setState(() {
-        _customerTypeOptions = options;
+        final effectiveOptions = options.isEmpty
+            ? _fallbackCustomerTypeOptions
+            : options;
+        _customerTypeOptions = effectiveOptions;
         _customerType = options.contains(_customerType)
             ? _customerType
-            : (options.isNotEmpty ? options.first : null);
+            : effectiveOptions.first;
         if (options.isEmpty) {
           _customerTypeLoadError =
-              'Customer Type belum tersedia di site aktif.';
+              'Tipe pembayaran memakai opsi standar karena master Customer Type kosong.';
         }
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _customerTypeOptions = const [];
-        _customerType = null;
+        _customerTypeOptions = _fallbackCustomerTypeOptions;
+        _customerType = _fallbackCustomerTypeOptions.contains(_customerType)
+            ? _customerType
+            : _fallbackCustomerTypeOptions.first;
         _customerTypeLoadError =
-            'Customer Type gagal dimuat. Pastikan role punya Read Customer Type.';
+            'Tipe pembayaran memakai opsi standar karena master Customer Type gagal dimuat.';
       });
     } finally {
       if (mounted) setState(() => _isLoadingCustomerTypes = false);
@@ -694,4 +602,9 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
   }
 
   String _text(Object? value) => value?.toString().trim() ?? '';
+
+  String? _validCustomerCategory(String? value) {
+    final normalized = value?.trim().toUpperCase() ?? '';
+    return _customerCategoryOptions.contains(normalized) ? normalized : null;
+  }
 }

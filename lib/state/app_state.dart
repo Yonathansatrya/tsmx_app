@@ -4162,7 +4162,7 @@ class AppState with ChangeNotifier {
         'sales_person',
         'customer_name',
         'customer_type',
-        'customer_group',
+        'customer_category',
         'status',
         'modified',
       ],

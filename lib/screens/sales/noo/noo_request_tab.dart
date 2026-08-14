@@ -140,7 +140,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
           'sales_person',
           'customer_name',
           'customer_type',
-          'customer_group',
+          'customer_category',
           'mobile_no',
           'address_line1',
           'status',
@@ -316,7 +316,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
     final date = _formatDate(row['request_date']);
     final mobileNo = _text(row['mobile_no']);
     final customerType = _text(row['customer_type']);
-    final customerGroup = _text(row['customer_group']);
+    final customerCategory = _text(row['customer_category']);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -383,7 +383,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
                     ),
                   ),
                   if (customerType.isNotEmpty ||
-                      customerGroup.isNotEmpty ||
+                      customerCategory.isNotEmpty ||
                       mobileNo.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Wrap(
@@ -391,9 +391,9 @@ class _NooRequestTabState extends State<NooRequestTab> {
                       runSpacing: 8,
                       children: [
                         if (customerType.isNotEmpty)
-                          _miniBadge(Icons.badge_rounded, customerType),
-                        if (customerGroup.isNotEmpty)
-                          _miniBadge(Icons.group_work_rounded, customerGroup),
+                          _miniBadge(Icons.payments_rounded, customerType),
+                        if (customerCategory.isNotEmpty)
+                          _miniBadge(Icons.category_rounded, customerCategory),
                         if (mobileNo.isNotEmpty)
                           _miniBadge(Icons.phone_rounded, mobileNo),
                       ],
@@ -525,12 +525,12 @@ class _NooRequestTabState extends State<NooRequestTab> {
                         _detailRow('Company', _text(row['company'])),
                         _detailRow('Sales Person', _text(row['sales_person'])),
                         _detailRow(
-                          'Customer Type',
+                          'Tipe Pembayaran',
                           _text(row['customer_type']),
                         ),
                         _detailRow(
-                          'Customer Group',
-                          _text(row['customer_group']),
+                          'Customer Category',
+                          _text(row['customer_category']),
                         ),
                         _detailRow('No. HP', _text(row['mobile_no'])),
                         _detailRow('Alamat Utama', _text(row['address_line1'])),

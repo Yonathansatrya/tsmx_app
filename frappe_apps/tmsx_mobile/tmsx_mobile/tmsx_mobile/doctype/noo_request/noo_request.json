@@ -14,9 +14,10 @@
     "customer_section",
     "customer_name",
     "customer_type",
-    "customer_group",
+    "customer_category",
     "mobile_no",
-    "address_line1"
+    "address_line1",
+    "status"
   ],
   "fields": [
     {
@@ -35,15 +36,6 @@
       "in_standard_filter": 1,
       "label": "Request Date",
       "reqd": 1
-    },
-    {
-      "default": "Pending Approval",
-      "fieldname": "status",
-      "fieldtype": "Select",
-      "in_list_view": 1,
-      "in_standard_filter": 1,
-      "label": "Status",
-      "options": "Draft\nPending Approval\nApproved\nRejected\nCreated Customer"
     },
     {
       "fieldname": "company",
@@ -76,18 +68,18 @@
       "reqd": 1
     },
     {
-      "default": "Company",
+      "default": "CASH",
       "fieldname": "customer_type",
       "fieldtype": "Select",
       "label": "Customer Type",
-      "options": "Company\nIndividual",
+      "options": "CASH\nCOD\nCBD",
       "reqd": 1
     },
     {
-      "fieldname": "customer_group",
-      "fieldtype": "Link",
-      "label": "Customer Group",
-      "options": "Customer Group",
+      "fieldname": "customer_category",
+      "fieldtype": "Select",
+      "label": "Customer Category",
+      "options": "MT\nGT",
       "reqd": 1
     },
     {
@@ -101,6 +93,15 @@
       "fieldtype": "Small Text",
       "label": "Address Line 1",
       "reqd": 1
+    },
+    {
+      "default": "Pending Approval",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Status",
+      "options": "Draft\nPending Approval\nApproved\nRejected\nCreated Customer"
     }
   ],
   "links": [],
