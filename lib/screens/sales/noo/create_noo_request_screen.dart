@@ -106,7 +106,7 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: SalesUi.compactScreenPadding,
+          padding: SalesUi.compactScreenPaddingOf(context),
           children: [
             SalesHeroCard(
               title: widget.isEditMode ? 'Edit NOO' : 'Pengajuan NOO',

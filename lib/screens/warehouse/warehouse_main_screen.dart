@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/responsive/responsive_layout.dart';
 import '../shared/role_main_screen.dart';
 import 'inventory/warehouse_inventory_tab.dart';
 import 'operation/warehouse_operations_tab.dart';
@@ -280,18 +281,21 @@ class _NoWarehouseAccessScreen extends StatelessWidget {
   const _NoWarehouseAccessScreen();
 
   @override
-  Widget build(BuildContext context) => const Scaffold(
+  Widget build(BuildContext context) => Scaffold(
     backgroundColor: AppColors.background,
     body: Center(
-      child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Text(
-          'Tidak ada akses Warehouse/Stock/QC yang tersedia untuk user ini.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppColors.slate,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
+      child: TmsxResponsiveBody(
+        maxWidth: 520,
+        child: Padding(
+          padding: EdgeInsets.all(TmsxResponsive.horizontalPadding(context)),
+          child: const Text(
+            'Tidak ada akses Warehouse/Stock/QC yang tersedia untuk user ini.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.slate,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),

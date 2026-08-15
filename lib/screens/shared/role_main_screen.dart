@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/responsive/responsive_layout.dart';
 import '../auth/login_screen.dart';
 import '../profile/profile_screen.dart';
 
@@ -156,7 +157,7 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
             Positioned.fill(
               child: _LazyRolePane(
                 active: index == _currentIndex,
-                child: _screens[index],
+                child: TmsxResponsiveBody(child: _screens[index]),
               ),
             ),
         ],
@@ -235,33 +236,43 @@ class _RoleBottomNav extends StatelessWidget {
       child: SafeArea(
         top: false,
         minimum: EdgeInsets.fromLTRB(14, 3, 14, bottomPadding > 0 ? 6 : 10),
-        child: Container(
-          height: 58,
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.border),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primaryDark.withValues(alpha: 0.07),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              for (var index = 0; index < destinations.length; index++)
-                Expanded(
-                  child: _RoleBottomNavItem(
-                    destination: destinations[index],
-                    selected: index == selectedIndex,
-                    compact: destinations.length >= 5,
-                    onTap: () => onSelected(index),
-                  ),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: SizedBox(
+              width: double.infinity,
+              child: Container(
+                height: 58,
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.border),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryDark.withValues(alpha: 0.07),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
-            ],
+                child: Row(
+                  children: [
+                    for (var index = 0; index < destinations.length; index++)
+                      Expanded(
+                        child: _RoleBottomNavItem(
+                          destination: destinations[index],
+                          selected: index == selectedIndex,
+                          compact: destinations.length >= 5,
+                          onTap: () => onSelected(index),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),

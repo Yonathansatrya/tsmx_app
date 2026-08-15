@@ -63,7 +63,7 @@ class _WarehouseDeadStockViewState extends State<WarehouseDeadStockView> {
       onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: warehousePagePadding,
+        padding: warehousePagePaddingOf(context),
         children: [
           const WarehouseSectionHeader(
             title: 'Dead Stock Monitoring',

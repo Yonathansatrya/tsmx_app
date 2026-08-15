@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/responsive/responsive_layout.dart';
 import '../auth/login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -83,38 +84,46 @@ class _ProfileScreenState extends State<ProfileScreen>
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'Ganti Foto Profil',
-                style: TextStyle(
-                  color: AppColors.navy,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+        child: TmsxResponsiveBody(
+          maxWidth: 520,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              TmsxResponsive.horizontalPadding(context),
+              0,
+              TmsxResponsive.horizontalPadding(context),
+              16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Ganti Foto Profil',
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Pilih foto yang jelas agar akun mudah dikenali.',
-                style: TextStyle(color: AppColors.slate),
-              ),
-              const SizedBox(height: 16),
-              _PhotoSourceTile(
-                icon: Icons.camera_alt_rounded,
-                title: 'Ambil dari kamera',
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-              const SizedBox(height: 8),
-              _PhotoSourceTile(
-                icon: Icons.photo_library_rounded,
-                title: 'Pilih dari galeri',
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-            ],
+                const SizedBox(height: 6),
+                const Text(
+                  'Pilih foto yang jelas agar akun mudah dikenali.',
+                  style: TextStyle(color: AppColors.slate),
+                ),
+                const SizedBox(height: 16),
+                _PhotoSourceTile(
+                  icon: Icons.camera_alt_rounded,
+                  title: 'Ambil dari kamera',
+                  onTap: () => Navigator.pop(context, ImageSource.camera),
+                ),
+                const SizedBox(height: 8),
+                _PhotoSourceTile(
+                  icon: Icons.photo_library_rounded,
+                  title: 'Pilih dari galeri',
+                  onTap: () => Navigator.pop(context, ImageSource.gallery),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -281,7 +290,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       onRefresh: _loadProfile,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 2, 16, 30),
+        padding: TmsxResponsive.pagePadding(context, top: 2, bottom: 30),
         children: [
           _buildIdentityCard(appState),
           if (_loadingProfile) ...[
@@ -643,7 +652,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _buildSecurityTab() {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 2, 16, 30),
+      padding: TmsxResponsive.pagePadding(context, top: 2, bottom: 30),
       children: [
         Container(
           padding: const EdgeInsets.all(18),

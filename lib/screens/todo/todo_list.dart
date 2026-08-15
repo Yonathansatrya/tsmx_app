@@ -14,6 +14,7 @@ import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_status_badge.dart';
 import '../../widgets/erp/erp_status_chip_bar.dart';
 import '../../widgets/erp/erp_workflow_helper.dart';
+import '../../widgets/responsive/responsive_layout.dart';
 
 enum _ApprovalTodoSortOption { newest, oldest, amountHigh, amountLow }
 
@@ -250,7 +251,7 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
       onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+        padding: TmsxResponsive.pagePadding(context, top: 16, bottom: 90),
         children: [
           _ApprovalTodoSummaryCard(summary: summary),
           const SizedBox(height: 12),
@@ -299,7 +300,11 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
                   'Hanya action Workflow yang tersedia untuk role login yang ditampilkan.',
             )
           else if (_reviewFilter == _ApprovalReviewFilter.todo)
-            ...rows.map(_approvalCard),
+            TmsxResponsiveCardGrid(
+              wideTabletColumns: 2,
+              desktopColumns: 3,
+              children: rows.map(_approvalCard).toList(),
+            ),
           if (_reviewFilter != _ApprovalReviewFilter.todo &&
               historyGroups.isEmpty &&
               !_loading)
@@ -309,7 +314,11 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
                   'Dokumen yang sudah pernah di-approve/reject dari aplikasi akan muncul di sini.',
             )
           else if (_reviewFilter != _ApprovalReviewFilter.todo)
-            ...historyGroups.map(_historyGroupCard),
+            TmsxResponsiveCardGrid(
+              wideTabletColumns: 2,
+              desktopColumns: 3,
+              children: historyGroups.map(_historyGroupCard).toList(),
+            ),
         ],
       ),
     );
@@ -1594,47 +1603,50 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadDetail,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 28),
-          children: [
-            _detailHeader(),
-            if (_loading) ...[
-              const SizedBox(height: 12),
-              const LinearProgressIndicator(),
+      body: TmsxResponsiveBody(
+        maxWidth: 680,
+        child: RefreshIndicator(
+          onRefresh: _loadDetail,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: TmsxResponsive.pagePadding(context, top: 14, bottom: 28),
+            children: [
+              _detailHeader(),
+              if (_loading) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                _errorBox(_error!),
+              ],
+              if (detail != null) ...[
+                const SizedBox(height: 14),
+                _sectionCard(
+                  title: 'Informasi Dokumen',
+                  children: _documentInfoRows(detail),
+                ),
+                const SizedBox(height: 12),
+                _sectionCard(
+                  title: widget.approval.doctype == 'Material Request'
+                      ? 'Kebutuhan'
+                      : 'Nilai Dokumen',
+                  children: _amountRows(detail),
+                ),
+                const SizedBox(height: 12),
+                _sectionCard(
+                  title: 'Item (${items.length})',
+                  children: items.isEmpty
+                      ? [const Text('Tidak ada item.')]
+                      : items.map(_itemRow).toList(),
+                ),
+                const SizedBox(height: 12),
+                _activitySection(),
+              ],
+              const SizedBox(height: 16),
+              _decisionCard(),
             ],
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              _errorBox(_error!),
-            ],
-            if (detail != null) ...[
-              const SizedBox(height: 14),
-              _sectionCard(
-                title: 'Informasi Dokumen',
-                children: _documentInfoRows(detail),
-              ),
-              const SizedBox(height: 12),
-              _sectionCard(
-                title: widget.approval.doctype == 'Material Request'
-                    ? 'Kebutuhan'
-                    : 'Nilai Dokumen',
-                children: _amountRows(detail),
-              ),
-              const SizedBox(height: 12),
-              _sectionCard(
-                title: 'Item (${items.length})',
-                children: items.isEmpty
-                    ? [const Text('Tidak ada item.')]
-                    : items.map(_itemRow).toList(),
-              ),
-              const SizedBox(height: 12),
-              _activitySection(),
-            ],
-            const SizedBox(height: 16),
-            _decisionCard(),
-          ],
+          ),
         ),
       ),
     );
@@ -2304,88 +2316,91 @@ class _SalesOrderApprovalHistoryDetailPageState
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadDetail,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-          children: [
-            _summaryHeader(
-              documentName: widget.group.documentName,
-              doctype: widget.group.doctype,
-              party: party,
-              state: state,
-              total: _historyTotal(detail),
-            ),
-            if (_loading) ...[
-              const SizedBox(height: 12),
-              const LinearProgressIndicator(),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              _errorBox(_error!),
-            ],
-            if (detail != null) ...[
-              const SizedBox(height: 14),
-              _sectionCard(
-                title: 'Detail Dokumen',
-                children: _historyDetailRows(detail, party),
+      body: TmsxResponsiveBody(
+        maxWidth: 680,
+        child: RefreshIndicator(
+          onRefresh: _loadDetail,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: TmsxResponsive.pagePadding(context, top: 16, bottom: 28),
+            children: [
+              _summaryHeader(
+                documentName: widget.group.documentName,
+                doctype: widget.group.doctype,
+                party: party,
+                state: state,
+                total: _historyTotal(detail),
               ),
-              const SizedBox(height: 12),
-              _sectionCard(
-                title: widget.group.doctype == 'Material Request'
-                    ? 'Kebutuhan'
-                    : 'Nilai Dokumen',
-                children: _historyAmountRows(detail),
-              ),
-              const SizedBox(height: 12),
-              _sectionCard(
-                title: 'Item (${items.length})',
-                children: items.isEmpty
-                    ? [const Text('Tidak ada item.')]
-                    : items.map(_itemRow).toList(),
-              ),
-              if (salesTeam.isNotEmpty) ...[
+              if (_loading) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                _errorBox(_error!),
+              ],
+              if (detail != null) ...[
+                const SizedBox(height: 14),
+                _sectionCard(
+                  title: 'Detail Dokumen',
+                  children: _historyDetailRows(detail, party),
+                ),
                 const SizedBox(height: 12),
                 _sectionCard(
-                  title: 'Sales Team',
-                  children: salesTeam
-                      .map(
-                        (row) => _detailRow(
-                          _text(row['sales_person']),
-                          '${_number(row['allocated_percentage'])}% kontribusi',
-                        ),
-                      )
-                      .toList(),
+                  title: widget.group.doctype == 'Material Request'
+                      ? 'Kebutuhan'
+                      : 'Nilai Dokumen',
+                  children: _historyAmountRows(detail),
                 ),
+                const SizedBox(height: 12),
+                _sectionCard(
+                  title: 'Item (${items.length})',
+                  children: items.isEmpty
+                      ? [const Text('Tidak ada item.')]
+                      : items.map(_itemRow).toList(),
+                ),
+                if (salesTeam.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _sectionCard(
+                    title: 'Sales Team',
+                    children: salesTeam
+                        .map(
+                          (row) => _detailRow(
+                            _text(row['sales_person']),
+                            '${_number(row['allocated_percentage'])}% kontribusi',
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
               ],
-            ],
-            const SizedBox(height: 16),
-            const Text(
-              'Activity Log',
-              style: TextStyle(
-                color: AppColors.navy,
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
+              const SizedBox(height: 16),
+              const Text(
+                'Activity Log',
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            if (_activity.isEmpty)
-              _sectionCard(
-                title: 'Belum ada aktivitas',
-                children: const [Text('Activity dokumen belum tersedia.')],
-              )
-            else
-              ..._activity.asMap().entries.map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-                return _timelineItem(
-                  item,
-                  isFirst: index == 0,
-                  isLast: index == _activity.length - 1,
-                );
-              }),
-          ],
+              const SizedBox(height: 10),
+              if (_activity.isEmpty)
+                _sectionCard(
+                  title: 'Belum ada aktivitas',
+                  children: const [Text('Activity dokumen belum tersedia.')],
+                )
+              else
+                ..._activity.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  return _timelineItem(
+                    item,
+                    isFirst: index == 0,
+                    isLast: index == _activity.length - 1,
+                  );
+                }),
+            ],
+          ),
         ),
       ),
     );
@@ -2987,78 +3002,87 @@ class _SalesOrderApprovalDetailPageState
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadDetail,
-        child: ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-          children: [
-            _detailHeader(widget.approval),
-            if (_loading) ...[
-              const SizedBox(height: 12),
-              const LinearProgressIndicator(),
-            ],
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              _errorBox(_error!),
-            ],
-            if (detail != null) ...[
-              const SizedBox(height: 14),
-              _sectionCard(
-                title: 'Informasi Order',
-                children: [
-                  _detailRow('Customer', _text(detail['customer_name'])),
-                  _detailRow(
-                    'Tanggal Order',
-                    _text(detail['transaction_date']),
-                  ),
-                  _detailRow('Tanggal Kirim', _text(detail['delivery_date'])),
-                  _detailRow('Company', _text(detail['company'])),
-                  _detailRow('Gudang', _text(detail['set_warehouse'])),
-                  _detailRow('Price List', _text(detail['selling_price_list'])),
-                  _detailRow('Currency', _text(detail['currency'])),
-                  _detailRow('Dibuat oleh', _text(detail['owner'])),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _sectionCard(
-                title: 'Nilai Order',
-                children: [
-                  _moneyRow('Subtotal', detail['net_total']),
-                  _moneyRow('Diskon', detail['discount_amount']),
-                  _moneyRow('Pajak & Biaya', detail['total_taxes_and_charges']),
-                  _moneyRow(
-                    'Grand Total',
-                    detail['grand_total'],
-                    emphasized: true,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _sectionCard(
-                title: 'Item (${items.length})',
-                children: items.isEmpty
-                    ? [const Text('Tidak ada item.')]
-                    : items.map(_itemRow).toList(),
-              ),
-              if (salesTeam.isNotEmpty) ...[
+      body: TmsxResponsiveBody(
+        maxWidth: 680,
+        child: RefreshIndicator(
+          onRefresh: _loadDetail,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: TmsxResponsive.pagePadding(context, top: 16, bottom: 28),
+            children: [
+              _detailHeader(widget.approval),
+              if (_loading) ...[
+                const SizedBox(height: 12),
+                const LinearProgressIndicator(),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                _errorBox(_error!),
+              ],
+              if (detail != null) ...[
+                const SizedBox(height: 14),
+                _sectionCard(
+                  title: 'Informasi Order',
+                  children: [
+                    _detailRow('Customer', _text(detail['customer_name'])),
+                    _detailRow(
+                      'Tanggal Order',
+                      _text(detail['transaction_date']),
+                    ),
+                    _detailRow('Tanggal Kirim', _text(detail['delivery_date'])),
+                    _detailRow('Company', _text(detail['company'])),
+                    _detailRow('Gudang', _text(detail['set_warehouse'])),
+                    _detailRow(
+                      'Price List',
+                      _text(detail['selling_price_list']),
+                    ),
+                    _detailRow('Currency', _text(detail['currency'])),
+                    _detailRow('Dibuat oleh', _text(detail['owner'])),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 _sectionCard(
-                  title: 'Sales Team',
-                  children: salesTeam
-                      .map(
-                        (row) => _detailRow(
-                          _text(row['sales_person']),
-                          '${_number(row['allocated_percentage'])}% kontribusi',
-                        ),
-                      )
-                      .toList(),
+                  title: 'Nilai Order',
+                  children: [
+                    _moneyRow('Subtotal', detail['net_total']),
+                    _moneyRow('Diskon', detail['discount_amount']),
+                    _moneyRow(
+                      'Pajak & Biaya',
+                      detail['total_taxes_and_charges'],
+                    ),
+                    _moneyRow(
+                      'Grand Total',
+                      detail['grand_total'],
+                      emphasized: true,
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 12),
+                _sectionCard(
+                  title: 'Item (${items.length})',
+                  children: items.isEmpty
+                      ? [const Text('Tidak ada item.')]
+                      : items.map(_itemRow).toList(),
+                ),
+                if (salesTeam.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _sectionCard(
+                    title: 'Sales Team',
+                    children: salesTeam
+                        .map(
+                          (row) => _detailRow(
+                            _text(row['sales_person']),
+                            '${_number(row['allocated_percentage'])}% kontribusi',
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
               ],
+              const SizedBox(height: 16),
+              _decisionCard(),
             ],
-            const SizedBox(height: 16),
-            _decisionCard(),
-          ],
+          ),
         ),
       ),
     );

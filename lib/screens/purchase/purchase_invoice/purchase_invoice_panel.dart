@@ -13,6 +13,7 @@ import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import '../shared/buying_document_detail_sheet.dart';
 import '../shared/purchase_ui.dart';
 
@@ -390,15 +391,19 @@ class _PurchaseInvoicePanelState extends State<PurchaseInvoicePanel> {
             message: _emptyMessage(),
           )
         else
-          ...filtered.map(
-            (d) => ErpDocumentCard(
-              id: d.id,
-              party: d.supplier,
-              statusText: d.statusText,
-              date: d.date,
-              value: d.value,
-              onTap: () => _openDetail(d),
-            ),
+          TmsxResponsiveCardGrid(
+            children: filtered
+                .map(
+                  (d) => ErpDocumentCard(
+                    id: d.id,
+                    party: d.supplier,
+                    statusText: d.statusText,
+                    date: d.date,
+                    value: d.value,
+                    onTap: () => _openDetail(d),
+                  ),
+                )
+                .toList(),
           ),
         if (appState.hasMorePurchaseInvoices ||
             appState.isMorePurchaseInvoicesLoading) ...[

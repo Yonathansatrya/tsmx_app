@@ -78,7 +78,7 @@ class WarehouseOperationsTab extends StatelessWidget {
     ];
 
     return ListView(
-      padding: warehousePagePadding,
+      padding: warehousePagePaddingOf(context),
       children: [
         const WarehouseSectionHeader(
           title: 'Operasi Gudang',

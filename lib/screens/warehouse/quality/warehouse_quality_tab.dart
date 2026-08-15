@@ -70,7 +70,7 @@ class WarehouseQualityTab extends StatelessWidget {
     ];
 
     return ListView(
-      padding: warehousePagePadding,
+      padding: warehousePagePaddingOf(context),
       children: [
         const WarehouseSectionHeader(
           title: 'Quality Control',

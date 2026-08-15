@@ -12,6 +12,7 @@ import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
 import '../../../widgets/erp/document_trend_card.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import '../shared/selling_document_detail_sheet.dart';
 import '../shared/selling_filter_widgets.dart';
 
@@ -403,15 +404,19 @@ class _SalesInvoicePanelState extends State<SalesInvoicePanel> {
         if (filtered.isEmpty && !appState.isSalesInvoicesLoading)
           const ErpEmptyState(title: 'No sales invoices found')
         else
-          ...filtered.map(
-            (d) => ErpDocumentCard(
-              id: d.id,
-              party: d.customer,
-              statusText: d.statusText,
-              date: d.date,
-              value: d.value,
-              onTap: () => _openDetail(d),
-            ),
+          TmsxResponsiveCardGrid(
+            children: filtered
+                .map(
+                  (d) => ErpDocumentCard(
+                    id: d.id,
+                    party: d.customer,
+                    statusText: d.statusText,
+                    date: d.date,
+                    value: d.value,
+                    onTap: () => _openDetail(d),
+                  ),
+                )
+                .toList(),
           ),
 
         if (appState.hasMoreSalesInvoices ||

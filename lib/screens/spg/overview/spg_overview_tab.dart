@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 
 class SpgOverviewTab extends StatelessWidget {
   final ValueChanged<int> onMenuSelected;
@@ -10,12 +11,17 @@ class SpgOverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 104),
+      padding: TmsxResponsive.pagePadding(context, top: 16, bottom: 104),
       children: [
         const _SpgHeroCard(),
         const SizedBox(height: 18),
         GridView.count(
-          crossAxisCount: 3,
+          crossAxisCount: TmsxResponsive.columnsFor(
+            context,
+            phone: 3,
+            tablet: 4,
+            desktop: 5,
+          ),
           mainAxisSpacing: 14,
           crossAxisSpacing: 12,
           childAspectRatio: 0.78,

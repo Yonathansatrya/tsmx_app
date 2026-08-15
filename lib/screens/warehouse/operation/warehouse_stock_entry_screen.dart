@@ -212,7 +212,7 @@ class _WarehouseStockEntryScreenState extends State<WarehouseStockEntryScreen> {
         : Form(
             key: _formKey,
             child: ListView(
-              padding: warehousePagePadding,
+              padding: warehousePagePaddingOf(context),
               children: [
                 _instructionPanel(),
                 const SizedBox(height: 14),

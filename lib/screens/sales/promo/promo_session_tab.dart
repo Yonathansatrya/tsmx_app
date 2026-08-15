@@ -35,7 +35,7 @@ class _PromoSessionTabState extends State<PromoSessionTab> {
         RefreshIndicator(
           onRefresh: _loadRequests,
           child: ListView(
-            padding: SalesUi.compactScreenPadding,
+            padding: SalesUi.compactScreenPaddingOf(context),
             children: [
               SalesHeroCard(
                 title: 'Pengajuan Promo Session',

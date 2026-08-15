@@ -13,6 +13,7 @@ import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import '../../purchase/purchase_order/create_purchase_order_screen.dart';
 import '../shared/buying_document_detail_sheet.dart';
 import '../shared/purchase_ui.dart';
@@ -721,17 +722,25 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
             message: 'Gunakan tombol Buat PO untuk membuat dokumen baru.',
           )
         else
-          ...filtered.map(
-            (o) => ErpDocumentCard(
-              id: o.id,
-              party: o.vendor,
-              statusText: o.statusText,
-              date: o.eta,
-              value: o.totalValue,
-              onTap: () => _openDetail(o),
-              onEdit: isDocDraft(o.docStatus) ? () => _editPo(o.id) : null,
-              onDelete: isDocDraft(o.docStatus) ? () => _deletePo(o.id) : null,
-            ),
+          TmsxResponsiveCardGrid(
+            children: filtered
+                .map(
+                  (o) => ErpDocumentCard(
+                    id: o.id,
+                    party: o.vendor,
+                    statusText: o.statusText,
+                    date: o.eta,
+                    value: o.totalValue,
+                    onTap: () => _openDetail(o),
+                    onEdit: isDocDraft(o.docStatus)
+                        ? () => _editPo(o.id)
+                        : null,
+                    onDelete: isDocDraft(o.docStatus)
+                        ? () => _deletePo(o.id)
+                        : null,
+                  ),
+                )
+                .toList(),
           ),
 
         if (appState.hasMorePurchaseOrders ||

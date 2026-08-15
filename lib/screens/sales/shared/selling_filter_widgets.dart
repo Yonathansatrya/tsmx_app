@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 
 enum SellingSortOption { newest, oldest, valueHigh, valueLow }
 
@@ -266,116 +267,124 @@ class _SellingAdvancedFilterSheetState
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(
-          left: 18,
-          right: 18,
-          top: 18,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 18,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                widget.title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.navy,
+      child: TmsxResponsiveBody(
+        maxWidth: 560,
+        alignment: Alignment.bottomCenter,
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: TmsxResponsive.horizontalPadding(context),
+            right: TmsxResponsive.horizontalPadding(context),
+            top: 18,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 18,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  widget.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.navy,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: _customerCtrl,
-                decoration: const InputDecoration(labelText: 'Customer'),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _minCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Min value'),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _customerCtrl,
+                  decoration: const InputDecoration(labelText: 'Customer'),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _minCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Min value',
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _maxCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Max value'),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        controller: _maxCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Max value',
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _pickDate(isFrom: true),
-                      icon: const Icon(Icons.date_range_rounded),
-                      label: Text('From ${_dateText(_from)}'),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pickDate(isFrom: true),
+                        icon: const Icon(Icons.date_range_rounded),
+                        label: Text('From ${_dateText(_from)}'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _pickDate(isFrom: false),
-                      icon: const Icon(Icons.event_rounded),
-                      label: Text('To ${_dateText(_to)}'),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pickDate(isFrom: false),
+                        icon: const Icon(Icons.event_rounded),
+                        label: Text('To ${_dateText(_to)}'),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<SellingDocStatusFilter>(
-                initialValue: _docStatus,
-                decoration: const InputDecoration(labelText: 'Doc status'),
-                items: const [
-                  DropdownMenuItem(
-                    value: SellingDocStatusFilter.all,
-                    child: Text('All'),
-                  ),
-                  DropdownMenuItem(
-                    value: SellingDocStatusFilter.draft,
-                    child: Text('Draft'),
-                  ),
-                  DropdownMenuItem(
-                    value: SellingDocStatusFilter.submitted,
-                    child: Text('Submitted'),
-                  ),
-                  DropdownMenuItem(
-                    value: SellingDocStatusFilter.cancelled,
-                    child: Text('Cancelled'),
-                  ),
-                ],
-                onChanged: (value) {
-                  if (value != null) setState(() => _docStatus = value);
-                },
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _reset,
-                      child: const Text('Reset'),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<SellingDocStatusFilter>(
+                  initialValue: _docStatus,
+                  decoration: const InputDecoration(labelText: 'Doc status'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: SellingDocStatusFilter.all,
+                      child: Text('All'),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _apply,
-                      child: const Text('Apply'),
+                    DropdownMenuItem(
+                      value: SellingDocStatusFilter.draft,
+                      child: Text('Draft'),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                    DropdownMenuItem(
+                      value: SellingDocStatusFilter.submitted,
+                      child: Text('Submitted'),
+                    ),
+                    DropdownMenuItem(
+                      value: SellingDocStatusFilter.cancelled,
+                      child: Text('Cancelled'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _docStatus = value);
+                  },
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _reset,
+                        child: const Text('Reset'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _apply,
+                        child: const Text('Apply'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -44,7 +44,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
         RefreshIndicator(
           onRefresh: _loadRequests,
           child: ListView(
-            padding: SalesUi.compactScreenPadding,
+            padding: SalesUi.compactScreenPaddingOf(context),
             children: [
               SalesHeroCard(
                 title: 'Daftar NOO',

@@ -78,7 +78,7 @@ class _WarehouseOperationHistoryScreenState
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: warehousePagePadding,
+          padding: warehousePagePaddingOf(context),
           children: [
             const WarehouseSectionHeader(
               title: 'Riwayat Transaksi',

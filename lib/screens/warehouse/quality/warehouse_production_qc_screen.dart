@@ -78,7 +78,7 @@ class _WarehouseProductionQcScreenState
         onRefresh: () => _load(forceRefresh: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: warehousePagePadding,
+          padding: warehousePagePaddingOf(context),
           children: [
             const WarehouseSectionHeader(
               title: 'QC Dalam Proses',

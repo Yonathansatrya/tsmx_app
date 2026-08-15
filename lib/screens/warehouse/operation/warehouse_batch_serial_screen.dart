@@ -97,7 +97,7 @@ class _BatchViewState extends State<_BatchView> {
       onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: warehousePagePadding,
+        padding: warehousePagePaddingOf(context),
         children: [
           const WarehouseSectionHeader(
             title: 'Tracking Batch',
@@ -241,7 +241,7 @@ class _SerialViewState extends State<_SerialView> {
       onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: warehousePagePadding,
+        padding: warehousePagePaddingOf(context),
         children: [
           const WarehouseSectionHeader(
             title: 'Tracking Serial Number',

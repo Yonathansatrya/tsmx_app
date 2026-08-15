@@ -15,6 +15,7 @@ import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import 'create_sales_order_screen.dart';
 import '../shared/selling_document_detail_sheet.dart';
 
@@ -807,18 +808,24 @@ class _SalesOrderPanelState extends State<SalesOrderPanel> {
         if (filtered.isEmpty && !appState.isSalesOrdersLoading)
           const ErpEmptyState(title: 'No sales orders found')
         else
-          ...filtered.map(
-            (o) => ErpDocumentCard(
-              id: o.id,
-              party: o.customer,
-              statusText: o.effectiveStatusText,
-              date: o.date,
-              value: o.value,
-              onTap: () => _openDetail(o),
-              onEdit: isDocDraft(o.docStatus) ? () => _editSo(o.id) : null,
-              onDuplicate: () => _duplicateSoFromList(o),
-              onDownload: () => _downloadAndShareSoPdf(o.id),
-            ),
+          TmsxResponsiveCardGrid(
+            children: filtered
+                .map(
+                  (o) => ErpDocumentCard(
+                    id: o.id,
+                    party: o.customer,
+                    statusText: o.effectiveStatusText,
+                    date: o.date,
+                    value: o.value,
+                    onTap: () => _openDetail(o),
+                    onEdit: isDocDraft(o.docStatus)
+                        ? () => _editSo(o.id)
+                        : null,
+                    onDuplicate: () => _duplicateSoFromList(o),
+                    onDownload: () => _downloadAndShareSoPdf(o.id),
+                  ),
+                )
+                .toList(),
           ),
         if (appState.hasMoreSalesOrders ||
             appState.isMoreSalesOrdersLoading) ...[

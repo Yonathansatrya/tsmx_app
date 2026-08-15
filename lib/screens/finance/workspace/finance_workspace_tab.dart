@@ -995,7 +995,7 @@ class _FinanceWorkspaceTabState extends State<_FinanceWorkspaceTab> {
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 96),
+        padding: TmsxResponsive.pagePadding(context, top: 18, bottom: 96),
         children: [
           _FinancePeriodCard(
             title: title,

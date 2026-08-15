@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/responsive/responsive_layout.dart';
 
 const logisticsPagePadding = EdgeInsets.fromLTRB(16, 14, 16, 88);
+EdgeInsets logisticsPagePaddingOf(BuildContext context) {
+  return TmsxResponsive.pagePadding(context, top: 14, bottom: 88);
+}
+
 const logisticsSectionGap = SizedBox(height: 18);
 
 const logisticsGreen = Color(0xFF16A34A);

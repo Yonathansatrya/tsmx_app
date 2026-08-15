@@ -50,6 +50,7 @@ class _SalesCollectionTabState extends State<SalesCollectionTab> {
     final selectedCompany = state.sellingCompanyFilter.isNotEmpty
         ? state.sellingCompanyFilter
         : (state.preferredCompany(companies) ?? '');
+    final pagePadding = SalesUi.screenPaddingOf(context);
     return DefaultTabController(
       length: 3,
       child: ColoredBox(
@@ -58,7 +59,12 @@ class _SalesCollectionTabState extends State<SalesCollectionTab> {
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+                padding: EdgeInsets.fromLTRB(
+                  pagePadding.left,
+                  18,
+                  pagePadding.right,
+                  12,
+                ),
                 child: Column(
                   children: [
                     ErpPeriodFilterCard(
@@ -99,7 +105,12 @@ class _SalesCollectionTabState extends State<SalesCollectionTab> {
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                padding: EdgeInsets.fromLTRB(
+                  pagePadding.left,
+                  0,
+                  pagePadding.right,
+                  12,
+                ),
                 child: SalesPillTabBar(
                   tabs: const [
                     Tab(text: 'AR Aging'),

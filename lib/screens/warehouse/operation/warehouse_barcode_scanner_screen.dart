@@ -144,7 +144,7 @@ class _WarehouseBarcodeScannerScreenState
       onRefresh: _loadInventory,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: warehousePagePadding,
+        padding: warehousePagePaddingOf(context),
         children: [
           const WarehouseSectionHeader(
             title: 'Scan Item',

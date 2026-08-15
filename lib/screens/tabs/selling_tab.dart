@@ -217,7 +217,7 @@ class SellingTabState extends State<SellingTab>
             builder: (context, _) {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+                padding: SalesUi.screenPaddingOf(context),
                 children: [
                   ErpPeriodFilterCard(
                     title: 'Periode Selling',

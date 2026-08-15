@@ -27,7 +27,7 @@ class WarehouseOverviewTab extends StatelessWidget {
       },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: warehousePagePadding,
+        padding: warehousePagePaddingOf(context),
         children: [
           _WarehouseHeroCard(
             warehouses: state.warehouses.length,

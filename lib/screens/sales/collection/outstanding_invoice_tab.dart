@@ -10,6 +10,7 @@ import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import 'ar_aging_tab.dart';
 import 'collection_widgets.dart';
+import '../shared/sales_ui.dart';
 
 class OutstandingInvoiceTab extends StatefulWidget {
   const OutstandingInvoiceTab({
@@ -105,7 +106,7 @@ class _OutstandingInvoiceTabState extends State<OutstandingInvoiceTab>
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+        padding: SalesUi.screenPaddingOf(context),
         children: [
           const CollectionSectionHeader(
             title: 'Piutang Customer',

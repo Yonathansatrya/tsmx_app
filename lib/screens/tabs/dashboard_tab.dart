@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../widgets/dashboard/dashboard_module_launcher.dart';
+import '../../widgets/responsive/responsive_layout.dart';
 import '../profile/profile_screen.dart';
 
 class DashboardTab extends StatefulWidget {
@@ -33,14 +34,16 @@ class _DashboardTabState extends State<DashboardTab> {
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 18, 16, 110),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _DashboardGreetingCard(appState: appState),
-            const SizedBox(height: 18),
-            const DashboardModuleLauncher(),
-          ],
+        padding: TmsxResponsive.pagePadding(context, top: 18, bottom: 110),
+        child: TmsxResponsiveBody(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _DashboardGreetingCard(appState: appState),
+              const SizedBox(height: 18),
+              const DashboardModuleLauncher(),
+            ],
+          ),
         ),
       ),
     );

@@ -9,6 +9,7 @@ import '../state/app_state.dart';
 import '../theme/app_colors.dart';
 import '../utils/erp_doc_utils.dart';
 import '../utils/erp_format.dart';
+import '../widgets/responsive/responsive_layout.dart';
 import '../config/mobile_role_registry.dart';
 import 'auth/login_screen.dart';
 import 'profile/profile_screen.dart';
@@ -261,7 +262,7 @@ class _AppMainScreenState extends State<AppMainScreen> {
                   active: index == selectedIndex,
                   child: KeyedSubtree(
                     key: ValueKey(tabs[index].keyName),
-                    child: tabs[index].child,
+                    child: TmsxResponsiveBody(child: tabs[index].child),
                   ),
                 ),
               ),
@@ -1228,33 +1229,43 @@ class _TmsxBottomNav extends StatelessWidget {
       child: SafeArea(
         top: false,
         minimum: EdgeInsets.fromLTRB(18, 4, 18, bottomPadding > 0 ? 8 : 14),
-        child: Container(
-          height: 62,
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppColors.white.withValues(alpha: 0.96),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.white),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primaryDark.withValues(alpha: 0.11),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              for (var index = 0; index < tabs.length; index++)
-                Expanded(
-                  child: _TmsxBottomNavItem(
-                    tab: tabs[index],
-                    selected: index == selectedIndex,
-                    compact: tabs.length >= 4,
-                    onTap: () => onSelected(index),
-                  ),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: SizedBox(
+              width: double.infinity,
+              child: Container(
+                height: 62,
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                decoration: BoxDecoration(
+                  color: AppColors.white.withValues(alpha: 0.96),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: AppColors.white),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryDark.withValues(alpha: 0.11),
+                      blurRadius: 24,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
                 ),
-            ],
+                child: Row(
+                  children: [
+                    for (var index = 0; index < tabs.length; index++)
+                      Expanded(
+                        child: _TmsxBottomNavItem(
+                          tab: tabs[index],
+                          selected: index == selectedIndex,
+                          compact: tabs.length >= 4,
+                          onTap: () => onSelected(index),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),

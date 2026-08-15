@@ -36,7 +36,7 @@ class LogisticsOverviewTab extends StatelessWidget {
       onRefresh: () => context.read<AppState>().refreshDeliveryNotes(),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: logisticsPagePadding,
+        padding: logisticsPagePaddingOf(context),
         children: [
           const LogisticsSectionHeader(
             title: 'Dashboard Logistics',

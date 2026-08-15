@@ -263,13 +263,19 @@ class _ArAgingTabState extends State<ArAgingTab>
     final totalOverdue = _totalOverdueFor(invoices);
     final previewInvoices = invoices.take(10).toList(growable: false);
     final previewPayments = payments.take(10).toList(growable: false);
+    final pagePadding = SalesUi.screenPaddingOf(context);
     return RefreshIndicator(
       onRefresh: _load,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            padding: EdgeInsets.fromLTRB(
+              pagePadding.left,
+              16,
+              pagePadding.right,
+              0,
+            ),
             sliver: SliverList.list(
               children: [
                 const CollectionSectionHeader(
@@ -384,7 +390,7 @@ class _ArAgingTabState extends State<ArAgingTab>
             const SliverToBoxAdapter(child: SizedBox.shrink())
           else
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(horizontal: pagePadding.left),
               sliver: SliverList.builder(
                 itemCount: previewInvoices.length,
                 itemBuilder: (context, index) {
@@ -402,7 +408,12 @@ class _ArAgingTabState extends State<ArAgingTab>
             ),
           if (!loading && agingError == null && invoices.length > 10)
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              padding: EdgeInsets.fromLTRB(
+                pagePadding.left,
+                4,
+                pagePadding.right,
+                12,
+              ),
               sliver: SliverToBoxAdapter(
                 child: _CollectionMoreButton(
                   label: 'Lihat semua invoice',
@@ -413,7 +424,12 @@ class _ArAgingTabState extends State<ArAgingTab>
               ),
             ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+            padding: EdgeInsets.fromLTRB(
+              pagePadding.left,
+              10,
+              pagePadding.right,
+              0,
+            ),
             sliver: SliverList(
               delegate: SliverChildListDelegate.fixed([
                 const SizedBox(height: 8),
@@ -435,7 +451,7 @@ class _ArAgingTabState extends State<ArAgingTab>
             const SliverToBoxAdapter(child: SizedBox.shrink())
           else
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(horizontal: pagePadding.left),
               sliver: SliverList.builder(
                 itemCount: previewPayments.length,
                 itemBuilder: (context, index) {
@@ -450,7 +466,12 @@ class _ArAgingTabState extends State<ArAgingTab>
             ),
           if (!loading && paymentError == null && payments.length > 10)
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              padding: EdgeInsets.fromLTRB(
+                pagePadding.left,
+                4,
+                pagePadding.right,
+                12,
+              ),
               sliver: SliverToBoxAdapter(
                 child: _CollectionMoreButton(
                   label: 'Lihat semua histori pembayaran',
@@ -462,7 +483,12 @@ class _ArAgingTabState extends State<ArAgingTab>
             ),
           if (agingError != null || paymentError != null)
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+              padding: EdgeInsets.fromLTRB(
+                pagePadding.left,
+                12,
+                pagePadding.right,
+                90,
+              ),
               sliver: SliverToBoxAdapter(
                 child: OutlinedButton.icon(
                   onPressed: _load,
@@ -681,7 +707,7 @@ class _CollectionFullListScreenState extends State<_CollectionFullListScreen> {
         onRefresh: isInvoiceMode ? () async {} : _reloadPayments,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+          padding: SalesUi.screenPaddingOf(context).copyWith(bottom: 28),
           children: [
             _CollectionFullListFilterPanel(
               searchController: _searchController,

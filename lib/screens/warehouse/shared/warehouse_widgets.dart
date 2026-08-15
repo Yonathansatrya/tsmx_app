@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 
 const warehousePagePadding = EdgeInsets.fromLTRB(16, 14, 16, 96);
+EdgeInsets warehousePagePaddingOf(BuildContext context) {
+  return TmsxResponsive.pagePadding(context, top: 14, bottom: 96);
+}
+
 const warehouseSectionGap = SizedBox(height: 20);
 const warehouseItemGap = SizedBox(height: 10);
 

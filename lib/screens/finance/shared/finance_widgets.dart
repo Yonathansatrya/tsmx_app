@@ -323,50 +323,54 @@ class _FinanceListSheet extends StatelessWidget {
       minChildSize: 0.45,
       maxChildSize: 0.92,
       builder: (context, controller) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-          ),
-          child: ListView(
-            controller: controller,
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
-            children: [
-              Center(
-                child: Container(
-                  width: 42,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.border,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        color: AppColors.navy,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
+        return TmsxResponsiveBody(
+          maxWidth: 680,
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+            ),
+            child: ListView(
+              controller: controller,
+              padding: TmsxResponsive.pagePadding(context, top: 10, bottom: 28),
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.border,
+                      borderRadius: BorderRadius.circular(20),
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (children.isEmpty)
-                ErpEmptyState(title: emptyTitle)
-              else
-                ...children,
-            ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (children.isEmpty)
+                  ErpEmptyState(title: emptyTitle)
+                else
+                  ...children,
+              ],
+            ),
           ),
         );
       },

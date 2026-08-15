@@ -64,7 +64,7 @@ class _InactiveCustomerTabState extends State<InactiveCustomerTab> {
           forceRemote: true,
         ),
         child: ListView(
-          padding: SalesUi.compactScreenPadding,
+          padding: SalesUi.compactScreenPaddingOf(context),
           children: [
             SalesHeroCard(
               title: 'Inactive Customer',

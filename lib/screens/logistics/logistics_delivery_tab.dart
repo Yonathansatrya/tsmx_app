@@ -225,7 +225,7 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
       onRefresh: _refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: logisticsPagePadding,
+        padding: logisticsPagePaddingOf(context),
         children: [
           LogisticsSectionHeader(
             title: 'Delivery Monitoring',
@@ -568,7 +568,7 @@ class _LogisticsDeliveryDetailScreenState
       ),
       body: SafeArea(
         child: ListView(
-          padding: logisticsPagePadding,
+          padding: logisticsPagePaddingOf(context),
           children: [
             Container(
               padding: const EdgeInsets.all(16),

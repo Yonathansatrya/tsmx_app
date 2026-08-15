@@ -70,7 +70,7 @@ class _WarehouseInventoryValuationViewState
       onRefresh: _refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: warehousePagePadding,
+        padding: warehousePagePaddingOf(context),
         children: [
           const WarehouseSectionHeader(
             title: 'Inventory Valuation',

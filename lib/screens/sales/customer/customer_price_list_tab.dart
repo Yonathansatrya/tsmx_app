@@ -10,6 +10,7 @@ import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import '../shared/sales_ui.dart';
 
 const Color _priceTeal = Color(0xFF14B8A6);
@@ -145,7 +146,7 @@ class _CustomerPriceListTabState extends State<CustomerPriceListTab> {
       },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: SalesUi.compactScreenPadding,
+        padding: SalesUi.compactScreenPaddingOf(context),
         children: [
           SalesHeroCard(
             icon: Icons.price_check_rounded,
@@ -577,124 +578,130 @@ class _CustomerSelectSheetState extends State<_CustomerSelectSheet> {
       maxChildSize: 0.95,
       minChildSize: 0.55,
       builder: (context, scrollController) {
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            14,
-            16,
-            MediaQuery.of(context).viewInsets.bottom + 16,
-          ),
-          child: Column(
-            children: [
-              Container(
-                width: 42,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(999),
+        return TmsxResponsiveBody(
+          maxWidth: 640,
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              TmsxResponsive.horizontalPadding(context),
+              14,
+              TmsxResponsive.horizontalPadding(context),
+              MediaQuery.of(context).viewInsets.bottom + 16,
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const SalesHeroCard(
-                title: 'Pilih Customer',
-                subtitle: 'Cari berdasarkan nama atau kode customer.',
-                icon: Icons.storefront_rounded,
-                accent: _priceTeal,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _queryController,
-                autofocus: true,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  hintText: 'Cari customer',
-                  prefixIcon: Icon(Icons.search_rounded),
+                const SizedBox(height: 16),
+                const SalesHeroCard(
+                  title: 'Pilih Customer',
+                  subtitle: 'Cari berdasarkan nama atau kode customer.',
+                  icon: Icons.storefront_rounded,
+                  accent: _priceTeal,
                 ),
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: rows.isEmpty
-                    ? const ErpEmptyState(
-                        icon: Icons.storefront_rounded,
-                        title: 'Customer tidak ditemukan',
-                      )
-                    : ListView.separated(
-                        controller: scrollController,
-                        itemCount: rows.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final customer = rows[index];
-                          final selected = widget.selected?.id == customer.id;
-                          return Material(
-                            color: selected
-                                ? _priceTeal.withValues(alpha: 0.10)
-                                : AppColors.surfaceMuted,
-                            borderRadius: BorderRadius.circular(18),
-                            child: InkWell(
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _queryController,
+                  autofocus: true,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(
+                    hintText: 'Cari customer',
+                    prefixIcon: Icon(Icons.search_rounded),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: rows.isEmpty
+                      ? const ErpEmptyState(
+                          icon: Icons.storefront_rounded,
+                          title: 'Customer tidak ditemukan',
+                        )
+                      : ListView.separated(
+                          controller: scrollController,
+                          itemCount: rows.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final customer = rows[index];
+                            final selected = widget.selected?.id == customer.id;
+                            return Material(
+                              color: selected
+                                  ? _priceTeal.withValues(alpha: 0.10)
+                                  : AppColors.surfaceMuted,
                               borderRadius: BorderRadius.circular(18),
-                              onTap: () => Navigator.pop(context, customer),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 42,
-                                      height: 42,
-                                      decoration: BoxDecoration(
-                                        color: _priceTeal.withValues(
-                                          alpha: selected ? 0.16 : 0.10,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(18),
+                                onTap: () => Navigator.pop(context, customer),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 42,
+                                        height: 42,
+                                        decoration: BoxDecoration(
+                                          color: _priceTeal.withValues(
+                                            alpha: selected ? 0.16 : 0.10,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
                                         ),
-                                        borderRadius: BorderRadius.circular(14),
+                                        child: Icon(
+                                          selected
+                                              ? Icons.check_rounded
+                                              : Icons.storefront_rounded,
+                                          color: _priceTeal,
+                                        ),
                                       ),
-                                      child: Icon(
-                                        selected
-                                            ? Icons.check_rounded
-                                            : Icons.storefront_rounded,
-                                        color: _priceTeal,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            customer.name,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: AppColors.navy,
-                                              fontWeight: FontWeight.w900,
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              customer.name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: AppColors.navy,
+                                                fontWeight: FontWeight.w900,
+                                              ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            customer.id,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: AppColors.slate,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w700,
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              customer.id,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: AppColors.slate,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    const Icon(
-                                      Icons.chevron_right_rounded,
-                                      color: AppColors.slate,
-                                    ),
-                                  ],
+                                      const Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: AppColors.slate,
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
           ),
         );
       },

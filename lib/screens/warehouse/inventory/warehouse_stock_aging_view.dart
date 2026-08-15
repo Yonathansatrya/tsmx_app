@@ -68,7 +68,7 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
       onRefresh: () => _load(forceRefresh: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: warehousePagePadding,
+        padding: warehousePagePaddingOf(context),
         children: [
           const WarehouseSectionHeader(
             title: 'Stock Aging',

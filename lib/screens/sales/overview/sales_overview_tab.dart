@@ -827,7 +827,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
         await _reloadReports(forceRemote: true);
       },
       child: ListView(
-        padding: SalesUi.screenPadding,
+        padding: SalesUi.screenPaddingOf(context),
         children: [
           _SalesOverviewFilterCard(
             date: _filterDate,

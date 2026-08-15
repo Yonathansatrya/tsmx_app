@@ -6,6 +6,7 @@ import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_section_widgets.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import 'create_spg_daily_activity_screen.dart';
 
 class SpgDailyActivityTab extends StatefulWidget {
@@ -57,7 +58,7 @@ class _SpgDailyActivityTabState extends State<SpgDailyActivityTab> {
           onRefresh: _load,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
+            padding: TmsxResponsive.pagePadding(context, top: 16, bottom: 104),
             children: [
               const _SpgListHeader(
                 title: 'SPG Daily Activity',

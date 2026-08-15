@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../models/promo_request.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import '../shared/sales_ui.dart';
 
 class CreatePromoRequestScreen extends StatefulWidget {
@@ -72,162 +73,173 @@ class _CreatePromoRequestScreenState extends State<CreatePromoRequestScreen> {
           ),
         ),
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: SalesUi.compactScreenPadding,
-          children: [
-            SalesHeroCard(
-              title: 'Pengajuan Promo Session',
-              subtitle:
-                  'Ajukan promo item untuk diproses menjadi Promotional Scheme.',
-              icon: Icons.local_offer_rounded,
-              trailing: _statusChip(),
-            ),
-            SalesUi.gap(),
-            SalesInfoCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SalesSectionTitle(
-                    title: 'Data Pengajuan',
-                    subtitle:
-                        'Pilih company, sales, target, dan periode promo.',
-                  ),
-                  SalesUi.gap(),
-                  _companyField(companies),
-                  SalesUi.gap(),
-                  state.isSalesUserRole
-                      ? _readonlyValue(
-                          label: 'Sales Person',
-                          value: currentSalesPerson.isNotEmpty
-                              ? currentSalesPerson
-                              : '-',
-                          icon: Icons.person_rounded,
-                        )
-                      : _valuePickerField(
-                          label: 'Sales Person',
-                          value: _selectedSalesPerson,
-                          placeholder: 'Pilih sales person',
-                          icon: Icons.person_rounded,
-                          onTap: _pickSalesPerson,
-                          onClear: () =>
-                              setState(() => _selectedSalesPerson = null),
-                        ),
-                  SalesUi.gap(),
-                  _linkPickerField(
-                    controller: _customerGroupController,
-                    label: 'Customer Group',
-                    placeholder: 'Pilih customer group',
-                    icon: Icons.groups_rounded,
-                    onTap: _pickCustomerGroup,
-                  ),
-                  SalesUi.gap(),
-                  _linkPickerField(
-                    controller: _customerController,
-                    label: 'Customer',
-                    placeholder: 'Pilih customer',
-                    icon: Icons.storefront_rounded,
-                    onTap: _pickCustomer,
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Isi salah satu: Customer Group atau Customer.',
-                    style: TextStyle(
-                      color: AppColors.slate,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+      body: TmsxResponsiveBody(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: SalesUi.compactScreenPaddingOf(context),
+            children: [
+              SalesHeroCard(
+                title: 'Pengajuan Promo Session',
+                subtitle:
+                    'Ajukan promo item untuk diproses menjadi Promotional Scheme.',
+                icon: Icons.local_offer_rounded,
+                trailing: _statusChip(),
+              ),
+              SalesUi.gap(),
+              SalesInfoCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SalesSectionTitle(
+                      title: 'Data Pengajuan',
+                      subtitle:
+                          'Pilih company, sales, target, dan periode promo.',
                     ),
-                  ),
-                  SalesUi.gap(),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _dateTile(
-                          label: 'Valid From',
-                          value: _validFrom,
-                          onTap: () => _pickDate(
-                            current: _validFrom,
-                            onPicked: (date) =>
-                                setState(() => _validFrom = date),
+                    SalesUi.gap(),
+                    _companyField(companies),
+                    SalesUi.gap(),
+                    state.isSalesUserRole
+                        ? _readonlyValue(
+                            label: 'Sales Person',
+                            value: currentSalesPerson.isNotEmpty
+                                ? currentSalesPerson
+                                : '-',
+                            icon: Icons.person_rounded,
+                          )
+                        : _valuePickerField(
+                            label: 'Sales Person',
+                            value: _selectedSalesPerson,
+                            placeholder: 'Pilih sales person',
+                            icon: Icons.person_rounded,
+                            onTap: _pickSalesPerson,
+                            onClear: () =>
+                                setState(() => _selectedSalesPerson = null),
+                          ),
+                    SalesUi.gap(),
+                    _linkPickerField(
+                      controller: _customerGroupController,
+                      label: 'Customer Group',
+                      placeholder: 'Pilih customer group',
+                      icon: Icons.groups_rounded,
+                      onTap: _pickCustomerGroup,
+                    ),
+                    SalesUi.gap(),
+                    _linkPickerField(
+                      controller: _customerController,
+                      label: 'Customer',
+                      placeholder: 'Pilih customer',
+                      icon: Icons.storefront_rounded,
+                      onTap: _pickCustomer,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Isi salah satu: Customer Group atau Customer.',
+                      style: TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SalesUi.gap(),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _dateTile(
+                            label: 'Valid From',
+                            value: _validFrom,
+                            onTap: () => _pickDate(
+                              current: _validFrom,
+                              onPicked: (date) =>
+                                  setState(() => _validFrom = date),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _dateTile(
-                          label: 'Valid Upto',
-                          value: _validUpto,
-                          onTap: () => _pickDate(
-                            current: _validUpto,
-                            onPicked: (date) =>
-                                setState(() => _validUpto = date),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _dateTile(
+                            label: 'Valid Upto',
+                            value: _validUpto,
+                            onTap: () => _pickDate(
+                              current: _validUpto,
+                              onPicked: (date) =>
+                                  setState(() => _validUpto = date),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            SalesUi.gap(),
-            SalesInfoCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SalesSectionTitle(
-                    title: 'Item Promo',
-                    subtitle: 'Isi diskon nominal atau harga promo per item.',
-                  ),
-                  SalesUi.gap(),
-                  ...List.generate(_items.length, _itemCard),
-                  OutlinedButton.icon(
-                    onPressed: () =>
-                        setState(() => _items.add(_PromoItemForm())),
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('Tambah Item'),
-                  ),
-                ],
+              SalesUi.gap(),
+              SalesInfoCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SalesSectionTitle(
+                      title: 'Item Promo',
+                      subtitle: 'Isi diskon nominal atau harga promo per item.',
+                    ),
+                    SalesUi.gap(),
+                    ...List.generate(_items.length, _itemCard),
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          setState(() => _items.add(_PromoItemForm())),
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Tambah Item'),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            SalesUi.gap(),
-            SalesInfoCard(
-              child: _textField(
-                controller: _noteController,
-                label: 'Catatan Promo',
-                icon: Icons.notes_rounded,
-                maxLines: 4,
+              SalesUi.gap(),
+              SalesInfoCard(
+                child: _textField(
+                  controller: _noteController,
+                  label: 'Catatan Promo',
+                  icon: Icons.notes_rounded,
+                  maxLines: 4,
+                ),
               ),
-            ),
-            const SizedBox(height: 96),
-          ],
+              const SizedBox(height: 96),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        child: FilledButton.icon(
-          onPressed: _isSubmitting ? null : _submit,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: AppColors.white,
-            minimumSize: const Size.fromHeight(52),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
+        minimum: EdgeInsets.fromLTRB(
+          TmsxResponsive.horizontalPadding(context),
+          8,
+          TmsxResponsive.horizontalPadding(context),
+          16,
+        ),
+        child: TmsxResponsiveBody(
+          child: FilledButton.icon(
+            onPressed: _isSubmitting ? null : _submit,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.white,
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
             ),
-          ),
-          icon: _isSubmitting
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
-                  ),
-                )
-              : const Icon(Icons.send_rounded),
-          label: Text(
-            _isSubmitting ? 'Mengirim...' : 'Kirim Pengajuan Promo',
-            style: const TextStyle(fontWeight: FontWeight.w900),
+            icon: _isSubmitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        AppColors.white,
+                      ),
+                    ),
+                  )
+                : const Icon(Icons.send_rounded),
+            label: Text(
+              _isSubmitting ? 'Mengirim...' : 'Kirim Pengajuan Promo',
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
           ),
         ),
       ),

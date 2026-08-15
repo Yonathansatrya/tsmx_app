@@ -130,7 +130,7 @@ class _WarehouseQcApprovalScreenState extends State<WarehouseQcApprovalScreen> {
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: warehousePagePadding,
+          padding: warehousePagePaddingOf(context),
           children: [
             const WarehouseSectionHeader(
               title: 'QC Menunggu Approval',

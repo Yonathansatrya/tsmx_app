@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_status_badge.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 
 class SellingDetailMetric {
   final String label;
@@ -64,47 +65,55 @@ void showSellingDocumentDetailSheet({
         minChildSize: 0.42,
         maxChildSize: 0.92,
         builder: (context, scrollController) {
-          return Container(
-            decoration: const BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-            ),
-            child: SingleChildScrollView(
-              controller: scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppColors.border,
-                        borderRadius: BorderRadius.circular(20),
+          return TmsxResponsiveBody(
+            maxWidth: 680,
+            alignment: Alignment.bottomCenter,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+              ),
+              child: SingleChildScrollView(
+                controller: scrollController,
+                padding: TmsxResponsive.pagePadding(
+                  context,
+                  top: 10,
+                  bottom: 28,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.border,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  _SellingDetailHeader(
-                    title: title,
-                    subtitle: subtitle,
-                    statusText: statusText,
-                    icon: icon,
-                    onClose: () => Navigator.pop(sheetContext),
-                  ),
-                  if (metrics.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _SellingMetricGrid(metrics: metrics),
+                    const SizedBox(height: 14),
+                    _SellingDetailHeader(
+                      title: title,
+                      subtitle: subtitle,
+                      statusText: statusText,
+                      icon: icon,
+                      onClose: () => Navigator.pop(sheetContext),
+                    ),
+                    if (metrics.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _SellingMetricGrid(metrics: metrics),
+                    ],
+                    if (infos.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      _SellingInfoCard(infos: infos),
+                    ],
+                    const SizedBox(height: 14),
+                    _SellingItemsSection(items: items),
+                    if (footer != null) ...[const SizedBox(height: 16), footer],
                   ],
-                  if (infos.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _SellingInfoCard(infos: infos),
-                  ],
-                  const SizedBox(height: 14),
-                  _SellingItemsSection(items: items),
-                  if (footer != null) ...[const SizedBox(height: 16), footer],
-                ],
+                ),
               ),
             ),
           );

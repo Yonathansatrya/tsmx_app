@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/responsive/responsive_layout.dart';
 import '../shared/role_main_screen.dart';
 import 'logistics_delivery_tab.dart';
 import 'logistics_overview_tab.dart';
@@ -193,18 +194,21 @@ class _NoLogisticsAccessScreen extends StatelessWidget {
   const _NoLogisticsAccessScreen();
 
   @override
-  Widget build(BuildContext context) => const Scaffold(
+  Widget build(BuildContext context) => Scaffold(
     backgroundColor: AppColors.background,
     body: Center(
-      child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Text(
-          'Tidak ada akses Logistics yang tersedia untuk user ini.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: AppColors.slate,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
+      child: TmsxResponsiveBody(
+        maxWidth: 520,
+        child: Padding(
+          padding: EdgeInsets.all(TmsxResponsive.horizontalPadding(context)),
+          child: const Text(
+            'Tidak ada akses Logistics yang tersedia untuk user ini.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.slate,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),

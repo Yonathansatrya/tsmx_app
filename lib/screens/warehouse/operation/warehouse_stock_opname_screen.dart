@@ -144,7 +144,7 @@ class _WarehouseStockOpnameScreenState
             onRefresh: _load,
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: warehousePagePadding,
+              padding: warehousePagePaddingOf(context),
               children: [
                 _instructionPanel(),
                 const SizedBox(height: 14),

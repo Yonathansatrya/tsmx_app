@@ -6,6 +6,7 @@ import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_item_autocomplete_field.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import '../shared/purchase_ui.dart';
 
 class CreateMaterialRequestScreen extends StatefulWidget {
@@ -385,184 +386,187 @@ class _CreateMaterialRequestScreenState
           : _error != null
           ? _ErrorState(message: _error!, onRetry: _load)
           : SingleChildScrollView(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
+              padding: TmsxResponsive.pagePadding(
+                context,
                 top: 16,
-                bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const PurchaseCreateHeader(
-                      title: 'Buat Material Request',
-                      subtitle: 'Ajukan kebutuhan material sesuai warehouse.',
-                      icon: Icons.assignment_outlined,
-                      accentColor: Color(0xFFF59E0B),
-                    ),
-                    const SizedBox(height: 16),
-                    if (widget.initialItem != null) ...[
-                      _InfoCard(initialItem: widget.initialItem),
+                bottom: 24,
+              ).copyWith(bottom: 24 + MediaQuery.of(context).viewInsets.bottom),
+              child: TmsxResponsiveBody(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const PurchaseCreateHeader(
+                        title: 'Buat Material Request',
+                        subtitle: 'Ajukan kebutuhan material sesuai warehouse.',
+                        icon: Icons.assignment_outlined,
+                        accentColor: Color(0xFFF59E0B),
+                      ),
                       const SizedBox(height: 16),
+                      if (widget.initialItem != null) ...[
+                        _InfoCard(initialItem: widget.initialItem),
+                        const SizedBox(height: 16),
+                      ],
+                      _sectionCard(
+                        title: 'Request Information',
+                        icon: Icons.assignment_outlined,
+                        children: [
+                          _dropdownField(
+                            label: 'Series',
+                            value: _selectedSeries,
+                            items: _seriesItems(),
+                            onChanged: (value) =>
+                                setState(() => _selectedSeries = value),
+                            icon: Icons.tag_outlined,
+                          ),
+                          const SizedBox(height: 12),
+                          _dropdownField(
+                            label: 'Purpose',
+                            value: _requestType,
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'Purchase',
+                                child: Text('Purchase'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Material Transfer',
+                                child: Text('Material Transfer'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Material Issue',
+                                child: Text('Material Issue'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Manufacture',
+                                child: Text('Manufacture'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Customer Provided',
+                                child: Text('Customer Provided'),
+                              ),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) {
+                                setState(() => _requestType = value);
+                              }
+                            },
+                            icon: Icons.flag_outlined,
+                          ),
+                          const SizedBox(height: 12),
+                          _dateField(
+                            'Transaction Date',
+                            _transactionDate,
+                            _pickDate,
+                          ),
+                          const SizedBox(height: 12),
+                          ErpItemAutocompleteField(
+                            label: 'Company',
+                            selectedId: _selectedCompany,
+                            options: _companySearchOptions(),
+                            decoration: _decoration(
+                              'Company',
+                              prefixIcon: Icons.business_outlined,
+                            ),
+                            onSelected: (value) =>
+                                setState(() => _selectedCompany = value),
+                            validator: (value) =>
+                                value == null ? 'Company wajib dipilih' : null,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _sectionCard(
+                        title: 'Item Details',
+                        icon: Icons.inventory_2_outlined,
+                        children: [
+                          ErpItemAutocompleteField(
+                            label: 'Item',
+                            selectedId: _selectedItem,
+                            options: _itemSearchOptions(),
+                            onSelected: (value) =>
+                                setState(() => _selectedItem = value),
+                            decoration: _decoration(
+                              'Item',
+                              prefixIcon: Icons.search_rounded,
+                            ),
+                            validator: (value) =>
+                                value == null ? 'Item wajib dipilih' : null,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _qtyCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: _decoration(
+                              'Quantity',
+                              prefixIcon: Icons.numbers_rounded,
+                            ),
+                            validator: (value) {
+                              final qty = double.tryParse(value?.trim() ?? '');
+                              if (qty == null || qty <= 0) {
+                                return 'Qty harus lebih dari 0';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          ErpItemAutocompleteField(
+                            label: 'Target Warehouse',
+                            selectedId: _selectedWarehouse,
+                            options: _warehouseSearchOptions(),
+                            decoration: _decoration(
+                              'Target Warehouse',
+                              prefixIcon: Icons.warehouse_outlined,
+                            ),
+                            onSelected: (value) =>
+                                setState(() => _selectedWarehouse = value),
+                          ),
+                          const SizedBox(height: 12),
+                          ..._additionalItems.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final row = entry.value;
+                            return _AdditionalItemCard(
+                              index: index,
+                              row: row,
+                              itemItems: _itemSearchOptions(),
+                              warehouseItems: _warehouseSearchOptions(),
+                              defaultWarehouse: _selectedWarehouse,
+                              decoration: _decoration,
+                              onChanged: () => setState(() {}),
+                              onRemove: () => _removeItemRow(index),
+                            );
+                          }),
+                          OutlinedButton.icon(
+                            onPressed: _addItemRow,
+                            icon: const Icon(Icons.add_rounded),
+                            label: const Text('Tambah Item'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _SummaryCard(
+                        requestType: _requestType,
+                        transactionDate: _transactionDate,
+                        company: _selectedCompany,
+                        warehouse: _selectedWarehouse,
+                      ),
+                      const SizedBox(height: 24),
                     ],
-                    _sectionCard(
-                      title: 'Request Information',
-                      icon: Icons.assignment_outlined,
-                      children: [
-                        _dropdownField(
-                          label: 'Series',
-                          value: _selectedSeries,
-                          items: _seriesItems(),
-                          onChanged: (value) =>
-                              setState(() => _selectedSeries = value),
-                          icon: Icons.tag_outlined,
-                        ),
-                        const SizedBox(height: 12),
-                        _dropdownField(
-                          label: 'Purpose',
-                          value: _requestType,
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'Purchase',
-                              child: Text('Purchase'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Material Transfer',
-                              child: Text('Material Transfer'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Material Issue',
-                              child: Text('Material Issue'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Manufacture',
-                              child: Text('Manufacture'),
-                            ),
-                            DropdownMenuItem(
-                              value: 'Customer Provided',
-                              child: Text('Customer Provided'),
-                            ),
-                          ],
-                          onChanged: (value) {
-                            if (value != null) {
-                              setState(() => _requestType = value);
-                            }
-                          },
-                          icon: Icons.flag_outlined,
-                        ),
-                        const SizedBox(height: 12),
-                        _dateField(
-                          'Transaction Date',
-                          _transactionDate,
-                          _pickDate,
-                        ),
-                        const SizedBox(height: 12),
-                        ErpItemAutocompleteField(
-                          label: 'Company',
-                          selectedId: _selectedCompany,
-                          options: _companySearchOptions(),
-                          decoration: _decoration(
-                            'Company',
-                            prefixIcon: Icons.business_outlined,
-                          ),
-                          onSelected: (value) =>
-                              setState(() => _selectedCompany = value),
-                          validator: (value) =>
-                              value == null ? 'Company wajib dipilih' : null,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _sectionCard(
-                      title: 'Item Details',
-                      icon: Icons.inventory_2_outlined,
-                      children: [
-                        ErpItemAutocompleteField(
-                          label: 'Item',
-                          selectedId: _selectedItem,
-                          options: _itemSearchOptions(),
-                          onSelected: (value) =>
-                              setState(() => _selectedItem = value),
-                          decoration: _decoration(
-                            'Item',
-                            prefixIcon: Icons.search_rounded,
-                          ),
-                          validator: (value) =>
-                              value == null ? 'Item wajib dipilih' : null,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _qtyCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: _decoration(
-                            'Quantity',
-                            prefixIcon: Icons.numbers_rounded,
-                          ),
-                          validator: (value) {
-                            final qty = double.tryParse(value?.trim() ?? '');
-                            if (qty == null || qty <= 0) {
-                              return 'Qty harus lebih dari 0';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        ErpItemAutocompleteField(
-                          label: 'Target Warehouse',
-                          selectedId: _selectedWarehouse,
-                          options: _warehouseSearchOptions(),
-                          decoration: _decoration(
-                            'Target Warehouse',
-                            prefixIcon: Icons.warehouse_outlined,
-                          ),
-                          onSelected: (value) =>
-                              setState(() => _selectedWarehouse = value),
-                        ),
-                        const SizedBox(height: 12),
-                        ..._additionalItems.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final row = entry.value;
-                          return _AdditionalItemCard(
-                            index: index,
-                            row: row,
-                            itemItems: _itemSearchOptions(),
-                            warehouseItems: _warehouseSearchOptions(),
-                            defaultWarehouse: _selectedWarehouse,
-                            decoration: _decoration,
-                            onChanged: () => setState(() {}),
-                            onRemove: () => _removeItemRow(index),
-                          );
-                        }),
-                        OutlinedButton.icon(
-                          onPressed: _addItemRow,
-                          icon: const Icon(Icons.add_rounded),
-                          label: const Text('Tambah Item'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _SummaryCard(
-                      requestType: _requestType,
-                      transactionDate: _transactionDate,
-                      company: _selectedCompany,
-                      warehouse: _selectedWarehouse,
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                  ),
                 ),
               ),
             ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(16),
-        child: PurchasePrimaryActionButton(
-          label: 'Save Material Request',
-          icon: Icons.save_alt_rounded,
-          isLoading: _saving,
-          onPressed: _loading || _error != null ? null : _save,
+        minimum: EdgeInsets.all(TmsxResponsive.horizontalPadding(context)),
+        child: TmsxResponsiveBody(
+          child: PurchasePrimaryActionButton(
+            label: 'Save Material Request',
+            icon: Icons.save_alt_rounded,
+            isLoading: _saving,
+            onPressed: _loading || _error != null ? null : _save,
+          ),
         ),
       ),
     );

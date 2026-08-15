@@ -5,6 +5,7 @@ import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_item_autocomplete_field.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import '../shared/purchase_ui.dart';
 
 class CreatePurchaseInvoiceScreen extends StatefulWidget {
@@ -398,255 +399,258 @@ class _CreatePurchaseInvoiceScreenState
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
+              padding: TmsxResponsive.pagePadding(
+                context,
                 top: 16,
-                bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const PurchaseCreateHeader(
-                    title: 'Buat Purchase Invoice',
-                    subtitle: 'Catat tagihan supplier dan nilai pembelian.',
-                    icon: Icons.request_quote_outlined,
-                    accentColor: Color(0xFF0EA5E9),
-                  ),
-                  const SizedBox(height: 16),
-                  if (_loadError != null) ...[
-                    Card(
-                      color: Colors.red.shade50,
-                      child: ListTile(
-                        title: Text(_loadError!),
-                        trailing: IconButton(
-                          onPressed: _loadOptions,
-                          icon: const Icon(Icons.refresh),
-                        ),
-                      ),
+                bottom: 24,
+              ).copyWith(bottom: 24 + MediaQuery.of(context).viewInsets.bottom),
+              child: TmsxResponsiveBody(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const PurchaseCreateHeader(
+                      title: 'Buat Purchase Invoice',
+                      subtitle: 'Catat tagihan supplier dan nilai pembelian.',
+                      icon: Icons.request_quote_outlined,
+                      accentColor: Color(0xFF0EA5E9),
                     ),
                     const SizedBox(height: 16),
-                  ],
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.border),
-                      boxShadow: AppColors.cardShadow,
-                    ),
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Text(
-                          'Purchase Invoice Info',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.navy,
+                    if (_loadError != null) ...[
+                      Card(
+                        color: Colors.red.shade50,
+                        child: ListTile(
+                          title: Text(_loadError!),
+                          trailing: IconButton(
+                            onPressed: _loadOptions,
+                            icon: const Icon(Icons.refresh),
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          initialValue: _selectedSeries,
-                          decoration: _decoration('Series'),
-                          isExpanded: true,
-                          items: _series
-                              .map(
-                                (value) => DropdownMenuItem(
-                                  value: value,
-                                  child: Text(
-                                    value,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: AppColors.border),
+                        boxShadow: AppColors.cardShadow,
+                      ),
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text(
+                            'Purchase Invoice Info',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.navy,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue: _selectedSeries,
+                            decoration: _decoration('Series'),
+                            isExpanded: true,
+                            items: _series
+                                .map(
+                                  (value) => DropdownMenuItem(
+                                    value: value,
+                                    child: Text(
+                                      value,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) =>
-                              setState(() => _selectedSeries = value),
-                          validator: (value) =>
-                              value == null ? 'Series wajib dipilih' : null,
-                        ),
-                        const SizedBox(height: 12),
-                        ErpItemAutocompleteField(
-                          label: 'Supplier',
-                          selectedId: _selectedSupplier,
-                          decoration: _decoration('Supplier'),
-                          options: _supplierSearchOptions(),
-                          onSelected: (value) =>
-                              setState(() => _selectedSupplier = value),
-                          validator: (value) =>
-                              value == null ? 'Supplier wajib dipilih' : null,
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _dateField(
-                                'Date',
-                                _postingDate,
-                                () => _pickDate(dueDate: false),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _dateField(
-                                'Due Date',
-                                _dueDate,
-                                () => _pickDate(dueDate: true),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _stockSettingsCard(),
-                  const SizedBox(height: 16),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.border),
-                      boxShadow: AppColors.cardShadow,
-                    ),
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Text(
-                          'Item Details',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.navy,
+                                )
+                                .toList(),
+                            onChanged: (value) =>
+                                setState(() => _selectedSeries = value),
+                            validator: (value) =>
+                                value == null ? 'Series wajib dipilih' : null,
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        ErpItemAutocompleteField(
-                          label: 'Item',
-                          selectedId: _selectedItem,
-                          options: _itemSearchOptions(),
-                          decoration: _decoration('Item'),
-                          onSelected: (value) =>
-                              setState(() => _selectedItem = value),
-                          validator: (value) =>
-                              value == null ? 'Item wajib dipilih' : null,
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _qtyCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                decoration: _decoration('Accepted Qty'),
-                                validator: (value) {
-                                  final qty = double.tryParse(
-                                    value?.trim() ?? '',
-                                  );
-                                  return qty == null || qty <= 0
-                                      ? 'Qty > 0'
-                                      : null;
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _rateCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                decoration: _decoration('Rate'),
-                                validator: (value) {
-                                  final rate = double.tryParse(
-                                    value?.trim() ?? '',
-                                  );
-                                  return rate == null || rate < 0
-                                      ? 'Rate >= 0'
-                                      : null;
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        ..._additionalItems.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final row = entry.value;
-                          return _AdditionalInvoiceItemCard(
-                            index: index,
-                            row: row,
-                            itemItems: _itemSearchOptions(),
-                            warehouseItems: _warehouseSearchOptions(),
-                            updateStock: _updateStock,
-                            defaultWarehouse: _selectedWarehouse,
-                            decoration: _decoration,
-                            onChanged: () => setState(() {}),
-                            onRemove: () => _removeItemRow(index),
-                          );
-                        }),
-                        OutlinedButton.icon(
-                          onPressed: _addItemRow,
-                          icon: const Icon(Icons.add_rounded),
-                          label: const Text('Tambah Item'),
-                        ),
-                        const SizedBox(height: 12),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                            ),
+                          const SizedBox(height: 12),
+                          ErpItemAutocompleteField(
+                            label: 'Supplier',
+                            selectedId: _selectedSupplier,
+                            decoration: _decoration('Supplier'),
+                            options: _supplierSearchOptions(),
+                            onSelected: (value) =>
+                                setState(() => _selectedSupplier = value),
+                            validator: (value) =>
+                                value == null ? 'Supplier wajib dipilih' : null,
                           ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 14,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          const SizedBox(height: 12),
+                          Row(
                             children: [
-                              const Text(
-                                'Total',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.slate,
+                              Expanded(
+                                child: _dateField(
+                                  'Date',
+                                  _postingDate,
+                                  () => _pickDate(dueDate: false),
                                 ),
                               ),
-                              Text(
-                                _formatCurrency(_total),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.primary,
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _dateField(
+                                  'Due Date',
+                                  _dueDate,
+                                  () => _pickDate(dueDate: true),
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                    const SizedBox(height: 16),
+                    _stockSettingsCard(),
+                    const SizedBox(height: 16),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: AppColors.border),
+                        boxShadow: AppColors.cardShadow,
+                      ),
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text(
+                            'Item Details',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.navy,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ErpItemAutocompleteField(
+                            label: 'Item',
+                            selectedId: _selectedItem,
+                            options: _itemSearchOptions(),
+                            decoration: _decoration('Item'),
+                            onSelected: (value) =>
+                                setState(() => _selectedItem = value),
+                            validator: (value) =>
+                                value == null ? 'Item wajib dipilih' : null,
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _qtyCtrl,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  decoration: _decoration('Accepted Qty'),
+                                  validator: (value) {
+                                    final qty = double.tryParse(
+                                      value?.trim() ?? '',
+                                    );
+                                    return qty == null || qty <= 0
+                                        ? 'Qty > 0'
+                                        : null;
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _rateCtrl,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  decoration: _decoration('Rate'),
+                                  validator: (value) {
+                                    final rate = double.tryParse(
+                                      value?.trim() ?? '',
+                                    );
+                                    return rate == null || rate < 0
+                                        ? 'Rate >= 0'
+                                        : null;
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          ..._additionalItems.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final row = entry.value;
+                            return _AdditionalInvoiceItemCard(
+                              index: index,
+                              row: row,
+                              itemItems: _itemSearchOptions(),
+                              warehouseItems: _warehouseSearchOptions(),
+                              updateStock: _updateStock,
+                              defaultWarehouse: _selectedWarehouse,
+                              decoration: _decoration,
+                              onChanged: () => setState(() {}),
+                              onRemove: () => _removeItemRow(index),
+                            );
+                          }),
+                          OutlinedButton.icon(
+                            onPressed: _addItemRow,
+                            icon: const Icon(Icons.add_rounded),
+                            label: const Text('Tambah Item'),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: AppColors.background,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 14,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Total',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.slate,
+                                  ),
+                                ),
+                                Text(
+                                  _formatCurrency(_total),
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
             ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(16),
-        child: PurchasePrimaryActionButton(
-          label: 'Save Purchase Invoice',
-          icon: Icons.save_alt_rounded,
-          isLoading: _saving,
-          onPressed: _loading || _loadError != null ? null : _save,
+        minimum: EdgeInsets.all(TmsxResponsive.horizontalPadding(context)),
+        child: TmsxResponsiveBody(
+          child: PurchasePrimaryActionButton(
+            label: 'Save Purchase Invoice',
+            icon: Icons.save_alt_rounded,
+            isLoading: _saving,
+            onPressed: _loading || _loadError != null ? null : _save,
+          ),
         ),
       ),
     );

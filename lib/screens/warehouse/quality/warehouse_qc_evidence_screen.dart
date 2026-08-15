@@ -161,7 +161,7 @@ class _WarehouseQcEvidenceScreenState extends State<WarehouseQcEvidenceScreen> {
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: warehousePagePadding,
+          padding: warehousePagePaddingOf(context),
           children: [
             const WarehouseSectionHeader(
               title: 'Bukti Foto QC',

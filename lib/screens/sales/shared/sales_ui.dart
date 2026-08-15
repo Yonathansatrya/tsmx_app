@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_colors.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 
 class SalesUi {
   const SalesUi._();
@@ -13,6 +14,14 @@ class SalesUi {
     100,
   );
   static const EdgeInsets cardPadding = EdgeInsets.all(16);
+
+  static EdgeInsets screenPaddingOf(BuildContext context) {
+    return TmsxResponsive.pagePadding(context, top: 16, bottom: 100);
+  }
+
+  static EdgeInsets compactScreenPaddingOf(BuildContext context) {
+    return TmsxResponsive.pagePadding(context, top: 14, bottom: 100);
+  }
 
   static BoxDecoration cardDecoration({
     Color color = AppColors.white,

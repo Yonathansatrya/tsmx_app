@@ -12,6 +12,7 @@ import '../../widgets/erp/erp_empty_state.dart';
 import '../../widgets/erp/erp_error_box.dart';
 import '../../widgets/erp/erp_detail_sheet.dart';
 import '../../widgets/erp/erp_filter_tools.dart';
+import '../../widgets/responsive/responsive_layout.dart';
 import '../shared/role_main_screen.dart';
 
 part 'shared/finance_widgets.dart';
@@ -112,15 +113,20 @@ class _FinanceMainScreenState extends State<FinanceMainScreen> {
         final access = snapshot.data ?? const _FinanceAccess();
         final entries = access.entries(accountingOnly: widget.accountingOnly);
         if (entries.isEmpty) {
-          return const Scaffold(
+          return Scaffold(
             backgroundColor: AppColors.background,
             body: Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  'Tidak ada akses Keuangan yang tersedia untuk user ini.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.slate),
+              child: TmsxResponsiveBody(
+                maxWidth: 520,
+                child: Padding(
+                  padding: EdgeInsets.all(
+                    TmsxResponsive.horizontalPadding(context),
+                  ),
+                  child: const Text(
+                    'Tidak ada akses Keuangan yang tersedia untuk user ini.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.slate),
+                  ),
                 ),
               ),
             ),

@@ -13,6 +13,7 @@ import '../../../widgets/erp/erp_error_box.dart';
 import '../../../widgets/erp/erp_status_badge.dart';
 import '../../../widgets/erp/erp_status_chip_bar.dart';
 import '../../../widgets/erp/erp_workflow_helper.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import '../../purchase/material_request/create_material_request_screen.dart';
 import '../../purchase/purchase_order/create_purchase_order_screen.dart';
 import '../shared/buying_document_detail_sheet.dart';
@@ -508,9 +509,15 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
             message: _emptyMessage(),
           )
         else
-          ...filtered.map(
-            (doc) =>
-                _MaterialRequestCard(doc: doc, onTap: () => _openDetail(doc)),
+          TmsxResponsiveCardGrid(
+            children: filtered
+                .map(
+                  (doc) => _MaterialRequestCard(
+                    doc: doc,
+                    onTap: () => _openDetail(doc),
+                  ),
+                )
+                .toList(),
           ),
         if (appState.materialRequestsError == null &&
             (appState.hasMoreMaterialRequests ||

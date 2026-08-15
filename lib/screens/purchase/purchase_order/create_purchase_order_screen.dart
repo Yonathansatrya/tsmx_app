@@ -7,6 +7,7 @@ import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_item_autocomplete_field.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import '../shared/purchase_ui.dart';
 
 class CreatePurchaseOrderScreen extends StatefulWidget {
@@ -717,302 +718,120 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              PurchaseCreateHeader(
-                title: widget.isEditMode
-                    ? 'Edit Purchase Order'
-                    : 'Buat Purchase Order',
-                subtitle: 'Susun order pembelian supplier dan kebutuhan item.',
-                icon: Icons.shopping_bag_outlined,
-                accentColor: const Color(0xFF16A34A),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppColors.border),
-                  boxShadow: AppColors.cardShadow,
+        padding: TmsxResponsive.pagePadding(context, top: 16, bottom: 24),
+        child: TmsxResponsiveBody(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PurchaseCreateHeader(
+                  title: widget.isEditMode
+                      ? 'Edit Purchase Order'
+                      : 'Buat Purchase Order',
+                  subtitle:
+                      'Susun order pembelian supplier dan kebutuhan item.',
+                  icon: Icons.shopping_bag_outlined,
+                  accentColor: const Color(0xFF16A34A),
                 ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Purchase Order Info',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.navy,
+                const SizedBox(height: 16),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: AppColors.border),
+                    boxShadow: AppColors.cardShadow,
+                  ),
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Purchase Order Info',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.navy,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    GestureDetector(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _requiredByDate.isBefore(_selectedDate)
-                              ? _selectedDate
-                              : _requiredByDate,
-                          firstDate: _selectedDate,
-                          lastDate: DateTime(2035),
-                        );
-                        if (picked != null) {
-                          setState(() => _requiredByDate = picked);
-                        }
-                      },
-                      child: InputDecorator(
+                      const SizedBox(height: 12),
+                      GestureDetector(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _requiredByDate.isBefore(_selectedDate)
+                                ? _selectedDate
+                                : _requiredByDate,
+                            firstDate: _selectedDate,
+                            lastDate: DateTime(2035),
+                          );
+                          if (picked != null) {
+                            setState(() => _requiredByDate = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Required By',
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: Text(
+                            DateFormat('dd-MM-yyyy').format(_requiredByDate),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedSeries,
                         decoration: InputDecoration(
-                          labelText: 'Required By',
+                          labelText: 'Series',
                           filled: true,
                           fillColor: AppColors.background,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        child: Text(
-                          DateFormat('dd-MM-yyyy').format(_requiredByDate),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedSeries,
-                      decoration: InputDecoration(
-                        labelText: 'Series',
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      items: _seriesOptions
-                          .map(
-                            (series) => DropdownMenuItem(
-                              value: series,
-                              child: Text(series),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: widget.isEditMode
-                          ? null
-                          : (value) => setState(() => _selectedSeries = value),
-                      validator: (value) => widget.isEditMode || value != null
-                          ? null
-                          : 'Series wajib dipilih',
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _supplierCtrl,
-                      readOnly: true,
-                      onTap: _selectSupplier,
-                      decoration: InputDecoration(
-                        labelText: 'Supplier',
-                        hintText: _isLoadingSelectors
-                            ? 'Loading supplier...'
-                            : 'Pilih atau search supplier',
-                        prefixIcon: const Icon(Icons.storefront_outlined),
-                        suffixIcon: _supplierCtrl.text.isNotEmpty
-                            ? IconButton(
-                                tooltip: 'Bersihkan Supplier',
-                                onPressed: _clearSupplier,
-                                icon: const Icon(Icons.close_rounded),
-                              )
-                            : IconButton(
-                                tooltip: 'Search supplier',
-                                onPressed: _selectSupplier,
-                                icon: const Icon(Icons.search_rounded),
+                        items: _seriesOptions
+                            .map(
+                              (series) => DropdownMenuItem(
+                                value: series,
+                                child: Text(series),
                               ),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.10),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.36),
-                            width: 1.4,
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 14,
-                        ),
-                        errorText: _supplierError,
-                      ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Supplier wajib diisi'
-                          : null,
-                    ),
-                    if (_selectedSupplierLabel().isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      TextFormField(
-                        key: ValueKey(
-                          'supplier_name_${_supplierCtrl.text.trim()}',
-                        ),
-                        initialValue: _selectedSupplierLabel(),
-                        readOnly: true,
-                        decoration: InputDecoration(
-                          labelText: 'Supplier Name',
-                          prefixIcon: const Icon(Icons.badge_outlined),
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.12),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.10),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    GestureDetector(
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: _selectedDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _selectedDate = picked;
-                            if (_requiredByDate.isBefore(picked)) {
-                              _requiredByDate = picked;
-                            }
-                          });
-                        }
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Tanggal PO',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.slate,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              DateFormat('dd-MM-yyyy').format(_selectedDate),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: AppColors.navy,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    Builder(
-                      builder: (context) {
-                        final companyOptions = _visibleCompanyOptions;
-                        final selectedCompany =
-                            _selectedCompany != null &&
-                                companyOptions.contains(_selectedCompany)
-                            ? _selectedCompany
-                            : null;
-                        return DropdownButtonFormField<String>(
-                          initialValue: selectedCompany,
-                          decoration: InputDecoration(
-                            labelText: 'Company',
-                            prefixIcon: const Icon(Icons.apartment_rounded),
-                            filled: true,
-                            fillColor: AppColors.background,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide(
-                                color: AppColors.primary.withValues(alpha: 0.2),
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide(
-                                color: AppColors.primary.withValues(
-                                  alpha: 0.10,
-                                ),
-                              ),
-                            ),
-                          ),
-                          items: companyOptions
-                              .map(
-                                (company) => DropdownMenuItem(
-                                  value: company,
-                                  child: Text(
-                                    company,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: companyOptions.isEmpty
-                              ? null
-                              : (value) =>
-                                    setState(() => _selectedCompany = value),
-                          validator: (value) =>
-                              (value ?? _selectedCompany)?.trim().isNotEmpty ==
-                                  true
-                              ? null
-                              : 'Company wajib diisi',
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    if (_warehouseOptions.isNotEmpty)
-                      ErpItemAutocompleteField(
-                        label: 'Pilih Warehouse',
-                        selectedId:
-                            _warehouseOptions.any(
-                              (w) => w.name == _selectedWarehouse,
                             )
-                            ? _selectedWarehouse
-                            : context.read<AppState>().preferredWarehouse(
-                                _warehouseOptions,
-                              ),
+                            .toList(),
+                        onChanged: widget.isEditMode
+                            ? null
+                            : (value) =>
+                                  setState(() => _selectedSeries = value),
+                        validator: (value) => widget.isEditMode || value != null
+                            ? null
+                            : 'Series wajib dipilih',
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _supplierCtrl,
+                        readOnly: true,
+                        onTap: _selectSupplier,
                         decoration: InputDecoration(
-                          labelText: 'Pilih Warehouse',
-                          prefixIcon: const Icon(Icons.warehouse_outlined),
+                          labelText: 'Supplier',
+                          hintText: _isLoadingSelectors
+                              ? 'Loading supplier...'
+                              : 'Pilih atau search supplier',
+                          prefixIcon: const Icon(Icons.storefront_outlined),
+                          suffixIcon: _supplierCtrl.text.isNotEmpty
+                              ? IconButton(
+                                  tooltip: 'Bersihkan Supplier',
+                                  onPressed: _clearSupplier,
+                                  icon: const Icon(Icons.close_rounded),
+                                )
+                              : IconButton(
+                                  tooltip: 'Search supplier',
+                                  onPressed: _selectSupplier,
+                                  icon: const Icon(Icons.search_rounded),
+                                ),
                           filled: true,
                           fillColor: AppColors.background,
                           border: OutlineInputBorder(
@@ -1038,358 +857,566 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                             horizontal: 12,
                             vertical: 14,
                           ),
+                          errorText: _supplierError,
                         ),
-                        options: _warehouseOptions
-                            .map(
-                              (warehouse) => ErpItemOption(
-                                id: warehouse.name,
-                                label: warehouse.name,
-                              ),
-                            )
-                            .toList(),
-                        onSelected: (value) => setState(() {
-                          _selectedWarehouse = value;
-                          _selectedCompany =
-                              _companyForWarehouse(value) ?? _selectedCompany;
-                        }),
-                      )
-                    else
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: Colors.orange.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        child: const Text(
-                          'Warehouse tidak tersedia. Refresh data warehouse terlebih dahulu.',
-                          style: TextStyle(fontSize: 12, color: Colors.orange),
-                        ),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? 'Supplier wajib diisi'
+                            : null,
                       ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppColors.border),
-                  boxShadow: AppColors.cardShadow,
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Item Details',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.navy,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _itemTextController ??= TextEditingController(
-                        text: _initialItemText ?? '',
-                      ),
-                      readOnly: true,
-                      onTap: _selectPrimaryItem,
-                      decoration: InputDecoration(
-                        labelText: 'Item Code / Nama',
-                        hintText: 'Pilih atau search item',
-                        prefixIcon: const Icon(Icons.inventory_2_outlined),
-                        suffixIcon: IconButton(
-                          tooltip: 'Search item',
-                          onPressed: _selectPrimaryItem,
-                          icon: const Icon(Icons.search_rounded),
-                        ),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.16),
+                      if (_selectedSupplierLabel().isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          key: ValueKey(
+                            'supplier_name_${_supplierCtrl.text.trim()}',
                           ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.10),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.36),
-                            width: 1.4,
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 14,
-                        ),
-                        errorText: _itemError,
-                      ),
-                      validator: (v) {
-                        if ((_selectedItemCode ?? '').trim().isEmpty) {
-                          return 'Item wajib dipilih';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _uomCtrl,
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: 'UOM',
-                        hintText: 'Pilih item dulu',
-                        prefixIcon: const Icon(Icons.straighten_rounded),
-                        filled: true,
-                        fillColor: AppColors.softGreen,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.12),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.14),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _qtyCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: 'Quantity',
-                              filled: true,
-                              fillColor: AppColors.background,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
+                          initialValue: _selectedSupplierLabel(),
+                          readOnly: true,
+                          decoration: InputDecoration(
+                            labelText: 'Supplier Name',
+                            prefixIcon: const Icon(Icons.badge_outlined),
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.12,
                                 ),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
                             ),
-                            validator: (v) {
-                              final q = double.tryParse(v?.trim() ?? '');
-                              if (q == null || q <= 0) return 'Qty harus > 0';
-                              return null;
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _rateCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: 'Rate (optional)',
-                              filled: true,
-                              fillColor: AppColors.background,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.10,
                                 ),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
                             ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) return null;
-                              final r = double.tryParse(v.trim());
-                              if (r == null || r < 0) return 'Rate harus >= 0';
-                              return null;
-                            },
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _discountCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Diskon',
-                        hintText: '0',
-                        prefixIcon: const Icon(Icons.discount_outlined),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                      ),
-                      validator: (v) {
-                        final discount = _parseNumber(v ?? '');
-                        final rate = _parseNumber(_rateCtrl.text);
-                        if (discount < 0) return 'Diskon harus >= 0';
-                        if (rate > 0 && discount > rate) {
-                          return 'Diskon tidak boleh lebih besar dari rate';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    _PurchaseItemSubtotalBox(
-                      subtotal: _itemSubtotal(
-                        qty: _qtyCtrl,
-                        rate: _rateCtrl,
-                        discount: _discountCtrl,
-                      ),
-                      formatMoney: _formatMoney,
-                    ),
-                    const SizedBox(height: 12),
-                    ..._additionalItems.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final row = entry.value;
-                      return _AdditionalPurchaseItemCard(
-                        index: index,
-                        row: row,
-                        onChanged: () => setState(() {}),
-                        onSelectItem: () => _selectAdditionalItem(row),
-                        onRemove: () => _removeItemRow(index),
-                        formatMoney: _formatMoney,
-                      );
-                    }),
-                    OutlinedButton.icon(
-                      onPressed: _addItemRow,
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('Tambah Item'),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: AppColors.primary.withValues(alpha: 0.2),
-                        ),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 14,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Total',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.slate,
+                      const SizedBox(height: 12),
+                      GestureDetector(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: _selectedDate,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2030),
+                          );
+                          if (picked != null) {
+                            setState(() {
+                              _selectedDate = picked;
+                              if (_requiredByDate.isBefore(picked)) {
+                                _requiredByDate = picked;
+                              }
+                            });
+                          }
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.2),
                             ),
                           ),
-                          Text(
-                            _formattedTotal,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Tanggal PO',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.slate,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                DateFormat('dd-MM-yyyy').format(_selectedDate),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.navy,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      Builder(
+                        builder: (context) {
+                          final companyOptions = _visibleCompanyOptions;
+                          final selectedCompany =
+                              _selectedCompany != null &&
+                                  companyOptions.contains(_selectedCompany)
+                              ? _selectedCompany
+                              : null;
+                          return DropdownButtonFormField<String>(
+                            initialValue: selectedCompany,
+                            decoration: InputDecoration(
+                              labelText: 'Company',
+                              prefixIcon: const Icon(Icons.apartment_rounded),
+                              filled: true,
+                              fillColor: AppColors.background,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                borderSide: BorderSide(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.2,
+                                  ),
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                borderSide: BorderSide(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.10,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            items: companyOptions
+                                .map(
+                                  (company) => DropdownMenuItem(
+                                    value: company,
+                                    child: Text(
+                                      company,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: companyOptions.isEmpty
+                                ? null
+                                : (value) =>
+                                      setState(() => _selectedCompany = value),
+                            validator: (value) =>
+                                (value ?? _selectedCompany)
+                                        ?.trim()
+                                        .isNotEmpty ==
+                                    true
+                                ? null
+                                : 'Company wajib diisi',
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      if (_warehouseOptions.isNotEmpty)
+                        ErpItemAutocompleteField(
+                          label: 'Pilih Warehouse',
+                          selectedId:
+                              _warehouseOptions.any(
+                                (w) => w.name == _selectedWarehouse,
+                              )
+                              ? _selectedWarehouse
+                              : context.read<AppState>().preferredWarehouse(
+                                  _warehouseOptions,
+                                ),
+                          decoration: InputDecoration(
+                            labelText: 'Pilih Warehouse',
+                            prefixIcon: const Icon(Icons.warehouse_outlined),
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.10,
+                                ),
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.36,
+                                ),
+                                width: 1.4,
+                              ),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 14,
+                            ),
+                          ),
+                          options: _warehouseOptions
+                              .map(
+                                (warehouse) => ErpItemOption(
+                                  id: warehouse.name,
+                                  label: warehouse.name,
+                                ),
+                              )
+                              .toList(),
+                          onSelected: (value) => setState(() {
+                            _selectedWarehouse = value;
+                            _selectedCompany =
+                                _companyForWarehouse(value) ?? _selectedCompany;
+                          }),
+                        )
+                      else
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: Colors.orange.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: const Text(
+                            'Warehouse tidak tersedia. Refresh data warehouse terlebih dahulu.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: AppColors.border),
+                    boxShadow: AppColors.cardShadow,
+                  ),
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Item Details',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.navy,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _itemTextController ??=
+                            TextEditingController(text: _initialItemText ?? ''),
+                        readOnly: true,
+                        onTap: _selectPrimaryItem,
+                        decoration: InputDecoration(
+                          labelText: 'Item Code / Nama',
+                          hintText: 'Pilih atau search item',
+                          prefixIcon: const Icon(Icons.inventory_2_outlined),
+                          suffixIcon: IconButton(
+                            tooltip: 'Search item',
+                            onPressed: _selectPrimaryItem,
+                            icon: const Icon(Icons.search_rounded),
+                          ),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.16),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.10),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.36),
+                              width: 1.4,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 14,
+                          ),
+                          errorText: _itemError,
+                        ),
+                        validator: (v) {
+                          if ((_selectedItemCode ?? '').trim().isEmpty) {
+                            return 'Item wajib dipilih';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _uomCtrl,
+                        readOnly: true,
+                        decoration: InputDecoration(
+                          labelText: 'UOM',
+                          hintText: 'Pilih item dulu',
+                          prefixIcon: const Icon(Icons.straighten_rounded),
+                          filled: true,
+                          fillColor: AppColors.softGreen,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.12),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.14),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _qtyCtrl,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: InputDecoration(
+                                labelText: 'Quantity',
+                                filled: true,
+                                fillColor: AppColors.background,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                  ),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                              ),
+                              validator: (v) {
+                                final q = double.tryParse(v?.trim() ?? '');
+                                if (q == null || q <= 0) return 'Qty harus > 0';
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _rateCtrl,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: InputDecoration(
+                                labelText: 'Rate (optional)',
+                                filled: true,
+                                fillColor: AppColors.background,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                  ),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                              ),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) return null;
+                                final r = double.tryParse(v.trim());
+                                if (r == null || r < 0) {
+                                  return 'Rate harus >= 0';
+                                }
+                                return null;
+                              },
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: AppColors.border),
-                  boxShadow: AppColors.cardShadow,
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Noted',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.navy,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _notedCtrl,
-                      minLines: 3,
-                      maxLines: 5,
-                      decoration: InputDecoration(
-                        labelText: 'Noted',
-                        hintText: 'Catatan tambahan untuk purchase order',
-                        prefixIcon: const Padding(
-                          padding: EdgeInsets.only(bottom: 54),
-                          child: Icon(Icons.notes_rounded),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _discountCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
                         ),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.12),
+                        decoration: InputDecoration(
+                          labelText: 'Diskon',
+                          hintText: '0',
+                          prefixIcon: const Icon(Icons.discount_outlined),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        validator: (v) {
+                          final discount = _parseNumber(v ?? '');
+                          final rate = _parseNumber(_rateCtrl.text);
+                          if (discount < 0) return 'Diskon harus >= 0';
+                          if (rate > 0 && discount > rate) {
+                            return 'Diskon tidak boleh lebih besar dari rate';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _PurchaseItemSubtotalBox(
+                        subtotal: _itemSubtotal(
+                          qty: _qtyCtrl,
+                          rate: _rateCtrl,
+                          discount: _discountCtrl,
+                        ),
+                        formatMoney: _formatMoney,
+                      ),
+                      const SizedBox(height: 12),
+                      ..._additionalItems.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final row = entry.value;
+                        return _AdditionalPurchaseItemCard(
+                          index: index,
+                          row: row,
+                          onChanged: () => setState(() {}),
+                          onSelectItem: () => _selectAdditionalItem(row),
+                          onRemove: () => _removeItemRow(index),
+                          formatMoney: _formatMoney,
+                        );
+                      }),
+                      OutlinedButton.icon(
+                        onPressed: _addItemRow,
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Tambah Item'),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Total',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.slate,
+                              ),
+                            ),
+                            Text(
+                              _formattedTotal,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: AppColors.border),
+                    boxShadow: AppColors.cardShadow,
+                  ),
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Noted',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.navy,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _notedCtrl,
+                        minLines: 3,
+                        maxLines: 5,
+                        decoration: InputDecoration(
+                          labelText: 'Noted',
+                          hintText: 'Catatan tambahan untuk purchase order',
+                          prefixIcon: const Padding(
+                            padding: EdgeInsets.only(bottom: 54),
+                            child: Icon(Icons.notes_rounded),
+                          ),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.12),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-            ],
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(16),
-        child: PurchasePrimaryActionButton(
-          label: widget.isEditMode
-              ? 'Update Purchase Order'
-              : 'Save Purchase Order',
-          icon: widget.isEditMode ? Icons.sync_rounded : Icons.save_alt_rounded,
-          isLoading: _isSaving,
-          onPressed: _save,
+        minimum: EdgeInsets.all(TmsxResponsive.horizontalPadding(context)),
+        child: TmsxResponsiveBody(
+          child: PurchasePrimaryActionButton(
+            label: widget.isEditMode
+                ? 'Update Purchase Order'
+                : 'Save Purchase Order',
+            icon: widget.isEditMode
+                ? Icons.sync_rounded
+                : Icons.save_alt_rounded,
+            isLoading: _isSaving,
+            onPressed: _save,
+          ),
         ),
       ),
     );

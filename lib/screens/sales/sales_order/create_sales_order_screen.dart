@@ -11,6 +11,7 @@ import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_item_autocomplete_field.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import '../shared/sales_ui.dart';
 
 class CreateSalesOrderScreen extends StatefulWidget {
@@ -2514,152 +2515,93 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_selectorLoadError != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFED7AA)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        Icons.warning_amber_rounded,
-                        color: Colors.orange,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Sebagian data tidak dapat dibaca',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _selectorLoadError!,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ],
+        padding: TmsxResponsive.pagePadding(context, top: 16, bottom: 24),
+        child: TmsxResponsiveBody(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_selectorLoadError != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFED7AA)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.orange,
                         ),
-                      ),
-                      IconButton(
-                        tooltip: 'Coba lagi',
-                        onPressed: _isLoadingSelectors ? null : _loadSelectors,
-                        icon: const Icon(Icons.refresh_rounded),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              // Document Info Section
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Informasi Sales Order',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.slate,
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    DropdownButtonFormField<String>(
-                      initialValue: _seriesOptions.isNotEmpty
-                          ? (_seriesOptions.contains(_selectedSeries)
-                                ? _selectedSeries
-                                : _seriesOptions.first)
-                          : null,
-                      decoration: InputDecoration(
-                        labelText: 'Series',
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                      ),
-                      items: _seriesOptions
-                          .map(
-                            (series) => DropdownMenuItem(
-                              value: series,
-                              child: Text(series),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: _seriesOptions.isEmpty
-                          ? null
-                          : (v) => setState(() => _selectedSeries = v),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Series wajib dipilih'
-                          : null,
-                      hint: _isLoadingSelectors
-                          ? const Text('Loading series...')
-                          : const Text('Pilih series'),
-                    ),
-                    if (_seriesError != null) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _seriesError!,
-                              style: const TextStyle(
-                                color: Colors.redAccent,
-                                fontSize: 12,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Sebagian data tidak dapat dibaca',
+                                style: TextStyle(fontWeight: FontWeight.w700),
                               ),
-                            ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _selectorLoadError!,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
                           ),
-                          TextButton.icon(
-                            onPressed: _isLoadingSelectors
-                                ? null
-                                : _loadSelectors,
-                            icon: const Icon(Icons.refresh_rounded),
-                            label: const Text('Retry'),
-                          ),
-                        ],
+                        ),
+                        IconButton(
+                          tooltip: 'Coba lagi',
+                          onPressed: _isLoadingSelectors
+                              ? null
+                              : _loadSelectors,
+                          icon: const Icon(Icons.refresh_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                // Document Info Section
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
                     ],
+                  ),
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Informasi Sales Order',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.slate,
+                        ),
+                      ),
 
-                    if (!appState.mobileAccess.isSalesUser) ...[
                       const SizedBox(height: 12),
-                      ErpItemAutocompleteField(
-                        label: 'Sales Person',
-                        selectedId:
-                            _salesPersonOptions.contains(_selectedSalesPerson)
-                            ? _selectedSalesPerson
+
+                      DropdownButtonFormField<String>(
+                        initialValue: _seriesOptions.isNotEmpty
+                            ? (_seriesOptions.contains(_selectedSeries)
+                                  ? _selectedSeries
+                                  : _seriesOptions.first)
                             : null,
                         decoration: InputDecoration(
-                          labelText: 'Sales Person',
+                          labelText: 'Series',
                           filled: true,
                           fillColor: AppColors.background,
                           border: OutlineInputBorder(
@@ -2669,259 +2611,246 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             ),
                           ),
                         ),
-                        options: _salesPersonOptions
+                        items: _seriesOptions
                             .map(
-                              (salesPerson) => ErpItemOption(
-                                id: salesPerson,
-                                label: salesPerson,
+                              (series) => DropdownMenuItem(
+                                value: series,
+                                child: Text(series),
                               ),
                             )
                             .toList(),
-                        onSelected: (value) =>
-                            setState(() => _selectedSalesPerson = value),
+                        onChanged: _seriesOptions.isEmpty
+                            ? null
+                            : (v) => setState(() => _selectedSeries = v),
                         validator: (value) =>
                             value == null || value.trim().isEmpty
-                            ? 'Sales Person wajib dipilih'
+                            ? 'Series wajib dipilih'
                             : null,
+                        hint: _isLoadingSelectors
+                            ? const Text('Loading series...')
+                            : const Text('Pilih series'),
                       ),
-                    ],
-
-                    const SizedBox(height: 12),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: _selectedDate,
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime(2030),
-                              );
-
-                              if (picked != null) {
-                                setState(() {
-                                  _selectedDate = picked;
-
-                                  if (_selectedDeliveryDate.isBefore(picked)) {
-                                    _selectedDeliveryDate = picked;
-                                  }
-                                });
-                                _scheduleRepriceAllItems();
-                              }
-                            },
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.background,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
+                      if (_seriesError != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _seriesError!,
+                                style: const TextStyle(
+                                  color: Colors.redAccent,
+                                  fontSize: 12,
                                 ),
                               ),
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(
-                                        Icons.calendar_today,
-                                        size: 14,
-                                        color: AppColors.slate,
-                                      ),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'Date',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.slate,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    DateFormat(
-                                      'dd-MM-yyyy',
-                                    ).format(_selectedDate),
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      color: AppColors.navy,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
                             ),
-                          ),
-                        ),
-
-                        const SizedBox(width: 12),
-
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate:
-                                    _selectedDeliveryDate.isBefore(
-                                      _selectedDate,
-                                    )
-                                    ? _selectedDate
-                                    : _selectedDeliveryDate,
-                                firstDate: _selectedDate,
-                                lastDate: DateTime(2030),
-                              );
-
-                              if (picked != null) {
-                                setState(() => _selectedDeliveryDate = picked);
-                              }
-                            },
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.background,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                ),
-                              ),
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(
-                                        Icons.local_shipping_outlined,
-                                        size: 14,
-                                        color: AppColors.slate,
-                                      ),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'Delivery',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.slate,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    DateFormat(
-                                      'dd-MM-yyyy',
-                                    ).format(_selectedDeliveryDate),
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      color: AppColors.navy,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                            TextButton.icon(
+                              onPressed: _isLoadingSelectors
+                                  ? null
+                                  : _loadSelectors,
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Retry'),
                             ),
-                          ),
+                          ],
                         ),
                       ],
-                    ),
 
-                    const SizedBox(height: 12),
-
-                    ErpItemAutocompleteField(
-                      label: 'Company',
-                      selectedId: _companyOptions.contains(_selectedCompany)
-                          ? _selectedCompany
-                          : null,
-                      decoration: InputDecoration(
-                        labelText: 'Company',
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
+                      if (!appState.mobileAccess.isSalesUser) ...[
+                        const SizedBox(height: 12),
+                        ErpItemAutocompleteField(
+                          label: 'Sales Person',
+                          selectedId:
+                              _salesPersonOptions.contains(_selectedSalesPerson)
+                              ? _selectedSalesPerson
+                              : null,
+                          decoration: InputDecoration(
+                            labelText: 'Sales Person',
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                              ),
+                            ),
                           ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                      ),
-                      options: _companyOptions
-                          .map(
-                            (company) =>
-                                ErpItemOption(id: company, label: company),
-                          )
-                          .toList(),
-                      onSelected: _onCompanySelected,
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Company wajib dipilih'
-                          : null,
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    TextFormField(
-                      controller: _customerCtrl,
-                      readOnly: true,
-                      onTap: _isCustomerLocked
-                          ? null
-                          : _showCustomerSelectSheet,
-                      decoration: InputDecoration(
-                        labelText: 'Nama Customer',
-                        hintText: _isLoadingSelectors
-                            ? 'Loading customer...'
-                            : (_isCustomerLocked
-                                  ? 'Customer dikunci dari dokumen asal'
-                                  : 'Pilih atau search customer'),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        suffixIcon: _isCustomerLocked
-                            ? const Icon(Icons.lock_outline_rounded)
-                            : _customerCtrl.text.isNotEmpty
-                            ? IconButton(
-                                tooltip: 'Bersihkan Customer',
-                                onPressed: _clearCustomer,
-                                icon: const Icon(Icons.close_rounded),
+                          options: _salesPersonOptions
+                              .map(
+                                (salesPerson) => ErpItemOption(
+                                  id: salesPerson,
+                                  label: salesPerson,
+                                ),
                               )
-                            : const Icon(Icons.search_rounded),
-                        errorText: _customerError,
-                      ),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Customer wajib diisi'
-                          : null,
-                    ),
-                    if (_selectedCustomerName().isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        key: ValueKey(
-                          'customer_name_${_customerCtrl.text.trim()}',
+                              .toList(),
+                          onSelected: (value) =>
+                              setState(() => _selectedSalesPerson = value),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Sales Person wajib dipilih'
+                              : null,
                         ),
-                        initialValue: _selectedCustomerName(),
-                        readOnly: true,
+                      ],
+
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _selectedDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2030),
+                                );
+
+                                if (picked != null) {
+                                  setState(() {
+                                    _selectedDate = picked;
+
+                                    if (_selectedDeliveryDate.isBefore(
+                                      picked,
+                                    )) {
+                                      _selectedDeliveryDate = picked;
+                                    }
+                                  });
+                                  _scheduleRepriceAllItems();
+                                }
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.background,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                  ),
+                                ),
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(
+                                          Icons.calendar_today,
+                                          size: 14,
+                                          color: AppColors.slate,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Date',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.slate,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      DateFormat(
+                                        'dd-MM-yyyy',
+                                      ).format(_selectedDate),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.navy,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(width: 12),
+
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate:
+                                      _selectedDeliveryDate.isBefore(
+                                        _selectedDate,
+                                      )
+                                      ? _selectedDate
+                                      : _selectedDeliveryDate,
+                                  firstDate: _selectedDate,
+                                  lastDate: DateTime(2030),
+                                );
+
+                                if (picked != null) {
+                                  setState(
+                                    () => _selectedDeliveryDate = picked,
+                                  );
+                                }
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.background,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                  ),
+                                ),
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(
+                                          Icons.local_shipping_outlined,
+                                          size: 14,
+                                          color: AppColors.slate,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Delivery',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.slate,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      DateFormat(
+                                        'dd-MM-yyyy',
+                                      ).format(_selectedDeliveryDate),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.navy,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      ErpItemAutocompleteField(
+                        label: 'Company',
+                        selectedId: _companyOptions.contains(_selectedCompany)
+                            ? _selectedCompany
+                            : null,
                         decoration: InputDecoration(
-                          labelText: 'Customer Name',
+                          labelText: 'Company',
                           filled: true,
                           fillColor: AppColors.background,
-                          prefixIcon: const Icon(Icons.storefront_outlined),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide(
@@ -2932,63 +2861,35 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             horizontal: 12,
                             vertical: 12,
                           ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                            ),
-                          ),
                         ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    ErpItemAutocompleteField(
-                      label: 'Cost Center',
-                      selectedId:
-                          costCenterOptions.any(
-                            (center) => center.name == _selectedCenter,
-                          )
-                          ? _selectedCenter
-                          : null,
-                      decoration: InputDecoration(
-                        labelText: 'Cost Center',
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                      ),
-                      options: costCenterOptions
-                          .map(
-                            (center) => ErpItemOption(
-                              id: center.name,
-                              label: center.name,
-                            ),
-                          )
-                          .toList(),
-                      onSelected: (v) => setState(() => _selectedCenter = v),
-                    ),
-                    const SizedBox(height: 12),
-                    if (warehouseOptions.isNotEmpty)
-                      ErpItemAutocompleteField(
-                        key: ValueKey('warehouse:${_selectedWarehouse ?? ''}'),
-                        label: 'Warehouse',
-                        selectedId:
-                            warehouseOptions.any(
-                              (warehouse) =>
-                                  warehouse.name == _selectedWarehouse,
+                        options: _companyOptions
+                            .map(
+                              (company) =>
+                                  ErpItemOption(id: company, label: company),
                             )
-                            ? _selectedWarehouse
+                            .toList(),
+                        onSelected: _onCompanySelected,
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? 'Company wajib dipilih'
                             : null,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: _customerCtrl,
+                        readOnly: true,
+                        onTap: _isCustomerLocked
+                            ? null
+                            : _showCustomerSelectSheet,
                         decoration: InputDecoration(
-                          labelText: 'Warehouse',
+                          labelText: 'Nama Customer',
+                          hintText: _isLoadingSelectors
+                              ? 'Loading customer...'
+                              : (_isCustomerLocked
+                                    ? 'Customer dikunci dari dokumen asal'
+                                    : 'Pilih atau search customer'),
                           filled: true,
                           fillColor: AppColors.background,
                           border: OutlineInputBorder(
@@ -2997,680 +2898,794 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                               color: AppColors.primary.withValues(alpha: 0.2),
                             ),
                           ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          suffixIcon: _isCustomerLocked
+                              ? const Icon(Icons.lock_outline_rounded)
+                              : _customerCtrl.text.isNotEmpty
+                              ? IconButton(
+                                  tooltip: 'Bersihkan Customer',
+                                  onPressed: _clearCustomer,
+                                  icon: const Icon(Icons.close_rounded),
+                                )
+                              : const Icon(Icons.search_rounded),
+                          errorText: _customerError,
                         ),
-                        options: warehouseOptions
-                            .map(
-                              (warehouse) => ErpItemOption(
-                                id: warehouse.name,
-                                label: warehouse.name,
-                              ),
-                            )
-                            .toList(),
-                        onSelected: (value) {
-                          setState(() => _selectedWarehouse = value);
-                          _loadCustomerInsight();
-                          _scheduleRepriceAllItems();
-                        },
-                        validator: (value) =>
-                            value == null || value.trim().isEmpty
-                            ? 'Warehouse wajib dipilih'
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Customer wajib diisi'
                             : null,
-                      )
-                    else
-                      const Text(
-                        'Warehouse tidak tersedia untuk Company ini.',
-                        style: TextStyle(color: Colors.orange),
                       ),
-                    if (_isLoadingCustomerInsight) ...[
-                      const SizedBox(height: 10),
-                      const LinearProgressIndicator(),
-                    ] else if (_customerInsight != null) ...[
-                      const SizedBox(height: 10),
-                      _CustomerInsightCard(
-                        insight: _customerInsight!,
-                        orderTotal: _totalAmount,
-                        onHistory: _showCustomerHistory,
-                      ),
-                    ] else if (_customerInsightError != null) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.orange.withValues(alpha: 0.3),
+                      if (_selectedCustomerName().isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: ValueKey(
+                            'customer_name_${_customerCtrl.text.trim()}',
                           ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Text(
-                              'Informasi kredit customer gagal dimuat.',
-                              style: TextStyle(fontWeight: FontWeight.w800),
+                          initialValue: _selectedCustomerName(),
+                          readOnly: true,
+                          decoration: InputDecoration(
+                            labelText: 'Customer Name',
+                            filled: true,
+                            fillColor: AppColors.background,
+                            prefixIcon: const Icon(Icons.storefront_outlined),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                              ),
                             ),
-                            TextButton.icon(
-                              onPressed: _loadCustomerInsight,
-                              icon: const Icon(Icons.refresh_rounded),
-                              label: const Text('Retry informasi customer'),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
                             ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: AppColors.cardShadow,
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Currency & Price List',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.slate,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Currency',
-                        prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                      ),
-                      child: Text(
-                        _selectedCurrency ?? '-',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.navy,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: 'Selling Price List',
-                        prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                      ),
-                      child: Text(
-                        _selectedPriceList ??
-                            (_priceListOptions.isEmpty
-                                ? 'Price List tidak tersedia'
-                                : '-'),
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.navy,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    if (_priceListCurrency != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Price List Currency: $_priceListCurrency',
-                        style: const TextStyle(
-                          color: AppColors.slate,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Items',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.navy,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                              ),
                             ),
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed:
-                              _selectedItemCode == null &&
-                                  (_itemTextController?.text.isEmpty ?? true)
-                              ? null
-                              : _clearPrimaryItem,
-                          icon: const Icon(Icons.delete_outline_rounded),
-                          label: const Text('Hapus Item'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.redAccent,
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _itemTextController,
-                      readOnly: true,
-                      onTap: _selectPrimaryItem,
-                      decoration: InputDecoration(
-                        labelText: 'Nama Item / Kode',
-                        hintText: 'Pilih atau search item',
-                        prefixIcon: const Icon(Icons.inventory_2_rounded),
-                        suffixIcon: _isValidatingItem
-                            ? const Padding(
-                                padding: EdgeInsets.all(8),
-                                child: SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
+                      const SizedBox(height: 12),
+                      ErpItemAutocompleteField(
+                        label: 'Cost Center',
+                        selectedId:
+                            costCenterOptions.any(
+                              (center) => center.name == _selectedCenter,
+                            )
+                            ? _selectedCenter
+                            : null,
+                        decoration: InputDecoration(
+                          labelText: 'Cost Center',
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        options: costCenterOptions
+                            .map(
+                              (center) => ErpItemOption(
+                                id: center.name,
+                                label: center.name,
+                              ),
+                            )
+                            .toList(),
+                        onSelected: (v) => setState(() => _selectedCenter = v),
+                      ),
+                      const SizedBox(height: 12),
+                      if (warehouseOptions.isNotEmpty)
+                        ErpItemAutocompleteField(
+                          key: ValueKey(
+                            'warehouse:${_selectedWarehouse ?? ''}',
+                          ),
+                          label: 'Warehouse',
+                          selectedId:
+                              warehouseOptions.any(
+                                (warehouse) =>
+                                    warehouse.name == _selectedWarehouse,
+                              )
+                              ? _selectedWarehouse
+                              : null,
+                          decoration: InputDecoration(
+                            labelText: 'Warehouse',
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                              ),
+                            ),
+                          ),
+                          options: warehouseOptions
+                              .map(
+                                (warehouse) => ErpItemOption(
+                                  id: warehouse.name,
+                                  label: warehouse.name,
                                 ),
                               )
-                            : IconButton(
-                                tooltip: 'Search item',
-                                onPressed: _selectPrimaryItem,
-                                icon: const Icon(Icons.search_rounded),
+                              .toList(),
+                          onSelected: (value) {
+                            setState(() => _selectedWarehouse = value);
+                            _loadCustomerInsight();
+                            _scheduleRepriceAllItems();
+                          },
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Warehouse wajib dipilih'
+                              : null,
+                        )
+                      else
+                        const Text(
+                          'Warehouse tidak tersedia untuk Company ini.',
+                          style: TextStyle(color: Colors.orange),
+                        ),
+                      if (_isLoadingCustomerInsight) ...[
+                        const SizedBox(height: 10),
+                        const LinearProgressIndicator(),
+                      ] else if (_customerInsight != null) ...[
+                        const SizedBox(height: 10),
+                        _CustomerInsightCard(
+                          insight: _customerInsight!,
+                          orderTotal: _totalAmount,
+                          onHistory: _showCustomerHistory,
+                        ),
+                      ] else if (_customerInsightError != null) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.orange.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const Text(
+                                'Informasi kredit customer gagal dimuat.',
+                                style: TextStyle(fontWeight: FontWeight.w800),
                               ),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.16),
+                              TextButton.icon(
+                                onPressed: _loadCustomerInsight,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Retry informasi customer'),
+                              ),
+                            ],
                           ),
                         ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.10),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.36),
-                            width: 1.4,
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 14,
-                        ),
-                        errorText: _itemError,
-                      ),
-                      validator: (v) {
-                        if ((_selectedItemCode ?? '').trim().isEmpty) {
-                          return 'Item wajib dipilih';
-                        }
-                        return null;
-                      },
-                    ),
+                      ],
+                    ],
+                  ),
+                ),
 
-                    const SizedBox(height: 12),
+                const SizedBox(height: 16),
 
-                    TextFormField(
-                      controller: _qtyCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: AppColors.cardShadow,
+                  ),
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Currency & Price List',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.slate,
+                        ),
                       ),
-                      decoration: InputDecoration(
-                        labelText: 'Quantity',
-                        prefixIcon: IconButton(
-                          tooltip: 'Kurangi quantity',
-                          onPressed: () => _adjustQuantity(_qtyCtrl, -1),
-                          icon: const Icon(Icons.remove_rounded),
-                        ),
-                        suffixIcon: IconButton(
-                          tooltip: 'Tambah quantity',
-                          onPressed: () => _adjustQuantity(_qtyCtrl, 1),
-                          icon: const Icon(Icons.add_rounded),
-                        ),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
+                      const SizedBox(height: 12),
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Currency',
+                          prefixIcon: const Icon(Icons.lock_outline_rounded),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
                           ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                      ),
-                      validator: (v) {
-                        final q = double.tryParse(v?.trim() ?? '');
-                        if (q == null || q <= 0) return 'Qty > 0';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _rateCtrl,
-                      readOnly: true,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      onEditingComplete: () =>
-                          _formatMoneyController(_rateCtrl),
-                      onTapOutside: (_) => _formatMoneyController(_rateCtrl),
-                      decoration: InputDecoration(
-                        labelText: 'Harga/Unit',
-                        prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
+                        child: Text(
+                          _selectedCurrency ?? '-',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.navy,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
                       ),
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty) return null;
-                        final r = _itemRate(v);
-                        if (r < 0) return 'Harga >= 0';
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _discountCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      onEditingComplete: () =>
-                          _formatMoneyController(_discountCtrl),
-                      onTapOutside: (_) =>
-                          _formatMoneyController(_discountCtrl),
-                      decoration: InputDecoration(
-                        labelText: 'Discount Amount',
-                        prefixIcon: const Icon(Icons.discount_outlined),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
+                      const SizedBox(height: 12),
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Selling Price List',
+                          prefixIcon: const Icon(Icons.lock_outline_rounded),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
                           ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                      ),
-                      validator: (value) {
-                        final discount = _itemDiscount(value ?? '');
-                        if (discount < 0) {
-                          return 'Diskon harus 0 atau lebih';
-                        }
-                        final rate = _itemRate(_rateCtrl.text);
-                        if (rate > 0 && discount > rate) {
-                          return 'Diskon tidak boleh melebihi harga';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    _ItemSubtotalSummary(
-                      qty: _itemQty(_qtyCtrl.text),
-                      rate: _itemRate(_rateCtrl.text),
-                      discount: _itemDiscount(_discountCtrl.text),
-                      effectiveRate: _effectiveItemRate(
-                        rateText: _rateCtrl.text,
-                        discountText: _discountCtrl.text,
-                      ),
-                      subtotal: _itemSubtotal(
-                        qtyText: _qtyCtrl.text,
-                        rateText: _rateCtrl.text,
-                        discountText: _discountCtrl.text,
-                      ),
-                      formatCurrency: _formatRupiah,
-                    ),
-                    const SizedBox(height: 12),
-                    ..._additionalItems.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final row = entry.value;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.18),
+                        child: Text(
+                          _selectedPriceList ??
+                              (_priceListOptions.isEmpty
+                                  ? 'Price List tidak tersedia'
+                                  : '-'),
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.navy,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Item ${index + 2}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.navy,
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: 'Hapus item',
-                                  onPressed: () => _removeItemRow(index),
-                                  icon: const Icon(
-                                    Icons.delete_outline_rounded,
-                                    color: Colors.redAccent,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            TextFormField(
-                              controller: row.itemTextController,
-                              readOnly: true,
-                              onTap: () => _selectAdditionalItem(row),
-                              decoration: InputDecoration(
-                                labelText: 'Nama Item / Kode',
-                                hintText: 'Pilih atau search item',
-                                prefixIcon: const Icon(
-                                  Icons.inventory_2_rounded,
-                                ),
-                                suffixIcon: IconButton(
-                                  tooltip: 'Search item',
-                                  onPressed: () => _selectAdditionalItem(row),
-                                  icon: const Icon(Icons.search_rounded),
-                                ),
-                                filled: true,
-                                fillColor: AppColors.white,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                  borderSide: BorderSide(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.16,
-                                    ),
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                  borderSide: BorderSide(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.10,
-                                    ),
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(18),
-                                  borderSide: BorderSide(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.36,
-                                    ),
-                                    width: 1.4,
-                                  ),
-                                ),
-                              ),
-                              validator: (value) {
-                                if (row.itemCode == null ||
-                                    row.itemCode!.trim().isEmpty) {
-                                  return 'Item wajib dipilih';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 10),
-                            TextFormField(
-                              controller: row.qtyController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              decoration: InputDecoration(
-                                labelText: 'Quantity',
-                                prefixIcon: IconButton(
-                                  tooltip: 'Kurangi quantity',
-                                  onPressed: () =>
-                                      _adjustQuantity(row.qtyController, -1),
-                                  icon: const Icon(Icons.remove_rounded),
-                                ),
-                                suffixIcon: IconButton(
-                                  tooltip: 'Tambah quantity',
-                                  onPressed: () =>
-                                      _adjustQuantity(row.qtyController, 1),
-                                  icon: const Icon(Icons.add_rounded),
-                                ),
-                              ),
-                              validator: (value) {
-                                final qty = double.tryParse(
-                                  value?.trim() ?? '',
-                                );
-                                return qty == null || qty <= 0
-                                    ? 'Qty > 0'
-                                    : null;
-                              },
-                            ),
-                            const SizedBox(height: 10),
-                            TextFormField(
-                              controller: row.rateController,
-                              readOnly: true,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              onEditingComplete: () =>
-                                  _formatMoneyController(row.rateController),
-                              onTapOutside: (_) =>
-                                  _formatMoneyController(row.rateController),
-                              decoration: const InputDecoration(
-                                labelText: 'Harga/Unit',
-                                prefixIcon: Icon(Icons.lock_outline_rounded),
-                              ),
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return null;
-                                }
-                                final rate = _itemRate(value);
-                                return rate < 0 ? 'Harga >= 0' : null;
-                              },
-                            ),
-                            const SizedBox(height: 10),
-                            TextFormField(
-                              controller: row.discountController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              onEditingComplete: () => _formatMoneyController(
-                                row.discountController,
-                              ),
-                              onTapOutside: (_) => _formatMoneyController(
-                                row.discountController,
-                              ),
-                              decoration: const InputDecoration(
-                                labelText: 'Discount Amount',
-                                prefixIcon: Icon(Icons.discount_outlined),
-                              ),
-                              validator: (value) {
-                                final discount = _itemDiscount(value ?? '');
-                                if (discount < 0) {
-                                  return 'Diskon harus 0 atau lebih';
-                                }
-                                final rate = _itemRate(row.rateController.text);
-                                if (rate > 0 && discount > rate) {
-                                  return 'Diskon tidak boleh melebihi harga';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 10),
-                            _ItemSubtotalSummary(
-                              qty: _itemQty(row.qtyController.text),
-                              rate: _itemRate(row.rateController.text),
-                              discount: _itemDiscount(
-                                row.discountController.text,
-                              ),
-                              effectiveRate: _effectiveItemRate(
-                                rateText: row.rateController.text,
-                                discountText: row.discountController.text,
-                              ),
-                              subtotal: _itemSubtotal(
-                                qtyText: row.qtyController.text,
-                                rateText: row.rateController.text,
-                                discountText: row.discountController.text,
-                              ),
-                              formatCurrency: _formatRupiah,
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                    OutlinedButton.icon(
-                      onPressed: _addItemRow,
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('Tambah Item'),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: AppColors.primary.withValues(alpha: 0.2),
-                        ),
                       ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 14,
+                      if (_priceListCurrency != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Price List Currency: $_priceListCurrency',
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
                         children: [
-                          const Text(
-                            'Total Amount',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.slate,
+                          const Expanded(
+                            child: Text(
+                              'Items',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.navy,
+                              ),
                             ),
                           ),
-                          Text(
-                            'Rp ${_formatRupiah(_totalAmount)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primary,
+                          TextButton.icon(
+                            onPressed:
+                                _selectedItemCode == null &&
+                                    (_itemTextController?.text.isEmpty ?? true)
+                                ? null
+                                : _clearPrimaryItem,
+                            icon: const Icon(Icons.delete_outline_rounded),
+                            label: const Text('Hapus Item'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.redAccent,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _itemTextController,
+                        readOnly: true,
+                        onTap: _selectPrimaryItem,
+                        decoration: InputDecoration(
+                          labelText: 'Nama Item / Kode',
+                          hintText: 'Pilih atau search item',
+                          prefixIcon: const Icon(Icons.inventory_2_rounded),
+                          suffixIcon: _isValidatingItem
+                              ? const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : IconButton(
+                                  tooltip: 'Search item',
+                                  onPressed: _selectPrimaryItem,
+                                  icon: const Icon(Icons.search_rounded),
+                                ),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.16),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.10),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.36),
+                              width: 1.4,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 14,
+                          ),
+                          errorText: _itemError,
+                        ),
+                        validator: (v) {
+                          if ((_selectedItemCode ?? '').trim().isEmpty) {
+                            return 'Item wajib dipilih';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: _qtyCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Quantity',
+                          prefixIcon: IconButton(
+                            tooltip: 'Kurangi quantity',
+                            onPressed: () => _adjustQuantity(_qtyCtrl, -1),
+                            icon: const Icon(Icons.remove_rounded),
+                          ),
+                          suffixIcon: IconButton(
+                            tooltip: 'Tambah quantity',
+                            onPressed: () => _adjustQuantity(_qtyCtrl, 1),
+                            icon: const Icon(Icons.add_rounded),
+                          ),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        validator: (v) {
+                          final q = double.tryParse(v?.trim() ?? '');
+                          if (q == null || q <= 0) return 'Qty > 0';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _rateCtrl,
+                        readOnly: true,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onEditingComplete: () =>
+                            _formatMoneyController(_rateCtrl),
+                        onTapOutside: (_) => _formatMoneyController(_rateCtrl),
+                        decoration: InputDecoration(
+                          labelText: 'Harga/Unit',
+                          prefixIcon: const Icon(Icons.lock_outline_rounded),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return null;
+                          final r = _itemRate(v);
+                          if (r < 0) return 'Harga >= 0';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _discountCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onEditingComplete: () =>
+                            _formatMoneyController(_discountCtrl),
+                        onTapOutside: (_) =>
+                            _formatMoneyController(_discountCtrl),
+                        decoration: InputDecoration(
+                          labelText: 'Discount Amount',
+                          prefixIcon: const Icon(Icons.discount_outlined),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        validator: (value) {
+                          final discount = _itemDiscount(value ?? '');
+                          if (discount < 0) {
+                            return 'Diskon harus 0 atau lebih';
+                          }
+                          final rate = _itemRate(_rateCtrl.text);
+                          if (rate > 0 && discount > rate) {
+                            return 'Diskon tidak boleh melebihi harga';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _ItemSubtotalSummary(
+                        qty: _itemQty(_qtyCtrl.text),
+                        rate: _itemRate(_rateCtrl.text),
+                        discount: _itemDiscount(_discountCtrl.text),
+                        effectiveRate: _effectiveItemRate(
+                          rateText: _rateCtrl.text,
+                          discountText: _discountCtrl.text,
+                        ),
+                        subtotal: _itemSubtotal(
+                          qtyText: _qtyCtrl.text,
+                          rateText: _rateCtrl.text,
+                          discountText: _discountCtrl.text,
+                        ),
+                        formatCurrency: _formatRupiah,
+                      ),
+                      const SizedBox(height: 12),
+                      ..._additionalItems.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final row = entry.value;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.18),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Item ${index + 2}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.navy,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Hapus item',
+                                    onPressed: () => _removeItemRow(index),
+                                    icon: const Icon(
+                                      Icons.delete_outline_rounded,
+                                      color: Colors.redAccent,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              TextFormField(
+                                controller: row.itemTextController,
+                                readOnly: true,
+                                onTap: () => _selectAdditionalItem(row),
+                                decoration: InputDecoration(
+                                  labelText: 'Nama Item / Kode',
+                                  hintText: 'Pilih atau search item',
+                                  prefixIcon: const Icon(
+                                    Icons.inventory_2_rounded,
+                                  ),
+                                  suffixIcon: IconButton(
+                                    tooltip: 'Search item',
+                                    onPressed: () => _selectAdditionalItem(row),
+                                    icon: const Icon(Icons.search_rounded),
+                                  ),
+                                  filled: true,
+                                  fillColor: AppColors.white,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                    borderSide: BorderSide(
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.16,
+                                      ),
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                    borderSide: BorderSide(
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.10,
+                                      ),
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                    borderSide: BorderSide(
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.36,
+                                      ),
+                                      width: 1.4,
+                                    ),
+                                  ),
+                                ),
+                                validator: (value) {
+                                  if (row.itemCode == null ||
+                                      row.itemCode!.trim().isEmpty) {
+                                    return 'Item wajib dipilih';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                controller: row.qtyController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                decoration: InputDecoration(
+                                  labelText: 'Quantity',
+                                  prefixIcon: IconButton(
+                                    tooltip: 'Kurangi quantity',
+                                    onPressed: () =>
+                                        _adjustQuantity(row.qtyController, -1),
+                                    icon: const Icon(Icons.remove_rounded),
+                                  ),
+                                  suffixIcon: IconButton(
+                                    tooltip: 'Tambah quantity',
+                                    onPressed: () =>
+                                        _adjustQuantity(row.qtyController, 1),
+                                    icon: const Icon(Icons.add_rounded),
+                                  ),
+                                ),
+                                validator: (value) {
+                                  final qty = double.tryParse(
+                                    value?.trim() ?? '',
+                                  );
+                                  return qty == null || qty <= 0
+                                      ? 'Qty > 0'
+                                      : null;
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                controller: row.rateController,
+                                readOnly: true,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                onEditingComplete: () =>
+                                    _formatMoneyController(row.rateController),
+                                onTapOutside: (_) =>
+                                    _formatMoneyController(row.rateController),
+                                decoration: const InputDecoration(
+                                  labelText: 'Harga/Unit',
+                                  prefixIcon: Icon(Icons.lock_outline_rounded),
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return null;
+                                  }
+                                  final rate = _itemRate(value);
+                                  return rate < 0 ? 'Harga >= 0' : null;
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                controller: row.discountController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                onEditingComplete: () => _formatMoneyController(
+                                  row.discountController,
+                                ),
+                                onTapOutside: (_) => _formatMoneyController(
+                                  row.discountController,
+                                ),
+                                decoration: const InputDecoration(
+                                  labelText: 'Discount Amount',
+                                  prefixIcon: Icon(Icons.discount_outlined),
+                                ),
+                                validator: (value) {
+                                  final discount = _itemDiscount(value ?? '');
+                                  if (discount < 0) {
+                                    return 'Diskon harus 0 atau lebih';
+                                  }
+                                  final rate = _itemRate(
+                                    row.rateController.text,
+                                  );
+                                  if (rate > 0 && discount > rate) {
+                                    return 'Diskon tidak boleh melebihi harga';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              _ItemSubtotalSummary(
+                                qty: _itemQty(row.qtyController.text),
+                                rate: _itemRate(row.rateController.text),
+                                discount: _itemDiscount(
+                                  row.discountController.text,
+                                ),
+                                effectiveRate: _effectiveItemRate(
+                                  rateText: row.rateController.text,
+                                  discountText: row.discountController.text,
+                                ),
+                                subtotal: _itemSubtotal(
+                                  qtyText: row.qtyController.text,
+                                  rateText: row.rateController.text,
+                                  discountText: row.discountController.text,
+                                ),
+                                formatCurrency: _formatRupiah,
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                      OutlinedButton.icon(
+                        onPressed: _addItemRow,
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Tambah Item'),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Total Amount',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.slate,
+                              ),
+                            ),
+                            Text(
+                              'Rp ${_formatRupiah(_totalAmount)}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              _SalesOrderNotedCard(controller: _notedCtrl),
+                _SalesOrderNotedCard(controller: _notedCtrl),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              _AttachmentCard(
-                photos: _photos,
-                onCamera: () => _pickPhoto(ImageSource.camera),
-                onGallery: () => _pickPhoto(ImageSource.gallery),
-                onRemove: (index) => setState(() => _photos.removeAt(index)),
-              ),
+                _AttachmentCard(
+                  photos: _photos,
+                  onCamera: () => _pickPhoto(ImageSource.camera),
+                  onGallery: () => _pickPhoto(ImageSource.gallery),
+                  onRemove: (index) => setState(() => _photos.removeAt(index)),
+                ),
 
-              const SizedBox(height: 24),
-            ],
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
 
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(16),
-        child: ElevatedButton(
-          onPressed:
-              (_isSaving ||
-                  _isLoadingSelectors ||
-                  _isValidatingItem ||
-                  _selectedSeries == null)
-              ? null
-              : _save,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+        minimum: EdgeInsets.all(TmsxResponsive.horizontalPadding(context)),
+        child: TmsxResponsiveBody(
+          child: ElevatedButton(
+            onPressed:
+                (_isSaving ||
+                    _isLoadingSelectors ||
+                    _isValidatingItem ||
+                    _selectedSeries == null)
+                ? null
+                : _save,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 2,
             ),
-            elevation: 2,
-          ),
-          child: _isSaving
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            child: _isSaving
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Text(
+                    _saveButtonLabel,
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                   ),
-                )
-              : Text(
-                  _saveButtonLabel,
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                ),
+          ),
         ),
       ),
     );

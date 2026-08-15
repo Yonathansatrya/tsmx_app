@@ -8,6 +8,7 @@ import '../../../models/spg_workspace.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_error_box.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 
 class CreateSpgDailyActivityScreen extends StatefulWidget {
   const CreateSpgDailyActivityScreen({super.key});
@@ -159,37 +160,46 @@ class _CreateSpgDailyActivityScreenState
         backgroundColor: AppColors.background,
         foregroundColor: AppColors.navy,
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-        children: [
-          _headerCard(),
-          const SizedBox(height: 12),
-          _formCard(),
-          if (_loading) ...[
+      body: TmsxResponsiveBody(
+        child: ListView(
+          padding: TmsxResponsive.pagePadding(context, top: 12, bottom: 100),
+          children: [
+            _headerCard(),
             const SizedBox(height: 12),
-            const LinearProgressIndicator(),
+            _formCard(),
+            if (_loading) ...[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator(),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              ErpErrorBox(message: _error!),
+            ],
           ],
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            ErpErrorBox(message: _error!),
-          ],
-        ],
+        ),
       ),
       bottomNavigationBar: SafeArea(
         top: false,
-        minimum: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        child: FilledButton.icon(
-          onPressed: _saving ? null : _save,
-          icon: _saving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.cloud_upload_rounded),
-          label: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text(_saving ? 'Menyimpan...' : 'Kirim Report Foto'),
+        minimum: EdgeInsets.fromLTRB(
+          TmsxResponsive.horizontalPadding(context),
+          8,
+          TmsxResponsive.horizontalPadding(context),
+          16,
+        ),
+        child: TmsxResponsiveBody(
+          child: FilledButton.icon(
+            onPressed: _saving ? null : _save,
+            icon: _saving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.cloud_upload_rounded),
+            label: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(_saving ? 'Menyimpan...' : 'Kirim Report Foto'),
+            ),
           ),
         ),
       ),

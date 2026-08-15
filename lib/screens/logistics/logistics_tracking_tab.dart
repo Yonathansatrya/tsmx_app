@@ -59,7 +59,7 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
       onRefresh: () => _refresh(context),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: logisticsPagePadding,
+        padding: logisticsPagePaddingOf(context),
         children: [
           _TrackingHeroCard(
             outstanding: docs.where(_isOutstanding).length,
@@ -586,7 +586,7 @@ class _LogisticsTrackingDetailScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: ListView(
-          padding: logisticsPagePadding,
+          padding: logisticsPagePaddingOf(context),
           children: [
             LogisticsModernCard(
               child: Row(

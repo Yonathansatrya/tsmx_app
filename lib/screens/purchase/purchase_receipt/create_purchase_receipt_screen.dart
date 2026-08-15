@@ -5,6 +5,7 @@ import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
 import '../../../widgets/erp/erp_item_autocomplete_field.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
 import '../shared/purchase_ui.dart';
 
 class CreatePurchaseReceiptScreen extends StatefulWidget {
@@ -452,199 +453,203 @@ class _CreatePurchaseReceiptScreenState
           : _error != null
           ? _ErrorState(message: _error!, onRetry: _load)
           : SingleChildScrollView(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
+              padding: TmsxResponsive.pagePadding(
+                context,
                 top: 16,
-                bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const PurchaseCreateHeader(
-                      title: 'Buat Purchase Receipt',
-                      subtitle: 'Catat penerimaan barang dari supplier.',
-                      icon: Icons.local_shipping_outlined,
-                      accentColor: Color(0xFF2563EB),
-                    ),
-                    const SizedBox(height: 16),
-                    _sectionCard(
-                      title: 'Receipt Information',
-                      icon: Icons.receipt_long_outlined,
-                      children: [
-                        _dropdownField(
-                          label: 'Series',
-                          value: _selectedSeries,
-                          items: _seriesItems(),
-                          onChanged: (value) =>
-                              setState(() => _selectedSeries = value),
-                          icon: Icons.tag_outlined,
-                          validator: (value) =>
-                              value == null ? 'Series wajib dipilih' : null,
-                        ),
-                        const SizedBox(height: 12),
-                        ErpItemAutocompleteField(
-                          label: 'Supplier',
-                          selectedId: _selectedSupplier,
-                          options: _supplierSearchOptions(),
-                          decoration: _decoration(
-                            'Supplier',
-                            prefixIcon: Icons.storefront_outlined,
+                bottom: 24,
+              ).copyWith(bottom: 24 + MediaQuery.of(context).viewInsets.bottom),
+              child: TmsxResponsiveBody(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const PurchaseCreateHeader(
+                        title: 'Buat Purchase Receipt',
+                        subtitle: 'Catat penerimaan barang dari supplier.',
+                        icon: Icons.local_shipping_outlined,
+                        accentColor: Color(0xFF2563EB),
+                      ),
+                      const SizedBox(height: 16),
+                      _sectionCard(
+                        title: 'Receipt Information',
+                        icon: Icons.receipt_long_outlined,
+                        children: [
+                          _dropdownField(
+                            label: 'Series',
+                            value: _selectedSeries,
+                            items: _seriesItems(),
+                            onChanged: (value) =>
+                                setState(() => _selectedSeries = value),
+                            icon: Icons.tag_outlined,
+                            validator: (value) =>
+                                value == null ? 'Series wajib dipilih' : null,
                           ),
-                          onSelected: (value) =>
-                              setState(() => _selectedSupplier = value),
-                          validator: (value) =>
-                              value == null ? 'Supplier wajib dipilih' : null,
-                        ),
-                        const SizedBox(height: 12),
-                        _dateField('Posting Date', _date, _pickDate),
-                        const SizedBox(height: 12),
-                        _readOnlyField(
-                          'Company',
-                          _warehouse?.company ?? '-',
-                          icon: Icons.business_outlined,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _sectionCard(
-                      title: 'Item Receipt',
-                      icon: Icons.inventory_2_outlined,
-                      children: [
-                        ErpItemAutocompleteField(
-                          label: 'Item',
-                          selectedId: _selectedItem,
-                          options: _itemSearchOptions(),
-                          onSelected: (value) =>
-                              setState(() => _selectedItem = value),
-                          decoration: _decoration(
-                            'Item',
-                            prefixIcon: Icons.search_rounded,
+                          const SizedBox(height: 12),
+                          ErpItemAutocompleteField(
+                            label: 'Supplier',
+                            selectedId: _selectedSupplier,
+                            options: _supplierSearchOptions(),
+                            decoration: _decoration(
+                              'Supplier',
+                              prefixIcon: Icons.storefront_outlined,
+                            ),
+                            onSelected: (value) =>
+                                setState(() => _selectedSupplier = value),
+                            validator: (value) =>
+                                value == null ? 'Supplier wajib dipilih' : null,
                           ),
-                          validator: (value) =>
-                              value == null ? 'Item wajib dipilih' : null,
-                        ),
-                        const SizedBox(height: 12),
-                        ErpItemAutocompleteField(
-                          label: 'Accepted Warehouse',
-                          selectedId: _selectedWarehouse,
-                          options: _warehouseSearchOptions(),
-                          decoration: _decoration(
-                            'Accepted Warehouse',
-                            prefixIcon: Icons.warehouse_outlined,
+                          const SizedBox(height: 12),
+                          _dateField('Posting Date', _date, _pickDate),
+                          const SizedBox(height: 12),
+                          _readOnlyField(
+                            'Company',
+                            _warehouse?.company ?? '-',
+                            icon: Icons.business_outlined,
                           ),
-                          onSelected: (value) =>
-                              setState(() => _selectedWarehouse = value),
-                          validator: (value) =>
-                              value == null ? 'Warehouse wajib dipilih' : null,
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _qtyCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                decoration: _decoration(
-                                  'Accepted Qty',
-                                  prefixIcon: Icons.numbers_rounded,
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _sectionCard(
+                        title: 'Item Receipt',
+                        icon: Icons.inventory_2_outlined,
+                        children: [
+                          ErpItemAutocompleteField(
+                            label: 'Item',
+                            selectedId: _selectedItem,
+                            options: _itemSearchOptions(),
+                            onSelected: (value) =>
+                                setState(() => _selectedItem = value),
+                            decoration: _decoration(
+                              'Item',
+                              prefixIcon: Icons.search_rounded,
+                            ),
+                            validator: (value) =>
+                                value == null ? 'Item wajib dipilih' : null,
+                          ),
+                          const SizedBox(height: 12),
+                          ErpItemAutocompleteField(
+                            label: 'Accepted Warehouse',
+                            selectedId: _selectedWarehouse,
+                            options: _warehouseSearchOptions(),
+                            decoration: _decoration(
+                              'Accepted Warehouse',
+                              prefixIcon: Icons.warehouse_outlined,
+                            ),
+                            onSelected: (value) =>
+                                setState(() => _selectedWarehouse = value),
+                            validator: (value) => value == null
+                                ? 'Warehouse wajib dipilih'
+                                : null,
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _qtyCtrl,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  decoration: _decoration(
+                                    'Accepted Qty',
+                                    prefixIcon: Icons.numbers_rounded,
+                                  ),
+                                  validator: (value) {
+                                    final qty = double.tryParse(
+                                      value?.trim() ?? '',
+                                    );
+                                    return qty == null || qty <= 0
+                                        ? 'Qty > 0'
+                                        : null;
+                                  },
                                 ),
-                                validator: (value) {
-                                  final qty = double.tryParse(
-                                    value?.trim() ?? '',
-                                  );
-                                  return qty == null || qty <= 0
-                                      ? 'Qty > 0'
-                                      : null;
-                                },
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _rejectedQtyCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                decoration: _decoration('Rejected Qty'),
-                                validator: (value) {
-                                  final qty = double.tryParse(
-                                    value?.trim() ?? '',
-                                  );
-                                  return qty == null || qty < 0
-                                      ? 'Qty >= 0'
-                                      : null;
-                                },
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _rejectedQtyCtrl,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  decoration: _decoration('Rejected Qty'),
+                                  validator: (value) {
+                                    final qty = double.tryParse(
+                                      value?.trim() ?? '',
+                                    );
+                                    return qty == null || qty < 0
+                                        ? 'Qty >= 0'
+                                        : null;
+                                  },
+                                ),
                               ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _rateCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _rateCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
+                            decoration: _decoration(
+                              'Rate',
+                              prefixIcon: Icons.payments_outlined,
+                            ),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return null;
+                              }
+                              final rate = double.tryParse(value.trim());
+                              return rate == null || rate < 0
+                                  ? 'Rate >= 0'
+                                  : null;
+                            },
                           ),
-                          decoration: _decoration(
-                            'Rate',
-                            prefixIcon: Icons.payments_outlined,
+                          const SizedBox(height: 12),
+                          ..._additionalItems.asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final row = entry.value;
+                            return _AdditionalReceiptItemCard(
+                              index: index,
+                              row: row,
+                              itemItems: _itemSearchOptions(),
+                              warehouseItems: _warehouseSearchOptions(),
+                              decoration: _decoration,
+                              onChanged: () => setState(() {}),
+                              onRemove: () => _removeItemRow(index),
+                            );
+                          }),
+                          OutlinedButton.icon(
+                            onPressed: _addItemRow,
+                            icon: const Icon(Icons.add_rounded),
+                            label: const Text('Tambah Item'),
                           ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return null;
-                            }
-                            final rate = double.tryParse(value.trim());
-                            return rate == null || rate < 0
-                                ? 'Rate >= 0'
-                                : null;
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        ..._additionalItems.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final row = entry.value;
-                          return _AdditionalReceiptItemCard(
-                            index: index,
-                            row: row,
-                            itemItems: _itemSearchOptions(),
-                            warehouseItems: _warehouseSearchOptions(),
-                            decoration: _decoration,
-                            onChanged: () => setState(() {}),
-                            onRemove: () => _removeItemRow(index),
-                          );
-                        }),
-                        OutlinedButton.icon(
-                          onPressed: _addItemRow,
-                          icon: const Icon(Icons.add_rounded),
-                          label: const Text('Tambah Item'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _ReceiptSummaryCard(
-                      qty: _formatNumber(_totalAcceptedQty),
-                      rejectedQty: _formatNumber(_totalRejectedQty),
-                      total: _formatCurrency(_total),
-                      warehouse: _selectedWarehouse,
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _ReceiptSummaryCard(
+                        qty: _formatNumber(_totalAcceptedQty),
+                        rejectedQty: _formatNumber(_totalRejectedQty),
+                        total: _formatCurrency(_total),
+                        warehouse: _selectedWarehouse,
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
             ),
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(16),
-        child: PurchasePrimaryActionButton(
-          label: 'Save Purchase Receipt',
-          icon: Icons.save_alt_rounded,
-          isLoading: _saving,
-          onPressed: _loading || _error != null ? null : _save,
+        minimum: EdgeInsets.all(TmsxResponsive.horizontalPadding(context)),
+        child: TmsxResponsiveBody(
+          child: PurchasePrimaryActionButton(
+            label: 'Save Purchase Receipt',
+            icon: Icons.save_alt_rounded,
+            isLoading: _saving,
+            onPressed: _loading || _error != null ? null : _save,
+          ),
         ),
       ),
     );
