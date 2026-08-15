@@ -39,30 +39,16 @@ class MobileAccess {
 
   bool canUse(String module) {
     final normalized = module.trim().toLowerCase();
-    final bootModules = boot?.modules ?? const <String>{};
-    if (boot != null && bootModules.isNotEmpty) {
-      return bootModules.contains(normalized);
-    }
-
-    if (MobileRoleRegistry.isFullAccessRole(normalizedRole)) {
-      return MobileRoleRegistry.modulesForRole(
-        normalizedRole,
-      ).contains(normalized);
-    }
-
-    return MobileRoleRegistry.modulesForRole(
-      normalizedRole,
-    ).contains(normalized);
+    return enabledModules.contains(normalized);
   }
 
   Set<String> get enabledModules {
     final bootModules = boot?.modules ?? const <String>{};
-    if (boot != null && bootModules.isNotEmpty) return bootModules;
-
-    if (MobileRoleRegistry.isFullAccessRole(normalizedRole)) {
-      return MobileRoleRegistry.modulesForRole(normalizedRole);
+    final roleModules = MobileRoleRegistry.modulesForRole(normalizedRole);
+    if (boot != null && bootModules.isNotEmpty) {
+      return {...roleModules, ...bootModules};
     }
 
-    return MobileRoleRegistry.modulesForRole(normalizedRole);
+    return roleModules;
   }
 }

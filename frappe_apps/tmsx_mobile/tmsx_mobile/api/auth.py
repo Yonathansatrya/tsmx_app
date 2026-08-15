@@ -387,18 +387,18 @@ def _matching_role_rule(settings, roles):
 
 
 def _configured_modules(settings, role_rule, roles):
+    role_modules = set(_mobile_modules_for_roles(roles))
     if role_rule:
         modules = _json_list(getattr(role_rule, "modules", None))
         if modules:
-            return modules
+            return sorted(role_modules | set(modules))
 
     if settings:
         default_modules = _json_list(getattr(settings, "default_modules", None))
         if default_modules:
-            role_modules = set(_mobile_modules_for_roles(roles))
             return sorted(set(default_modules) | role_modules)
 
-    return _mobile_modules_for_roles(roles)
+    return sorted(role_modules)
 
 
 def _configured_scope(role_rule, fieldname, fallback):

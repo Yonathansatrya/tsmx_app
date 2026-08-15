@@ -72,7 +72,8 @@ class _AppMainScreenState extends State<AppMainScreen> {
 
   List<_MainTabItem> _tabs(AppState appState) {
     final workspaceEntries = _workspaceEntries(appState);
-    final singleWorkspace = workspaceEntries.length == 1;
+    final singleWorkspace =
+        workspaceEntries.length == 1 && !appState.canUseApprovals;
     final tabs = <_MainTabItem>[
       _MainTabItem(
         keyName: MobileModule.dashboard,
@@ -193,7 +194,10 @@ class _AppMainScreenState extends State<AppMainScreen> {
     final tabs = _tabs(appState);
     final selectedIndex = _currentIndex.clamp(0, tabs.length - 1);
     final workspaceEntries = _workspaceEntries(appState);
-    final singleWorkspace = selectedIndex == 0 && workspaceEntries.length == 1;
+    final singleWorkspace =
+        selectedIndex == 0 &&
+        workspaceEntries.length == 1 &&
+        !appState.canUseApprovals;
     if (_pendingOpenApprovalTodo &&
         tabs.any((tab) => tab.keyName == MobileModule.approvals)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
