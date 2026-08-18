@@ -20,7 +20,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen>
     with SingleTickerProviderStateMixin {
   static final Uri _appUpdateUri = Uri.parse(
-    'https://play.google.com/apps/testing/com.tmsxhub',
+    'https://play.google.com/store/apps/details?id=com.tmsxhub&hl=en-US&ah=e76XkbMCe5OQdYkzEWSgI5nwdOQ',
   );
   static const Color _accentTeal = Color(0xFF14B8A6);
   static const Color _accentBlue = Color(0xFF3B82F6);
