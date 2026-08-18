@@ -502,7 +502,7 @@ class _InvoiceDashboardCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.border),
         boxShadow: AppColors.cardShadow,
       ),
@@ -512,16 +512,16 @@ class _InvoiceDashboardCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
                   color: AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(15),
                 ),
                 child: const Icon(
                   Icons.account_balance_wallet_outlined,
                   color: AppColors.primary,
-                  size: 20,
+                  size: 21,
                 ),
               ),
               const SizedBox(width: 10),
@@ -552,27 +552,22 @@ class _InvoiceDashboardCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          PurchaseMetricGrid(
             children: [
-              Expanded(
-                child: _InvoiceSummaryTile(
-                  label: 'Belum Dibayar',
-                  value: 'Rp ${formatErpCurrency(outstandingAmount)}',
-                  icon: Icons.payments_outlined,
-                  color: AppColors.primary,
-                ),
+              PurchaseMetricTile(
+                label: 'Belum Dibayar',
+                value: 'Rp ${formatErpCurrency(outstandingAmount)}',
+                icon: Icons.payments_outlined,
+                color: AppColors.primary,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _InvoiceSummaryTile(
-                  label: 'Lewat Tempo',
-                  value: 'Rp ${formatErpCurrency(overdueAmount)}',
-                  helper: '${overdueInvoices.length} invoice',
-                  icon: Icons.error_outline_rounded,
-                  color: overdueInvoices.isEmpty
-                      ? AppColors.slate
-                      : AppColors.danger,
-                ),
+              PurchaseMetricTile(
+                label: 'Lewat Tempo',
+                value: 'Rp ${formatErpCurrency(overdueAmount)}',
+                helper: '${overdueInvoices.length} invoice',
+                icon: Icons.error_outline_rounded,
+                color: overdueInvoices.isEmpty
+                    ? AppColors.slate
+                    : AppColors.danger,
               ),
             ],
           ),
@@ -642,70 +637,6 @@ class _InvoiceApprovalInfoCard extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InvoiceSummaryTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final String helper;
-  final IconData icon;
-  final Color color;
-
-  const _InvoiceSummaryTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    this.helper = '',
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(11),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.navy,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          if (helper.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              helper,
-              style: const TextStyle(
-                color: AppColors.slate,
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
         ],
       ),
     );

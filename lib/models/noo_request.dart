@@ -5,8 +5,8 @@ class NooRequestDraft {
     required this.customerName,
     required this.addressLine1,
     this.salesPerson,
-    this.customerType = 'CASH',
     this.customerCategory,
+    this.defaultPaymentTermsTemplate,
     this.mobileNo,
   });
 
@@ -14,8 +14,8 @@ class NooRequestDraft {
   final String company;
   final String? salesPerson;
   final String customerName;
-  final String customerType;
   final String? customerCategory;
+  final String? defaultPaymentTermsTemplate;
   final String? mobileNo;
   final String addressLine1;
 
@@ -25,11 +25,12 @@ class NooRequestDraft {
       'company': company.trim(),
       'status': 'Pending Approval',
       'customer_name': customerName.trim(),
-      'customer_type': customerType.trim().isEmpty ? 'CASH' : customerType,
       'address_line1': addressLine1.trim(),
       if (_hasValue(salesPerson)) 'sales_person': salesPerson!.trim(),
       if (_hasValue(customerCategory))
         'customer_category': customerCategory!.trim(),
+      if (_hasValue(defaultPaymentTermsTemplate))
+        'default_payment_terms_template': defaultPaymentTermsTemplate!.trim(),
       if (_hasValue(mobileNo)) 'mobile_no': mobileNo!.trim(),
     };
   }

@@ -592,7 +592,7 @@ class _ReceiptIssueSummaryCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.border),
         boxShadow: AppColors.cardShadow,
       ),
@@ -602,20 +602,20 @@ class _ReceiptIssueSummaryCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
                   color: hasIssue
                       ? AppColors.warning.withValues(alpha: 0.12)
                       : AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(15),
                 ),
                 child: Icon(
                   hasIssue
                       ? Icons.notification_important_outlined
                       : Icons.check_circle_outline_rounded,
                   color: hasIssue ? AppColors.warning : AppColors.primary,
-                  size: 20,
+                  size: 21,
                 ),
               ),
               const SizedBox(width: 10),

@@ -643,10 +643,6 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _OutstandingPoDashboardCard(orders: appState.purchaseOrders),
-
-        const SizedBox(height: 12),
-
         DocumentTrendCard(
           title: 'Purchase Order',
           emptyMessage:
@@ -656,6 +652,10 @@ class _PurchaseOrderPanelState extends State<PurchaseOrderPanel> {
           selectedMonth: appState.buyingPeriodMonth,
           sourceLabel: 'Sumber: Purchase Analytics ERPNext',
         ),
+
+        const SizedBox(height: 12),
+
+        _OutstandingPoDashboardCard(orders: appState.purchaseOrders),
 
         const SizedBox(height: 12),
 
@@ -1113,7 +1113,7 @@ class _CheapestSupplierCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.softGreen,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
       ),
       child: Row(
@@ -1341,7 +1341,7 @@ class _OutstandingPoDashboardCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.border),
         boxShadow: AppColors.cardShadow,
       ),
@@ -1351,16 +1351,16 @@ class _OutstandingPoDashboardCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
                   color: AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(15),
                 ),
                 child: const Icon(
                   Icons.pending_actions_rounded,
                   color: AppColors.primary,
-                  size: 20,
+                  size: 21,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1391,108 +1391,39 @@ class _OutstandingPoDashboardCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          PurchaseMetricGrid(
             children: [
-              Expanded(
-                child: _OutstandingPoTile(
-                  label: 'Open PO',
-                  value: '${outstanding.length}',
-                  icon: Icons.shopping_bag_outlined,
-                  color: AppColors.primary,
-                ),
+              PurchaseMetricTile(
+                label: 'Open PO',
+                value: '${outstanding.length}',
+                icon: Icons.shopping_bag_outlined,
+                color: AppColors.primary,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _OutstandingPoTile(
-                  label: 'Perlu Terima',
-                  value: '$toReceive',
-                  icon: Icons.move_to_inbox_outlined,
-                  color: toReceive > 0 ? AppColors.warning : AppColors.slate,
-                ),
+              PurchaseMetricTile(
+                label: 'Perlu Terima',
+                value: '$toReceive',
+                icon: Icons.move_to_inbox_outlined,
+                color: toReceive > 0 ? AppColors.warning : AppColors.slate,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _OutstandingPoTile(
-                  label: 'Perlu Bill',
-                  value: '$toBill',
-                  icon: Icons.receipt_long_outlined,
-                  color: toBill > 0 ? AppColors.warning : AppColors.slate,
-                ),
+              PurchaseMetricTile(
+                label: 'Perlu Bill',
+                value: '$toBill',
+                icon: Icons.receipt_long_outlined,
+                color: toBill > 0 ? AppColors.warning : AppColors.slate,
+              ),
+              PurchaseMetricTile(
+                label: 'Nilai Open PO',
+                value: 'Rp ${formatErpCurrency(totalValue)}',
+                icon: Icons.payments_outlined,
+                color: AppColors.navy,
+              ),
+              PurchaseMetricTile(
+                label: 'ETA Overdue',
+                value: '$overdue PO',
+                icon: Icons.schedule_rounded,
+                color: overdue > 0 ? AppColors.danger : AppColors.success,
               ),
             ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _OutstandingPoTile(
-                  label: 'Nilai Open PO',
-                  value: 'Rp ${formatErpCurrency(totalValue)}',
-                  icon: Icons.payments_outlined,
-                  color: AppColors.navy,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _OutstandingPoTile(
-                  label: 'ETA Overdue',
-                  value: '$overdue PO',
-                  icon: Icons.schedule_rounded,
-                  color: overdue > 0 ? AppColors.danger : AppColors.success,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OutstandingPoTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _OutstandingPoTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(height: 7),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.navy,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
           ),
         ],
       ),

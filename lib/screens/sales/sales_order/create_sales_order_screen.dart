@@ -1906,7 +1906,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedDeliveryDate.isBefore(_selectedDate)) {
+    if (_dateOnly(_selectedDeliveryDate).isBefore(_dateOnly(_selectedDate))) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Delivery Date tidak boleh sebelum Transaction Date'),
@@ -2100,6 +2100,10 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         });
       }
     }
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
   }
 
   Future<void> _loadSelectors() async {
@@ -2708,9 +2712,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                                   setState(() {
                                     _selectedDate = picked;
 
-                                    if (_selectedDeliveryDate.isBefore(
-                                      picked,
-                                    )) {
+                                    if (_dateOnly(
+                                      _selectedDeliveryDate,
+                                    ).isBefore(_dateOnly(picked))) {
                                       _selectedDeliveryDate = picked;
                                     }
                                   });
@@ -2774,12 +2778,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                                 final picked = await showDatePicker(
                                   context: context,
                                   initialDate:
-                                      _selectedDeliveryDate.isBefore(
-                                        _selectedDate,
-                                      )
-                                      ? _selectedDate
+                                      _dateOnly(
+                                        _selectedDeliveryDate,
+                                      ).isBefore(_dateOnly(_selectedDate))
+                                      ? _dateOnly(_selectedDate)
                                       : _selectedDeliveryDate,
-                                  firstDate: _selectedDate,
+                                  firstDate: _dateOnly(_selectedDate),
                                   lastDate: DateTime(2030),
                                 );
 

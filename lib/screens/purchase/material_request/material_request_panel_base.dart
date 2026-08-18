@@ -146,6 +146,23 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
     };
   }
 
+  bool _isPermissionError(String? message) {
+    final text = message?.toLowerCase() ?? '';
+    return text.contains('permission') ||
+        text.contains('tidak dizinkan') ||
+        text.contains('tidak diizinkan') ||
+        text.contains('not permitted') ||
+        text.contains('not allowed') ||
+        text.contains('akses erpnext');
+  }
+
+  String _friendlyError(String message) {
+    if (_isPermissionError(message)) {
+      return 'Akses Material Request ditolak ERPNext. Cek Role Permission untuk Material Request dan Material Request Item, lalu cek User Permission Company jika role sudah benar.';
+    }
+    return message.replaceFirst('Exception: ', '');
+  }
+
   List<InventoryItem> _planningItems(AppState appState) {
     final rows =
         appState.inventory
@@ -429,6 +446,9 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
     final focusSummary = _MaterialRequestFocusSummary.from(
       appState.materialRequests,
     );
+    final materialRequestError = appState.materialRequestsError;
+    final hasBlockingError =
+        materialRequestError != null && appState.materialRequests.isEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -477,48 +497,53 @@ class _MaterialRequestPanelState extends State<MaterialRequestPanel> {
           hintText: 'Cari MR, tipe, company, atau item...',
         ),
 
-        if (appState.materialRequestsError != null) ...[
+        if (materialRequestError != null) ...[
           const SizedBox(height: 10),
-          ErpErrorBox(message: appState.materialRequestsError!),
+          ErpErrorBox(
+            message: _friendlyError(materialRequestError),
+            onRetry: () => context.read<AppState>().refreshMaterialRequests(),
+          ),
         ],
 
-        const SizedBox(height: 10),
+        if (!hasBlockingError) ...[
+          const SizedBox(height: 10),
 
-        ErpStatusChipBar<String>(
-          chips: _chips,
-          selected: _statusFilter ?? _allStatusFilter,
-          onSelected: (value) {
-            final status = value == _allStatusFilter ? null : value;
-            setState(() => _statusFilter = status);
-            context.read<AppState>().setMaterialRequestQuery(
-              search: _search,
-              status: status,
-            );
-          },
-        ),
-
-        const SizedBox(height: 12),
-
-        if (filtered.isEmpty &&
-            !appState.isMaterialRequestsLoading &&
-            appState.materialRequestsError == null)
-          ErpEmptyState(
-            title: _focusFilter == _MaterialRequestFocusFilter.all
-                ? 'Belum ada request'
-                : 'Request tidak ditemukan',
-            message: _emptyMessage(),
-          )
-        else
-          TmsxResponsiveCardGrid(
-            children: filtered
-                .map(
-                  (doc) => _MaterialRequestCard(
-                    doc: doc,
-                    onTap: () => _openDetail(doc),
-                  ),
-                )
-                .toList(),
+          ErpStatusChipBar<String>(
+            chips: _chips,
+            selected: _statusFilter ?? _allStatusFilter,
+            onSelected: (value) {
+              final status = value == _allStatusFilter ? null : value;
+              setState(() => _statusFilter = status);
+              context.read<AppState>().setMaterialRequestQuery(
+                search: _search,
+                status: status,
+              );
+            },
           ),
+
+          const SizedBox(height: 12),
+
+          if (filtered.isEmpty &&
+              !appState.isMaterialRequestsLoading &&
+              appState.materialRequestsError == null)
+            ErpEmptyState(
+              title: _focusFilter == _MaterialRequestFocusFilter.all
+                  ? 'Belum ada request'
+                  : 'Request tidak ditemukan',
+              message: _emptyMessage(),
+            )
+          else
+            TmsxResponsiveCardGrid(
+              children: filtered
+                  .map(
+                    (doc) => _MaterialRequestCard(
+                      doc: doc,
+                      onTap: () => _openDetail(doc),
+                    ),
+                  )
+                  .toList(),
+            ),
+        ],
         if (appState.materialRequestsError == null &&
             (appState.hasMoreMaterialRequests ||
                 appState.isMoreMaterialRequestsLoading)) ...[
@@ -676,7 +701,7 @@ class _MaterialRequestSummaryCard extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppColors.border),
         boxShadow: AppColors.cardShadow,
       ),
@@ -686,16 +711,16 @@ class _MaterialRequestSummaryCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
                   color: AppColors.softGreen,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(15),
                 ),
                 child: const Icon(
                   Icons.assignment_turned_in_outlined,
                   color: AppColors.primary,
-                  size: 20,
+                  size: 21,
                 ),
               ),
               const SizedBox(width: 10),
@@ -726,86 +751,27 @@ class _MaterialRequestSummaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          PurchaseMetricGrid(
             children: [
-              Expanded(
-                child: _MaterialRequestSummaryTile(
-                  label: 'Aktif',
-                  value: '$activeCount request',
-                  icon: Icons.pending_actions_rounded,
-                  color: AppColors.primary,
-                ),
+              PurchaseMetricTile(
+                label: 'Aktif',
+                value: '$activeCount request',
+                icon: Icons.pending_actions_rounded,
+                color: AppColors.primary,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MaterialRequestSummaryTile(
-                  label: 'Draft',
-                  value: '$draftCount draft',
-                  icon: Icons.edit_note_rounded,
-                  color: AppColors.warning,
-                ),
+              PurchaseMetricTile(
+                label: 'Draft',
+                value: '$draftCount draft',
+                icon: Icons.edit_note_rounded,
+                color: AppColors.warning,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MaterialRequestSummaryTile(
-                  label: 'Qty',
-                  value: formatErpCurrency(activeQty),
-                  icon: Icons.inventory_2_outlined,
-                  color: AppColors.slate,
-                ),
+              PurchaseMetricTile(
+                label: 'Qty',
+                value: formatErpCurrency(activeQty),
+                icon: Icons.inventory_2_outlined,
+                color: AppColors.slate,
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MaterialRequestSummaryTile extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _MaterialRequestSummaryTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 18),
-          const SizedBox(height: 7),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AppColors.navy,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
           ),
         ],
       ),

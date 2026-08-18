@@ -139,8 +139,8 @@ class _NooRequestTabState extends State<NooRequestTab> {
           'company',
           'sales_person',
           'customer_name',
-          'customer_type',
           'customer_category',
+          'default_payment_terms_template',
           'mobile_no',
           'address_line1',
           'status',
@@ -315,7 +315,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
     final company = _text(row['company'], fallback: '-');
     final date = _formatDate(row['request_date']);
     final mobileNo = _text(row['mobile_no']);
-    final customerType = _text(row['customer_type']);
+    final paymentTerms = _text(row['default_payment_terms_template']);
     final customerCategory = _text(row['customer_category']);
 
     return Padding(
@@ -382,7 +382,7 @@ class _NooRequestTabState extends State<NooRequestTab> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (customerType.isNotEmpty ||
+                  if (paymentTerms.isNotEmpty ||
                       customerCategory.isNotEmpty ||
                       mobileNo.isNotEmpty) ...[
                     const SizedBox(height: 8),
@@ -390,8 +390,8 @@ class _NooRequestTabState extends State<NooRequestTab> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        if (customerType.isNotEmpty)
-                          _miniBadge(Icons.payments_rounded, customerType),
+                        if (paymentTerms.isNotEmpty)
+                          _miniBadge(Icons.payments_rounded, paymentTerms),
                         if (customerCategory.isNotEmpty)
                           _miniBadge(Icons.category_rounded, customerCategory),
                         if (mobileNo.isNotEmpty)
@@ -525,8 +525,8 @@ class _NooRequestTabState extends State<NooRequestTab> {
                         _detailRow('Company', _text(row['company'])),
                         _detailRow('Sales Person', _text(row['sales_person'])),
                         _detailRow(
-                          'Tipe Pembayaran',
-                          _text(row['customer_type']),
+                          'Payment Terms',
+                          _text(row['default_payment_terms_template']),
                         ),
                         _detailRow(
                           'Customer Category',

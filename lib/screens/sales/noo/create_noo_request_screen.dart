@@ -18,8 +18,7 @@ class CreateNooRequestScreen extends StatefulWidget {
 }
 
 class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
-  static const _customerCategoryOptions = ['MT', 'GT'];
-  static const _fallbackCustomerTypeOptions = ['CASH', 'COD', 'CBD'];
+  static const _customerCategoryOptions = ['GT', 'MT'];
 
   final _formKey = GlobalKey<FormState>();
   final _customerNameController = TextEditingController();
@@ -33,11 +32,11 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
   bool _salesPersonOptionsRequested = false;
   bool _isLoadingSalesPersons = false;
   String? _salesPersonLoadError;
-  List<String> _customerTypeOptions = const [];
-  bool _customerTypeOptionsRequested = false;
-  bool _isLoadingCustomerTypes = false;
-  String? _customerTypeLoadError;
-  String? _customerType;
+  List<String> _paymentTermsOptions = const [];
+  bool _paymentTermsOptionsRequested = false;
+  bool _isLoadingPaymentTerms = false;
+  String? _paymentTermsLoadError;
+  String? _defaultPaymentTermsTemplate;
   bool _isSubmitting = false;
 
   @override
@@ -48,7 +47,9 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
     _selectedCompany = _text(initial['company']);
     _selectedSalesPerson = _text(initial['sales_person']);
     _customerCategory = _text(initial['customer_category']);
-    _customerType = _text(initial['customer_type']);
+    _defaultPaymentTermsTemplate = _text(
+      initial['default_payment_terms_template'],
+    );
     _customerNameController.text = _text(initial['customer_name']);
     _mobileNoController.text = _text(initial['mobile_no']);
     _addressController.text = _text(initial['address_line1']);
@@ -80,10 +81,10 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
         if (mounted) _loadSalesPersonOptions(context.read<AppState>());
       });
     }
-    if (!_customerTypeOptionsRequested) {
-      _customerTypeOptionsRequested = true;
+    if (!_paymentTermsOptionsRequested) {
+      _paymentTermsOptionsRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _loadCustomerTypeOptions(context.read<AppState>());
+        if (mounted) _loadPaymentTermsOptions(context.read<AppState>());
       });
     }
 
@@ -160,7 +161,7 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
                   const SalesSectionTitle(
                     title: 'Data Customer',
                     subtitle:
-                        'Nama calon customer, kategori, pembayaran, nomor HP, dan alamat.',
+                        'Nama calon customer, kategori, payment terms, nomor HP, dan alamat.',
                   ),
                   SalesUi.gap(),
                   _textField(
@@ -194,20 +195,23 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
                   ),
                   SalesUi.gap(),
                   DropdownButtonFormField<String>(
-                    initialValue: _customerTypeOptions.contains(_customerType)
-                        ? _customerType
+                    initialValue:
+                        _paymentTermsOptions.contains(
+                          _defaultPaymentTermsTemplate,
+                        )
+                        ? _defaultPaymentTermsTemplate
                         : null,
                     decoration: _decoration(
-                      'Tipe Pembayaran',
+                      'Default Payment Terms Template',
                       Icons.payments_rounded,
                     ),
                     isExpanded: true,
-                    items: _customerTypeOptions
+                    items: _paymentTermsOptions
                         .map(
-                          (type) => DropdownMenuItem(
-                            value: type,
+                          (template) => DropdownMenuItem(
+                            value: template,
                             child: Text(
-                              type,
+                              template,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -215,21 +219,23 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
                         )
                         .toList(),
                     hint: Text(
-                      _isLoadingCustomerTypes
-                          ? 'Memuat tipe pembayaran...'
-                          : 'Pilih tipe pembayaran',
+                      _isLoadingPaymentTerms
+                          ? 'Memuat payment terms...'
+                          : 'Pilih payment terms',
                     ),
-                    onChanged: _isLoadingCustomerTypes
+                    onChanged: _isLoadingPaymentTerms
                         ? null
-                        : (value) => setState(() => _customerType = value),
+                        : (value) => setState(
+                            () => _defaultPaymentTermsTemplate = value,
+                          ),
                     validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Tipe pembayaran wajib dipilih'
+                        ? 'Default Payment Terms Template wajib dipilih'
                         : null,
                   ),
-                  if (_customerTypeLoadError != null) ...[
+                  if (_paymentTermsLoadError != null) ...[
                     const SizedBox(height: 8),
                     Text(
-                      _customerTypeLoadError!,
+                      _paymentTermsLoadError!,
                       style: const TextStyle(
                         color: AppColors.danger,
                         fontSize: 11,
@@ -477,8 +483,8 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
         company: company,
         salesPerson: salesPerson,
         customerName: _customerNameController.text,
-        customerType: _customerType ?? '',
         customerCategory: _customerCategory,
+        defaultPaymentTermsTemplate: _defaultPaymentTermsTemplate,
         mobileNo: _mobileNoController.text,
         addressLine1: _addressController.text,
       );
@@ -553,14 +559,14 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
     }
   }
 
-  Future<void> _loadCustomerTypeOptions(AppState state) async {
+  Future<void> _loadPaymentTermsOptions(AppState state) async {
     setState(() {
-      _isLoadingCustomerTypes = true;
-      _customerTypeLoadError = null;
+      _isLoadingPaymentTerms = true;
+      _paymentTermsLoadError = null;
     });
     try {
       final rows = await state.frappeService.fetchResource(
-        'Customer Type',
+        'Payment Terms Template',
         fields: const ['name'],
         orderBy: 'name asc',
         limit: 100,
@@ -574,30 +580,26 @@ class _CreateNooRequestScreenState extends State<CreateNooRequestScreen> {
             ..sort();
       if (!mounted) return;
       setState(() {
-        final effectiveOptions = options.isEmpty
-            ? _fallbackCustomerTypeOptions
-            : options;
-        _customerTypeOptions = effectiveOptions;
-        _customerType = options.contains(_customerType)
-            ? _customerType
-            : effectiveOptions.first;
+        _paymentTermsOptions = options;
+        _defaultPaymentTermsTemplate =
+            options.contains(_defaultPaymentTermsTemplate)
+            ? _defaultPaymentTermsTemplate
+            : null;
         if (options.isEmpty) {
-          _customerTypeLoadError =
-              'Tipe pembayaran memakai opsi standar karena master Customer Type kosong.';
+          _paymentTermsLoadError =
+              'Payment Terms Template kosong atau belum tersedia di ERPNext.';
         }
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _customerTypeOptions = _fallbackCustomerTypeOptions;
-        _customerType = _fallbackCustomerTypeOptions.contains(_customerType)
-            ? _customerType
-            : _fallbackCustomerTypeOptions.first;
-        _customerTypeLoadError =
-            'Tipe pembayaran memakai opsi standar karena master Customer Type gagal dimuat.';
+        _paymentTermsOptions = const [];
+        _defaultPaymentTermsTemplate = null;
+        _paymentTermsLoadError =
+            'Payment Terms Template gagal dimuat. Pastikan role punya Read Payment Terms Template.';
       });
     } finally {
-      if (mounted) setState(() => _isLoadingCustomerTypes = false);
+      if (mounted) setState(() => _isLoadingPaymentTerms = false);
     }
   }
 

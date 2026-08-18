@@ -8,13 +8,12 @@
   "field_order": [
     "naming_series",
     "request_date",
-    "status",
     "company",
     "sales_person",
     "customer_section",
     "customer_name",
-    "customer_type",
     "customer_category",
+    "default_payment_terms_template",
     "mobile_no",
     "address_line1",
     "status"
@@ -68,18 +67,17 @@
       "reqd": 1
     },
     {
-      "default": "CASH",
-      "fieldname": "customer_type",
-      "fieldtype": "Select",
-      "label": "Customer Type",
-      "options": "CASH\nCOD\nCBD",
-      "reqd": 1
-    },
-    {
       "fieldname": "customer_category",
       "fieldtype": "Select",
       "label": "Customer Category",
-      "options": "MT\nGT",
+      "options": "GT\nMT",
+      "reqd": 1
+    },
+    {
+      "fieldname": "default_payment_terms_template",
+      "fieldtype": "Link",
+      "label": "Default Payment Terms Template",
+      "options": "Payment Terms Template",
       "reqd": 1
     },
     {
@@ -101,7 +99,7 @@
       "in_list_view": 1,
       "in_standard_filter": 1,
       "label": "Status",
-      "options": "Draft\nPending Approval\nApproved\nRejected\nCreated Customer"
+      "options": "Pending Approval\nSubmitted"
     }
   ],
   "links": [],
