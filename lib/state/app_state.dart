@@ -5063,6 +5063,7 @@ class AppState with ChangeNotifier {
     bool refreshAfterSave = true,
   }) async {
     await _frappeService.ensureLoggedIn();
+    final normalizedCustomer = customer?.trim() ?? '';
     if (items != null &&
         (items.isEmpty ||
             items.any(
@@ -5076,7 +5077,7 @@ class AppState with ChangeNotifier {
     }
 
     final updates = <String, dynamic>{
-      if (customer != null && customer.trim().isNotEmpty) 'customer': customer,
+      if (normalizedCustomer.isNotEmpty) 'customer': normalizedCustomer,
       if (company != null && company.trim().isNotEmpty)
         'company': company.trim(),
       if (currency != null && currency.trim().isNotEmpty)
@@ -5121,6 +5122,37 @@ class AppState with ChangeNotifier {
         ],
     };
 
+    if (normalizedCustomer.isNotEmpty) {
+      try {
+        final currentDoc = await _frappeService.fetchDocument(
+          'Sales Order',
+          orderId,
+        );
+        final currentCustomer = currentDoc['customer']?.toString().trim() ?? '';
+        final hasMismatchedCustomer =
+            currentCustomer.isNotEmpty && currentCustomer != normalizedCustomer;
+        final hasInvalidAddress = await _salesOrderHasAddressMismatch(
+          currentDoc,
+          normalizedCustomer,
+        );
+        if (hasMismatchedCustomer || hasInvalidAddress) {
+          updates.addAll(const {
+            'customer_address': '',
+            'address_display': '',
+            'shipping_address_name': '',
+            'shipping_address': '',
+            'contact_person': '',
+            'contact_display': '',
+            'contact_mobile': '',
+            'contact_email': '',
+          });
+        }
+      } catch (_) {
+        // If the current document cannot be read, keep the intended update and
+        // let ERPNext return the authoritative validation message.
+      }
+    }
+
     if (updates.isEmpty) {
       throw Exception('No fields to update.');
     }
@@ -5137,6 +5169,35 @@ class AppState with ChangeNotifier {
     }
     unawaited(refreshDashboardSummaryForCurrentAccess(silent: true));
     return updatedOrder;
+  }
+
+  Future<bool> _salesOrderHasAddressMismatch(
+    Map<String, dynamic> order,
+    String customer,
+  ) async {
+    for (final field in const ['customer_address', 'shipping_address_name']) {
+      final addressName = order[field]?.toString().trim() ?? '';
+      if (addressName.isEmpty) continue;
+      try {
+        final address = await _frappeService.fetchDocument(
+          'Address',
+          addressName,
+        );
+        final links = address['links'];
+        if (links is! List) return true;
+        final belongsToCustomer = links.any((rawLink) {
+          if (rawLink is! Map) return false;
+          final link = Map<String, dynamic>.from(rawLink);
+          final doctype = link['link_doctype']?.toString().trim() ?? '';
+          final name = link['link_name']?.toString().trim() ?? '';
+          return doctype == 'Customer' && name == customer;
+        });
+        if (!belongsToCustomer) return true;
+      } catch (_) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<void> deleteSalesOrder(String orderId) async {
