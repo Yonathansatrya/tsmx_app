@@ -114,8 +114,8 @@ class SalesVisitLocationService {
         : AppleSettings(
             accuracy: LocationAccuracy.high,
             distanceFilter: 25,
-            pauseLocationUpdatesAutomatically: false,
-            showBackgroundLocationIndicator: true,
+            pauseLocationUpdatesAutomatically: true,
+            showBackgroundLocationIndicator: false,
           );
     _subscription = Geolocator.getPositionStream(locationSettings: settings)
         .listen((position) async {
