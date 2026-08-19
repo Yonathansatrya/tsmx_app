@@ -11,6 +11,7 @@ class SalesOrderItem {
   final double rate;
   final double discountAmount;
   final String warehouse;
+  final String costCenter;
   final String deliveryDate;
 
   SalesOrderItem({
@@ -20,6 +21,7 @@ class SalesOrderItem {
     required this.rate,
     this.discountAmount = 0,
     this.warehouse = '',
+    this.costCenter = '',
     this.deliveryDate = '',
   });
 
@@ -35,6 +37,7 @@ class SalesOrderItem {
       rate: NumParse.asDouble(json['rate'] ?? json['net_rate']),
       discountAmount: NumParse.asDouble(json['discount_amount']),
       warehouse: json['warehouse']?.toString() ?? '',
+      costCenter: json['cost_center']?.toString() ?? '',
       deliveryDate: json['delivery_date']?.toString() ?? '',
     );
   }
@@ -57,6 +60,7 @@ class SalesOrder {
   final String currency;
   final String sellingPriceList;
   final String priceListCurrency;
+  final String costCenter;
   final String noted;
   final bool ignorePricingRule;
   final int itemsCount;
@@ -79,6 +83,7 @@ class SalesOrder {
     this.currency = '',
     this.sellingPriceList = '',
     this.priceListCurrency = '',
+    this.costCenter = '',
     this.noted = '',
     this.ignorePricingRule = false,
     required this.itemsCount,
@@ -152,6 +157,7 @@ class SalesOrder {
       currency: json['currency']?.toString() ?? '',
       sellingPriceList: json['selling_price_list']?.toString() ?? '',
       priceListCurrency: json['price_list_currency']?.toString() ?? '',
+      costCenter: json['cost_center']?.toString() ?? '',
       noted: json['noted']?.toString() ?? '',
       ignorePricingRule:
           json['ignore_pricing_rule'] == 1 ||
@@ -178,6 +184,7 @@ class SalesOrder {
     String? currency,
     String? sellingPriceList,
     String? priceListCurrency,
+    String? costCenter,
     String? noted,
     bool? ignorePricingRule,
     int? itemsCount,
@@ -200,6 +207,7 @@ class SalesOrder {
       currency: currency ?? this.currency,
       sellingPriceList: sellingPriceList ?? this.sellingPriceList,
       priceListCurrency: priceListCurrency ?? this.priceListCurrency,
+      costCenter: costCenter ?? this.costCenter,
       noted: noted ?? this.noted,
       ignorePricingRule: ignorePricingRule ?? this.ignorePricingRule,
       itemsCount: itemsCount ?? this.itemsCount,

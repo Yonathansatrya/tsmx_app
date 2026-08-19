@@ -284,12 +284,28 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
   List<_CostCenterOption> _costCentersForCompany() {
     final company = _selectedCompany?.trim() ?? '';
-    if (company.isEmpty) return _costCenterOptions;
+    if (company.isEmpty) {
+      return _ensureSelectedCostCenterOption(_costCenterOptions);
+    }
 
     final filtered = _costCenterOptions
         .where((center) => center.company == company)
         .toList();
-    return filtered.isNotEmpty ? filtered : _costCenterOptions;
+    final options = filtered.isNotEmpty ? filtered : _costCenterOptions;
+    return _ensureSelectedCostCenterOption(options);
+  }
+
+  List<_CostCenterOption> _ensureSelectedCostCenterOption(
+    List<_CostCenterOption> options,
+  ) {
+    final selected = _selectedCenter?.trim() ?? '';
+    if (selected.isEmpty || options.any((center) => center.name == selected)) {
+      return options;
+    }
+    return [
+      ...options,
+      _CostCenterOption(name: selected, company: _selectedCompany ?? ''),
+    ];
   }
 
   String _activeCompany() => _selectedCompany?.trim() ?? '';
@@ -2359,7 +2375,10 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
             : (_seriesOptions.isNotEmpty ? _seriesOptions.first : null);
         _selectedCompany = selectedCompany;
         _selectedCenter =
-            costCenterChoices.any((center) => center.name == _selectedCenter)
+            _selectedCenter?.trim().isNotEmpty == true &&
+                _ensureSelectedCostCenterOption(
+                  costCenterChoices,
+                ).any((center) => center.name == _selectedCenter)
             ? _selectedCenter
             : (defaultCostCenter ??
                   (costCenterChoices.isNotEmpty
@@ -2446,6 +2465,12 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       _priceListCurrency = order.priceListCurrency.isNotEmpty
           ? order.priceListCurrency
           : _priceListCurrency;
+      final orderCostCenter = order.costCenter.trim().isNotEmpty
+          ? order.costCenter.trim()
+          : firstItem?.costCenter.trim() ?? '';
+      if (orderCostCenter.isNotEmpty) {
+        _selectedCenter = orderCostCenter;
+      }
       _notedCtrl.text = order.noted;
       _discountCtrl.text = firstItem?.discountAmount != null
           ? _formatRupiah(firstItem!.discountAmount)
