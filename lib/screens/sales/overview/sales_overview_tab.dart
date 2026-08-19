@@ -68,12 +68,8 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadFilterOptions();
-      await Future.wait([
-        _loadDailyReport(),
-        _loadRanking(),
-        _loadVisitSnapshot(),
-        _loadProfileImage(),
-      ]);
+      if (!mounted) return;
+      _startInitialLoads();
     });
   }
 
@@ -86,13 +82,13 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   static const Duration _salesOverviewCacheTtl = Duration(hours: 12);
   static const String _salesOverviewCachePrefix = 'sales_overview';
 
-  DateTime get _periodStart => DateTime(_filterDate.year, _filterDate.month);
+  DateTime get _periodStart =>
+      DateTime(_filterDate.year, _filterDate.month, _filterDate.day);
 
-  DateTime get _periodEnd =>
-      DateTime(_filterDate.year, _filterDate.month + 1, 0);
+  DateTime get _periodEnd => _periodStart;
 
   String get _periodKey =>
-      '${_filterDate.year}-${_filterDate.month.toString().padLeft(2, '0')}';
+      '${_filterDate.year}-${_filterDate.month.toString().padLeft(2, '0')}-${_filterDate.day.toString().padLeft(2, '0')}';
 
   String _scopeKey(AppState state) {
     final salesPerson = state.mobileAccess.shouldScopeSalesData
@@ -133,6 +129,20 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       _scopeKey(state),
       _periodKey,
     ].join('|');
+  }
+
+  void _startInitialLoads() {
+    _loadDailyReport();
+    _loadVisitSnapshot();
+    _loadProfileImage();
+    _startDeferredRankingLoad();
+  }
+
+  void _startDeferredRankingLoad({bool forceRemote = false}) {
+    Future<void>.delayed(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      _loadRanking(forceRemote: forceRemote);
+    });
   }
 
   Future<void> _loadFilterOptions() async {
@@ -243,8 +253,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
       ),
       builder: (context) => _SalesOverviewFilterSheet(
-        initialMonth: _filterDate.month,
-        initialYear: _filterDate.year,
+        initialDate: _filterDate,
         initialCompany: _selectedCompany,
         initialSalesGroup: _selectedSalesGroup,
         companies: _companyOptions,
@@ -258,7 +267,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     );
     if (result == null || !mounted) return;
     setState(() {
-      _filterDate = DateTime(result.year, result.month);
+      _filterDate = result.date;
       _selectedCompany = result.company;
       _selectedSalesGroup = result.salesGroup;
     });
@@ -402,9 +411,9 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   Future<void> _reloadReports({bool forceRemote = false}) async {
     await Future.wait([
       _loadDailyReport(forceRemote: forceRemote),
-      _loadRanking(forceRemote: forceRemote),
       _loadVisitSnapshot(forceRefresh: forceRemote),
     ]);
+    _startDeferredRankingLoad(forceRemote: forceRemote);
   }
 
   Future<void> _loadVisitSnapshot({bool forceRefresh = false}) async {
@@ -1219,7 +1228,7 @@ class _SalesOverviewFilterCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${_monthName(date.month)} ${date.year}  |  ${selectedCompany.isEmpty ? 'Semua Company' : selectedCompany}',
+                  '${_dateLabel(date)}  |  ${selectedCompany.isEmpty ? 'Semua Company' : selectedCompany}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -1271,14 +1280,12 @@ class _SalesOverviewFilterCard extends StatelessWidget {
 }
 
 class _SalesOverviewFilterValue {
-  final int month;
-  final int year;
+  final DateTime date;
   final String company;
   final String salesGroup;
 
   const _SalesOverviewFilterValue({
-    required this.month,
-    required this.year,
+    required this.date,
     required this.company,
     required this.salesGroup,
   });
@@ -1286,8 +1293,7 @@ class _SalesOverviewFilterValue {
 
 class _SalesOverviewFilterSheet extends StatefulWidget {
   const _SalesOverviewFilterSheet({
-    required this.initialMonth,
-    required this.initialYear,
+    required this.initialDate,
     required this.initialCompany,
     required this.initialSalesGroup,
     required this.companies,
@@ -1296,8 +1302,7 @@ class _SalesOverviewFilterSheet extends StatefulWidget {
     required this.loading,
   });
 
-  final int initialMonth;
-  final int initialYear;
+  final DateTime initialDate;
   final String initialCompany;
   final String initialSalesGroup;
   final List<String> companies;
@@ -1311,16 +1316,18 @@ class _SalesOverviewFilterSheet extends StatefulWidget {
 }
 
 class _SalesOverviewFilterSheetState extends State<_SalesOverviewFilterSheet> {
-  late int _month;
-  late int _year;
+  late DateTime _date;
   late String _company;
   late String _salesGroup;
 
   @override
   void initState() {
     super.initState();
-    _month = widget.initialMonth;
-    _year = widget.initialYear;
+    _date = DateTime(
+      widget.initialDate.year,
+      widget.initialDate.month,
+      widget.initialDate.day,
+    );
     _company = widget.initialCompany;
     _salesGroup = widget.initialSalesGroup;
   }
@@ -1328,19 +1335,28 @@ class _SalesOverviewFilterSheetState extends State<_SalesOverviewFilterSheet> {
   void _reset() {
     final now = DateTime.now();
     setState(() {
-      _month = now.month;
-      _year = now.year;
+      _date = DateTime(now.year, now.month, now.day);
       _company = '';
       _salesGroup = widget.lockSalesPerson ? widget.initialSalesGroup : 'all';
     });
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(DateTime.now().year + 2, 12, 31),
+    );
+    if (picked == null) return;
+    setState(() => _date = DateTime(picked.year, picked.month, picked.day));
   }
 
   void _apply() {
     Navigator.pop(
       context,
       _SalesOverviewFilterValue(
-        month: _month,
-        year: _year,
+        date: _date,
         company: _company,
         salesGroup: _salesGroup,
       ),
@@ -1349,9 +1365,6 @@ class _SalesOverviewFilterSheetState extends State<_SalesOverviewFilterSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final years = [
-      for (var year = DateTime.now().year; year >= 2020; year--) year,
-    ];
     final selectedCompany =
         _company.isEmpty || widget.companies.contains(_company) ? _company : '';
     final selectedSalesGroup =
@@ -1368,126 +1381,119 @@ class _SalesOverviewFilterSheetState extends State<_SalesOverviewFilterSheet> {
           14,
           MediaQuery.viewInsetsOf(context).bottom + 14,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Filter Periode & Lainnya',
-              style: TextStyle(
-                color: AppColors.navy,
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 18),
-            DropdownButtonFormField<int>(
-              initialValue: _month,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Bulan',
-                prefixIcon: Icon(Icons.calendar_month_rounded),
-              ),
-              items: [
-                for (var month = 1; month <= 12; month++)
-                  DropdownMenuItem<int>(
-                    value: month,
-                    child: Text(_monthName(month)),
-                  ),
-              ],
-              onChanged: widget.loading
-                  ? null
-                  : (value) => setState(() => _month = value ?? _month),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<int>(
-              initialValue: years.contains(_year) ? _year : years.first,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Tahun',
-                prefixIcon: Icon(Icons.event_rounded),
-              ),
-              items: [
-                for (final year in years)
-                  DropdownMenuItem<int>(value: year, child: Text('$year')),
-              ],
-              onChanged: widget.loading
-                  ? null
-                  : (value) => setState(() => _year = value ?? _year),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: selectedCompany,
-              isExpanded: true,
-              decoration: const InputDecoration(
-                labelText: 'Company',
-                prefixIcon: Icon(Icons.business_rounded),
-              ),
-              items: [
-                const DropdownMenuItem<String>(
-                  value: '',
-                  child: Text('Semua Company'),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Filter Tanggal & Lainnya',
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
                 ),
-                ...widget.companies.map(
-                  (company) => DropdownMenuItem<String>(
-                    value: company,
-                    child: Text(company, overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(height: 18),
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: widget.loading ? null : _pickDate,
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Tanggal',
+                    prefixIcon: Icon(Icons.calendar_today_rounded),
+                    suffixIcon: Icon(Icons.expand_more_rounded),
+                  ),
+                  child: Text(
+                    _dateLabel(_date),
+                    style: const TextStyle(
+                      color: AppColors.navy,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
-              ],
-              onChanged: widget.loading
-                  ? null
-                  : (value) => setState(() => _company = value ?? ''),
-            ),
-            if (!widget.lockSalesPerson) ...[
+              ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                initialValue: selectedSalesGroup,
+                initialValue: selectedCompany,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                  labelText: 'Sales Group',
-                  prefixIcon: Icon(Icons.groups_rounded),
+                  labelText: 'Company',
+                  prefixIcon: Icon(Icons.business_rounded),
                 ),
                 items: [
                   const DropdownMenuItem<String>(
-                    value: 'all',
-                    child: Text('All'),
+                    value: '',
+                    child: Text('Semua Company'),
                   ),
-                  ...widget.salesGroups.map(
-                    (salesGroup) => DropdownMenuItem<String>(
-                      value: salesGroup,
-                      child: Text(salesGroup, overflow: TextOverflow.ellipsis),
+                  ...widget.companies.map(
+                    (company) => DropdownMenuItem<String>(
+                      value: company,
+                      child: Text(company, overflow: TextOverflow.ellipsis),
                     ),
                   ),
                 ],
                 onChanged: widget.loading
                     ? null
-                    : (value) => setState(() => _salesGroup = value ?? 'all'),
+                    : (value) => setState(() => _company = value ?? ''),
               ),
-            ],
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: widget.loading ? null : _reset,
-                    child: const Text('Reset'),
+              if (!widget.lockSalesPerson) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedSalesGroup,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Sales Group',
+                    prefixIcon: Icon(Icons.groups_rounded),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: widget.loading ? null : _apply,
-                    child: const Text('Terapkan Filter'),
-                  ),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: 'all',
+                      child: Text('All'),
+                    ),
+                    ...widget.salesGroups.map(
+                      (salesGroup) => DropdownMenuItem<String>(
+                        value: salesGroup,
+                        child: Text(
+                          salesGroup,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: widget.loading
+                      ? null
+                      : (value) => setState(() => _salesGroup = value ?? 'all'),
                 ),
               ],
-            ),
-          ],
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: widget.loading ? null : _reset,
+                      child: const Text('Reset'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: widget.loading ? null : _apply,
+                      child: const Text('Terapkan Filter'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+String _dateLabel(DateTime date) {
+  return '${date.day.toString().padLeft(2, '0')} ${_monthName(date.month)} ${date.year}';
 }
 
 String _monthName(int month) {
