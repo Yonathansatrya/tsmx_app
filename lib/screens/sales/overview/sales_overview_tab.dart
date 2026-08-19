@@ -62,7 +62,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
   String? _topCustomersError;
   String? _rankingError;
   String? _visitError;
-  List<SalesVisit> _recentVisits = const [];
+  String? _profileImageUrl;
 
   @override
   void initState() {
@@ -73,6 +73,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
         _loadDailyReport(),
         _loadRanking(),
         _loadVisitSnapshot(),
+        _loadProfileImage(),
       ]);
     });
   }
@@ -384,7 +385,6 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     if (!state.canUseSales) {
       if (mounted) {
         setState(() {
-          _recentVisits = const [];
           _visitLoading = false;
           _visitError = null;
         });
@@ -396,14 +396,13 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       _visitError = null;
     });
     try {
-      final rows = await state.fetchSalesVisits(forceRefresh: forceRefresh);
+      await state.fetchSalesVisits(forceRefresh: forceRefresh);
       if (!mounted) return;
-      setState(() => _recentVisits = rows.take(5).toList());
+      setState(() => _visitError = null);
     } catch (error) {
       if (!mounted) return;
       if (_isSalesVisitPermissionError(error)) {
         setState(() {
-          _recentVisits = const [];
           _visitError = null;
         });
       } else {
@@ -411,6 +410,22 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       }
     } finally {
       if (mounted) setState(() => _visitLoading = false);
+    }
+  }
+
+  Future<void> _loadProfileImage() async {
+    final state = context.read<AppState>();
+    try {
+      final profile = await state.fetchCurrentUserProfile();
+      final image = profile['user_image']?.toString().trim() ?? '';
+      if (!mounted || image.isEmpty) return;
+      final imageUrl =
+          image.startsWith('http://') || image.startsWith('https://')
+          ? image
+          : Uri.parse(state.frappeService.baseUrl).resolve(image).toString();
+      setState(() => _profileImageUrl = imageUrl);
+    } catch (_) {
+      if (mounted) setState(() => _profileImageUrl = null);
     }
   }
 
@@ -829,6 +844,21 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       child: ListView(
         padding: SalesUi.screenPaddingOf(context),
         children: [
+          if (state.canUseSales) ...[
+            _SalesVisitActionCard(
+              active: state.activeSalesVisit,
+              profileImageUrl: _profileImageUrl,
+              loading: _visitLoading,
+              error: _visitError,
+              onCheckIn: _openVisitCheckIn,
+              onCheckOut: state.activeSalesVisit == null
+                  ? null
+                  : () => _checkOutActiveVisit(state.activeSalesVisit!),
+              onOpenHistory: () => widget.onMenuSelected(4),
+            ),
+            SalesUi.gap(18),
+          ],
+
           _SalesOverviewFilterCard(
             date: _filterDate,
             selectedCompany: _selectedCompany,
@@ -847,21 +877,6 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
               _reloadReports();
             },
           ),
-
-          if (state.canUseSales) ...[
-            SalesUi.gap(18),
-            _SalesVisitActionCard(
-              active: state.activeSalesVisit,
-              recentVisits: _recentVisits,
-              loading: _visitLoading,
-              error: _visitError,
-              onCheckIn: _openVisitCheckIn,
-              onCheckOut: state.activeSalesVisit == null
-                  ? null
-                  : () => _checkOutActiveVisit(state.activeSalesVisit!),
-              onOpenHistory: () => widget.onMenuSelected(4),
-            ),
-          ],
 
           if (state.canUseSales) ...[
             SalesUi.gap(18),
@@ -963,7 +978,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
 class _SalesVisitActionCard extends StatelessWidget {
   const _SalesVisitActionCard({
     required this.active,
-    required this.recentVisits,
+    required this.profileImageUrl,
     required this.loading,
     required this.error,
     required this.onCheckIn,
@@ -972,7 +987,7 @@ class _SalesVisitActionCard extends StatelessWidget {
   });
 
   final SalesVisit? active;
-  final List<SalesVisit> recentVisits;
+  final String? profileImageUrl;
   final bool loading;
   final String? error;
   final VoidCallback onCheckIn;
@@ -982,158 +997,173 @@ class _SalesVisitActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activeVisit = active;
+    final now = DateTime.now();
+    final greeting = now.hour < 11
+        ? 'Good Morning,'
+        : now.hour < 15
+        ? 'Good Afternoon,'
+        : 'Good Evening,';
+    final title = activeVisit?.customer.trim().isNotEmpty == true
+        ? activeVisit!.customer
+        : 'Sales Team!';
+    final statusText = activeVisit == null
+        ? 'You are not Check-in yet Today.'
+        : 'You are checked in today.';
+    final timeText = activeVisit == null
+        ? ''
+        : (activeVisit.checkInTime.isEmpty ? '-' : activeVisit.checkInTime);
     return SalesInfoCard(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       accent: _salesGreen,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          CollectionSectionHeader(
-            title: 'Absensi',
-            subtitle: activeVisit == null
-                ? 'Mulai check-in customer dari dashboard'
-                : 'Sedang aktif di ${activeVisit.customer}',
-            icon: Icons.location_on_rounded,
-            trailing: IconButton.filledTonal(
-              tooltip: 'Data Absensi',
-              onPressed: onOpenHistory,
-              icon: const Icon(Icons.history_rounded),
-            ),
-          ),
-          SalesUi.gap(12),
           if (loading)
             const LinearProgressIndicator()
           else ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: activeVisit == null
-                    ? AppColors.background
-                    : _salesGreen.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: activeVisit == null
-                      ? AppColors.border
-                      : _salesGreen.withValues(alpha: 0.20),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: activeVisit == null
-                          ? AppColors.surfaceMuted
-                          : _salesGreen,
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: Icon(
-                      activeVisit == null
-                          ? Icons.storefront_outlined
-                          : Icons.near_me_rounded,
-                      color: activeVisit == null
-                          ? AppColors.slate
-                          : AppColors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        greeting,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        statusText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (timeText.isNotEmpty) ...[
+                        const SizedBox(height: 2),
                         Text(
-                          activeVisit?.customer ?? 'Belum ada check-in aktif',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          timeText,
                           style: const TextStyle(
-                            color: AppColors.navy,
+                            color: _salesBlue,
+                            fontSize: 11,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          activeVisit == null
-                              ? 'Tekan Check-in untuk mulai absensi.'
-                              : 'Check-in: ${activeVisit.checkInTime.isEmpty ? '-' : activeVisit.checkInTime}',
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.slate,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
                       ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SalesUi.gap(12),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: activeVisit == null ? onCheckIn : null,
-                    icon: const Icon(Icons.login_rounded),
-                    label: const Text('Check-in'),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: activeVisit == null ? null : onCheckOut,
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Check-out'),
+                InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onOpenHistory,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          color: AppColors.softGreen,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.white, width: 2),
+                        ),
+                        child: profileImageUrl == null
+                            ? const Icon(
+                                Icons.person_rounded,
+                                color: _salesGreen,
+                                size: 24,
+                              )
+                            : Image.network(
+                                profileImageUrl!,
+                                cacheWidth: 96,
+                                cacheHeight: 96,
+                                filterQuality: FilterQuality.medium,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => const Icon(
+                                  Icons.person_rounded,
+                                  color: _salesGreen,
+                                  size: 24,
+                                ),
+                              ),
+                      ),
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: Container(
+                          width: 18,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: AppColors.softGreen,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.white,
+                              width: 2,
+                            ),
+                          ),
+                          child: Icon(
+                            activeVisit == null
+                                ? Icons.location_on_outlined
+                                : Icons.near_me_rounded,
+                            color: _salesGreen,
+                            size: 11,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            if (recentVisits.isNotEmpty) ...[
-              SalesUi.gap(12),
-              const Divider(height: 1),
-              SalesUi.gap(8),
-              ...recentVisits.take(3).map(_recentVisitRow),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _recentVisitRow(SalesVisit visit) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 7),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.storefront_outlined,
-            size: 16,
-            color: AppColors.slate,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              visit.customer.isEmpty ? visit.id : visit.customer,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.navy,
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: activeVisit == null ? onCheckIn : onCheckOut,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _salesGreen,
+                  side: BorderSide(color: _salesGreen.withValues(alpha: 0.45)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                ),
+                icon: Icon(
+                  activeVisit == null
+                      ? Icons.login_rounded
+                      : Icons.logout_rounded,
+                  size: 17,
+                ),
+                label: Text(
+                  activeVisit == null ? 'Check In' : 'Check Out',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            visit.status,
-            style: const TextStyle(
-              color: AppColors.primary,
-              fontSize: 11,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
+          ],
         ],
       ),
     );
