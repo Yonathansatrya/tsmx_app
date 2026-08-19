@@ -694,6 +694,80 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
     }
   }
 
+  InputDecoration _fieldDecoration(String label, {IconData? icon}) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: icon == null ? null : Icon(icon),
+      filled: true,
+      fillColor: AppColors.background,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(
+          color: AppColors.primary.withValues(alpha: 0.12),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(
+          color: AppColors.primary.withValues(alpha: 0.36),
+          width: 1.4,
+        ),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    );
+  }
+
+  Widget _dateTile({
+    required String label,
+    required IconData icon,
+    required DateTime value,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 14, color: AppColors.slate),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.slate,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              DateFormat('dd-MM-yyyy').format(value),
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.navy,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -725,75 +799,34 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                PurchaseCreateHeader(
-                  title: widget.isEditMode
-                      ? 'Edit Purchase Order'
-                      : 'Buat Purchase Order',
-                  subtitle:
-                      'Susun order pembelian supplier dan kebutuhan item.',
-                  icon: Icons.shopping_bag_outlined,
-                  accentColor: const Color(0xFF16A34A),
-                ),
-                const SizedBox(height: 16),
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: AppColors.cardShadow,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        'Purchase Order Info',
+                        'Informasi Purchase Order',
                         style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.navy,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      GestureDetector(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _requiredByDate.isBefore(_selectedDate)
-                                ? _selectedDate
-                                : _requiredByDate,
-                            firstDate: _selectedDate,
-                            lastDate: DateTime(2035),
-                          );
-                          if (picked != null) {
-                            setState(() => _requiredByDate = picked);
-                          }
-                        },
-                        child: InputDecorator(
-                          decoration: InputDecoration(
-                            labelText: 'Required By',
-                            filled: true,
-                            fillColor: AppColors.background,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: Text(
-                            DateFormat('dd-MM-yyyy').format(_requiredByDate),
-                          ),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.slate,
                         ),
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         initialValue: _selectedSeries,
-                        decoration: InputDecoration(
-                          labelText: 'Series',
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
+                        decoration: _fieldDecoration('Series'),
                         items: _seriesOptions
                             .map(
                               (series) => DropdownMenuItem(
@@ -809,56 +842,86 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                         validator: (value) => widget.isEditMode || value != null
                             ? null
                             : 'Series wajib dipilih',
+                        hint: _isLoadingSelectors
+                            ? const Text('Loading series...')
+                            : const Text('Pilih series'),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _dateTile(
+                              label: 'Date',
+                              icon: Icons.calendar_today,
+                              value: _selectedDate,
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _selectedDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2030),
+                                );
+                                if (picked != null) {
+                                  setState(() {
+                                    _selectedDate = picked;
+                                    if (_requiredByDate.isBefore(picked)) {
+                                      _requiredByDate = picked;
+                                    }
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _dateTile(
+                              label: 'Required By',
+                              icon: Icons.local_shipping_outlined,
+                              value: _requiredByDate,
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate:
+                                      _requiredByDate.isBefore(_selectedDate)
+                                      ? _selectedDate
+                                      : _requiredByDate,
+                                  firstDate: _selectedDate,
+                                  lastDate: DateTime(2035),
+                                );
+                                if (picked != null) {
+                                  setState(() => _requiredByDate = picked);
+                                }
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _supplierCtrl,
                         readOnly: true,
                         onTap: _selectSupplier,
-                        decoration: InputDecoration(
-                          labelText: 'Supplier',
-                          hintText: _isLoadingSelectors
-                              ? 'Loading supplier...'
-                              : 'Pilih atau search supplier',
-                          prefixIcon: const Icon(Icons.storefront_outlined),
-                          suffixIcon: _supplierCtrl.text.isNotEmpty
-                              ? IconButton(
-                                  tooltip: 'Bersihkan Supplier',
-                                  onPressed: _clearSupplier,
-                                  icon: const Icon(Icons.close_rounded),
-                                )
-                              : IconButton(
-                                  tooltip: 'Search supplier',
-                                  onPressed: _selectSupplier,
-                                  icon: const Icon(Icons.search_rounded),
-                                ),
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.2),
+                        decoration:
+                            _fieldDecoration(
+                              'Supplier',
+                              icon: Icons.storefront_outlined,
+                            ).copyWith(
+                              hintText: _isLoadingSelectors
+                                  ? 'Loading supplier...'
+                                  : 'Pilih atau search supplier',
+                              suffixIcon: _supplierCtrl.text.isNotEmpty
+                                  ? IconButton(
+                                      tooltip: 'Bersihkan Supplier',
+                                      onPressed: _clearSupplier,
+                                      icon: const Icon(Icons.close_rounded),
+                                    )
+                                  : IconButton(
+                                      tooltip: 'Search supplier',
+                                      onPressed: _selectSupplier,
+                                      icon: const Icon(Icons.search_rounded),
+                                    ),
+                              errorText: _supplierError,
                             ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.10),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.36),
-                              width: 1.4,
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 14,
-                          ),
-                          errorText: _supplierError,
-                        ),
                         validator: (value) =>
                             value == null || value.trim().isEmpty
                             ? 'Supplier wajib diisi'
@@ -872,85 +935,12 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                           ),
                           initialValue: _selectedSupplierLabel(),
                           readOnly: true,
-                          decoration: InputDecoration(
-                            labelText: 'Supplier Name',
-                            prefixIcon: const Icon(Icons.badge_outlined),
-                            filled: true,
-                            fillColor: AppColors.background,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide(
-                                color: AppColors.primary.withValues(
-                                  alpha: 0.12,
-                                ),
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide(
-                                color: AppColors.primary.withValues(
-                                  alpha: 0.10,
-                                ),
-                              ),
-                            ),
+                          decoration: _fieldDecoration(
+                            'Supplier Name',
+                            icon: Icons.badge_outlined,
                           ),
                         ),
                       ],
-                      const SizedBox(height: 12),
-                      GestureDetector(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _selectedDate,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime(2030),
-                          );
-                          if (picked != null) {
-                            setState(() {
-                              _selectedDate = picked;
-                              if (_requiredByDate.isBefore(picked)) {
-                                _requiredByDate = picked;
-                              }
-                            });
-                          }
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Tanggal PO',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.slate,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                DateFormat('dd-MM-yyyy').format(_selectedDate),
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.navy,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
                       const SizedBox(height: 12),
 
                       Builder(
@@ -963,27 +953,9 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                               : null;
                           return DropdownButtonFormField<String>(
                             initialValue: selectedCompany,
-                            decoration: InputDecoration(
-                              labelText: 'Company',
-                              prefixIcon: const Icon(Icons.apartment_rounded),
-                              filled: true,
-                              fillColor: AppColors.background,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: BorderSide(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                ),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                borderSide: BorderSide(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.10,
-                                  ),
-                                ),
-                              ),
+                            decoration: _fieldDecoration(
+                              'Company',
+                              icon: Icons.apartment_rounded,
                             ),
                             items: companyOptions
                                 .map(
@@ -1022,38 +994,9 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                               : context.read<AppState>().preferredWarehouse(
                                   _warehouseOptions,
                                 ),
-                          decoration: InputDecoration(
-                            labelText: 'Pilih Warehouse',
-                            prefixIcon: const Icon(Icons.warehouse_outlined),
-                            filled: true,
-                            fillColor: AppColors.background,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide(
-                                color: AppColors.primary.withValues(alpha: 0.2),
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide(
-                                color: AppColors.primary.withValues(
-                                  alpha: 0.10,
-                                ),
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide(
-                                color: AppColors.primary.withValues(
-                                  alpha: 0.36,
-                                ),
-                                width: 1.4,
-                              ),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 14,
-                            ),
+                          decoration: _fieldDecoration(
+                            'Pilih Warehouse',
+                            icon: Icons.warehouse_outlined,
                           ),
                           options: _warehouseOptions
                               .map(
@@ -1095,19 +1038,24 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: AppColors.cardShadow,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const Text(
-                        'Item Details',
+                        'Items',
                         style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
                           color: AppColors.navy,
                         ),
                       ),
@@ -1117,42 +1065,19 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                             TextEditingController(text: _initialItemText ?? ''),
                         readOnly: true,
                         onTap: _selectPrimaryItem,
-                        decoration: InputDecoration(
-                          labelText: 'Item Code / Nama',
-                          hintText: 'Pilih atau search item',
-                          prefixIcon: const Icon(Icons.inventory_2_outlined),
-                          suffixIcon: IconButton(
-                            tooltip: 'Search item',
-                            onPressed: _selectPrimaryItem,
-                            icon: const Icon(Icons.search_rounded),
-                          ),
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.16),
+                        decoration:
+                            _fieldDecoration(
+                              'Nama Item / Kode',
+                              icon: Icons.inventory_2_rounded,
+                            ).copyWith(
+                              hintText: 'Pilih atau search item',
+                              suffixIcon: IconButton(
+                                tooltip: 'Search item',
+                                onPressed: _selectPrimaryItem,
+                                icon: const Icon(Icons.search_rounded),
+                              ),
+                              errorText: _itemError,
                             ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.10),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.36),
-                              width: 1.4,
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 14,
-                          ),
-                          errorText: _itemError,
-                        ),
                         validator: (v) {
                           if ((_selectedItemCode ?? '').trim().isEmpty) {
                             return 'Item wajib dipilih';
@@ -1164,25 +1089,14 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                       TextFormField(
                         controller: _uomCtrl,
                         readOnly: true,
-                        decoration: InputDecoration(
-                          labelText: 'UOM',
-                          hintText: 'Pilih item dulu',
-                          prefixIcon: const Icon(Icons.straighten_rounded),
-                          filled: true,
-                          fillColor: AppColors.softGreen,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.12),
+                        decoration:
+                            _fieldDecoration(
+                              'UOM',
+                              icon: Icons.straighten_rounded,
+                            ).copyWith(
+                              hintText: 'Pilih item dulu',
+                              fillColor: AppColors.softGreen,
                             ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.14),
-                            ),
-                          ),
-                        ),
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -1194,23 +1108,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
                                   ),
-                              decoration: InputDecoration(
-                                labelText: 'Quantity',
-                                filled: true,
-                                fillColor: AppColors.background,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.2,
-                                    ),
-                                  ),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                              ),
+                              decoration: _fieldDecoration('Quantity'),
                               validator: (v) {
                                 final q = double.tryParse(v?.trim() ?? '');
                                 if (q == null || q <= 0) return 'Qty harus > 0';
@@ -1226,23 +1124,7 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
                                   ),
-                              decoration: InputDecoration(
-                                labelText: 'Rate (optional)',
-                                filled: true,
-                                fillColor: AppColors.background,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.2,
-                                    ),
-                                  ),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                              ),
+                              decoration: _fieldDecoration('Rate (optional)'),
                               validator: (v) {
                                 if (v == null || v.trim().isEmpty) return null;
                                 final r = double.tryParse(v.trim());
@@ -1261,23 +1143,10 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
-                        decoration: InputDecoration(
-                          labelText: 'Diskon',
-                          hintText: '0',
-                          prefixIcon: const Icon(Icons.discount_outlined),
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                        ),
+                        decoration: _fieldDecoration(
+                          'Diskon',
+                          icon: Icons.discount_outlined,
+                        ).copyWith(hintText: '0'),
                         validator: (v) {
                           final discount = _parseNumber(v ?? '');
                           final rate = _parseNumber(_rateCtrl.text);
@@ -1357,9 +1226,14 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: AppColors.cardShadow,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   padding: const EdgeInsets.all(14),
                   child: Column(
@@ -1378,22 +1252,17 @@ class _CreatePurchaseOrderScreenState extends State<CreatePurchaseOrderScreen> {
                         controller: _notedCtrl,
                         minLines: 3,
                         maxLines: 5,
-                        decoration: InputDecoration(
-                          labelText: 'Noted',
-                          hintText: 'Catatan tambahan untuk purchase order',
-                          prefixIcon: const Padding(
-                            padding: EdgeInsets.only(bottom: 54),
-                            child: Icon(Icons.notes_rounded),
-                          ),
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.12),
+                        decoration:
+                            _fieldDecoration(
+                              'Noted',
+                              icon: Icons.notes_rounded,
+                            ).copyWith(
+                              hintText: 'Catatan tambahan untuk purchase order',
+                              prefixIcon: const Padding(
+                                padding: EdgeInsets.only(bottom: 54),
+                                child: Icon(Icons.notes_rounded),
+                              ),
                             ),
-                          ),
-                        ),
                       ),
                     ],
                   ),
@@ -1773,7 +1642,7 @@ class _AdditionalPurchaseItemCard extends StatelessWidget {
     return InputDecoration(
       labelText: label,
       filled: true,
-      fillColor: AppColors.white,
+      fillColor: AppColors.background,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     );
@@ -1785,16 +1654,9 @@ class _AdditionalPurchaseItemCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
