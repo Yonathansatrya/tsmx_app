@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
-import '../../widgets/erp/erp_filter_tools.dart';
 import '../shared/role_main_screen.dart';
 import 'material_request/create_material_request_screen.dart';
 import 'material_request/material_request_panel.dart';
@@ -334,6 +333,42 @@ class _PurchasePane extends StatelessWidget {
 
   const _PurchasePane({required this.doctypeKey, required this.child});
 
+  Future<void> _openPurchasePeriodFilter(BuildContext context) async {
+    final appState = context.read<AppState>();
+    final supplierType =
+        _purchaseSupplierTypeOptions.containsKey(
+          appState.buyingSupplierTypeFilter,
+        )
+        ? appState.buyingSupplierTypeFilter
+        : 'all';
+
+    final result = await showModalBottomSheet<_PurchasePeriodFilterValue>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (context) => _PurchasePeriodFilterSheet(
+        initialMonth: appState.buyingPeriodMonth,
+        initialYear: appState.buyingPeriodYear,
+        initialCompany: appState.buyingCompanyFilter,
+        initialSupplierType: supplierType,
+        companies: appState.buyingCompanies,
+        loading: appState.isOrderSummaryLoading,
+      ),
+    );
+    if (result == null || !context.mounted) return;
+
+    await context.read<AppState>().setBuyingPeriod(
+      year: result.year,
+      month: result.month,
+      company: result.company,
+      supplierType: result.supplierType,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -351,40 +386,13 @@ class _PurchasePane extends StatelessWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
         children: [
-          ErpPeriodFilterCard(
-            title: 'Filter Pembelian',
-            subtitle: state.buyingPeriodMonth == 0
-                ? 'Daftar dokumen mengikuti tahun ini'
-                : 'Daftar dokumen mengikuti bulan ini',
-            icon: Icons.shopping_bag_rounded,
+          _PurchasePeriodFilterBar(
             selectedYear: state.buyingPeriodYear,
             selectedMonth: state.buyingPeriodMonth,
-            loading: state.isOrderSummaryLoading,
-            companyOptions: state.buyingCompanies,
             selectedCompany: state.buyingCompanyFilter,
-            onCompanyChanged: (company) {
-              context.read<AppState>().setBuyingPeriod(
-                year: state.buyingPeriodYear,
-                month: state.buyingPeriodMonth,
-                company: company,
-              );
-            },
-            selectedCustomerType: state.buyingSupplierTypeFilter,
-            onCustomerTypeChanged: (supplierType) {
-              context.read<AppState>().setBuyingPeriod(
-                year: state.buyingPeriodYear,
-                month: state.buyingPeriodMonth,
-                supplierType: supplierType,
-              );
-            },
-            partnerTypeLabel: 'Supplier',
-            partnerTypeIcon: Icons.storefront_rounded,
-            onChanged: (year, month) {
-              context.read<AppState>().setBuyingPeriod(
-                year: year,
-                month: month,
-              );
-            },
+            selectedSupplierType: state.buyingSupplierTypeFilter,
+            loading: state.isOrderSummaryLoading,
+            onOpenFilter: () => _openPurchasePeriodFilter(context),
           ),
           const SizedBox(height: 14),
           child,
@@ -392,6 +400,377 @@ class _PurchasePane extends StatelessWidget {
       ),
     );
   }
+}
+
+const Map<String, String> _purchaseSupplierTypeOptions = {
+  'all': 'Semua Supplier',
+  'external': 'External',
+  'internal': 'Internal',
+};
+
+class _PurchasePeriodFilterBar extends StatelessWidget {
+  const _PurchasePeriodFilterBar({
+    required this.selectedYear,
+    required this.selectedMonth,
+    required this.selectedCompany,
+    required this.selectedSupplierType,
+    required this.loading,
+    required this.onOpenFilter,
+  });
+
+  final int selectedYear;
+  final int selectedMonth;
+  final String selectedCompany;
+  final String selectedSupplierType;
+  final bool loading;
+  final VoidCallback onOpenFilter;
+
+  @override
+  Widget build(BuildContext context) {
+    final periodLabel = selectedMonth == 0
+        ? '$selectedYear'
+        : '${_purchaseMonthName(selectedMonth)} $selectedYear';
+    final companyLabel = selectedCompany.trim().isEmpty
+        ? 'Semua Company'
+        : selectedCompany.trim();
+    final supplierLabel =
+        _purchaseSupplierTypeOptions[selectedSupplierType] ?? 'Semua Supplier';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.07),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.softGreen,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.shopping_bag_rounded,
+              color: AppColors.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '$periodLabel  |  $companyLabel',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    if (loading) ...[
+                      const SizedBox(width: 8),
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  supplierLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: loading ? null : onOpenFilter,
+            icon: const Icon(Icons.filter_alt_rounded, size: 15),
+            label: const Text('Filter'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.softGreen,
+              foregroundColor: AppColors.primary,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              minimumSize: const Size(0, 38),
+              textStyle: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PurchasePeriodFilterValue {
+  const _PurchasePeriodFilterValue({
+    required this.month,
+    required this.year,
+    required this.company,
+    required this.supplierType,
+  });
+
+  final int month;
+  final int year;
+  final String company;
+  final String supplierType;
+}
+
+class _PurchasePeriodFilterSheet extends StatefulWidget {
+  const _PurchasePeriodFilterSheet({
+    required this.initialMonth,
+    required this.initialYear,
+    required this.initialCompany,
+    required this.initialSupplierType,
+    required this.companies,
+    required this.loading,
+  });
+
+  final int initialMonth;
+  final int initialYear;
+  final String initialCompany;
+  final String initialSupplierType;
+  final List<String> companies;
+  final bool loading;
+
+  @override
+  State<_PurchasePeriodFilterSheet> createState() =>
+      _PurchasePeriodFilterSheetState();
+}
+
+class _PurchasePeriodFilterSheetState
+    extends State<_PurchasePeriodFilterSheet> {
+  late int _month;
+  late int _year;
+  late String _company;
+  late String _supplierType;
+
+  @override
+  void initState() {
+    super.initState();
+    _month = widget.initialMonth;
+    _year = widget.initialYear;
+    _company = widget.initialCompany;
+    _supplierType = widget.initialSupplierType;
+  }
+
+  void _reset() {
+    final now = DateTime.now();
+    setState(() {
+      _month = now.month;
+      _year = now.year;
+      _company = '';
+      _supplierType = 'all';
+    });
+  }
+
+  void _apply() {
+    Navigator.pop(
+      context,
+      _PurchasePeriodFilterValue(
+        month: _month,
+        year: _year,
+        company: _company,
+        supplierType: _supplierType,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentYear = DateTime.now().year;
+    final years = [
+      for (var year = currentYear; year >= currentYear - 5; year--) year,
+    ];
+    final companies = {
+      ...widget.companies.where((name) => name.trim().isNotEmpty),
+      if (_company.trim().isNotEmpty) _company.trim(),
+    }.toList()..sort();
+    final selectedCompany = companies.contains(_company) ? _company : '';
+    final selectedSupplierType =
+        _purchaseSupplierTypeOptions.containsKey(_supplierType)
+        ? _supplierType
+        : 'all';
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 14,
+          right: 14,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 14,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Filter Periode & Supplier',
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              DropdownButtonFormField<int>(
+                initialValue: _month,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Bulan',
+                  prefixIcon: Icon(Icons.calendar_today_rounded, size: 18),
+                ),
+                items: [
+                  const DropdownMenuItem(value: 0, child: Text('Semua Bulan')),
+                  for (var i = 1; i <= 12; i++)
+                    DropdownMenuItem(
+                      value: i,
+                      child: Text(_purchaseMonthName(i)),
+                    ),
+                ],
+                onChanged: widget.loading
+                    ? null
+                    : (value) => setState(() => _month = value ?? _month),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                initialValue: years.contains(_year) ? _year : currentYear,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Tahun',
+                  prefixIcon: Icon(Icons.event_rounded, size: 18),
+                ),
+                items: [
+                  for (final year in years)
+                    DropdownMenuItem(value: year, child: Text('$year')),
+                ],
+                onChanged: widget.loading
+                    ? null
+                    : (value) => setState(() => _year = value ?? _year),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: selectedCompany,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Company',
+                  prefixIcon: Icon(Icons.business_rounded, size: 18),
+                ),
+                items: [
+                  const DropdownMenuItem(
+                    value: '',
+                    child: Text('Semua Company'),
+                  ),
+                  for (final company in companies)
+                    DropdownMenuItem(
+                      value: company,
+                      child: Text(company, overflow: TextOverflow.ellipsis),
+                    ),
+                ],
+                onChanged: widget.loading
+                    ? null
+                    : (value) => setState(() => _company = value ?? ''),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                initialValue: selectedSupplierType,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Supplier',
+                  prefixIcon: Icon(Icons.storefront_rounded, size: 18),
+                ),
+                items: [
+                  for (final option in _purchaseSupplierTypeOptions.entries)
+                    DropdownMenuItem(
+                      value: option.key,
+                      child: Text(option.value),
+                    ),
+                ],
+                onChanged: widget.loading
+                    ? null
+                    : (value) => setState(
+                        () => _supplierType = value ?? _supplierType,
+                      ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: widget.loading ? null : _reset,
+                      child: const Text('Reset'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: widget.loading ? null : _apply,
+                      child: const Text('Terapkan Filter'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _purchaseMonthName(int month) {
+  const names = [
+    'Januari',
+    'Februari',
+    'Maret',
+    'April',
+    'Mei',
+    'Juni',
+    'Juli',
+    'Agustus',
+    'September',
+    'Oktober',
+    'November',
+    'Desember',
+  ];
+  if (month < 1 || month > 12) return '-';
+  return names[month - 1];
 }
 
 class _PurchaseDoctypePermissions {
