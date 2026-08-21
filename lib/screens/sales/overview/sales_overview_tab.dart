@@ -151,7 +151,9 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       if (state.mobileAccess.shouldScopeSalesData) {
         await state.loadSellingFilterOptions();
         _companyOptions = state.sellingCompanies;
-        _selectedCompany = state.sellingCompanyFilter;
+        _selectedCompany = state.sellingCompanyFilter.trim().isNotEmpty
+            ? state.sellingCompanyFilter
+            : state.preferredCompany(_companyOptions) ?? '';
         _selectedSalesGroup = state.currentSalesPerson ?? 'all';
         _salesGroupOptions = [
           if (state.currentSalesPerson?.isNotEmpty == true)
@@ -160,7 +162,9 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       } else {
         await state.loadSellingFilterOptions();
         _companyOptions = state.sellingCompanies;
-        _selectedCompany = state.sellingCompanyFilter;
+        _selectedCompany = state.sellingCompanyFilter.trim().isNotEmpty
+            ? state.sellingCompanyFilter
+            : state.preferredCompany(_companyOptions) ?? '';
         _salesGroupOptions = state.sellingSalesGroups;
         if (_selectedSalesGroup != 'all' &&
             !_salesGroupOptions.contains(_selectedSalesGroup)) {
@@ -195,12 +199,14 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     if (!forceRemote) {
       final cached = await _readDailyReport(cacheKey);
       if (cached != null && mounted && requestVersion == _dailyRequestVersion) {
-        setState(() {
-          _dailyReport = cached;
-          _dailyReportError = null;
-          _dailyReportLoading = false;
-        });
-        return;
+        if (!cached.isEmpty) {
+          setState(() {
+            _dailyReport = cached;
+            _dailyReportError = null;
+            _dailyReportLoading = false;
+          });
+          return;
+        }
       }
     }
     setState(() {
@@ -271,7 +277,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       _selectedCompany = result.company;
       _selectedSalesGroup = result.salesGroup;
     });
-    await _reloadReports();
+    await _reloadReports(forceRemote: true);
   }
 
   Future<void> _loadRanking({bool forceRemote = false}) async {
@@ -329,12 +335,14 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       if (cached != null &&
           mounted &&
           requestVersion == _rankingRequestVersion) {
-        setState(() {
-          _topCustomers = cached;
-          _topCustomersError = null;
-          _topCustomersLoading = false;
-        });
-        return;
+        if (cached.isNotEmpty) {
+          setState(() {
+            _topCustomers = cached;
+            _topCustomersError = null;
+            _topCustomersLoading = false;
+          });
+          return;
+        }
       }
     }
     try {
@@ -375,12 +383,14 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
       if (cached != null &&
           mounted &&
           requestVersion == _rankingRequestVersion) {
-        setState(() {
-          _ranking = cached;
-          _rankingError = null;
-          _rankingLoading = false;
-        });
-        return;
+        if (cached.isNotEmpty) {
+          setState(() {
+            _ranking = cached;
+            _rankingError = null;
+            _rankingLoading = false;
+          });
+          return;
+        }
       }
     }
     try {
@@ -408,10 +418,13 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     }
   }
 
-  Future<void> _reloadReports({bool forceRemote = false}) async {
+  Future<void> _reloadReports({
+    bool forceRemote = false,
+    bool includeVisitSnapshot = false,
+  }) async {
     await Future.wait([
       _loadDailyReport(forceRemote: forceRemote),
-      _loadVisitSnapshot(forceRefresh: forceRemote),
+      if (includeVisitSnapshot) _loadVisitSnapshot(forceRefresh: forceRemote),
     ]);
     _startDeferredRankingLoad(forceRemote: forceRemote);
   }
@@ -875,7 +888,7 @@ class _SalesOverviewTabState extends State<SalesOverviewTab> {
     return RefreshIndicator(
       onRefresh: () async {
         await state.refreshDataForCurrentRole();
-        await _reloadReports(forceRemote: true);
+        await _reloadReports(forceRemote: true, includeVisitSnapshot: true);
       },
       child: ListView(
         padding: SalesUi.screenPaddingOf(context),
@@ -1043,101 +1056,70 @@ class _SalesVisitActionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (loading)
-            const LinearProgressIndicator()
-          else ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        greeting,
-                        style: const TextStyle(
-                          color: AppColors.slate,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+          Stack(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          greeting,
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.navy,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        statusText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.slate,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      if (timeText.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          timeText,
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            color: _salesBlue,
-                            fontSize: 11,
+                            color: AppColors.navy,
+                            fontSize: 16,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: onOpenHistory,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          color: AppColors.softGreen,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.white, width: 2),
+                        const SizedBox(height: 4),
+                        Text(
+                          statusText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                        child: profileImageUrl == null
-                            ? const Icon(
-                                Icons.person_rounded,
-                                color: _salesGreen,
-                                size: 24,
-                              )
-                            : Image.network(
-                                profileImageUrl!,
-                                cacheWidth: 96,
-                                cacheHeight: 96,
-                                filterQuality: FilterQuality.medium,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => const Icon(
-                                  Icons.person_rounded,
-                                  color: _salesGreen,
-                                  size: 24,
-                                ),
-                              ),
-                      ),
-                      Positioned(
-                        right: -2,
-                        bottom: -2,
-                        child: Container(
-                          width: 18,
-                          height: 18,
+                        if (timeText.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            timeText,
+                            style: const TextStyle(
+                              color: _salesBlue,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onOpenHistory,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             color: AppColors.softGreen,
                             shape: BoxShape.circle,
@@ -1146,49 +1128,93 @@ class _SalesVisitActionCard extends StatelessWidget {
                               width: 2,
                             ),
                           ),
-                          child: Icon(
-                            activeVisit == null
-                                ? Icons.location_on_outlined
-                                : Icons.near_me_rounded,
-                            color: _salesGreen,
-                            size: 11,
+                          child: profileImageUrl == null
+                              ? const Icon(
+                                  Icons.person_rounded,
+                                  color: _salesGreen,
+                                  size: 24,
+                                )
+                              : Image.network(
+                                  profileImageUrl!,
+                                  cacheWidth: 96,
+                                  cacheHeight: 96,
+                                  filterQuality: FilterQuality.medium,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => const Icon(
+                                    Icons.person_rounded,
+                                    color: _salesGreen,
+                                    size: 24,
+                                  ),
+                                ),
+                        ),
+                        Positioned(
+                          right: -2,
+                          bottom: -2,
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: AppColors.softGreen,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.white,
+                                width: 2,
+                              ),
+                            ),
+                            child: Icon(
+                              activeVisit == null
+                                  ? Icons.location_on_outlined
+                                  : Icons.near_me_rounded,
+                              color: _salesGreen,
+                              size: 11,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (loading)
+                const Positioned(
+                  right: 0,
+                  top: 0,
+                  child: SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: activeVisit == null ? onCheckIn : onCheckOut,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _salesGreen,
-                  side: BorderSide(color: _salesGreen.withValues(alpha: 0.45)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 11),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: activeVisit == null ? onCheckIn : onCheckOut,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _salesGreen,
+                side: BorderSide(color: _salesGreen.withValues(alpha: 0.45)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                icon: Icon(
-                  activeVisit == null
-                      ? Icons.login_rounded
-                      : Icons.logout_rounded,
-                  size: 17,
-                ),
-                label: Text(
-                  activeVisit == null ? 'Check In' : 'Check Out',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w900,
-                  ),
+                padding: const EdgeInsets.symmetric(vertical: 11),
+              ),
+              icon: Icon(
+                activeVisit == null
+                    ? Icons.login_rounded
+                    : Icons.logout_rounded,
+                size: 17,
+              ),
+              label: Text(
+                activeVisit == null ? 'Check In' : 'Check Out',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ),
-          ],
+          ),
         ],
       ),
     );
