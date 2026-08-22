@@ -66,49 +66,18 @@ class _InactiveCustomerTabState extends State<InactiveCustomerTab> {
         child: ListView(
           padding: SalesUi.compactScreenPaddingOf(context),
           children: [
-            SalesHeroCard(
-              title: 'Inactive Customer',
-              subtitle: 'Customer tanpa SO atau SI dalam periode tertentu',
-              icon: Icons.person_off_rounded,
-              accent: _inactiveGreen,
-              trailing: state.isInactiveCustomersLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : IconButton.filledTonal(
-                      tooltip: 'Refresh',
-                      onPressed: () =>
-                          context.read<AppState>().refreshInactiveCustomers(
-                            daysSinceLastOrder: _days,
-                            doctypes: _selectedDocumentTypes,
-                            forceRemote: true,
-                          ),
-                      icon: const Icon(Icons.refresh_rounded),
-                    ),
-            ),
-            SalesUi.gap(),
             _InactiveCustomerFilter(
               days: _days,
-              daysController: _daysController,
               selectedDocumentTypes: _documentTypes,
               controller: _searchController,
-              onDaysChanged: (value) {
-                if (value == _days) return;
-                _daysController.text = value.toString();
-                setState(() => _days = value);
-                context.read<AppState>().refreshInactiveCustomers(
-                  daysSinceLastOrder: value,
-                  doctypes: _selectedDocumentTypes,
-                  forceRemote: true,
-                );
-              },
-              onDocumentTypesChanged: (value) {
+              loading: state.isInactiveCustomersLoading,
+              onFilterChanged: (value) {
                 setState(() {
+                  _days = value.days;
+                  _daysController.text = value.days.toString();
                   _documentTypes
                     ..clear()
-                    ..addAll(value);
+                    ..addAll(value.documentTypes);
                 });
                 context.read<AppState>().refreshInactiveCustomers(
                   daysSinceLastOrder: _days,
@@ -175,65 +144,134 @@ class _InactiveCustomerTabState extends State<InactiveCustomerTab> {
 class _InactiveCustomerFilter extends StatelessWidget {
   const _InactiveCustomerFilter({
     required this.days,
-    required this.daysController,
     required this.selectedDocumentTypes,
     required this.controller,
-    required this.onDaysChanged,
-    required this.onDocumentTypesChanged,
+    required this.loading,
+    required this.onFilterChanged,
     required this.onSearchChanged,
   });
 
   final int days;
-  final TextEditingController daysController;
   final Set<String> selectedDocumentTypes;
   final TextEditingController controller;
-  final ValueChanged<int> onDaysChanged;
-  final ValueChanged<Set<String>> onDocumentTypesChanged;
+  final bool loading;
+  final ValueChanged<_InactiveCustomerFilterValue> onFilterChanged;
   final ValueChanged<String> onSearchChanged;
 
   @override
   Widget build(BuildContext context) {
-    return SalesInfoCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SalesSectionTitle(
-            title: 'Range Last Customer',
-            subtitle: 'Sumber: report Inactive Customers ERPNext',
-          ),
-          SalesUi.gap(),
-          _DocumentTypePicker(
-            selected: selectedDocumentTypes,
-            onChanged: onDocumentTypesChanged,
-          ),
-          SalesUi.gap(),
-          TextField(
-            controller: daysController,
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.done,
-            decoration: _inputDecoration(
-              label: 'Tidak order selama',
-              icon: Icons.schedule_rounded,
-              suffix: TextButton(
-                onPressed: _applyDays,
-                child: const Text('Apply'),
+    return Column(
+      children: [
+        SalesInfoCard(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          accent: _inactiveGreen,
+          child: Row(
+            children: [
+              const Icon(
+                Icons.person_search_rounded,
+                color: AppColors.slate,
+                size: 18,
               ),
-            ),
-            onSubmitted: (_) => _applyDays(),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${_documentTypeLabel(selectedDocumentTypes)} | $days hari',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Inactive Customers ERPNext',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: loading ? null : () => _openFilterSheet(context),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.softGreen,
+                  foregroundColor: AppColors.primary,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                icon: loading
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.filter_alt_outlined, size: 15),
+                label: const Text(
+                  'Filter',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
           ),
-          SalesUi.gap(),
-          TextField(
-            controller: controller,
-            onChanged: onSearchChanged,
-            textInputAction: TextInputAction.search,
-            decoration: _inputDecoration(
-              label: 'Cari customer',
-              icon: Icons.search_rounded,
-            ),
+        ),
+        SalesUi.gap(),
+        SalesInfoCard(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              TextField(
+                controller: controller,
+                onChanged: onSearchChanged,
+                textInputAction: TextInputAction.search,
+                decoration: _inputDecoration(
+                  label: 'Cari customer',
+                  icon: Icons.search_rounded,
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ],
+    );
+  }
+
+  String _documentTypeLabel(Set<String> doctypes) {
+    final hasSo = doctypes.contains('Sales Order');
+    final hasSi = doctypes.contains('Sales Invoice');
+    if (hasSo && hasSi) return 'SO + SI';
+    if (hasSi) return 'Sales Invoice';
+    return 'Sales Order';
+  }
+
+  Future<void> _openFilterSheet(BuildContext context) async {
+    final result = await showModalBottomSheet<_InactiveCustomerFilterValue>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _InactiveCustomerFilterSheet(
+        days: days,
+        selectedDocumentTypes: selectedDocumentTypes,
       ),
     );
+    if (result == null) return;
+    onFilterChanged(result);
   }
 
   InputDecoration _inputDecoration({
@@ -266,11 +304,186 @@ class _InactiveCustomerFilter extends StatelessWidget {
       ),
     );
   }
+}
 
-  void _applyDays() {
-    final parsed = int.tryParse(daysController.text.trim());
-    if (parsed == null || parsed <= 0) return;
-    onDaysChanged(parsed);
+class _InactiveCustomerFilterValue {
+  const _InactiveCustomerFilterValue({
+    required this.days,
+    required this.documentTypes,
+  });
+
+  final int days;
+  final Set<String> documentTypes;
+}
+
+class _InactiveCustomerFilterSheet extends StatefulWidget {
+  const _InactiveCustomerFilterSheet({
+    required this.days,
+    required this.selectedDocumentTypes,
+  });
+
+  final int days;
+  final Set<String> selectedDocumentTypes;
+
+  @override
+  State<_InactiveCustomerFilterSheet> createState() =>
+      _InactiveCustomerFilterSheetState();
+}
+
+class _InactiveCustomerFilterSheetState
+    extends State<_InactiveCustomerFilterSheet> {
+  late final TextEditingController _daysController = TextEditingController(
+    text: widget.days.toString(),
+  );
+  late final Set<String> _selected = {...widget.selectedDocumentTypes};
+
+  @override
+  void dispose() {
+    _daysController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Filter Inactive Customer',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _DocumentTypePicker(
+                selected: _selected,
+                onChanged: (value) => setState(() {
+                  _selected
+                    ..clear()
+                    ..addAll(value);
+                }),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _daysController,
+                keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
+                decoration: _inputDecoration(
+                  label: 'Tidak order selama',
+                  icon: Icons.schedule_rounded,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _reset,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text('Reset'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _apply,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.white,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text('Terapkan Filter'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    required String label,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: AppColors.background,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: AppColors.primary.withValues(alpha: 0.35),
+        ),
+      ),
+    );
+  }
+
+  void _reset() {
+    _daysController.text = '60';
+    setState(() {
+      _selected
+        ..clear()
+        ..add('Sales Order');
+    });
+  }
+
+  void _apply() {
+    final parsed = int.tryParse(_daysController.text.trim());
+    if (parsed == null || parsed <= 0 || _selected.isEmpty) return;
+    Navigator.of(context).pop(
+      _InactiveCustomerFilterValue(
+        days: parsed,
+        documentTypes: _selected.toSet(),
+      ),
+    );
   }
 }
 

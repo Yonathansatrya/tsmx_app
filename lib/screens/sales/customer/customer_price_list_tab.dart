@@ -148,23 +148,6 @@ class _CustomerPriceListTabState extends State<CustomerPriceListTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: SalesUi.compactScreenPaddingOf(context),
         children: [
-          SalesHeroCard(
-            icon: Icons.price_check_rounded,
-            title: 'Price List Customer',
-            subtitle: 'Pilih customer untuk cek harga item yang tersedia.',
-            accent: _priceTeal,
-            trailing: IconButton.filledTonal(
-              tooltip: 'Refresh',
-              onPressed: _loadingCustomers || _loadingPrices
-                  ? null
-                  : () async {
-                      await _loadCustomers();
-                      if (_selectedCustomer != null) await _loadPrices();
-                    },
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ),
-          SalesUi.gap(14),
           SalesInfoCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

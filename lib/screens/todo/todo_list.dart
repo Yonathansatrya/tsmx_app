@@ -248,7 +248,6 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
               _statusQuickFilter!.toLowerCase();
     }).toList();
     rows.sort(_compareApprovalTodos);
-    final summary = _ApprovalTodoSummary.from(_rows);
     final visibleCount = _reviewFilter == _ApprovalReviewFilter.todo
         ? rows.length
         : historyGroups.length;
@@ -261,8 +260,6 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: TmsxResponsive.pagePadding(context, top: 16, bottom: 90),
         children: [
-          _ApprovalTodoSummaryCard(summary: summary),
-          const SizedBox(height: 12),
           _ApprovalReviewTabBar(
             selected: _reviewFilter,
             tabs: reviewTabs,
@@ -352,174 +349,60 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
         : null;
     return Column(
       children: [
+        _ApprovalCompactFilterBar(
+          title: selectedDoctype == null
+              ? 'Semua dokumen ($totalCount)'
+              : '${_approvalShortLabel(selectedDoctype)} - $selectedDoctype (${doctypeCounts[selectedDoctype] ?? 0})',
+          subtitle: _approvalSortLabel(_sortOption),
+          hasActiveFilter: hasActiveFilter,
+          onOpenFilter: () => _openApprovalFilterSheet(
+            totalCount: totalCount,
+            doctypeCounts: doctypeCounts,
+            doctypeOptions: doctypeOptions,
+            selectedDoctype: selectedDoctype,
+          ),
+        ),
+        const SizedBox(height: 12),
         Container(
-          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: AppColors.white,
             borderRadius: BorderRadius.circular(22),
             border: Border.all(color: AppColors.border),
             boxShadow: AppColors.cardShadow,
           ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final compact = constraints.maxWidth < 390;
-              final searchField = TextField(
-                controller: _search,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: 'Search SO or customer...',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _search.text.trim().isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Bersihkan pencarian',
-                          onPressed: _search.clear,
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                  filled: true,
-                  fillColor: AppColors.background,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppColors.primary),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 15,
-                  ),
-                  isDense: true,
-                ),
-              );
-              final doctypeField = DropdownButtonFormField<String?>(
-                initialValue: selectedDoctype,
-                isExpanded: true,
-                decoration: InputDecoration(
-                  labelText: 'Tipe dokumen',
-                  prefixIcon: Icon(
-                    selectedDoctype == null
-                        ? Icons.list_alt_rounded
-                        : _approvalIcon(selectedDoctype),
-                    size: 18,
-                    color: selectedDoctype == null
-                        ? AppColors.primary
-                        : _approvalAccent(selectedDoctype),
-                  ),
-                  filled: true,
-                  fillColor: AppColors.background,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: AppColors.primary),
-                  ),
-                  isDense: true,
-                ),
-                items: [
-                  DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text(
-                      'Semua dokumen ($totalCount)',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+          child: TextField(
+            controller: _search,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: 'Search SO or customer...',
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: _search.text.trim().isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Bersihkan pencarian',
+                      onPressed: _search.clear,
+                      icon: const Icon(Icons.close_rounded),
                     ),
-                  ),
-                  ...doctypeOptions.map(
-                    (doctype) => DropdownMenuItem<String?>(
-                      value: doctype,
-                      child: Text(
-                        '${_approvalShortLabel(doctype)} - $doctype (${doctypeCounts[doctype] ?? 0})',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                ],
-                onChanged: (doctype) =>
-                    setState(() => _doctypeQuickFilter = doctype),
-              );
-              final sortField =
-                  DropdownButtonFormField<_ApprovalTodoSortOption>(
-                    initialValue: _sortOption,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: 'Urutkan',
-                      prefixIcon: const Icon(Icons.sort_rounded, size: 18),
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: AppColors.primary),
-                      ),
-                      isDense: true,
-                    ),
-                    items: _ApprovalTodoSortOption.values.map((option) {
-                      return DropdownMenuItem<_ApprovalTodoSortOption>(
-                        value: option,
-                        child: Text(
-                          _approvalSortLabel(option),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (option) {
-                      if (option != null) setState(() => _sortOption = option);
-                    },
-                  );
-              final actions = Row(
-                children: [
-                  Expanded(
-                    child: _ApprovalFilterButton(
-                      icon: Icons.restart_alt_rounded,
-                      label: 'Reset',
-                      onTap: hasActiveFilter ? _resetApprovalFilters : null,
-                    ),
-                  ),
-                ],
-              );
-
-              return Column(
-                children: [
-                  searchField,
-                  const SizedBox(height: 12),
-                  doctypeField,
-                  const SizedBox(height: 10),
-                  if (compact) ...[
-                    sortField,
-                    const SizedBox(height: 10),
-                    actions,
-                  ] else
-                    Row(
-                      children: [
-                        Expanded(child: sortField),
-                        const SizedBox(width: 10),
-                        SizedBox(width: 110, child: actions),
-                      ],
-                    ),
-                ],
-              );
-            },
+              filled: true,
+              fillColor: Colors.transparent,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(22),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(22),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(22),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 16,
+              ),
+              isDense: true,
+            ),
           ),
         ),
         if (_reviewFilter == _ApprovalReviewFilter.todo) ...[
@@ -568,13 +451,35 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
     );
   }
 
-  void _resetApprovalFilters() {
+  Future<void> _openApprovalFilterSheet({
+    required int totalCount,
+    required Map<String, int> doctypeCounts,
+    required List<String> doctypeOptions,
+    required String? selectedDoctype,
+  }) async {
+    final result = await showModalBottomSheet<_ApprovalFilterResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      builder: (context) => _ApprovalFilterSheet(
+        totalCount: totalCount,
+        doctypeCounts: doctypeCounts,
+        doctypeOptions: doctypeOptions,
+        selectedDoctype: selectedDoctype,
+        selectedSort: _sortOption,
+        labelForDoctype: (doctype) =>
+            '${_approvalShortLabel(doctype)} - $doctype (${doctypeCounts[doctype] ?? 0})',
+        labelForSort: _approvalSortLabel,
+      ),
+    );
+    if (result == null || !mounted) return;
     setState(() {
-      _search.clear();
-      _doctypeQuickFilter = null;
-      _statusQuickFilter = null;
-      _reviewFilter = _ApprovalReviewFilter.todo;
-      _sortOption = _ApprovalTodoSortOption.newest;
+      _doctypeQuickFilter = result.doctype;
+      _sortOption = result.sort;
     });
   }
 
@@ -1143,48 +1048,248 @@ class _SalesOrderApprovalScreenState extends State<SalesOrderApprovalScreen> {
       .trim();
 }
 
-class _ApprovalFilterButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-
-  const _ApprovalFilterButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
+class _ApprovalCompactFilterBar extends StatelessWidget {
+  const _ApprovalCompactFilterBar({
+    required this.title,
+    required this.subtitle,
+    required this.hasActiveFilter,
+    required this.onOpenFilter,
   });
+
+  final String title;
+  final String subtitle;
+  final bool hasActiveFilter;
+  final VoidCallback onOpenFilter;
 
   @override
   Widget build(BuildContext context) {
-    final enabled = onTap != null;
-    return Material(
-      color: enabled
-          ? AppColors.softGreen
-          : AppColors.background.withValues(alpha: 0.8),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: SizedBox(
-          height: 48,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: enabled ? AppColors.primary : AppColors.slate,
-                size: 18,
-              ),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: enabled ? AppColors.primary : AppColors.slate,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.07),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.softGreen,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.assignment_turned_in_outlined,
+              color: AppColors.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: onOpenFilter,
+            icon: Icon(
+              hasActiveFilter
+                  ? Icons.filter_alt_rounded
+                  : Icons.filter_alt_outlined,
+              size: 15,
+            ),
+            label: const Text('Filter'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.softGreen,
+              foregroundColor: AppColors.primary,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              minimumSize: const Size(0, 38),
+              textStyle: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ApprovalFilterResult {
+  const _ApprovalFilterResult({required this.doctype, required this.sort});
+
+  final String? doctype;
+  final _ApprovalTodoSortOption sort;
+}
+
+class _ApprovalFilterSheet extends StatefulWidget {
+  const _ApprovalFilterSheet({
+    required this.totalCount,
+    required this.doctypeCounts,
+    required this.doctypeOptions,
+    required this.selectedDoctype,
+    required this.selectedSort,
+    required this.labelForDoctype,
+    required this.labelForSort,
+  });
+
+  final int totalCount;
+  final Map<String, int> doctypeCounts;
+  final List<String> doctypeOptions;
+  final String? selectedDoctype;
+  final _ApprovalTodoSortOption selectedSort;
+  final String Function(String doctype) labelForDoctype;
+  final String Function(_ApprovalTodoSortOption sort) labelForSort;
+
+  @override
+  State<_ApprovalFilterSheet> createState() => _ApprovalFilterSheetState();
+}
+
+class _ApprovalFilterSheetState extends State<_ApprovalFilterSheet> {
+  late String? _doctype = widget.selectedDoctype;
+  late _ApprovalTodoSortOption _sort = widget.selectedSort;
+
+  void _reset() {
+    setState(() {
+      _doctype = null;
+      _sort = _ApprovalTodoSortOption.newest;
+    });
+  }
+
+  void _apply() {
+    Navigator.pop(
+      context,
+      _ApprovalFilterResult(doctype: _doctype, sort: _sort),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedDoctype = widget.doctypeOptions.contains(_doctype)
+        ? _doctype
+        : null;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 14,
+          right: 14,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 14,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Filter Approval',
+                  style: TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              DropdownButtonFormField<String?>(
+                initialValue: selectedDoctype,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Tipe dokumen',
+                  prefixIcon: Icon(Icons.list_alt_rounded, size: 18),
+                ),
+                items: [
+                  DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua dokumen (${widget.totalCount})'),
+                  ),
+                  ...widget.doctypeOptions.map(
+                    (doctype) => DropdownMenuItem<String?>(
+                      value: doctype,
+                      child: Text(
+                        widget.labelForDoctype(doctype),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: (value) => setState(() => _doctype = value),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<_ApprovalTodoSortOption>(
+                initialValue: _sort,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Urutkan',
+                  prefixIcon: Icon(Icons.sort_rounded, size: 18),
+                ),
+                items: _ApprovalTodoSortOption.values.map((option) {
+                  return DropdownMenuItem<_ApprovalTodoSortOption>(
+                    value: option,
+                    child: Text(widget.labelForSort(option)),
+                  );
+                }).toList(),
+                onChanged: (value) => setState(() {
+                  _sort = value ?? _ApprovalTodoSortOption.newest;
+                }),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _reset,
+                      child: const Text('Reset'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _apply,
+                      child: const Text('Terapkan Filter'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1342,112 +1447,6 @@ class _ApprovalHistoryGroup {
     if (latest.salesOrder.isNotEmpty) return latest.salesOrder;
     final parts = key.split('::');
     return parts.length == 2 ? parts.last : key;
-  }
-}
-
-class _ApprovalTodoSummary {
-  final Map<String, int> counts;
-
-  const _ApprovalTodoSummary(this.counts);
-
-  factory _ApprovalTodoSummary.from(List<ErpApprovalTodo> rows) {
-    final counts = <String, int>{};
-    for (final row in rows) {
-      counts[row.doctype] = (counts[row.doctype] ?? 0) + 1;
-    }
-    return _ApprovalTodoSummary(counts);
-  }
-
-  int get total => counts.values.fold<int>(0, (sum, count) => sum + count);
-
-  int countFor(String doctype) => counts[doctype] ?? 0;
-
-  List<String> get visibleDoctypes {
-    const preferred = [
-      'Purchase Order',
-      'Purchase Invoice',
-      'Material Request',
-      'Journal Entry',
-      'Sales Order',
-    ];
-    final ordered = [
-      ...preferred.where(counts.containsKey),
-      ...counts.keys.where((doctype) => !preferred.contains(doctype)),
-    ];
-    return ordered;
-  }
-}
-
-class _ApprovalTodoSummaryCard extends StatelessWidget {
-  final _ApprovalTodoSummary summary;
-
-  const _ApprovalTodoSummaryCard({required this.summary});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.white, Color(0xFFEFFCFB)],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: const Color(0xFF14B8A6).withValues(alpha: 0.16),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF14B8A6).withValues(alpha: 0.10),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF14B8A6).withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Icon(
-                  Icons.checklist_rounded,
-                  color: Color(0xFF14B8A6),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${summary.total} Todo Approval',
-                      style: const TextStyle(
-                        color: AppColors.navy,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    const Text(
-                      'Pilih dokumen untuk melihat detail sebelum memberi keputusan.',
-                      style: TextStyle(color: AppColors.slate, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 }
 
