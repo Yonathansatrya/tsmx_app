@@ -27,6 +27,14 @@ enum _ApprovalReviewFilter {
   cancelled,
 }
 
+String _itemDiscountLabel(Map<String, dynamic> item) {
+  final amount = NumParse.asDouble(item['discount_amount']);
+  final percentage = NumParse.asDouble(item['discount_percentage']);
+  final amountLabel = 'Rp ${formatErpCurrency(amount)}';
+  if (percentage <= 0) return amountLabel;
+  return '$amountLabel (${percentage.toStringAsFixed(2)}%)';
+}
+
 class SalesOrderApprovalScreen extends StatefulWidget {
   final bool embedded;
   final String title;
@@ -1462,6 +1470,8 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
   String? _error;
   bool _loading = true;
   bool _processing = false;
+  bool _addingApprover = false;
+  bool _additionalApprovalProcessing = false;
 
   @override
   void initState() {
@@ -1480,6 +1490,7 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
         appState.fetchApprovalDocument(
           doctype: widget.approval.doctype,
           name: widget.approval.name,
+          forceRefresh: true,
         ),
         appState.fetchApprovalDocumentActivity(
           doctype: widget.approval.doctype,
@@ -1574,6 +1585,162 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
     ).whenComplete(controller.dispose);
   }
 
+  bool get _canAddAdditionalApprover {
+    final state = _approvalWorkflowState;
+    return widget.approval.doctype == 'Sales Order' &&
+        _stateKey(state) == _stateKey('Pending for Lead') &&
+        !_loading &&
+        !_processing &&
+        !_addingApprover &&
+        !_additionalApprovalProcessing;
+  }
+
+  String get _approvalWorkflowState {
+    final detailState = _text(_detail?['workflow_state']);
+    return detailState.isNotEmpty ? detailState : widget.approval.workflowState;
+  }
+
+  String _stateKey(String value) =>
+      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  Future<void> _openAddApprover() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => const _ApproverPickerSheet(),
+    );
+    if (selected == null || selected.trim().isEmpty || !mounted) return;
+    final reason = await _askAdditionalApprovalReason();
+    if (reason == null || reason.trim().isEmpty || !mounted) return;
+
+    setState(() {
+      _addingApprover = true;
+      _error = null;
+    });
+    try {
+      await context.read<AppState>().addSalesOrderAdditionalApprover(
+        salesOrder: widget.approval.name,
+        approver: selected,
+        reason: reason,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Additional approver $selected ditambahkan.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      await _loadDetail();
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _addingApprover = false);
+    }
+  }
+
+  Future<String?> _askAdditionalApprovalReason() {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Alasan Additional Approval'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 3,
+          maxLines: 5,
+          decoration: const InputDecoration(
+            labelText: 'Reason / Note',
+            hintText: 'Contoh: butuh approval direksi karena diskon khusus.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
+  }
+
+  Future<void> _decideAdditionalApproval({
+    required Map<String, dynamic> row,
+    required bool approved,
+  }) async {
+    final note = await _askAdditionalDecisionNote(approved: approved) ?? '';
+    if (note.trim().isEmpty || !mounted) return;
+
+    setState(() {
+      _additionalApprovalProcessing = true;
+      _error = null;
+    });
+    try {
+      await context.read<AppState>().decideSalesOrderAdditionalApproval(
+        salesOrder: widget.approval.name,
+        approverRow: row,
+        approved: approved,
+        reason: note,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Additional approval ${approved ? 'approved' : 'rejected'}.',
+          ),
+          backgroundColor: approved ? AppColors.success : AppColors.danger,
+        ),
+      );
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _additionalApprovalProcessing = false);
+    }
+  }
+
+  Future<String?> _askAdditionalDecisionNote({required bool approved}) {
+    final controller = TextEditingController();
+    final title = approved ? 'Approve Additional' : 'Reject Additional';
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$title - Note'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 3,
+          maxLines: 5,
+          decoration: InputDecoration(
+            labelText: 'Note',
+            hintText: approved
+                ? 'Tulis catatan approval.'
+                : 'Tulis alasan reject.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Submit'),
+          ),
+        ],
+      ),
+    ).whenComplete(controller.dispose);
+  }
+
   @override
   Widget build(BuildContext context) {
     final detail = _detail;
@@ -1621,30 +1788,43 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
                 _errorBox(_error!),
               ],
               if (detail != null) ...[
-                const SizedBox(height: 14),
+                if (widget.approval.doctype == 'Sales Order') ...[
+                  const SizedBox(height: 14),
+                  _additionalApproverSection(detail),
+                ],
+
+                const SizedBox(height: 12),
+                _decisionCard(detail),
+
+                const SizedBox(height: 12),
+
                 _sectionCard(
                   title: 'Informasi Dokumen',
                   children: _documentInfoRows(detail),
                 ),
+
                 const SizedBox(height: 12),
+
                 _sectionCard(
                   title: widget.approval.doctype == 'Material Request'
                       ? 'Kebutuhan'
                       : 'Nilai Dokumen',
                   children: _amountRows(detail),
                 ),
+
                 const SizedBox(height: 12),
+
                 _sectionCard(
                   title: 'Item (${items.length})',
                   children: items.isEmpty
                       ? [const Text('Tidak ada item.')]
                       : items.map(_itemRow).toList(),
                 ),
+
                 const SizedBox(height: 12),
+
                 _activitySection(),
               ],
-              const SizedBox(height: 16),
-              _decisionCard(),
             ],
           ),
         ),
@@ -1996,6 +2176,10 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
                     'Rp ${formatErpCurrency(NumParse.asDouble(item['rate']))}',
               ),
               _detailMetaPill(
+                icon: Icons.discount_outlined,
+                label: 'Diskon ${_itemDiscountLabel(item)}',
+              ),
+              _detailMetaPill(
                 icon: Icons.payments_outlined,
                 label:
                     'Rp ${formatErpCurrency(NumParse.asDouble(item['amount']))}',
@@ -2007,59 +2191,352 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
     ),
   );
 
-  Widget _decisionCard() => Container(
-    padding: const EdgeInsets.all(18),
-    decoration: _cardDecoration(),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+  Widget _decisionCard(Map<String, dynamic> detail) {
+    final hasPendingAdditional = _hasPendingAdditionalApprovals(detail);
+    final actions = hasPendingAdditional
+        ? const <String>[]
+        : widget.approval.actions;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Keputusan Approval',
+            style: TextStyle(
+              color: AppColors.navy,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            'Periksa detail, lalu pilih action sesuai Workflow ERPNext.',
+            style: TextStyle(color: AppColors.slate, fontSize: 11),
+          ),
+          const SizedBox(height: 16),
+          if (_processing)
+            const LinearProgressIndicator()
+          else if (hasPendingAdditional)
+            const Text(
+              'Workflow utama dikunci sampai semua Additional Approval selesai.',
+              style: TextStyle(
+                color: AppColors.slate,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else if (actions.isEmpty)
+            const Text(
+              'Tidak ada workflow action untuk user ini.',
+              style: TextStyle(
+                color: AppColors.slate,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
+            ...actions.map((action) {
+              final reject = _isRejectAction(action);
+              final button = reject
+                  ? OutlinedButton.icon(
+                      onPressed: () => _chooseAction(action),
+                      icon: const Icon(Icons.close_rounded),
+                      label: Text(action),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.danger,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    )
+                  : FilledButton.icon(
+                      onPressed: () => _chooseAction(action),
+                      icon: const Icon(Icons.check_rounded),
+                      label: Text(action),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    );
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: button,
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _additionalApproverSection(Map<String, dynamic> detail) {
+    final approvers = _additionalApproverRows(detail);
+    return _sectionCard(
+      title: 'Additional Approval',
       children: [
-        const Text(
-          'Keputusan Approval',
-          style: TextStyle(color: AppColors.navy, fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 5),
-        const Text(
-          'Periksa detail, lalu pilih action sesuai Workflow ERPNext.',
-          style: TextStyle(color: AppColors.slate, fontSize: 11),
-        ),
-        const SizedBox(height: 16),
-        if (_processing)
-          const LinearProgressIndicator()
+        if (approvers.isEmpty)
+          const Text(
+            'Belum ada additional approver.',
+            style: TextStyle(
+              color: AppColors.slate,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          )
         else
-          ...widget.approval.actions.map((action) {
-            final reject = _isRejectAction(action);
-            final button = reject
-                ? OutlinedButton.icon(
-                    onPressed: () => _chooseAction(action),
-                    icon: const Icon(Icons.close_rounded),
-                    label: Text(action),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.danger,
-                      minimumSize: const Size.fromHeight(48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                  )
-                : FilledButton.icon(
-                    onPressed: () => _chooseAction(action),
-                    icon: const Icon(Icons.check_rounded),
-                    label: Text(action),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                  );
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: button,
-            );
-          }),
+          ...approvers.map(_approverRow),
+        if (_canAddAdditionalApprover &&
+            !_hasPendingAdditionalForCurrentUser(detail)) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _openAddApprover,
+            icon: const Icon(Icons.person_add_alt_1_rounded),
+            label: const Text('Add Approver'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(44),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ),
+        ] else if (_addingApprover) ...[
+          const SizedBox(height: 12),
+          const LinearProgressIndicator(),
+        ] else ...[
+          const SizedBox(height: 10),
+          Text(
+            'Add Approver aktif setelah Sales Order masuk workflow Pending for Lead. '
+            'Saat ini: ${_approvalWorkflowState.isEmpty ? '-' : _approvalWorkflowState}.',
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ],
-    ),
-  );
+    );
+  }
+
+  List<Map<String, dynamic>> _additionalApproverRows(
+    Map<String, dynamic> detail,
+  ) {
+    return _mapRows(
+      detail['approvers'] ??
+          detail['additional_approvers'] ??
+          detail['additional_approval'] ??
+          detail['custom_approvers'] ??
+          detail['custom_additional_approvers'],
+    );
+  }
+
+  bool _hasPendingAdditionalApprovals(Map<String, dynamic> detail) {
+    return _additionalApproverRows(detail).any((row) {
+      final approvalType = _text(row['approval_type']).isEmpty
+          ? 'additional'
+          : _text(row['approval_type']).toLowerCase();
+      final status = _text(row['status']).isEmpty
+          ? 'pending'
+          : _text(row['status']).toLowerCase();
+      return approvalType == 'additional' && status == 'pending';
+    });
+  }
+
+  bool _hasPendingAdditionalForCurrentUser(Map<String, dynamic> detail) {
+    final currentUser = context.read<AppState>().currentUser?.trim() ?? '';
+    if (currentUser.isEmpty) return false;
+    return _additionalApproverRows(detail).any((row) {
+      final approver = _text(row['approver']);
+      final approvalType = _text(row['approval_type']).isEmpty
+          ? 'additional'
+          : _text(row['approval_type']).toLowerCase();
+      final status = _text(row['status']).isEmpty
+          ? 'pending'
+          : _text(row['status']).toLowerCase();
+      return approver.toLowerCase() == currentUser.toLowerCase() &&
+          approvalType == 'additional' &&
+          status == 'pending';
+    });
+  }
+
+  Widget _approverRow(Map<String, dynamic> row) {
+    final approver = _text(row['approver']);
+    final approvalType = _text(row['approval_type']).isEmpty
+        ? 'Additional'
+        : _text(row['approval_type']);
+    final status = _text(row['status']).isEmpty
+        ? 'Pending'
+        : _text(row['status']);
+    final requestedBy = _text(row['requested_by']);
+    final reason = _firstText(row, const [
+      'reason',
+      'remarks',
+      'remark',
+      'description',
+    ]);
+    final note = _text(row['note']);
+    final isPending = status.toLowerCase() == 'pending';
+    final isRejected = status.toLowerCase() == 'rejected';
+    final color = isPending
+        ? const Color(0xFFF59E0B)
+        : isRejected
+        ? AppColors.danger
+        : AppColors.success;
+    final canDecide = _canDecideAdditionalApproval(row);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: color.withValues(alpha: 0.14),
+                foregroundColor: color,
+                child: Text(
+                  _initials(approver),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      approver.isEmpty ? '-' : approver,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.navy,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      requestedBy.isEmpty
+                          ? approvalType
+                          : '$approvalType | requested by $requestedBy',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.slate,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (reason.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Reason: $reason',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                    if (note.isNotEmpty && note != reason) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Note: $note',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              ErpStatusBadge(statusText: status),
+            ],
+          ),
+          if (canDecide) ...[
+            const SizedBox(height: 12),
+            if (_additionalApprovalProcessing)
+              const LinearProgressIndicator()
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () =>
+                          _decideAdditionalApproval(row: row, approved: true),
+                      icon: const Icon(Icons.check_rounded, size: 17),
+                      label: const Text('Approve'),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(42),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          _decideAdditionalApproval(row: row, approved: false),
+                      icon: const Icon(Icons.close_rounded, size: 17),
+                      label: const Text('Reject'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.danger,
+                        minimumSize: const Size.fromHeight(42),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  bool _canDecideAdditionalApproval(Map<String, dynamic> row) {
+    if (widget.approval.doctype != 'Sales Order') return false;
+    if (_loading ||
+        _processing ||
+        _addingApprover ||
+        _additionalApprovalProcessing) {
+      return false;
+    }
+    final currentUser = context.read<AppState>().currentUser?.trim() ?? '';
+    if (currentUser.isEmpty) return false;
+    final approver = _text(row['approver']);
+    final approvalType = _text(row['approval_type']).isEmpty
+        ? 'additional'
+        : _text(row['approval_type']).toLowerCase();
+    final status = _text(row['status']).isEmpty
+        ? 'pending'
+        : _text(row['status']).toLowerCase();
+    return approver.toLowerCase() == currentUser.toLowerCase() &&
+        approvalType == 'additional' &&
+        status == 'pending';
+  }
 
   Widget _activitySection() => _sectionCard(
     title: 'Activity',
@@ -2201,6 +2678,14 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
 
   String _text(dynamic value) => value?.toString().trim() ?? '';
 
+  String _firstText(Map<String, dynamic> row, List<String> keys) {
+    for (final key in keys) {
+      final value = _text(row[key]);
+      if (value.isNotEmpty && value.toLowerCase() != 'null') return value;
+    }
+    return '';
+  }
+
   String _plainText(String value) => value
       .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
@@ -2212,6 +2697,23 @@ class _ErpApprovalDetailPageState extends State<_ErpApprovalDetailPage> {
     return number == number.roundToDouble()
         ? number.toInt().toString()
         : number.toStringAsFixed(2);
+  }
+
+  String _initials(String value) {
+    final clean = value.trim();
+    if (clean.isEmpty) return '?';
+    final parts = clean
+        .replaceAll('@', ' ')
+        .replaceAll('.', ' ')
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return clean.characters.first.toUpperCase();
+    return parts
+        .take(2)
+        .map((part) => part.characters.first)
+        .join()
+        .toUpperCase();
   }
 
   bool _isRejectAction(String action) {
@@ -2853,6 +3355,11 @@ class _SalesOrderApprovalHistoryDetailPageState
           'Rp ${formatErpCurrency(NumParse.asDouble(item['amount']))}',
           style: const TextStyle(color: AppColors.slate, fontSize: 11),
         ),
+        const SizedBox(height: 3),
+        Text(
+          'Diskon ${_itemDiscountLabel(item)}',
+          style: const TextStyle(color: AppColors.slate, fontSize: 11),
+        ),
       ],
     ),
   );
@@ -2903,6 +3410,209 @@ class _SalesOrderApprovalHistoryDetailPageState
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _ApproverPickerSheet extends StatefulWidget {
+  const _ApproverPickerSheet();
+
+  @override
+  State<_ApproverPickerSheet> createState() => _ApproverPickerSheetState();
+}
+
+class _ApproverPickerSheetState extends State<_ApproverPickerSheet> {
+  final _search = TextEditingController();
+  late Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = context.read<AppState>().fetchEnabledUsersForApproval();
+    _search.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _search.text.trim().toLowerCase();
+    return SafeArea(
+      top: false,
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.72,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            MediaQuery.viewInsetsOf(context).bottom + 16,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Pilih Additional Approver',
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _search,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: 'Cari nama atau email user...',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: query.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: _search.clear,
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _future,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return _pickerMessage(
+                        'Gagal memuat user: ${snapshot.error}',
+                      );
+                    }
+                    final users = (snapshot.data ?? const []).where((row) {
+                      final email = _text(row['name']).toLowerCase();
+                      final fullName = _text(row['full_name']).toLowerCase();
+                      return query.isEmpty ||
+                          email.contains(query) ||
+                          fullName.contains(query);
+                    }).toList();
+                    if (users.isEmpty) {
+                      return _pickerMessage('User tidak ditemukan.');
+                    }
+                    return ListView.separated(
+                      itemCount: users.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final row = users[index];
+                        final email = _text(row['name']);
+                        final fullName = _text(row['full_name']);
+                        return Material(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () => Navigator.pop(context, email),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Row(
+                                children: [
+                                  CircleAvatar(
+                                    backgroundColor: AppColors.softGreen,
+                                    foregroundColor: AppColors.primary,
+                                    child: Text(
+                                      _initials(
+                                        fullName.isEmpty ? email : fullName,
+                                      ),
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          fullName.isEmpty ? email : fullName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            color: AppColors.navy,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                        if (fullName.isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            email,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: AppColors.slate,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: AppColors.slate,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _pickerMessage(String message) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(18),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: AppColors.slate,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ),
+  );
+
+  static String _text(dynamic value) => value?.toString().trim() ?? '';
+
+  static String _initials(String value) {
+    final clean = value.trim();
+    if (clean.isEmpty) return '?';
+    final parts = clean
+        .replaceAll('@', ' ')
+        .replaceAll('.', ' ')
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return clean.characters.first.toUpperCase();
+    return parts
+        .take(2)
+        .map((part) => part.characters.first)
+        .join()
+        .toUpperCase();
+  }
 }
 
 class _SalesOrderApprovalDetailPageState
@@ -3227,6 +3937,11 @@ class _SalesOrderApprovalDetailPageState
           '${_number(item['qty'])} ${_text(item['uom'])} x '
           'Rp ${formatErpCurrency(NumParse.asDouble(item['rate']))} = '
           'Rp ${formatErpCurrency(NumParse.asDouble(item['amount']))}',
+          style: const TextStyle(color: AppColors.slate, fontSize: 11),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          'Diskon ${_itemDiscountLabel(item)}',
           style: const TextStyle(color: AppColors.slate, fontSize: 11),
         ),
       ],

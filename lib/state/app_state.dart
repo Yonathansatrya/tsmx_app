@@ -10318,8 +10318,175 @@ class AppState with ChangeNotifier {
   Future<Map<String, dynamic>> fetchApprovalDocument({
     required String doctype,
     required String name,
+    bool forceRefresh = false,
   }) {
+    if (forceRefresh) {
+      return _frappeService.fetchDocument(doctype, name).then((document) async {
+        await _storeCachedDocument(doctype, name, document);
+        return document;
+      });
+    }
     return _fetchCachedDocument(doctype, name);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchEnabledUsersForApproval() async {
+    await _frappeService.ensureLoggedIn();
+    final rows = await _frappeService.fetchResource(
+      'User',
+      fields: const ['name', 'full_name', 'user_image', 'enabled', 'user_type'],
+      filters: const [
+        ['enabled', '=', 1],
+        ['user_type', '=', 'System User'],
+      ],
+      orderBy: 'full_name asc, name asc',
+      limit: 500,
+    );
+    return rows
+        .where((row) => (row['name']?.toString().trim() ?? '').isNotEmpty)
+        .toList();
+  }
+
+  Future<void> addSalesOrderAdditionalApprover({
+    required String salesOrder,
+    required String approver,
+    required String reason,
+  }) async {
+    await _frappeService.callMethod(
+      'tmsx_mobile.api.approval.add_sales_order_approver',
+      args: {
+        'sales_order': salesOrder,
+        'approver': approver,
+        'approval_type': 'Additional',
+        'reason': reason.trim(),
+        'note': reason.trim(),
+      },
+    );
+    await _deleteCachedDocument('Sales Order', salesOrder);
+    _removeApprovalTodoCacheItem('Sales Order', salesOrder);
+    unawaited(
+      fetchApprovalTodos(
+        forceRefresh: true,
+      ).catchError((_) => const <ErpApprovalTodo>[]),
+    );
+    unawaited(refreshNotifications(silent: true).catchError((_) {}));
+  }
+
+  Future<void> decideSalesOrderAdditionalApproval({
+    required String salesOrder,
+    Map<String, dynamic>? approverRow,
+    required bool approved,
+    String reason = '',
+  }) async {
+    final rowName = approverRow?['name']?.toString().trim() ?? '';
+    try {
+      await _callSalesOrderApproverServerScript(
+        salesOrder: salesOrder,
+        rowName: rowName,
+        approved: approved,
+        note: reason,
+      );
+    } catch (error) {
+      if (!_shouldFallbackAdditionalApproval(error)) {
+        rethrow;
+      }
+      try {
+        await _frappeService.callMethod(
+          'tmsx_mobile.api.approval.decide_sales_order_additional_approval',
+          args: {
+            'sales_order': salesOrder,
+            'decision': approved ? 'approve' : 'reject',
+            'reason': reason.trim(),
+          },
+        );
+      } catch (fallbackError) {
+        if (!_shouldFallbackAdditionalApproval(fallbackError)) rethrow;
+        await _directUpdateSalesOrderAdditionalApproval(
+          salesOrder: salesOrder,
+          approverRow: approverRow,
+          approved: approved,
+          reason: reason,
+        );
+      }
+    }
+    await _deleteCachedDocument('Sales Order', salesOrder);
+    _removeApprovalTodoCacheItem('Sales Order', salesOrder);
+    unawaited(
+      fetchApprovalTodos(
+        forceRefresh: true,
+      ).catchError((_) => const <ErpApprovalTodo>[]),
+    );
+    unawaited(refreshNotifications(silent: true).catchError((_) {}));
+  }
+
+  Future<void> _callSalesOrderApproverServerScript({
+    required String salesOrder,
+    required String rowName,
+    required bool approved,
+    required String note,
+  }) async {
+    if (rowName.isEmpty) {
+      throw Exception(
+        'Approval Row kosong. Refresh detail approval lalu coba lagi.',
+      );
+    }
+    await _frappeService.callMethod(
+      approved ? 'approve_sales_order_approver' : 'reject_sales_order_approver',
+      args: {
+        'sales_order': salesOrder,
+        'row_name': rowName,
+        'note': note.trim(),
+      },
+    );
+  }
+
+  bool _shouldFallbackAdditionalApproval(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('failed to get method') ||
+        message.contains('not installed') ||
+        message.contains('additional approval pending');
+  }
+
+  Future<void> _directUpdateSalesOrderAdditionalApproval({
+    required String salesOrder,
+    required Map<String, dynamic>? approverRow,
+    required bool approved,
+    required String reason,
+  }) async {
+    final row = approverRow ?? const <String, dynamic>{};
+    final childDoctype = row['doctype']?.toString().trim() ?? '';
+    final childName = row['name']?.toString().trim() ?? '';
+    if (childDoctype.isEmpty || childName.isEmpty) {
+      throw Exception(
+        'Row Additional Approval tidak lengkap. Refresh detail lalu coba lagi.',
+      );
+    }
+
+    final status = approved ? 'Approved' : 'Rejected';
+    await _frappeService.updateDocument(childDoctype, childName, {
+      'status': status,
+    });
+
+    final decision = approved ? 'APPROVE ADDITIONAL' : 'REJECT ADDITIONAL';
+    final content = [
+      '$decision via $appDisplayName',
+      'Sales Order: $salesOrder',
+      if (reason.trim().isNotEmpty) 'Alasan: ${reason.trim()}',
+    ].join('\n');
+    unawaited(
+      _frappeService
+          .callMethod(
+            'frappe.desk.form.utils.add_comment',
+            args: {
+              'reference_doctype': 'Sales Order',
+              'reference_name': salesOrder,
+              'content': content,
+              'comment_email': _currentUser ?? '',
+              'comment_by': _currentUser ?? '',
+            },
+          )
+          .then<void>((_) {})
+          .catchError((_) {}),
+    );
   }
 
   Future<void> applySalesOrderWorkflow({
