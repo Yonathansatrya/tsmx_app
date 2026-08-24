@@ -5,9 +5,9 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../shared/role_main_screen.dart';
 import '../tabs/selling_tab.dart';
+import '../tabs/stock_tab.dart';
 import 'sales_order/create_sales_order_screen.dart';
 import 'customer/customer_request_tab.dart';
-import 'collection/sales_collection_tab.dart';
 import 'overview/sales_overview_tab.dart';
 import 'visit/sales_visit_tab.dart';
 import '../spg/spg_main_screen.dart';
@@ -146,16 +146,16 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
         ),
       );
     }
-    if (permissions.canReadSalesInvoice) {
+    if (permissions.canReadStock) {
       entries.add(
         _SalesMenuEntry(
-          key: 'collection',
+          key: 'stock',
           destination: const NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet_rounded),
-            label: 'Koleksi',
+            icon: Icon(Icons.inventory_2_outlined),
+            selectedIcon: Icon(Icons.inventory_2_rounded),
+            label: 'Stock',
           ),
-          builder: (_) => const SalesCollectionTab(),
+          builder: (_) => const StockTab(),
         ),
       );
     }
@@ -206,6 +206,7 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
       state.canCreateDoctype('Sales Visit'),
       state.canReadDoctype('Employee Checkin'),
       state.canCreateDoctype('Employee Checkin'),
+      state.canReadDoctype('Bin'),
     ]);
     final permissions = _SalesDoctypePermissions(
       canReadSalesOrder: results[0],
@@ -217,6 +218,7 @@ class _SalesMainScreenState extends State<SalesMainScreen> {
       canCreateSalesVisit: results[6],
       canReadEmployeeCheckin: results[7],
       canCreateEmployeeCheckin: results[8],
+      canReadStock: results[9],
     );
     if (!permissions.hasAnyAccess && state.canUseSales) {
       return _SalesDoctypePermissions.legacyModuleAccess(
@@ -280,6 +282,7 @@ class _SalesDoctypePermissions {
   final bool canCreateSalesVisit;
   final bool canReadEmployeeCheckin;
   final bool canCreateEmployeeCheckin;
+  final bool canReadStock;
 
   const _SalesDoctypePermissions({
     required this.canReadSalesOrder,
@@ -291,6 +294,7 @@ class _SalesDoctypePermissions {
     required this.canCreateSalesVisit,
     required this.canReadEmployeeCheckin,
     required this.canCreateEmployeeCheckin,
+    required this.canReadStock,
   });
 
   factory _SalesDoctypePermissions.fullAccess() {
@@ -304,6 +308,7 @@ class _SalesDoctypePermissions {
       canCreateSalesVisit: true,
       canReadEmployeeCheckin: true,
       canCreateEmployeeCheckin: true,
+      canReadStock: true,
     );
   }
 
@@ -321,6 +326,7 @@ class _SalesDoctypePermissions {
         canCreateSalesVisit: false,
         canReadEmployeeCheckin: false,
         canCreateEmployeeCheckin: false,
+        canReadStock: false,
       );
     }
     return _SalesDoctypePermissions.fullAccess();
@@ -343,6 +349,7 @@ class _SalesDoctypePermissions {
       canReadDeliveryNote ||
       canReadSalesInvoice ||
       canReadCustomer ||
+      canReadStock ||
       canUseSalesVisit;
 }
 
@@ -367,7 +374,7 @@ class _SalesMenuRouter {
   void selectLegacySalesIndex(int legacyIndex) {
     final key = switch (legacyIndex) {
       1 => 'order',
-      2 => 'collection',
+      2 => 'stock',
       3 => 'customer',
       4 => 'visit',
       _ => 'home',

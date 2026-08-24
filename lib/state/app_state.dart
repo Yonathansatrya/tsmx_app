@@ -8015,20 +8015,40 @@ class AppState with ChangeNotifier {
   Future<void> refreshSalesInvoices() => fetchSalesInvoicesFromFrappe();
 
   Future<void> setSalesOrderQuery({String? search, String? status}) async {
-    _salesOrderSearch = search?.trim() ?? _salesOrderSearch;
-    _salesOrderStatus = status;
+    final nextSearch = search?.trim() ?? _salesOrderSearch;
+    final nextStatus = status;
+    if (_salesOrderSearch == nextSearch && _salesOrderStatus == nextStatus) {
+      return;
+    }
+    _salesOrderSearch = nextSearch;
+    _salesOrderStatus = nextStatus;
+    _salesOrdersFetchInFlight = null;
     await fetchSalesOrdersFromFrappe();
   }
 
   Future<void> setDeliveryNoteQuery({String? search, String? status}) async {
-    _deliveryNoteSearch = search?.trim() ?? _deliveryNoteSearch;
-    _deliveryNoteStatus = status;
+    final nextSearch = search?.trim() ?? _deliveryNoteSearch;
+    final nextStatus = status;
+    if (_deliveryNoteSearch == nextSearch &&
+        _deliveryNoteStatus == nextStatus) {
+      return;
+    }
+    _deliveryNoteSearch = nextSearch;
+    _deliveryNoteStatus = nextStatus;
+    _deliveryNotesFetchInFlight = null;
     await fetchDeliveryNotesFromFrappe();
   }
 
   Future<void> setSalesInvoiceQuery({String? search, String? status}) async {
-    _salesInvoiceSearch = search?.trim() ?? _salesInvoiceSearch;
-    _salesInvoiceStatus = status;
+    final nextSearch = search?.trim() ?? _salesInvoiceSearch;
+    final nextStatus = status;
+    if (_salesInvoiceSearch == nextSearch &&
+        _salesInvoiceStatus == nextStatus) {
+      return;
+    }
+    _salesInvoiceSearch = nextSearch;
+    _salesInvoiceStatus = nextStatus;
+    _salesInvoicesFetchInFlight = null;
     await fetchSalesInvoicesFromFrappe();
   }
 
@@ -8093,26 +8113,54 @@ class AppState with ChangeNotifier {
   Future<void> refreshMaterialRequests() => fetchMaterialRequestsFromFrappe();
 
   Future<void> setPurchaseOrderQuery({String? search, String? status}) async {
-    _purchaseOrderSearch = search?.trim() ?? _purchaseOrderSearch;
-    _purchaseOrderStatus = status;
+    final nextSearch = search?.trim() ?? _purchaseOrderSearch;
+    final nextStatus = status;
+    if (_purchaseOrderSearch == nextSearch &&
+        _purchaseOrderStatus == nextStatus) {
+      return;
+    }
+    _purchaseOrderSearch = nextSearch;
+    _purchaseOrderStatus = nextStatus;
+    _purchaseOrdersFetchInFlight = null;
     await fetchPurchaseOrdersFromFrappe();
   }
 
   Future<void> setPurchaseReceiptQuery({String? search, String? status}) async {
-    _purchaseReceiptSearch = search?.trim() ?? _purchaseReceiptSearch;
-    _purchaseReceiptStatus = status;
+    final nextSearch = search?.trim() ?? _purchaseReceiptSearch;
+    final nextStatus = status;
+    if (_purchaseReceiptSearch == nextSearch &&
+        _purchaseReceiptStatus == nextStatus) {
+      return;
+    }
+    _purchaseReceiptSearch = nextSearch;
+    _purchaseReceiptStatus = nextStatus;
+    _purchaseReceiptsFetchInFlight = null;
     await fetchPurchaseReceiptsFromFrappe();
   }
 
   Future<void> setPurchaseInvoiceQuery({String? search, String? status}) async {
-    _purchaseInvoiceSearch = search?.trim() ?? _purchaseInvoiceSearch;
-    _purchaseInvoiceStatus = status;
+    final nextSearch = search?.trim() ?? _purchaseInvoiceSearch;
+    final nextStatus = status;
+    if (_purchaseInvoiceSearch == nextSearch &&
+        _purchaseInvoiceStatus == nextStatus) {
+      return;
+    }
+    _purchaseInvoiceSearch = nextSearch;
+    _purchaseInvoiceStatus = nextStatus;
+    _purchaseInvoicesFetchInFlight = null;
     await fetchPurchaseInvoicesFromFrappe();
   }
 
   Future<void> setMaterialRequestQuery({String? search, String? status}) async {
-    _materialRequestSearch = search?.trim() ?? _materialRequestSearch;
-    _materialRequestStatus = status;
+    final nextSearch = search?.trim() ?? _materialRequestSearch;
+    final nextStatus = status;
+    if (_materialRequestSearch == nextSearch &&
+        _materialRequestStatus == nextStatus) {
+      return;
+    }
+    _materialRequestSearch = nextSearch;
+    _materialRequestStatus = nextStatus;
+    _materialRequestsFetchInFlight = null;
     await fetchMaterialRequestsFromFrappe();
   }
 
@@ -8412,17 +8460,7 @@ class AppState with ChangeNotifier {
     return warehouse.company == company;
   }
 
-  int _warehouseDisplayPriority(String warehouseName) {
-    final name = warehouseName.toLowerCase();
-    if (name.contains('inbound') || name.contains('receiving')) return 1;
-    return 2;
-  }
-
   int _compareWarehouseNames(String a, String b) {
-    final priority = _warehouseDisplayPriority(
-      a,
-    ).compareTo(_warehouseDisplayPriority(b));
-    if (priority != 0) return priority;
     return a.toLowerCase().compareTo(b.toLowerCase());
   }
 
@@ -8441,9 +8479,7 @@ class AppState with ChangeNotifier {
           areaId: areaId,
           title: w.name,
           subtitle: w.displayName == w.name ? '' : w.displayName,
-          icon: _iconForWarehouseName(w.name),
-          warehouseType: _typeForWarehouseName(w.name),
-          maxCapacity: _capacityForWarehouseName(w.name),
+          icon: Icons.inventory_2_outlined,
         ),
       );
     }
@@ -11977,43 +12013,6 @@ class AppState with ChangeNotifier {
       if (code.isEmpty || rate <= 0) continue;
       rates.putIfAbsent(code, () => rate);
     }
-  }
-
-  IconData _iconForWarehouseName(String name) {
-    final w = name.toLowerCase();
-    if (w.contains('inbound') || w.contains('masuk')) {
-      return Icons.move_to_inbox_outlined;
-    }
-    if (w.contains('ripen') || w.contains('matang') || w.contains('pematang')) {
-      return Icons.eco_outlined;
-    }
-    if (w.contains('stores') || w.contains('siap jual')) {
-      return Icons.storefront_outlined;
-    }
-    return Icons.inventory_2_outlined;
-  }
-
-  WarehouseType _typeForWarehouseName(String name) {
-    final w = name.toLowerCase();
-    if (w.contains('inbound') ||
-        w.contains('masuk') ||
-        w.contains('datang') ||
-        w.contains('receiving')) {
-      return WarehouseType.inbound;
-    }
-    if (w.contains('ripen') ||
-        w.contains('rippen') ||
-        w.contains('matang') ||
-        w.contains('pematang')) {
-      return WarehouseType.ripening;
-    }
-    return WarehouseType.stores;
-  }
-
-  int _capacityForWarehouseName(String name) {
-    final type = _typeForWarehouseName(name);
-    if (type == WarehouseType.inbound) return 2000;
-    return 900;
   }
 }
 

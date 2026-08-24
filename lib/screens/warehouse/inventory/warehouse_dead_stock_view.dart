@@ -65,12 +65,6 @@ class _WarehouseDeadStockViewState extends State<WarehouseDeadStockView> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: warehousePagePaddingOf(context),
         children: [
-          const WarehouseSectionHeader(
-            title: 'Dead Stock Monitoring',
-            subtitle: 'Stok tanpa pergerakan masuk atau keluar',
-            icon: Icons.inventory_2_outlined,
-          ),
-          warehouseSectionGap,
           Row(
             children: [
               Expanded(child: _metric('Item dead stock', '${rows.length}')),
@@ -91,41 +85,10 @@ class _WarehouseDeadStockViewState extends State<WarehouseDeadStockView> {
             hintText: 'Cari item atau kode',
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: _warehouse,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Filter gudang',
-              prefixIcon: Icon(Icons.warehouse_outlined),
-            ),
-            items: [
-              const DropdownMenuItem(value: '', child: Text('Semua gudang')),
-              ...warehouses.map(
-                (warehouse) => DropdownMenuItem(
-                  value: warehouse,
-                  child: Text(warehouse, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-            ],
-            onChanged: (value) => setState(
-              () => _warehouse = value?.isEmpty == true ? null : value,
-            ),
-          ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<int>(
-            initialValue: _threshold,
-            decoration: const InputDecoration(
-              labelText: 'Batas tanpa pergerakan',
-              prefixIcon: Icon(Icons.hourglass_empty_rounded),
-            ),
-            items: const [
-              DropdownMenuItem(value: 90, child: Text('Minimal 90 hari')),
-              DropdownMenuItem(value: 180, child: Text('Minimal 180 hari')),
-              DropdownMenuItem(value: 365, child: Text('Lebih dari 365 hari')),
-            ],
-            onChanged: (value) {
-              if (value != null) setState(() => _threshold = value);
-            },
+          _DeadStockFilterBar(
+            warehouse: _warehouse,
+            threshold: _threshold,
+            onTap: () => _openFilterSheet(warehouses),
           ),
           if (_loading) ...[
             const SizedBox(height: 12),
@@ -174,6 +137,24 @@ class _WarehouseDeadStockViewState extends State<WarehouseDeadStockView> {
     }).toList()..sort((a, b) {
       final age = b.inactiveDays.compareTo(a.inactiveDays);
       return age != 0 ? age : b.stockValue.compareTo(a.stockValue);
+    });
+  }
+
+  Future<void> _openFilterSheet(List<String> warehouses) async {
+    final result = await showModalBottomSheet<_DeadStockFilterValue>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _DeadStockFilterSheet(
+        warehouses: warehouses,
+        selectedWarehouse: _warehouse,
+        selectedThreshold: _threshold,
+      ),
+    );
+    if (result == null) return;
+    setState(() {
+      _warehouse = result.warehouse;
+      _threshold = result.threshold;
     });
   }
 
@@ -275,4 +256,313 @@ class _WarehouseDeadStockViewState extends State<WarehouseDeadStockView> {
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _DeadStockFilterValue {
+  const _DeadStockFilterValue({
+    required this.warehouse,
+    required this.threshold,
+  });
+
+  final String? warehouse;
+  final int threshold;
+}
+
+class _DeadStockFilterBar extends StatelessWidget {
+  const _DeadStockFilterBar({
+    required this.warehouse,
+    required this.threshold,
+    required this.onTap,
+  });
+
+  final String? warehouse;
+  final int threshold;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+      boxShadow: AppColors.cardShadow,
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppColors.softGreen,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.tune_rounded,
+            color: AppColors.primary,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${warehouse ?? 'Semua gudang'} | ${_thresholdLabel(threshold)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Filter gudang dan batas tanpa pergerakan',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        FilledButton.icon(
+          onPressed: onTap,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.softGreen,
+            foregroundColor: AppColors.primary,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(Icons.tune_rounded, size: 15),
+          label: const Text(
+            'Filter',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _DeadStockFilterSheet extends StatefulWidget {
+  const _DeadStockFilterSheet({
+    required this.warehouses,
+    required this.selectedWarehouse,
+    required this.selectedThreshold,
+  });
+
+  final List<String> warehouses;
+  final String? selectedWarehouse;
+  final int selectedThreshold;
+
+  @override
+  State<_DeadStockFilterSheet> createState() => _DeadStockFilterSheetState();
+}
+
+class _DeadStockFilterSheetState extends State<_DeadStockFilterSheet> {
+  final _search = TextEditingController();
+  late String? _warehouse = widget.selectedWarehouse;
+  late int _threshold = widget.selectedThreshold;
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.trim().toLowerCase();
+    final rows = query.isEmpty
+        ? widget.warehouses
+        : widget.warehouses
+              .where((warehouse) => warehouse.toLowerCase().contains(query))
+              .toList(growable: false);
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+        ),
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Filter Dead Stock',
+                    style: TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<int>(
+              initialValue: _threshold,
+              decoration: InputDecoration(
+                labelText: 'Batas tanpa pergerakan',
+                prefixIcon: const Icon(Icons.hourglass_empty_rounded),
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              items: const [
+                DropdownMenuItem(value: 90, child: Text('Minimal 90 hari')),
+                DropdownMenuItem(value: 180, child: Text('Minimal 180 hari')),
+                DropdownMenuItem(
+                  value: 365,
+                  child: Text('Lebih dari 365 hari'),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _threshold = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _search,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                hintText: 'Cari gudang...',
+                prefixIcon: const Icon(Icons.search_rounded),
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  _DeadStockWarehouseTile(
+                    title: 'Semua gudang',
+                    selected: _warehouse == null,
+                    onTap: () => setState(() => _warehouse = null),
+                  ),
+                  ...rows.map(
+                    (warehouse) => _DeadStockWarehouseTile(
+                      title: warehouse,
+                      selected: _warehouse == warehouse,
+                      onTap: () => setState(() => _warehouse = warehouse),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(
+                _DeadStockFilterValue(
+                  warehouse: _warehouse,
+                  threshold: _threshold,
+                ),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.white,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text('Terapkan Filter'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeadStockWarehouseTile extends StatelessWidget {
+  const _DeadStockWarehouseTile({
+    required this.title,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected ? AppColors.softGreen : Colors.transparent,
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              color: selected ? AppColors.primary : AppColors.slate,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? AppColors.primary : AppColors.navy,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+String _thresholdLabel(int threshold) {
+  return threshold == 365 ? '>365 hari' : 'Minimal $threshold hari';
 }

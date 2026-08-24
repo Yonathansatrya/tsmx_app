@@ -74,8 +74,10 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    if (!state.isAuthenticated) {
+    final isAuthenticated = context.select<AppState, bool>(
+      (state) => state.isAuthenticated,
+    );
+    if (!isAuthenticated) {
       _redirectToLogin();
       return const Scaffold(
         backgroundColor: AppColors.background,
@@ -85,9 +87,12 @@ class _RoleMainScreenState extends State<RoleMainScreen> {
       );
     }
 
-    final subtitle = state.selectedSiteName.trim().isNotEmpty
-        ? state.selectedSiteName
-        : state.currentUser ?? widget.fallbackUsername;
+    final subtitle = context.select<AppState, String>((state) {
+      final siteName = state.selectedSiteName.trim();
+      return siteName.isNotEmpty
+          ? siteName
+          : state.currentUser ?? widget.fallbackUsername;
+    });
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: widget.floatingActionButtonBuilder?.call(

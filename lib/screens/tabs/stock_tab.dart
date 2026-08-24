@@ -4,7 +4,6 @@ import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 import '../../models/inventory_item.dart';
 import '../../models/stock_area_option.dart';
-import '../../widgets/warehouse_gauge.dart';
 import '../stock/item_stock_detail_screen.dart';
 
 enum _StockStatusFilter { all, urgent, lowStock, inStock }
@@ -20,7 +19,7 @@ class StockTab extends StatefulWidget {
 
 class _StockTabState extends State<StockTab> {
   String? _selectedCompany;
-  WarehouseType? _selectedWarehouseType;
+  String? _selectedWarehouse;
   final TextEditingController _stockSearchController = TextEditingController();
   _StockStatusFilter _stockStatusFilter = _StockStatusFilter.all;
   _StockSortOption _stockSortOption = _StockSortOption.urgentFirst;
@@ -66,13 +65,8 @@ class _StockTabState extends State<StockTab> {
         _selectedCompany ??
         appState.preferredCompany(companies.map((entry) => entry.key)) ??
         companies.first.key;
-    final areas = appState.stockWarehousesForCompany(company);
-    final warehouseType =
-        _selectedWarehouseType ?? _defaultWarehouseType(areas);
-
     setState(() {
       _selectedCompany = company;
-      _selectedWarehouseType = warehouseType;
       _selectionInitialized = true;
     });
   }
@@ -86,21 +80,6 @@ class _StockTabState extends State<StockTab> {
     if (_selectedCompany != null) {
       await appState.refreshInventoryForCompany(_selectedCompany!);
     }
-  }
-
-  void _onCompanyChanged(String? company) {
-    if (company == null) return;
-
-    final appState = context.read<AppState>();
-    final areas = appState.stockWarehousesForCompany(company);
-
-    setState(() {
-      _selectedCompany = company;
-      _selectedWarehouseType = _defaultWarehouseType(areas);
-      _selectedItemGroup = null;
-    });
-
-    appState.refreshInventoryForCompany(company);
   }
 
   @override
@@ -121,20 +100,18 @@ class _StockTabState extends State<StockTab> {
 
     if (selectedCompany != null &&
         areas.isNotEmpty &&
-        (_selectedWarehouseType == null ||
-            !areas.any((a) => a.warehouseType == _selectedWarehouseType))) {
+        _selectedWarehouse != null &&
+        !areas.any((a) => a.areaId == _selectedWarehouse)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        setState(() => _selectedWarehouseType = _defaultWarehouseType(areas));
+        setState(() => _selectedWarehouse = null);
       });
     }
 
-    final selectedWarehouseType = _selectedWarehouseType;
-    final selectedAreas = selectedWarehouseType == null
-        ? <StockAreaOption>[]
-        : areas
-              .where((area) => area.warehouseType == selectedWarehouseType)
-              .toList();
+    final selectedWarehouse = _selectedWarehouse;
+    final selectedAreas = selectedWarehouse == null
+        ? areas
+        : areas.where((area) => area.areaId == selectedWarehouse).toList();
     final selectedAreaIds = selectedAreas.map((area) => area.areaId).toSet();
 
     final areaInventory = selectedAreaIds.isEmpty
@@ -144,28 +121,6 @@ class _StockTabState extends State<StockTab> {
               .toList();
 
     final filteredInventory = _filterAndSortInventory(areaInventory);
-
-    final totalBoxesInStock = areaInventory.fold<int>(
-      0,
-      (sum, item) => sum + item.quantity,
-    );
-
-    final int estimatedMaxBoxCapacity =
-        _warehouseCapacityConfig(selectedWarehouseType)?.totalCapacity ?? 0;
-
-    final capacityPercentage = estimatedMaxBoxCapacity > 0
-        ? (totalBoxesInStock / estimatedMaxBoxCapacity).clamp(0.0, 1.0)
-        : 0.0;
-
-    final urgentCount = areaInventory
-        .where((item) => item.status == StockStatus.urgent)
-        .length;
-    final lowStockCount = areaInventory
-        .where((item) => item.status == StockStatus.lowStock)
-        .length;
-    final normalCount = areaInventory
-        .where((item) => item.status == StockStatus.inStock)
-        .length;
 
     const double extraBottomSpace = 140;
 
@@ -180,11 +135,11 @@ class _StockTabState extends State<StockTab> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 16, 16, extraBottomSpace),
             children: [
-              _buildHeader(companies),
-
-              const SizedBox(height: 14),
-
-              if (areas.isNotEmpty) _buildAreaSelector(areas),
+              _buildStockFilterBar(
+                companies,
+                currentItems: areaInventory,
+                itemGroupOptions: appState.itemGroups,
+              ),
 
               if (areas.isEmpty && !appState.isInventoryLoading) ...[
                 const SizedBox(height: 8),
@@ -223,80 +178,7 @@ class _StockTabState extends State<StockTab> {
                 const SizedBox(height: 12),
               ],
 
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primaryDark.withValues(alpha: 0.05),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Warehouse Summary',
-                      style: TextStyle(
-                        fontFamily: 'HankenGrotesk',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.navy,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatusBadge(
-                            label: 'Urgent',
-                            value: urgentCount,
-                            color: Colors.red,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _buildStatusBadge(
-                            label: 'Low Stock',
-                            value: lowStockCount,
-                            color: Colors.orange,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _buildStatusBadge(
-                            label: 'Healthy',
-                            value: normalCount,
-                            color: Colors.green,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Center(
-                      child: WarehouseGauge(
-                        percentage: capacityPercentage,
-                        label: _selectedAreaTitle(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _capacitySummary(selectedWarehouseType),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.slate.withValues(alpha: 0.9),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 22),
+              const SizedBox(height: 8),
               _buildSectionHeader(
                 'Stock Inventory',
                 _inventoryCountLabel(
@@ -308,8 +190,6 @@ class _StockTabState extends State<StockTab> {
               _buildInventoryControls(
                 resultCount: filteredInventory.length,
                 totalCount: areaInventory.length,
-                currentItems: areaInventory,
-                itemGroupOptions: appState.itemGroups,
               ),
               const SizedBox(height: 10),
 
@@ -361,95 +241,8 @@ class _StockTabState extends State<StockTab> {
   bool get _hasActiveStockFilters {
     return _stockSearchController.text.trim().isNotEmpty ||
         _stockStatusFilter != _StockStatusFilter.all ||
+        _stockSortOption != _StockSortOption.urgentFirst ||
         _selectedItemGroup != null;
-  }
-
-  List<String> _getUniqueItemGroups(List<InventoryItem> items) {
-    final itemGroups = <String>{};
-    for (final item in items) {
-      if (item.category != null && item.category!.isNotEmpty) {
-        itemGroups.add(item.category!);
-      }
-    }
-    return itemGroups.toList()..sort();
-  }
-
-  String _warehouseTypeLabel(WarehouseType type) {
-    return switch (type) {
-      WarehouseType.inbound => 'Inbound',
-      WarehouseType.ripening => 'Ripening',
-      WarehouseType.stores => 'Stores',
-    };
-  }
-
-  Color _warehouseTypeColor(WarehouseType type) {
-    return switch (type) {
-      WarehouseType.inbound => const Color(0xFF2196F3), // Blue
-      WarehouseType.ripening => const Color(0xFFFF9800), // Orange
-      WarehouseType.stores => const Color(0xFF4CAF50), // Green
-    };
-  }
-
-  Map<WarehouseType, List<StockAreaOption>> _groupAreasByType(
-    List<StockAreaOption> areas,
-  ) {
-    final grouped = <WarehouseType, List<StockAreaOption>>{};
-    for (final area in areas) {
-      grouped.putIfAbsent(area.warehouseType, () => []).add(area);
-    }
-    return grouped;
-  }
-
-  List<WarehouseType> _availableWarehouseTypes(List<StockAreaOption> areas) {
-    const orderedTypes = [
-      WarehouseType.stores,
-      WarehouseType.ripening,
-      WarehouseType.inbound,
-    ];
-    return orderedTypes
-        .where((type) => areas.any((area) => area.warehouseType == type))
-        .toList();
-  }
-
-  WarehouseType? _defaultWarehouseType(List<StockAreaOption> areas) {
-    final types = _availableWarehouseTypes(areas);
-    return types.isEmpty ? null : types.first;
-  }
-
-  String _warehouseTypeDescription(WarehouseType type) {
-    return switch (type) {
-      WarehouseType.inbound => 'Barang datang disortir dulu',
-      WarehouseType.ripening => 'Pematangan buah',
-      WarehouseType.stores => 'Barang siap jual',
-    };
-  }
-
-  _WarehouseCapacity? _warehouseCapacityConfig(WarehouseType? type) {
-    return switch (type) {
-      WarehouseType.stores => const _WarehouseCapacity(
-        roomCount: 5,
-        capacityPerRoom: 1000,
-        roomLabel: 'ruangan kecil',
-      ),
-      WarehouseType.ripening => const _WarehouseCapacity(
-        roomCount: 3,
-        capacityPerRoom: 1000,
-        roomLabel: 'ruangan kecil',
-      ),
-      WarehouseType.inbound => const _WarehouseCapacity(
-        roomCount: 2,
-        capacityPerRoom: 2000,
-        roomLabel: 'ruangan besar',
-      ),
-      null => null,
-    };
-  }
-
-  String _capacitySummary(WarehouseType? type) {
-    final config = _warehouseCapacityConfig(type);
-    if (config == null) return 'Capacity not set';
-
-    return 'Capacity: ${config.roomCount} ${config.roomLabel} x ${config.capacityPerRoomLabel} = ${config.totalCapacityLabel} boxes';
   }
 
   List<InventoryItem> _filterAndSortInventory(List<InventoryItem> items) {
@@ -506,38 +299,9 @@ class _StockTabState extends State<StockTab> {
     return '$totalCount items';
   }
 
-  String _sortLabel(_StockSortOption option) {
-    return switch (option) {
-      _StockSortOption.urgentFirst => 'Urgent first',
-      _StockSortOption.quantityLow => 'Qty low-high',
-      _StockSortOption.quantityHigh => 'Qty high-low',
-      _StockSortOption.name => 'Name A-Z',
-    };
-  }
-
-  String _statusFilterLabel(_StockStatusFilter filter) {
-    return switch (filter) {
-      _StockStatusFilter.all => 'All',
-      _StockStatusFilter.urgent => 'Urgent',
-      _StockStatusFilter.lowStock => 'Low',
-      _StockStatusFilter.inStock => 'Healthy',
-    };
-  }
-
-  Color _statusFilterColor(_StockStatusFilter filter) {
-    return switch (filter) {
-      _StockStatusFilter.all => AppColors.primary,
-      _StockStatusFilter.urgent => Colors.red,
-      _StockStatusFilter.lowStock => Colors.orange,
-      _StockStatusFilter.inStock => Colors.green,
-    };
-  }
-
   Widget _buildInventoryControls({
     required int resultCount,
     required int totalCount,
-    required List<InventoryItem> currentItems,
-    required List<String> itemGroupOptions,
   }) {
     return Container(
       width: double.infinity,
@@ -616,8 +380,6 @@ class _StockTabState extends State<StockTab> {
               _buildSortMenu(),
             ],
           ),
-          const SizedBox(height: 10),
-          _buildItemGroupFilterSection(currentItems, itemGroupOptions),
           if (_hasActiveStockFilters) ...[
             const SizedBox(height: 8),
             Row(
@@ -637,6 +399,7 @@ class _StockTabState extends State<StockTab> {
                     _stockSearchController.clear();
                     setState(() {
                       _stockStatusFilter = _StockStatusFilter.all;
+                      _stockSortOption = _StockSortOption.urgentFirst;
                       _selectedItemGroup = null;
                     });
                   },
@@ -665,11 +428,7 @@ class _StockTabState extends State<StockTab> {
     return ChoiceChip(
       label: Text(_statusFilterLabel(filter)),
       selected: isSelected,
-      onSelected: (_) {
-        setState(() {
-          _stockStatusFilter = filter;
-        });
-      },
+      onSelected: (_) => setState(() => _stockStatusFilter = filter),
       showCheckmark: false,
       visualDensity: VisualDensity.compact,
       labelStyle: TextStyle(
@@ -683,86 +442,6 @@ class _StockTabState extends State<StockTab> {
         color: isSelected ? color : color.withValues(alpha: 0.16),
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-    );
-  }
-
-  Widget _buildItemGroupFilterSection(
-    List<InventoryItem> currentItems,
-    List<String> itemGroupOptions,
-  ) {
-    final itemGroups = {
-      ...itemGroupOptions
-          .map((group) => group.trim())
-          .where((group) => group.isNotEmpty),
-      ..._getUniqueItemGroups(currentItems),
-    }.toList()..sort();
-
-    if (itemGroups.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8, left: 4),
-          child: Text(
-            'Item Group',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: AppColors.slate.withValues(alpha: 0.8),
-            ),
-          ),
-        ),
-        SizedBox(
-          height: 34,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: _buildItemGroupChip(null, 'All'),
-              ),
-              ...itemGroups.map((itemGroup) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _buildItemGroupChip(itemGroup, itemGroup),
-                );
-              }),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildItemGroupChip(String? itemGroup, String label) {
-    final isSelected = _selectedItemGroup == itemGroup;
-
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (_) {
-        setState(() {
-          _selectedItemGroup = itemGroup;
-        });
-      },
-      showCheckmark: false,
-      visualDensity: VisualDensity.compact,
-      labelStyle: TextStyle(
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        color: isSelected ? AppColors.white : AppColors.primary,
-      ),
-      selectedColor: AppColors.primary,
-      backgroundColor: AppColors.primary.withValues(alpha: 0.08),
-      side: BorderSide(
-        color: isSelected
-            ? AppColors.primary
-            : AppColors.primary.withValues(alpha: 0.2),
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     );
   }
 
@@ -799,13 +478,38 @@ class _StockTabState extends State<StockTab> {
           }).toList(),
           onChanged: (option) {
             if (option == null) return;
-            setState(() {
-              _stockSortOption = option;
-            });
+            setState(() => _stockSortOption = option);
           },
         ),
       ),
     );
+  }
+
+  String _sortLabel(_StockSortOption option) {
+    return switch (option) {
+      _StockSortOption.urgentFirst => 'Urgent first',
+      _StockSortOption.quantityLow => 'Qty low-high',
+      _StockSortOption.quantityHigh => 'Qty high-low',
+      _StockSortOption.name => 'Name A-Z',
+    };
+  }
+
+  String _statusFilterLabel(_StockStatusFilter filter) {
+    return switch (filter) {
+      _StockStatusFilter.all => 'All',
+      _StockStatusFilter.urgent => 'Urgent',
+      _StockStatusFilter.lowStock => 'Low',
+      _StockStatusFilter.inStock => 'Healthy',
+    };
+  }
+
+  Color _statusFilterColor(_StockStatusFilter filter) {
+    return switch (filter) {
+      _StockStatusFilter.all => AppColors.primary,
+      _StockStatusFilter.urgent => Colors.red,
+      _StockStatusFilter.lowStock => Colors.orange,
+      _StockStatusFilter.inStock => Colors.green,
+    };
   }
 
   Widget _buildStockEntriesSection(AppState appState) {
@@ -928,16 +632,22 @@ class _StockTabState extends State<StockTab> {
     );
   }
 
-  Widget _buildHeader(List<MapEntry<String, String>> companies) {
-    final company = _selectedCompany;
-    final companyValid =
-        company != null && companies.any((entry) => entry.key == company);
+  Widget _buildStockFilterBar(
+    List<MapEntry<String, String>> companies, {
+    required List<InventoryItem> currentItems,
+    required List<String> itemGroupOptions,
+  }) {
+    final companyLabel =
+        _companyTitle(companies, _selectedCompany) ?? 'Semua Company';
+    final warehouseLabel = _selectedWarehouse == null
+        ? 'Semua area'
+        : _selectedWarehouse!;
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
         boxShadow: [
           BoxShadow(
@@ -947,240 +657,121 @@ class _StockTabState extends State<StockTab> {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.warehouse_rounded,
-                  color: AppColors.primary,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Warehouse',
-                      style: TextStyle(
-                        fontFamily: 'HankenGrotesk',
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.navy,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'Stock overview by company and area',
-                      style: TextStyle(fontSize: 11, color: AppColors.slate),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
           Container(
-            constraints: const BoxConstraints(minHeight: 42),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               color: AppColors.softGreen,
               borderRadius: BorderRadius.circular(12),
             ),
-            alignment: Alignment.centerLeft,
-            child: companies.isEmpty
-                ? const Text(
-                    'Loading...',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.slate,
-                    ),
-                  )
-                : DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: companyValid
-                          ? company
-                          : (context.read<AppState>().preferredCompany(
-                                  companies.map((entry) => entry.key),
-                                ) ??
-                                companies.first.key),
-                      isDense: true,
-                      isExpanded: true,
-                      dropdownColor: AppColors.white,
-                      icon: const Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: AppColors.primary,
-                      ),
-                      style: const TextStyle(
-                        fontFamily: 'HankenGrotesk',
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primary,
-                        fontSize: 13,
-                      ),
-                      items: companies.map((entry) {
-                        return DropdownMenuItem<String>(
-                          value: entry.key,
-                          child: Text(
-                            entry.value,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: _onCompanyChanged,
-                    ),
+            child: const Icon(
+              Icons.inventory_2_rounded,
+              color: AppColors.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$companyLabel | $warehouseLabel',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
                   ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Cek stok realtime sesuai akses gudang',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Refresh',
+            onPressed: _onPullRefresh,
+            icon: const Icon(Icons.refresh_rounded),
+            color: AppColors.primary,
+          ),
+          FilledButton.icon(
+            onPressed: companies.isEmpty
+                ? null
+                : () => _openStockFilterSheet(
+                    companies,
+                    currentItems: currentItems,
+                    itemGroupOptions: itemGroupOptions,
+                  ),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.softGreen,
+              foregroundColor: AppColors.primary,
+              disabledBackgroundColor: AppColors.background,
+              disabledForegroundColor: AppColors.slate,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: const Icon(Icons.filter_alt_outlined, size: 15),
+            label: const Text(
+              'Filter',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAreaSelector(List<StockAreaOption> areas) {
-    if (areas.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final groupedAreas = _groupAreasByType(areas);
-    final warehouseTypes = _availableWarehouseTypes(areas);
-
-    return SizedBox(
-      height: 74,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: warehouseTypes.length,
-        itemBuilder: (context, index) {
-          final type = warehouseTypes[index];
-          final typeAreas = groupedAreas[type] ?? const <StockAreaOption>[];
-          final typeColor = _warehouseTypeColor(type);
-          final isSelected = _selectedWarehouseType == type;
-          final capacity = _warehouseCapacityConfig(type);
-
-          return Padding(
-            padding: EdgeInsets.only(
-              right: index == warehouseTypes.length - 1 ? 0 : 10,
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  setState(() {
-                    _selectedWarehouseType = type;
-                    _selectedItemGroup = null;
-                  });
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOut,
-                  width: 178,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: isSelected ? typeColor : AppColors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected
-                          ? typeColor
-                          : typeColor.withValues(alpha: 0.22),
-                      width: isSelected ? 2 : 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: typeColor.withValues(
-                          alpha: isSelected ? 0.16 : 0.05,
-                        ),
-                        blurRadius: isSelected ? 12 : 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? AppColors.white.withValues(alpha: 0.2)
-                              : typeColor.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          typeAreas.isEmpty
-                              ? Icons.warehouse_rounded
-                              : typeAreas.first.icon,
-                          size: 18,
-                          color: isSelected ? AppColors.white : typeColor,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _warehouseTypeLabel(type),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w900,
-                                color: isSelected
-                                    ? AppColors.white
-                                    : AppColors.navy,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              capacity == null
-                                  ? '${typeAreas.length} rooms'
-                                  : '${capacity.roomCount} rooms - ${capacity.totalCapacityLabel} box',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                                color: isSelected
-                                    ? AppColors.white.withValues(alpha: 0.86)
-                                    : AppColors.slate,
-                              ),
-                            ),
-                            Text(
-                              _warehouseTypeDescription(type),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: isSelected
-                                    ? AppColors.white.withValues(alpha: 0.76)
-                                    : AppColors.slate.withValues(alpha: 0.86),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
+  Future<void> _openStockFilterSheet(
+    List<MapEntry<String, String>> companies, {
+    required List<InventoryItem> currentItems,
+    required List<String> itemGroupOptions,
+  }) async {
+    final appState = context.read<AppState>();
+    final result = await showModalBottomSheet<_StockFilterValue>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _StockFilterSheet(
+        companies: companies,
+        areasForCompany: appState.stockWarehousesForCompany,
+        currentItems: currentItems,
+        itemGroupOptions: itemGroupOptions,
+        selectedCompany: _selectedCompany,
+        selectedWarehouse: _selectedWarehouse,
+        selectedItemGroup: _selectedItemGroup,
       ),
     );
+    if (result == null) return;
+    if (result.company != _selectedCompany) {
+      setState(() {
+        _selectedCompany = result.company;
+        _selectedWarehouse = result.warehouse;
+        _selectedItemGroup = result.itemGroup;
+      });
+      appState.refreshInventoryForCompany(result.company);
+      return;
+    }
+    setState(() {
+      _selectedWarehouse = result.warehouse;
+      _selectedItemGroup = result.itemGroup;
+    });
   }
 
   String? _companyTitle(
@@ -1319,45 +910,500 @@ class _StockTabState extends State<StockTab> {
   }
 
   String _selectedAreaTitle() {
-    final type = _selectedWarehouseType;
-    return type == null ? 'Warehouse' : _warehouseTypeLabel(type);
+    return _selectedWarehouse ?? 'Semua Warehouse';
+  }
+}
+
+class _StockFilterValue {
+  const _StockFilterValue({
+    required this.company,
+    required this.warehouse,
+    required this.itemGroup,
+  });
+
+  final String company;
+  final String? warehouse;
+  final String? itemGroup;
+}
+
+class _StockFilterSheet extends StatefulWidget {
+  const _StockFilterSheet({
+    required this.companies,
+    required this.areasForCompany,
+    required this.currentItems,
+    required this.itemGroupOptions,
+    required this.selectedCompany,
+    required this.selectedWarehouse,
+    required this.selectedItemGroup,
+  });
+
+  final List<MapEntry<String, String>> companies;
+  final List<StockAreaOption> Function(String company) areasForCompany;
+  final List<InventoryItem> currentItems;
+  final List<String> itemGroupOptions;
+  final String? selectedCompany;
+  final String? selectedWarehouse;
+  final String? selectedItemGroup;
+
+  @override
+  State<_StockFilterSheet> createState() => _StockFilterSheetState();
+}
+
+class _StockFilterSheetState extends State<_StockFilterSheet> {
+  late String _company =
+      widget.selectedCompany ??
+      (widget.companies.isEmpty ? '' : widget.companies.first.key);
+  late String? _warehouse = widget.selectedWarehouse;
+  late String? _itemGroup = widget.selectedItemGroup;
+
+  @override
+  Widget build(BuildContext context) {
+    final areas = _company.isEmpty
+        ? const <StockAreaOption>[]
+        : widget.areasForCompany(_company);
+    if (_warehouse != null && !areas.any((area) => area.areaId == _warehouse)) {
+      _warehouse = null;
+    }
+    final itemGroups = _itemGroups();
+    if (_itemGroup != null && !itemGroups.contains(_itemGroup)) {
+      _itemGroup = null;
+    }
+
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Filter Stock',
+                      style: TextStyle(
+                        color: AppColors.navy,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _company,
+                isExpanded: true,
+                decoration: _sheetInputDecoration(
+                  label: 'Company',
+                  icon: Icons.business_rounded,
+                ),
+                items: widget.companies
+                    .map(
+                      (entry) => DropdownMenuItem<String>(
+                        value: entry.key,
+                        child: Text(
+                          entry.value,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _company = value;
+                    _warehouse = null;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              _buildWarehousePickerField(areas),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String?>(
+                initialValue: _itemGroup,
+                isExpanded: true,
+                decoration: _sheetInputDecoration(
+                  label: 'Item Group',
+                  icon: Icons.category_outlined,
+                ),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('Semua item group'),
+                  ),
+                  ...itemGroups.map(
+                    (group) => DropdownMenuItem<String?>(
+                      value: group,
+                      child: Text(
+                        group,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: (value) => setState(() => _itemGroup = value),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => setState(() {
+                        _company = widget.companies.isEmpty
+                            ? ''
+                            : widget.companies.first.key;
+                        _warehouse = null;
+                        _itemGroup = null;
+                      }),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text('Reset'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _company.isEmpty
+                          ? null
+                          : () => Navigator.of(context).pop(
+                              _StockFilterValue(
+                                company: _company,
+                                warehouse: _warehouse,
+                                itemGroup: _itemGroup,
+                              ),
+                            ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.white,
+                        minimumSize: const Size.fromHeight(48),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text('Terapkan Filter'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  Widget _buildStatusBadge({
-    required String label,
-    required int value,
-    required Color color,
-  }) {
-    return Container(
-      height: 88,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+  List<String> _itemGroups() {
+    final groups = {
+      ...widget.itemGroupOptions
+          .map((group) => group.trim())
+          .where((group) => group.isNotEmpty),
+      ...widget.currentItems
+          .map((item) => item.category?.trim() ?? '')
+          .where((group) => group.isNotEmpty),
+    }.toList();
+    groups.sort();
+    return groups;
+  }
+
+  Widget _buildWarehousePickerField(List<StockAreaOption> areas) {
+    final selectedLabel = _warehouseTitle(areas, _warehouse);
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _openWarehousePicker(areas),
+      child: InputDecorator(
+        decoration: _sheetInputDecoration(
+          label: 'Warehouse',
+          icon: Icons.warehouse_rounded,
+        ).copyWith(suffixIcon: const Icon(Icons.keyboard_arrow_down_rounded)),
+        child: Text(
+          selectedLabel,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: AppColors.navy,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w900,
-              color: color.withValues(alpha: 0.85),
+    );
+  }
+
+  Future<void> _openWarehousePicker(List<StockAreaOption> areas) async {
+    final result = await showModalBottomSheet<_WarehousePickerValue>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _WarehousePickerSheet(areas: areas, selectedWarehouse: _warehouse),
+    );
+    if (!mounted || result == null || result.warehouse == _warehouse) return;
+    setState(() => _warehouse = result.warehouse);
+  }
+
+  String _warehouseTitle(List<StockAreaOption> areas, String? warehouse) {
+    if (warehouse == null || warehouse.isEmpty) return 'Semua warehouse';
+    for (final area in areas) {
+      if (area.areaId == warehouse) return area.title;
+    }
+    return warehouse;
+  }
+
+  InputDecoration _sheetInputDecoration({
+    required String label,
+    required IconData icon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: AppColors.background,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(
+          color: AppColors.primary.withValues(alpha: 0.35),
+        ),
+      ),
+    );
+  }
+}
+
+class _WarehousePickerValue {
+  const _WarehousePickerValue(this.warehouse);
+
+  final String? warehouse;
+}
+
+class _WarehousePickerSheet extends StatefulWidget {
+  const _WarehousePickerSheet({
+    required this.areas,
+    required this.selectedWarehouse,
+  });
+
+  final List<StockAreaOption> areas;
+  final String? selectedWarehouse;
+
+  @override
+  State<_WarehousePickerSheet> createState() => _WarehousePickerSheetState();
+}
+
+class _WarehousePickerSheetState extends State<_WarehousePickerSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.trim().toLowerCase();
+    final filteredAreas = query.isEmpty
+        ? widget.areas
+        : widget.areas
+              .where((area) {
+                return area.title.toLowerCase().contains(query) ||
+                    area.subtitle.toLowerCase().contains(query) ||
+                    area.areaId.toLowerCase().contains(query);
+              })
+              .toList(growable: false);
+
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+        ),
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Pilih Warehouse',
+                    style: TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
             ),
-          ),
-          const Spacer(),
-          Text(
-            '$value',
-            style: TextStyle(
-              fontFamily: 'HankenGrotesk',
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              color: color,
+            const SizedBox(height: 10),
+            TextField(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                hintText: 'Cari warehouse...',
+                prefixIcon: const Icon(Icons.search_rounded),
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _query = '');
+                        },
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+              ),
             ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: filteredAreas.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == 0) {
+                    return _WarehousePickerTile(
+                      title: 'Semua warehouse',
+                      selected: widget.selectedWarehouse == null,
+                      onTap: () => Navigator.of(
+                        context,
+                      ).pop(const _WarehousePickerValue(null)),
+                    );
+                  }
+                  final area = filteredAreas[index - 1];
+                  return _WarehousePickerTile(
+                    title: area.title,
+                    subtitle: area.subtitle.isEmpty ? null : area.subtitle,
+                    selected: widget.selectedWarehouse == area.areaId,
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pop(_WarehousePickerValue(area.areaId)),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WarehousePickerTile extends StatelessWidget {
+  const _WarehousePickerTile({
+    required this.title,
+    required this.selected,
+    required this.onTap,
+    this.subtitle,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? AppColors.softGreen : Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                color: selected ? AppColors.primary : AppColors.slate,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: selected ? AppColors.primary : AppColors.navy,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.slate,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1401,36 +1447,5 @@ class _StockEmptyState extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _WarehouseCapacity {
-  final int roomCount;
-  final int capacityPerRoom;
-  final String roomLabel;
-
-  const _WarehouseCapacity({
-    required this.roomCount,
-    required this.capacityPerRoom,
-    required this.roomLabel,
-  });
-
-  int get totalCapacity => roomCount * capacityPerRoom;
-
-  String get capacityPerRoomLabel => _formatNumber(capacityPerRoom);
-
-  String get totalCapacityLabel => _formatNumber(totalCapacity);
-
-  static String _formatNumber(int value) {
-    final text = value.toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < text.length; i++) {
-      final remaining = text.length - i;
-      buffer.write(text[i]);
-      if (remaining > 1 && remaining % 3 == 1) {
-        buffer.write(',');
-      }
-    }
-    return buffer.toString();
   }
 }

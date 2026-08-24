@@ -95,42 +95,10 @@ class _WarehouseFastSlowMovingViewState
             hintText: 'Cari item atau kode',
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: _warehouse,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Filter gudang',
-              prefixIcon: Icon(Icons.warehouse_outlined),
-            ),
-            items: [
-              const DropdownMenuItem(value: '', child: Text('Semua gudang')),
-              ...warehouses.map(
-                (warehouse) => DropdownMenuItem(
-                  value: warehouse,
-                  child: Text(warehouse, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-            ],
-            onChanged: (value) => setState(
-              () => _warehouse = value?.isEmpty == true ? null : value,
-            ),
-          ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<int>(
-            initialValue: _periodDays,
-            decoration: const InputDecoration(
-              labelText: 'Periode analisis',
-              prefixIcon: Icon(Icons.date_range_outlined),
-            ),
-            items: const [
-              DropdownMenuItem(value: 30, child: Text('30 hari terakhir')),
-              DropdownMenuItem(value: 90, child: Text('90 hari terakhir')),
-            ],
-            onChanged: (value) {
-              if (value == null || value == _periodDays) return;
-              setState(() => _periodDays = value);
-              _load();
-            },
+          _FastSlowFilterBar(
+            warehouse: _warehouse,
+            periodDays: _periodDays,
+            onTap: () => _openFilterSheet(warehouses),
           ),
           const SizedBox(height: 10),
           SingleChildScrollView(
@@ -186,6 +154,26 @@ class _WarehouseFastSlowMovingViewState
       onSelected: (_) => setState(() => _filter = value),
     ),
   );
+
+  Future<void> _openFilterSheet(List<String> warehouses) async {
+    final result = await showModalBottomSheet<_FastSlowFilterValue>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _FastSlowFilterSheet(
+        warehouses: warehouses,
+        selectedWarehouse: _warehouse,
+        selectedPeriodDays: _periodDays,
+      ),
+    );
+    if (result == null) return;
+    final shouldReload = result.periodDays != _periodDays;
+    setState(() {
+      _warehouse = result.warehouse;
+      _periodDays = result.periodDays;
+    });
+    if (shouldReload) _load();
+  }
 
   List<StockMovementVelocityItem> _filteredRows() {
     final query = _search.text.trim().toLowerCase();
@@ -320,4 +308,305 @@ class _WarehouseFastSlowMovingViewState
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _FastSlowFilterValue {
+  const _FastSlowFilterValue({
+    required this.warehouse,
+    required this.periodDays,
+  });
+
+  final String? warehouse;
+  final int periodDays;
+}
+
+class _FastSlowFilterBar extends StatelessWidget {
+  const _FastSlowFilterBar({
+    required this.warehouse,
+    required this.periodDays,
+    required this.onTap,
+  });
+
+  final String? warehouse;
+  final int periodDays;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+      boxShadow: AppColors.cardShadow,
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppColors.softGreen,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.tune_rounded,
+            color: AppColors.primary,
+            size: 20,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${warehouse ?? 'Semua gudang'} | $periodDays hari',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.navy,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'Filter gudang dan periode analisis',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+        FilledButton.icon(
+          onPressed: onTap,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.softGreen,
+            foregroundColor: AppColors.primary,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(Icons.tune_rounded, size: 15),
+          label: const Text(
+            'Filter',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _FastSlowFilterSheet extends StatefulWidget {
+  const _FastSlowFilterSheet({
+    required this.warehouses,
+    required this.selectedWarehouse,
+    required this.selectedPeriodDays,
+  });
+
+  final List<String> warehouses;
+  final String? selectedWarehouse;
+  final int selectedPeriodDays;
+
+  @override
+  State<_FastSlowFilterSheet> createState() => _FastSlowFilterSheetState();
+}
+
+class _FastSlowFilterSheetState extends State<_FastSlowFilterSheet> {
+  final _search = TextEditingController();
+  late String? _warehouse = widget.selectedWarehouse;
+  late int _periodDays = widget.selectedPeriodDays;
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.trim().toLowerCase();
+    final rows = query.isEmpty
+        ? widget.warehouses
+        : widget.warehouses
+              .where((warehouse) => warehouse.toLowerCase().contains(query))
+              .toList(growable: false);
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+        ),
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Filter Pergerakan',
+                    style: TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<int>(
+              initialValue: _periodDays,
+              decoration: InputDecoration(
+                labelText: 'Periode analisis',
+                prefixIcon: const Icon(Icons.date_range_outlined),
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              items: const [
+                DropdownMenuItem(value: 30, child: Text('30 hari terakhir')),
+                DropdownMenuItem(value: 90, child: Text('90 hari terakhir')),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() => _periodDays = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _search,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                hintText: 'Cari gudang...',
+                prefixIcon: const Icon(Icons.search_rounded),
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  _FastSlowWarehouseTile(
+                    title: 'Semua gudang',
+                    selected: _warehouse == null,
+                    onTap: () => setState(() => _warehouse = null),
+                  ),
+                  ...rows.map(
+                    (warehouse) => _FastSlowWarehouseTile(
+                      title: warehouse,
+                      selected: _warehouse == warehouse,
+                      onTap: () => setState(() => _warehouse = warehouse),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(
+                _FastSlowFilterValue(
+                  warehouse: _warehouse,
+                  periodDays: _periodDays,
+                ),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.white,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text('Terapkan Filter'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FastSlowWarehouseTile extends StatelessWidget {
+  const _FastSlowWarehouseTile({
+    required this.title,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected ? AppColors.softGreen : Colors.transparent,
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              color: selected ? AppColors.primary : AppColors.slate,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? AppColors.primary : AppColors.navy,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

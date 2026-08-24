@@ -7,6 +7,7 @@ class MobileModule {
   static const dashboard = 'dashboard';
   static const sales = 'sales';
   static const spg = 'spg';
+  static const collection = 'collection';
   static const purchase = 'purchase';
   static const stock = 'stock';
   static const warehouse = 'warehouse';
@@ -21,6 +22,7 @@ class MobileModule {
     dashboard,
     sales,
     spg,
+    collection,
     purchase,
     stock,
     warehouse,
@@ -36,6 +38,7 @@ class MobileModule {
     dashboard,
     sales,
     spg,
+    collection,
     purchase,
     stock,
     warehouse,
@@ -141,9 +144,17 @@ class MobileRoleRegistry {
       key: MobileModule.sales,
       groupKey: 'sales',
       defaultLabel: 'Penjualan',
-      defaultSubtitle: 'Order, invoice, collection, visit',
+      defaultSubtitle: 'Order, customer, stock, visit',
       icon: Icons.point_of_sale_rounded,
       menuOrder: 20,
+    ),
+    MobileModule.collection: MobileModuleMeta(
+      key: MobileModule.collection,
+      groupKey: 'sales',
+      defaultLabel: 'Collection',
+      defaultSubtitle: 'AR aging, invoice, dan janji bayar',
+      icon: Icons.account_balance_wallet_rounded,
+      menuOrder: 23,
     ),
     MobileModule.spg: MobileModuleMeta(
       key: MobileModule.spg,
@@ -317,6 +328,7 @@ class MobileRoleRegistry {
       MobileModule.dashboard,
       MobileModule.sales,
       MobileModule.spg,
+      MobileModule.collection,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -331,6 +343,7 @@ class MobileRoleRegistry {
       MobileModule.dashboard,
       MobileModule.sales,
       MobileModule.spg,
+      MobileModule.collection,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -345,6 +358,7 @@ class MobileRoleRegistry {
       MobileModule.dashboard,
       MobileModule.sales,
       MobileModule.spg,
+      MobileModule.collection,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -356,6 +370,7 @@ class MobileRoleRegistry {
       MobileModule.dashboard,
       MobileModule.sales,
       MobileModule.spg,
+      MobileModule.collection,
       MobileModule.purchase,
       MobileModule.stock,
       MobileModule.warehouse,
@@ -369,7 +384,7 @@ class MobileRoleRegistry {
     },
     MobileRole.sales: {MobileModule.dashboard, MobileModule.sales},
     MobileRole.spg: {MobileModule.dashboard, MobileModule.spg},
-    MobileRole.collection: {MobileModule.dashboard, MobileModule.sales},
+    MobileRole.collection: {MobileModule.dashboard, MobileModule.collection},
     MobileRole.purchaseManager: {
       MobileModule.dashboard,
       MobileModule.purchase,

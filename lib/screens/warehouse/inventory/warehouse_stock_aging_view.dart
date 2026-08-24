@@ -70,12 +70,6 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: warehousePagePaddingOf(context),
         children: [
-          const WarehouseSectionHeader(
-            title: 'Stock Aging',
-            subtitle: 'Umur stok berdasarkan tanggal barang masuk terakhir',
-            icon: Icons.timelapse_rounded,
-          ),
-          warehouseSectionGap,
           Row(
             children: [
               Expanded(child: _metric('Stok >90 hari', '$oldCount')),
@@ -100,25 +94,9 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
             hintText: 'Cari item atau kode',
           ),
           const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
-            initialValue: _warehouse,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Filter gudang',
-              prefixIcon: Icon(Icons.warehouse_outlined),
-            ),
-            items: [
-              const DropdownMenuItem(value: '', child: Text('Semua gudang')),
-              ...warehouses.map(
-                (warehouse) => DropdownMenuItem(
-                  value: warehouse,
-                  child: Text(warehouse, overflow: TextOverflow.ellipsis),
-                ),
-              ),
-            ],
-            onChanged: (value) => setState(
-              () => _warehouse = value?.isEmpty == true ? null : value,
-            ),
+          _AgingFilterBar(
+            warehouse: _warehouse,
+            onTap: () => _openWarehouseFilter(warehouses),
           ),
           const SizedBox(height: 10),
           SingleChildScrollView(
@@ -174,6 +152,20 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
       onSelected: (_) => setState(() => _bucket = value),
     ),
   );
+
+  Future<void> _openWarehouseFilter(List<String> warehouses) async {
+    final result = await showModalBottomSheet<String?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AgingWarehouseFilterSheet(
+        warehouses: warehouses,
+        selectedWarehouse: _warehouse,
+      ),
+    );
+    if (!mounted || result == _warehouse) return;
+    setState(() => _warehouse = result?.isEmpty == true ? null : result);
+  }
 
   List<StockAgingItem> _filteredRows() {
     final query = _search.text.trim().toLowerCase();
@@ -313,4 +305,270 @@ class _WarehouseStockAgingViewState extends State<WarehouseStockAgingView> {
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
+}
+
+class _AgingFilterBar extends StatelessWidget {
+  const _AgingFilterBar({required this.warehouse, required this.onTap});
+
+  final String? warehouse;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.softGreen,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.warehouse_outlined,
+              color: AppColors.primary,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  warehouse ?? 'Semua gudang',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Filter gudang stock aging',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          FilledButton.icon(
+            onPressed: onTap,
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.softGreen,
+              foregroundColor: AppColors.primary,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            icon: const Icon(Icons.tune_rounded, size: 15),
+            label: const Text(
+              'Filter',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AgingWarehouseFilterSheet extends StatefulWidget {
+  const _AgingWarehouseFilterSheet({
+    required this.warehouses,
+    required this.selectedWarehouse,
+  });
+
+  final List<String> warehouses;
+  final String? selectedWarehouse;
+
+  @override
+  State<_AgingWarehouseFilterSheet> createState() =>
+      _AgingWarehouseFilterSheetState();
+}
+
+class _AgingWarehouseFilterSheetState
+    extends State<_AgingWarehouseFilterSheet> {
+  final _search = TextEditingController();
+  String _query = '';
+  String? _warehouse;
+
+  @override
+  void initState() {
+    super.initState();
+    _warehouse = widget.selectedWarehouse;
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _query.trim().toLowerCase();
+    final rows = query.isEmpty
+        ? widget.warehouses
+        : widget.warehouses
+              .where((warehouse) => warehouse.toLowerCase().contains(query))
+              .toList(growable: false);
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.all(12),
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.78,
+        ),
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: AppColors.cardShadow,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Filter Gudang',
+                    style: TextStyle(
+                      color: AppColors.navy,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _search,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                hintText: 'Cari gudang...',
+                prefixIcon: const Icon(Icons.search_rounded),
+                filled: true,
+                fillColor: AppColors.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  _WarehouseChoiceTile(
+                    title: 'Semua gudang',
+                    selected: _warehouse == null,
+                    onTap: () => setState(() => _warehouse = null),
+                  ),
+                  ...rows.map(
+                    (warehouse) => _WarehouseChoiceTile(
+                      title: warehouse,
+                      selected: _warehouse == warehouse,
+                      onTap: () => setState(() => _warehouse = warehouse),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(_warehouse ?? ''),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.white,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text('Terapkan Filter'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WarehouseChoiceTile extends StatelessWidget {
+  const _WarehouseChoiceTile({
+    required this.title,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected ? AppColors.softGreen : Colors.transparent,
+    borderRadius: BorderRadius.circular(14),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              color: selected ? AppColors.primary : AppColors.slate,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? AppColors.primary : AppColors.navy,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

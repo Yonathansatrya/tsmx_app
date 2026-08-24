@@ -429,6 +429,7 @@ def _mobile_modules_for_roles(roles):
         return [
             "dashboard",
             "sales",
+            "collection",
             "purchase",
             "stock",
             "warehouse",
@@ -460,7 +461,7 @@ def _mobile_modules_for_roles(roles):
         "collection",
         "accounts receivable",
     }:
-        modules.add("sales")
+        modules.add("collection")
 
     if role_names & {
         "purchase admin",
