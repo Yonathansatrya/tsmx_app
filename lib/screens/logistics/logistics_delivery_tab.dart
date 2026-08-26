@@ -233,12 +233,35 @@ class _LogisticsDeliveryTabState extends State<LogisticsDeliveryTab> {
             icon: Icons.assignment_turned_in_rounded,
           ),
           const SizedBox(height: 14),
-          _DeliverySummaryGrid(
-            outstanding: outstanding,
-            completed: completed,
-            draft: draft,
-            total: allRows.length,
-            outstandingValue: outstandingValue,
+          LogisticsMetricGrid(
+            footer: '${allRows.length} dokumen pengiriman dimuat',
+            items: [
+              LogisticsMetricItem(
+                label: 'Outstanding',
+                value: '$outstanding',
+                icon: Icons.pending_actions_rounded,
+                color: AppColors.warning,
+              ),
+              LogisticsMetricItem(
+                label: 'Completed',
+                value: '$completed',
+                icon: Icons.task_alt_rounded,
+                color: AppColors.success,
+              ),
+              LogisticsMetricItem(
+                label: 'Draft',
+                value: '$draft',
+                icon: Icons.edit_note_rounded,
+                color: AppColors.slate,
+              ),
+              LogisticsMetricItem(
+                label: 'Nilai Outstanding',
+                value: 'Rp ${formatErpCurrency(outstandingValue)}',
+                icon: Icons.payments_outlined,
+                color: AppColors.primary,
+                compactValue: true,
+              ),
+            ],
           ),
           const SizedBox(height: 14),
           LogisticsSearchField(
@@ -2383,153 +2406,6 @@ class _DeliveryScopeSelector extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DeliverySummaryGrid extends StatelessWidget {
-  const _DeliverySummaryGrid({
-    required this.outstanding,
-    required this.completed,
-    required this.draft,
-    required this.total,
-    required this.outstandingValue,
-  });
-
-  final int outstanding;
-  final int completed;
-  final int draft;
-  final int total;
-  final double outstandingValue;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      Row(
-        children: [
-          Expanded(
-            child: _DeliverySummaryCard(
-              label: 'Outstanding',
-              value: '$outstanding',
-              icon: Icons.pending_actions_rounded,
-              color: AppColors.warning,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _DeliverySummaryCard(
-              label: 'Completed',
-              value: '$completed',
-              icon: Icons.task_alt_rounded,
-              color: AppColors.success,
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 10),
-      Row(
-        children: [
-          Expanded(
-            child: _DeliverySummaryCard(
-              label: 'Draft',
-              value: '$draft',
-              icon: Icons.edit_note_rounded,
-              color: AppColors.slate,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _DeliverySummaryCard(
-              label: 'Nilai Outstanding',
-              value: 'Rp ${formatErpCurrency(outstandingValue)}',
-              icon: Icons.payments_outlined,
-              color: AppColors.primary,
-              compactValue: true,
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 8),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          '$total dokumen pengiriman dimuat',
-          style: const TextStyle(
-            color: AppColors.slate,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    ],
-  );
-}
-
-class _DeliverySummaryCard extends StatelessWidget {
-  const _DeliverySummaryCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-    this.compactValue = false,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final bool compactValue;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(13),
-    decoration: BoxDecoration(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppColors.border),
-      boxShadow: AppColors.cardShadow,
-    ),
-    child: Row(
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: color, size: 20),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: AppColors.navy,
-                  fontSize: compactValue ? 13 : 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.slate,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
 }
 
 class _SignaturePainter extends CustomPainter {

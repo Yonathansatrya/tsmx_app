@@ -113,7 +113,9 @@ class _AttendanceTabState extends State<AttendanceTab> {
       nextVisits = widget.spgMode
           ? await state.fetchSpgVisits(forceRefresh: forceRefresh)
           : await state.fetchSalesVisits(forceRefresh: forceRefresh);
-      final active = state.activeSalesVisit;
+      final active = widget.spgMode
+          ? state.activeSpgVisit
+          : state.activeSalesVisit;
       if (active != null) {
         try {
           target = await state.fetchCustomerVisitLocation(active.customer);
@@ -217,7 +219,9 @@ class _AttendanceTabState extends State<AttendanceTab> {
 
   Widget _checkInTab() {
     final state = context.watch<AppState>();
-    final active = state.activeSalesVisit;
+    final active = widget.spgMode
+        ? state.activeSpgVisit
+        : state.activeSalesVisit;
     final point = state.latestVisitLocation;
     final selectedDistance = target == null || point == null
         ? null

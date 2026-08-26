@@ -311,25 +311,27 @@ class _RoleBottomNavItem extends StatelessWidget {
           curve: Curves.easeOutCubic,
           height: double.infinity,
           margin: EdgeInsets.symmetric(horizontal: compact ? 1 : 2),
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 3 : 7,
-            vertical: 4,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.softGreen.withValues(alpha: 0.78)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(15),
-          ),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 3 : 7),
+          decoration: const BoxDecoration(color: Colors.transparent),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              IconTheme(
-                data: IconThemeData(color: color, size: compact ? 20 : 21),
-                child: selected
-                    ? destination.selectedIcon ?? destination.icon
-                    : destination.icon,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: selected ? 34 : 30,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.softGreen : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: IconTheme(
+                  data: IconThemeData(color: color, size: compact ? 20 : 21),
+                  child: selected
+                      ? destination.selectedIcon ?? destination.icon
+                      : destination.icon,
+                ),
               ),
               const SizedBox(height: 2),
               Flexible(
@@ -343,6 +345,16 @@ class _RoleBottomNavItem extends StatelessWidget {
                     fontSize: compact ? 9.5 : 10.5,
                     fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
                   ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: selected ? 18 : 4,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
                 ),
               ),
             ],

@@ -770,6 +770,8 @@ class AppState with ChangeNotifier {
       SalesVisitLocationService();
   SalesVisit? _activeSalesVisit;
   SalesVisit? get activeSalesVisit => _activeSalesVisit;
+  SalesVisit? _activeSpgVisit;
+  SalesVisit? get activeSpgVisit => _activeSpgVisit;
   List<SalesVisit> _salesVisitCache = const [];
   DateTime? _salesVisitCacheAt;
   Future<List<SalesVisit>>? _salesVisitFetchInFlight;
@@ -1381,6 +1383,8 @@ class AppState with ChangeNotifier {
     _documentCache.clear();
     _approvalTodoSnapshot = const [];
     _approvalTodoFetchInFlight = null;
+    _activeSalesVisit = null;
+    _activeSpgVisit = null;
     _salesVisitCache = const [];
     _salesVisitCacheAt = null;
     _salesVisitFetchInFlight = null;
@@ -1693,6 +1697,7 @@ class AppState with ChangeNotifier {
     _stopNotificationPolling();
     await _visitLocationService.stopTracking();
     _activeSalesVisit = null;
+    _activeSpgVisit = null;
     _latestVisitLocation = null;
     _mobileCompatibilityWarning = null;
     _mobileBoot = null;
@@ -3291,10 +3296,10 @@ class AppState with ChangeNotifier {
           )
           .toList(),
     );
-    _activeSalesVisit = null;
+    _activeSpgVisit = null;
     for (final visit in visits) {
       if (visit.isActive) {
-        _activeSalesVisit = visit;
+        _activeSpgVisit = visit;
         break;
       }
     }
@@ -3306,8 +3311,10 @@ class AppState with ChangeNotifier {
     required CustomerVisitLocation target,
     required String photoPath,
   }) async {
-    if (_activeSalesVisit != null) {
-      throw Exception('Selesaikan check-in aktif sebelum memulai yang baru.');
+    if (_activeSpgVisit != null) {
+      throw Exception(
+        'Selesaikan check-in SPG aktif sebelum memulai yang baru.',
+      );
     }
     final point = await getCurrentVisitLocation();
     final distance = visitDistanceTo(target, point);
@@ -3354,16 +3361,14 @@ class AppState with ChangeNotifier {
       ...await _frappeService.fetchDocument('SPG Visit', visit.id),
       'customer_name': customer,
     }).copyWith(checkInTime: checkin['time']?.toString() ?? now);
-    _activeSalesVisit = updated;
+    _activeSpgVisit = updated;
     notifyListeners();
     return updated;
   }
 
   Future<void> checkOutSpgVisit(String visitId) async {
     final point = await getCurrentVisitLocation();
-    final activeVisit = _activeSalesVisit?.id == visitId
-        ? _activeSalesVisit
-        : null;
+    final activeVisit = _activeSpgVisit?.id == visitId ? _activeSpgVisit : null;
     var employee = activeVisit?.employee.trim().isNotEmpty == true
         ? activeVisit!.employee.trim()
         : (_currentEmployee?.trim() ?? '');
@@ -3388,7 +3393,7 @@ class AppState with ChangeNotifier {
       'employee_checkin_out': checkout['name']?.toString() ?? '',
     });
     await _visitLocationService.stopTracking();
-    _activeSalesVisit = null;
+    _activeSpgVisit = null;
     notifyListeners();
   }
 
@@ -4797,8 +4802,8 @@ class AppState with ChangeNotifier {
   Future<VisitLocationPoint> startDeliveryDriverTracking(
     DeliveryNote deliveryNote,
   ) async {
-    if (_activeSalesVisit != null) {
-      throw Exception('Selesaikan check-in customer sebelum tracking driver.');
+    if (_activeSalesVisit != null || _activeSpgVisit != null) {
+      throw Exception('Selesaikan check-in aktif sebelum tracking driver.');
     }
     if (_activeDeliveryTrackingNote != null &&
         _activeDeliveryTrackingNote != deliveryNote.id) {

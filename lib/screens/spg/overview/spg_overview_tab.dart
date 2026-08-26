@@ -38,19 +38,11 @@ class _SpgOverviewTabState extends State<SpgOverviewTab> {
       _visitError = null;
     });
     try {
-      final visits = await context.read<AppState>().fetchSpgVisits(
-        forceRefresh: forceRefresh,
-      );
-      SalesVisit? activeVisit;
-      for (final visit in visits) {
-        if (visit.isActive) {
-          activeVisit = visit;
-          break;
-        }
-      }
+      final state = context.read<AppState>();
+      await state.fetchSpgVisits(forceRefresh: forceRefresh);
       if (!mounted) return;
       setState(() {
-        _activeVisit = activeVisit;
+        _activeVisit = state.activeSpgVisit;
         _visitError = null;
       });
     } catch (error) {

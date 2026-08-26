@@ -1350,37 +1350,29 @@ class _TmsxBottomNavItem extends StatelessWidget {
           curve: Curves.easeOutCubic,
           height: double.infinity,
           margin: EdgeInsets.symmetric(horizontal: compact ? 1 : 2),
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 3 : 7,
-            vertical: 5,
-          ),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.softGreen.withValues(alpha: 0.95)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-          ),
+          padding: EdgeInsets.symmetric(horizontal: compact ? 3 : 7),
+          decoration: const BoxDecoration(color: Colors.transparent),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
               AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
-                width: selected ? 30 : 26,
-                height: 24,
+                width: selected ? 34 : 30,
+                height: 28,
                 decoration: BoxDecoration(
-                  color: selected ? AppColors.primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(999),
+                  color: selected ? AppColors.softGreen : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 alignment: Alignment.center,
                 child: _BottomNavIcon(
                   icon: icon,
-                  color: selected ? AppColors.white : color,
+                  color: color,
                   count: tab.badgeCount,
-                  size: selected ? 18 : 21,
+                  size: selected ? 20 : 21,
                 ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Flexible(
                 child: Text(
                   label,
@@ -1392,6 +1384,16 @@ class _TmsxBottomNavItem extends StatelessWidget {
                     fontSize: compact ? 9.5 : 10.5,
                     fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
                   ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                width: selected ? 18 : 4,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: selected ? AppColors.primary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(99),
                 ),
               ),
             ],

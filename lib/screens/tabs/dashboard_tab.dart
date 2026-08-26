@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/dashboard/dashboard_activity_carousel.dart';
 import '../../widgets/dashboard/dashboard_module_launcher.dart';
 import '../../widgets/responsive/responsive_layout.dart';
 import '../profile/profile_screen.dart';
@@ -42,6 +43,8 @@ class _DashboardTabState extends State<DashboardTab> {
               _DashboardGreetingCard(appState: appState),
               const SizedBox(height: 18),
               const DashboardModuleLauncher(),
+              const SizedBox(height: 18),
+              const DashboardActivityCarousel(),
             ],
           ),
         ),

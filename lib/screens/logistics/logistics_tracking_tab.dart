@@ -61,53 +61,46 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: logisticsPagePaddingOf(context),
         children: [
-          _TrackingHeroCard(
-            outstanding: docs.where(_isOutstanding).length,
-            completed: completed,
-            toBill: toBill,
-            returns: returns,
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _TrackingMetricCard(
-                  label: 'Outstanding',
-                  value: '${docs.where(_isOutstanding).length}',
-                  icon: Icons.pending_actions_rounded,
-                  color: AppColors.warning,
-                ),
+          LogisticsHeroSummaryCard(
+            title: 'Tracking Armada',
+            subtitle: 'Pantau status delivery dan bukti pengiriman',
+            icon: Icons.route_rounded,
+            stats: [
+              LogisticsHeroStat(
+                label: 'Outstanding',
+                value: '${docs.where(_isOutstanding).length}',
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _TrackingMetricCard(
-                  label: 'To Bill',
-                  value: '$toBill',
-                  icon: Icons.receipt_long_outlined,
-                  color: AppColors.primary,
-                ),
-              ),
+              LogisticsHeroStat(label: 'To Bill', value: '$toBill'),
+              LogisticsHeroStat(label: 'Completed', value: '$completed'),
+              LogisticsHeroStat(label: 'Return', value: '$returns'),
             ],
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _TrackingMetricCard(
-                  label: 'Completed',
-                  value: '$completed',
-                  icon: Icons.task_alt_rounded,
-                  color: AppColors.success,
-                ),
+          const SizedBox(height: 14),
+          LogisticsMetricGrid(
+            items: [
+              LogisticsMetricItem(
+                label: 'Outstanding',
+                value: '${docs.where(_isOutstanding).length}',
+                icon: Icons.pending_actions_rounded,
+                color: AppColors.warning,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _TrackingMetricCard(
-                  label: 'Return',
-                  value: '$returns',
-                  icon: Icons.undo_rounded,
-                  color: AppColors.warning,
-                ),
+              LogisticsMetricItem(
+                label: 'To Bill',
+                value: '$toBill',
+                icon: Icons.receipt_long_outlined,
+                color: AppColors.primary,
+              ),
+              LogisticsMetricItem(
+                label: 'Completed',
+                value: '$completed',
+                icon: Icons.task_alt_rounded,
+                color: AppColors.success,
+              ),
+              LogisticsMetricItem(
+                label: 'Return',
+                value: '$returns',
+                icon: Icons.undo_rounded,
+                color: AppColors.warning,
               ),
             ],
           ),
@@ -429,134 +422,6 @@ class _LogisticsTrackingTabState extends State<LogisticsTrackingTab> {
       .replaceAll(RegExp(r'<[^>]*>'), ' ')
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
-}
-
-class _TrackingHeroCard extends StatelessWidget {
-  final int outstanding;
-  final int completed;
-  final int toBill;
-  final int returns;
-
-  const _TrackingHeroCard({
-    required this.outstanding,
-    required this.completed,
-    required this.toBill,
-    required this.returns,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: AppColors.primary,
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: [
-        BoxShadow(
-          color: AppColors.primary.withValues(alpha: 0.14),
-          blurRadius: 18,
-          offset: const Offset(0, 10),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: AppColors.white.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.route_rounded, color: AppColors.white),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Tracking Armada',
-                    style: TextStyle(
-                      color: AppColors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'Pantau status delivery dan bukti pengiriman',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Color(0xFFE3F2EA),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _HeroStat(label: 'Outstanding', value: '$outstanding'),
-            ),
-            Expanded(
-              child: _HeroStat(label: 'To Bill', value: '$toBill'),
-            ),
-            Expanded(
-              child: _HeroStat(label: 'Completed', value: '$completed'),
-            ),
-            Expanded(
-              child: _HeroStat(label: 'Return', value: '$returns'),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
-
-class _HeroStat extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _HeroStat({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        value,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: AppColors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-      const SizedBox(height: 2),
-      Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: Color(0xFFE3F2EA),
-          fontSize: 9,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    ],
-  );
 }
 
 class _LogisticsTrackingDetailScreen extends StatelessWidget {
@@ -1738,57 +1603,4 @@ class _JourneyStepTile extends StatelessWidget {
       _JourneyStepState.cancelled => 'Batal',
     };
   }
-}
-
-class _TrackingMetricCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _TrackingMetricCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: AppColors.white,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppColors.border),
-      boxShadow: AppColors.cardShadow,
-    ),
-    child: Row(
-      children: [
-        CircleAvatar(
-          backgroundColor: color.withValues(alpha: 0.1),
-          foregroundColor: color,
-          child: Icon(icon),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              Text(
-                label,
-                style: const TextStyle(color: AppColors.slate, fontSize: 11),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
 }

@@ -11,8 +11,23 @@ import '../../screens/shared/module_screen_registry.dart';
 import '../../state/app_state.dart';
 import '../../theme/app_colors.dart';
 
-class DashboardModuleLauncher extends StatelessWidget {
+class DashboardModuleLauncher extends StatefulWidget {
   const DashboardModuleLauncher({super.key});
+
+  @override
+  State<DashboardModuleLauncher> createState() =>
+      _DashboardModuleLauncherState();
+}
+
+class _DashboardModuleLauncherState extends State<DashboardModuleLauncher> {
+  final _pageController = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,22 +39,68 @@ class DashboardModuleLauncher extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount = constraints.maxWidth >= 360 ? 4 : 3;
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: entries.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: 14,
-            crossAxisSpacing: 10,
-            childAspectRatio: 0.86,
-          ),
-          itemBuilder: (context, index) {
-            return _ModuleEntryTile(entry: entries[index]);
-          },
+        const rowsPerPage = 3;
+        const tileHeight = 88.0;
+        const rowGap = 14.0;
+        final pageSize = crossAxisCount * rowsPerPage;
+        final pages = _chunkEntries(entries, pageSize);
+        final safePage = _page.clamp(0, pages.length - 1);
+        if (safePage != _page) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _page = safePage);
+          });
+        }
+        final gridHeight =
+            rowsPerPage * tileHeight + (rowsPerPage - 1) * rowGap;
+
+        return Column(
+          children: [
+            SizedBox(
+              height: gridHeight,
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: pages.length,
+                onPageChanged: (index) => setState(() => _page = index),
+                itemBuilder: (context, pageIndex) {
+                  final pageEntries = pages[pageIndex];
+                  return GridView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: pageEntries.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      mainAxisSpacing: rowGap,
+                      crossAxisSpacing: 10,
+                      mainAxisExtent: tileHeight,
+                    ),
+                    itemBuilder: (context, index) {
+                      return _ModuleEntryTile(entry: pageEntries[index]);
+                    },
+                  );
+                },
+              ),
+            ),
+            if (pages.length > 1) ...[
+              const SizedBox(height: 10),
+              _ModulePageDots(count: pages.length, activeIndex: safePage),
+            ],
+          ],
         );
       },
     );
+  }
+
+  List<List<_ModuleEntry>> _chunkEntries(
+    List<_ModuleEntry> entries,
+    int pageSize,
+  ) {
+    final pages = <List<_ModuleEntry>>[];
+    for (var index = 0; index < entries.length; index += pageSize) {
+      final end = (index + pageSize).clamp(0, entries.length);
+      pages.add(entries.sublist(index, end));
+    }
+    return pages;
   }
 
   List<_ModuleGroup> _buildGroups(AppState appState) {
@@ -160,6 +221,34 @@ class DashboardModuleLauncher extends StatelessWidget {
   Widget _screenForEntry(AppState appState, ModuleLaunchEntry entry) {
     return entry.screen;
   }
+}
+
+class _ModulePageDots extends StatelessWidget {
+  const _ModulePageDots({required this.count, required this.activeIndex});
+
+  final int count;
+  final int activeIndex;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: List.generate(count, (index) {
+      final active = index == activeIndex;
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        width: active ? 18 : 6,
+        height: 6,
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        decoration: BoxDecoration(
+          color: active
+              ? AppColors.primary
+              : AppColors.primary.withValues(alpha: 0.18),
+          borderRadius: BorderRadius.circular(99),
+        ),
+      );
+    }),
+  );
 }
 
 class _ModuleGroup {

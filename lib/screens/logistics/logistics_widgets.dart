@@ -110,6 +110,277 @@ class LogisticsModernCard extends StatelessWidget {
   );
 }
 
+class LogisticsHeroSummaryCard extends StatelessWidget {
+  const LogisticsHeroSummaryCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.stats,
+    this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final List<LogisticsHeroStat> stats;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AppColors.primary,
+    borderRadius: BorderRadius.circular(22),
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.14),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: AppColors.white, size: 23),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFFE3F2EA),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (onTap != null)
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.white,
+                  ),
+              ],
+            ),
+            if (stats.isNotEmpty) ...[
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  for (final stat in stats)
+                    Expanded(child: _LogisticsHeroMetric(stat: stat)),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class LogisticsHeroStat {
+  const LogisticsHeroStat({
+    required this.label,
+    required this.value,
+    this.compact = false,
+  });
+
+  final String label;
+  final String value;
+  final bool compact;
+}
+
+class _LogisticsHeroMetric extends StatelessWidget {
+  const _LogisticsHeroMetric({required this.stat});
+
+  final LogisticsHeroStat stat;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        stat.value,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: AppColors.white,
+          fontSize: stat.compact ? 12 : 19,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      const SizedBox(height: 2),
+      Text(
+        stat.label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFFE3F2EA),
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    ],
+  );
+}
+
+class LogisticsMetricGrid extends StatelessWidget {
+  const LogisticsMetricGrid({super.key, required this.items, this.footer});
+
+  final List<LogisticsMetricItem> items;
+  final String? footer;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var index = 0; index < items.length; index += 2) {
+      final first = items[index];
+      final second = index + 1 < items.length ? items[index + 1] : null;
+      rows.add(
+        Row(
+          children: [
+            Expanded(child: LogisticsMetricCard(item: first)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: second == null
+                  ? const SizedBox.shrink()
+                  : LogisticsMetricCard(item: second),
+            ),
+          ],
+        ),
+      );
+      if (index + 2 < items.length) rows.add(const SizedBox(height: 10));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...rows,
+        if (footer?.trim().isNotEmpty == true) ...[
+          const SizedBox(height: 8),
+          Text(
+            footer!.trim(),
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class LogisticsMetricItem {
+  const LogisticsMetricItem({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    this.compactValue = false,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final bool compactValue;
+}
+
+class LogisticsMetricCard extends StatelessWidget {
+  const LogisticsMetricCard({super.key, required this.item});
+
+  final LogisticsMetricItem item;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(13),
+    decoration: BoxDecoration(
+      color: AppColors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: AppColors.border),
+      boxShadow: AppColors.cardShadow,
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: item.color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(item.icon, color: item.color, size: 20),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: AppColors.navy,
+                  fontSize: item.compactValue ? 13 : 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: AppColors.slate,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class LogisticsSearchField extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
