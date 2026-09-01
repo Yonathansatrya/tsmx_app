@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import 'config/app_config.dart';
 import 'state/app_state.dart';
 import 'services/erp_services.dart';
+import 'services/native_notification_service.dart';
 import 'screens/auth/loading_screen.dart';
 import 'theme/app_colors.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  NativeNotificationService.instance.initialize();
   final services = ErpServices();
   runApp(
     MultiProvider(
@@ -15,18 +19,18 @@ void main() {
         Provider.value(value: services),
         ChangeNotifierProvider(create: (_) => AppState(services: services)),
       ],
-      child: const TMSXLogisticsApp(),
+      child: const TmsxHubApp(),
     ),
   );
 }
 
-class TMSXLogisticsApp extends StatelessWidget {
-  const TMSXLogisticsApp({super.key});
+class TmsxHubApp extends StatelessWidget {
+  const TmsxHubApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TMSX',
+      title: AppConfig.defaultAppName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -39,10 +43,12 @@ class TMSXLogisticsApp extends StatelessWidget {
           surfaceContainerLowest: AppColors.white,
           surfaceContainer: AppColors.surfaceMuted,
         ),
+
         scaffoldBackgroundColor: AppColors.background,
         textTheme: GoogleFonts.hankenGroteskTextTheme(
           Theme.of(context).textTheme,
         ),
+
         appBarTheme: const AppBarTheme(
           backgroundColor: AppColors.white,
           foregroundColor: AppColors.primary,
@@ -55,14 +61,17 @@ class TMSXLogisticsApp extends StatelessWidget {
             fontWeight: FontWeight.w900,
           ),
         ),
+
         dividerTheme: const DividerThemeData(
           color: AppColors.border,
           thickness: 1,
         ),
+
         progressIndicatorTheme: const ProgressIndicatorThemeData(
           color: AppColors.primary,
           linearTrackColor: AppColors.softGreen,
         ),
+
         cardTheme: CardThemeData(
           color: AppColors.white,
           elevation: 0,
@@ -72,6 +81,7 @@ class TMSXLogisticsApp extends StatelessWidget {
             side: const BorderSide(color: AppColors.border),
           ),
         ),
+
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: AppColors.surfaceMuted,
@@ -84,11 +94,13 @@ class TMSXLogisticsApp extends StatelessWidget {
             borderSide: BorderSide.none,
           ),
         ),
+
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: AppColors.primary,
           foregroundColor: AppColors.white,
           elevation: 3,
         ),
+
         switchTheme: SwitchThemeData(
           thumbColor: WidgetStateProperty.resolveWith<Color?>((states) {
             if (states.contains(WidgetState.selected)) {

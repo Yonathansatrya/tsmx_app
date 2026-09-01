@@ -94,7 +94,7 @@ FrappeStatusStyle styleForStatusText(String statusText) {
   }
   if (_contains(s, 'credit note')) {
     return const FrappeStatusStyle(
-      label: 'CREDIT NOTE',
+      label: 'CREDIT NOTE ISSUED',
       color: Color(0xFF64748B),
       icon: Icons.receipt_long_outlined,
     );
@@ -179,35 +179,27 @@ FrappeStatusStyle styleForStatusText(String statusText) {
 
 enum SalesOrderStatusKey {
   draft,
-  onHold,
   overdue,
   toDeliverAndBill,
   toBill,
   toDeliver,
-  toPay,
   completed,
   closed,
   cancelled,
   unknown,
 }
 
-SalesOrderStatusKey parseSalesOrderStatus(
-  String statusText, {
-  int? docstatus,
-  bool isOverdue = false,
-}) {
+SalesOrderStatusKey parseSalesOrderStatus(String statusText, {int? docstatus}) {
   final text = normalizeStatusText(statusText, docstatus: docstatus);
   final s = text.toLowerCase();
 
   if (_eq(s, 'draft') || docstatus == 0) return SalesOrderStatusKey.draft;
-  if (_contains(s, 'on hold')) return SalesOrderStatusKey.onHold;
   if (_contains(s, 'cancel') || docstatus == 2) {
     return SalesOrderStatusKey.cancelled;
   }
   if (_contains(s, 'closed')) return SalesOrderStatusKey.closed;
   if (_contains(s, 'completed')) return SalesOrderStatusKey.completed;
-  if (isOverdue) return SalesOrderStatusKey.overdue;
-  if (_contains(s, 'to pay')) return SalesOrderStatusKey.toPay;
+  if (_contains(s, 'overdue')) return SalesOrderStatusKey.overdue;
   if (_contains(s, 'to deliver and bill')) {
     return SalesOrderStatusKey.toDeliverAndBill;
   }
@@ -219,39 +211,30 @@ SalesOrderStatusKey parseSalesOrderStatus(
 
 enum PurchaseOrderStatusKey {
   draft,
-  onHold,
   toReceiveAndBill,
   toBill,
   toReceive,
-  toPay,
   completed,
-  delivered,
-  closed,
   cancelled,
-  delayed,
+  closed,
   unknown,
 }
 
 PurchaseOrderStatusKey parsePurchaseOrderStatus(
   String statusText, {
   int? docstatus,
-  bool isDelayed = false,
 }) {
-  if (isDelayed) return PurchaseOrderStatusKey.delayed;
-
   final text = normalizeStatusText(statusText, docstatus: docstatus);
   final s = text.toLowerCase();
 
   if (_eq(s, 'draft') || docstatus == 0) return PurchaseOrderStatusKey.draft;
-  if (_contains(s, 'on hold')) return PurchaseOrderStatusKey.onHold;
   if (_contains(s, 'cancel') || docstatus == 2) {
     return PurchaseOrderStatusKey.cancelled;
   }
   if (_contains(s, 'closed')) return PurchaseOrderStatusKey.closed;
   if (_contains(s, 'completed')) return PurchaseOrderStatusKey.completed;
-  if (_contains(s, 'delivered')) return PurchaseOrderStatusKey.delivered;
-  if (_contains(s, 'to pay')) return PurchaseOrderStatusKey.toPay;
-  if (_contains(s, 'to receive and bill')) {
+  if (_contains(s, 'to receive and bill') ||
+      _contains(s, 'to receive and to bill')) {
     return PurchaseOrderStatusKey.toReceiveAndBill;
   }
   if (_contains(s, 'to receive')) return PurchaseOrderStatusKey.toReceive;
@@ -263,7 +246,6 @@ PurchaseOrderStatusKey parsePurchaseOrderStatus(
 enum DeliveryNoteStatusKey {
   draft,
   toBill,
-  partiallyBilled,
   completed,
   returnDoc,
   returnIssued,
@@ -287,9 +269,6 @@ DeliveryNoteStatusKey parseDeliveryNoteStatus(
   if (_contains(s, 'return issued')) return DeliveryNoteStatusKey.returnIssued;
   if (_contains(s, 'return')) return DeliveryNoteStatusKey.returnDoc;
   if (_contains(s, 'completed')) return DeliveryNoteStatusKey.completed;
-  if (_contains(s, 'partially billed')) {
-    return DeliveryNoteStatusKey.partiallyBilled;
-  }
   if (_contains(s, 'to bill')) return DeliveryNoteStatusKey.toBill;
 
   return DeliveryNoteStatusKey.unknown;
@@ -297,12 +276,12 @@ DeliveryNoteStatusKey parseDeliveryNoteStatus(
 
 enum InvoiceStatusKey {
   draft,
-  unpaid,
-  partlyPaid,
-  paid,
-  overdue,
   returnDoc,
-  creditNote,
+  creditNoteIssued,
+  paid,
+  partlyPaid,
+  unpaid,
+  overdue,
   cancelled,
   unknown,
 }
@@ -315,7 +294,7 @@ InvoiceStatusKey parseInvoiceStatus(String statusText, {int? docstatus}) {
   if (_contains(s, 'cancel') || docstatus == 2) {
     return InvoiceStatusKey.cancelled;
   }
-  if (_contains(s, 'credit note')) return InvoiceStatusKey.creditNote;
+  if (_contains(s, 'credit note')) return InvoiceStatusKey.creditNoteIssued;
   if (_contains(s, 'return')) return InvoiceStatusKey.returnDoc;
   if (_contains(s, 'overdue')) return InvoiceStatusKey.overdue;
   if (_contains(s, 'partly paid') || _contains(s, 'partially paid')) {
@@ -333,8 +312,6 @@ FrappeStatusStyle styleForSalesOrderKey(SalesOrderStatusKey key) {
   switch (key) {
     case SalesOrderStatusKey.draft:
       return styleForStatusText('Draft');
-    case SalesOrderStatusKey.onHold:
-      return styleForStatusText('On Hold');
     case SalesOrderStatusKey.overdue:
       return styleForStatusText('Overdue');
     case SalesOrderStatusKey.toDeliverAndBill:
@@ -343,8 +320,6 @@ FrappeStatusStyle styleForSalesOrderKey(SalesOrderStatusKey key) {
       return styleForStatusText('To Bill');
     case SalesOrderStatusKey.toDeliver:
       return styleForStatusText('To Deliver');
-    case SalesOrderStatusKey.toPay:
-      return styleForStatusText('To Pay');
     case SalesOrderStatusKey.completed:
       return styleForStatusText('Completed');
     case SalesOrderStatusKey.closed:

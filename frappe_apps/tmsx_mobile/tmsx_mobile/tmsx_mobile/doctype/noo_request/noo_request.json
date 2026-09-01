@@ -1,0 +1,180 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "naming_series:",
+  "creation": "2026-07-22 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "naming_series",
+    "request_date",
+    "company",
+    "sales_person",
+    "customer_section",
+    "customer_name",
+    "customer_category",
+    "default_payment_terms_template",
+    "mobile_no",
+    "address_line1",
+    "status"
+  ],
+  "fields": [
+    {
+      "default": "NOO-.YYYY.-.#####",
+      "fieldname": "naming_series",
+      "fieldtype": "Select",
+      "label": "Series",
+      "options": "NOO-.YYYY.-.#####",
+      "reqd": 1
+    },
+    {
+      "default": "Today",
+      "fieldname": "request_date",
+      "fieldtype": "Date",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Request Date",
+      "reqd": 1
+    },
+    {
+      "fieldname": "company",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Company",
+      "options": "Company",
+      "reqd": 1
+    },
+    {
+      "fieldname": "sales_person",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Sales Person",
+      "options": "Sales Person",
+      "reqd": 1
+    },
+    {
+      "fieldname": "customer_section",
+      "fieldtype": "Section Break",
+      "label": "Data Customer"
+    },
+    {
+      "fieldname": "customer_name",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Customer Name",
+      "reqd": 1
+    },
+    {
+      "fieldname": "customer_category",
+      "fieldtype": "Select",
+      "label": "Customer Category",
+      "options": "GT\nMT",
+      "reqd": 1
+    },
+    {
+      "fieldname": "default_payment_terms_template",
+      "fieldtype": "Link",
+      "label": "Default Payment Terms Template",
+      "options": "Payment Terms Template",
+      "reqd": 1
+    },
+    {
+      "fieldname": "mobile_no",
+      "fieldtype": "Data",
+      "label": "Mobile No",
+      "reqd": 1
+    },
+    {
+      "fieldname": "address_line1",
+      "fieldtype": "Small Text",
+      "label": "Address Line 1",
+      "reqd": 1
+    },
+    {
+      "default": "Pending Approval",
+      "fieldname": "status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Status",
+      "options": "Pending Approval\nSubmitted"
+    }
+  ],
+  "links": [],
+  "modified": "2026-07-24 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "TMSX Mobile",
+  "name": "NOO Request",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Developer",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "email": 1,
+      "export": 1,
+      "print": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Admin Sales",
+      "share": 1,
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "role": "Sales User",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "role": "Sales",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Sales Manager",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Sales Admin",
+      "write": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "states": [],
+  "title_field": "customer_name"
+}

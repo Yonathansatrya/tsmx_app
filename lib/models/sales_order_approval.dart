@@ -45,6 +45,7 @@ class SalesOrderApproval {
 
 class SalesOrderApprovalHistory {
   final String id;
+  final String doctype;
   final String salesOrder;
   final String content;
   final String actor;
@@ -52,6 +53,7 @@ class SalesOrderApprovalHistory {
 
   const SalesOrderApprovalHistory({
     required this.id,
+    this.doctype = 'Sales Order',
     required this.salesOrder,
     required this.content,
     required this.actor,
@@ -61,6 +63,7 @@ class SalesOrderApprovalHistory {
   factory SalesOrderApprovalHistory.fromJson(Map<String, dynamic> json) =>
       SalesOrderApprovalHistory(
         id: json['name']?.toString() ?? '',
+        doctype: json['reference_doctype']?.toString() ?? 'Sales Order',
         salesOrder: json['reference_name']?.toString() ?? '',
         content: json['content']?.toString() ?? '',
         actor:

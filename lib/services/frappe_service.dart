@@ -14,7 +14,7 @@ class FrappeService {
   final Map<String, String> _cookies = {};
 
   FrappeService({String? baseUrl})
-    : baseUrl = baseUrl ?? AppConfig.normalizedFrappeBaseUrl;
+    : baseUrl = baseUrl ?? AppConfig.optionalFrappeBaseUrl;
 
   bool get hasCredentials => username != null && password != null;
 
@@ -50,6 +50,9 @@ class FrappeService {
   }
 
   Future<void> ensureLoggedIn() async {
+    if (baseUrl.trim().isEmpty) {
+      throw Exception('Frappe site belum dipilih.');
+    }
     if (!hasCredentials) {
       throw Exception('Missing Frappe username or password.');
     }
@@ -88,8 +91,35 @@ class FrappeService {
       '$baseUrl/api/resource/$encodedDoctype',
     ).replace(queryParameters: queryParameters);
 
-    final response = await _get(uri);
-    final decoded = await _decodeJson(response.body);
+    if (uri.toString().length > 1800) {
+      return _fetchResourceViaClientGetList(
+        doctype,
+        fields: fields,
+        limit: limit,
+        limitStart: limitStart,
+        orderBy: orderBy,
+        filters: filters,
+        orFilters: orFilters,
+      );
+    }
+
+    _DecodedFrappeResponse result;
+    try {
+      result = await _sendJsonWithRelogin(() => _get(uri), uri: uri);
+    } catch (error) {
+      if (!_isHtmlResponseError(error)) rethrow;
+      return _fetchResourceViaClientGetList(
+        doctype,
+        fields: fields,
+        limit: limit,
+        limitStart: limitStart,
+        orderBy: orderBy,
+        filters: filters,
+        orFilters: orFilters,
+      );
+    }
+    final response = result.response;
+    final decoded = result.decoded;
 
     if (response.statusCode != 200) {
       throw Exception(_extractFrappeError(decoded, response.statusCode));
@@ -106,6 +136,101 @@ class FrappeService {
     }).toList();
   }
 
+  Future<List<Map<String, dynamic>>> _fetchResourceViaClientGetList(
+    String doctype, {
+    required List<String> fields,
+    required int limit,
+    required int limitStart,
+    String? orderBy,
+    List<List<dynamic>>? filters,
+    List<List<dynamic>>? orFilters,
+  }) async {
+    final result = await callMethod(
+      'frappe.client.get_list',
+      args: {
+        'doctype': doctype,
+        'fields': fields,
+        'limit_page_length': limit,
+        'limit_start': limitStart,
+        if (orderBy != null && orderBy.trim().isNotEmpty) 'order_by': orderBy,
+        if (filters != null && filters.isNotEmpty) 'filters': filters,
+        if (orFilters != null && orFilters.isNotEmpty) 'or_filters': orFilters,
+      },
+    );
+    final rows = result is Map && result['data'] is List
+        ? result['data'] as List
+        : result is List
+        ? result
+        : const [];
+    return rows.map((item) {
+      return item is Map<String, dynamic>
+          ? item
+          : Map<String, dynamic>.from(item as Map);
+    }).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchReportView(
+    String doctype, {
+    required List<String> fields,
+    required int limit,
+    required int limitStart,
+    String? orderBy,
+    List<List<dynamic>>? filters,
+    List<List<dynamic>>? orFilters,
+  }) async {
+    final result = await callMethod(
+      'frappe.desk.reportview.get',
+      args: {
+        'doctype': doctype,
+        'fields': fields,
+        'filters': filters ?? const [],
+        'or_filters': orFilters ?? const [],
+        'order_by': orderBy ?? 'modified desc',
+        'start': limitStart,
+        'page_length': limit,
+        'view': 'List',
+        'group_by': null,
+        'with_comment_count': 0,
+      },
+    );
+
+    final payload = result is Map ? Map<String, dynamic>.from(result) : null;
+    final rawRows =
+        payload?['values'] ?? payload?['data'] ?? payload?['result'];
+    if (rawRows is! List) return const [];
+
+    final rawKeys = payload?['keys'] ?? payload?['fields'];
+    final keys = rawKeys is List
+        ? rawKeys.map((key) => key.toString()).toList()
+        : fields;
+
+    return rawRows
+        .map((item) {
+          if (item is Map<String, dynamic>) return item;
+          if (item is Map) return Map<String, dynamic>.from(item);
+          if (item is List) {
+            final row = <String, dynamic>{};
+            for (var i = 0; i < item.length && i < keys.length; i++) {
+              final key = _normalizeReportViewKey(keys[i]);
+              if (key.isNotEmpty) row[key] = item[i];
+            }
+            return row;
+          }
+          return <String, dynamic>{};
+        })
+        .where((row) => row.isNotEmpty)
+        .toList();
+  }
+
+  String _normalizeReportViewKey(String raw) {
+    var key = raw.split(':').first.trim().replaceAll('`', '');
+    final dotIndex = key.lastIndexOf('.');
+    if (dotIndex >= 0 && dotIndex < key.length - 1) {
+      key = key.substring(dotIndex + 1);
+    }
+    return key.trim();
+  }
+
   Future<Map<String, dynamic>> fetchDocument(
     String doctype,
     String name,
@@ -116,8 +241,9 @@ class FrappeService {
     final encodedName = Uri.encodeComponent(name);
     final uri = Uri.parse('$baseUrl/api/resource/$encodedDoctype/$encodedName');
 
-    final response = await _get(uri);
-    final decoded = await _decodeJson(response.body);
+    final result = await _sendJsonWithRelogin(() => _get(uri), uri: uri);
+    final response = result.response;
+    final decoded = result.decoded;
 
     if (response.statusCode != 200) {
       throw Exception(_extractFrappeError(decoded, response.statusCode));
@@ -142,12 +268,16 @@ class FrappeService {
     final encodedDoctype = Uri.encodeComponent(doctype);
     final uri = Uri.parse('$baseUrl/api/resource/$encodedDoctype');
 
-    final response = await _post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(data),
+    final result = await _sendJsonWithRelogin(
+      () => _post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(data),
+      ),
+      uri: uri,
     );
-    final decoded = await _decodeJson(response.body);
+    final response = result.response;
+    final decoded = result.decoded;
 
     if (response.statusCode != 200) {
       throw Exception(_extractFrappeError(decoded, response.statusCode));
@@ -196,6 +326,52 @@ class FrappeService {
     throw Exception('Invalid upload response.');
   }
 
+  Future<List<int>> downloadPrintPdf({
+    required String doctype,
+    required String name,
+    String? printFormat,
+    bool noLetterhead = false,
+  }) async {
+    await ensureLoggedIn();
+
+    final uri =
+        Uri.parse(
+          '$baseUrl/api/method/frappe.utils.print_format.download_pdf',
+        ).replace(
+          queryParameters: {
+            'doctype': doctype,
+            'name': name,
+            if (printFormat?.trim().isNotEmpty == true)
+              'format': printFormat!.trim(),
+            'no_letterhead': noLetterhead ? '1' : '0',
+          },
+        );
+
+    final response = await _getBytes(uri);
+    if (response.statusCode != 200) {
+      dynamic decoded;
+      try {
+        decoded = await _decodeJson(utf8.decode(response.bodyBytes));
+      } catch (_) {
+        decoded = null;
+      }
+      throw Exception(_extractFrappeError(decoded, response.statusCode));
+    }
+    if (response.bodyBytes.isEmpty) {
+      throw Exception('ERPNext tidak mengembalikan file PDF.');
+    }
+    final header = utf8.decode(
+      response.bodyBytes.take(5).toList(),
+      allowMalformed: true,
+    );
+    if (!header.startsWith('%PDF')) {
+      throw Exception(
+        'ERPNext tidak mengembalikan PDF. Pastikan Print Format Sales Order tersedia.',
+      );
+    }
+    return response.bodyBytes;
+  }
+
   Future<void> updateDocument(
     String doctype,
     String name,
@@ -207,12 +383,16 @@ class FrappeService {
     final encodedName = Uri.encodeComponent(name);
     final uri = Uri.parse('$baseUrl/api/resource/$encodedDoctype/$encodedName');
 
-    final response = await _put(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(data),
+    final result = await _sendJsonWithRelogin(
+      () => _put(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(data),
+      ),
+      uri: uri,
     );
-    final decoded = await _decodeJson(response.body);
+    final response = result.response;
+    final decoded = result.decoded;
 
     if (response.statusCode != 200) {
       throw Exception(_extractFrappeError(decoded, response.statusCode));
@@ -226,12 +406,16 @@ class FrappeService {
     await ensureLoggedIn();
 
     final uri = Uri.parse('$baseUrl/api/method/$method');
-    final response = await _post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(args ?? {}),
+    final result = await _sendJsonWithRelogin(
+      () => _post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(args ?? {}),
+      ),
+      uri: uri,
     );
-    final decoded = await _decodeJson(response.body);
+    final response = result.response;
+    final decoded = result.decoded;
 
     if (response.statusCode != 200) {
       throw Exception(_extractFrappeError(decoded, response.statusCode));
@@ -256,6 +440,7 @@ class FrappeService {
     String? warehouse,
     String? priceList,
     String? currency,
+    String? customerGroup,
     bool ignorePricingRule = false,
   }) async {
     final pricingArgs = <String, dynamic>{
@@ -279,6 +464,8 @@ class FrappeService {
         'selling_price_list': priceList.trim(),
       if (currency != null && currency.trim().isNotEmpty)
         'currency': currency.trim(),
+      if (customerGroup != null && customerGroup.trim().isNotEmpty)
+        'customer_group': customerGroup.trim(),
     };
 
     final result = await callMethod(
@@ -291,6 +478,7 @@ class FrappeService {
           'company': company,
           'transaction_date': transactionDate,
           'currency': currency,
+          'customer_group': customerGroup,
           'selling_price_list': priceList,
           'ignore_pricing_rule': ignorePricingRule ? 1 : 0,
         }),
@@ -568,6 +756,60 @@ class FrappeService {
     }
   }
 
+  Future<http.Response> _getBytes(
+    Uri uri, {
+    Map<String, String>? headers,
+  }) async {
+    final httpClient = HttpClient();
+    try {
+      final request = await httpClient.getUrl(uri);
+      request.headers.set(HttpHeaders.acceptHeader, 'application/pdf');
+      if (headers != null) {
+        headers.forEach((key, value) {
+          if (key.toLowerCase() == HttpHeaders.expectHeader.toLowerCase()) {
+            return;
+          }
+          request.headers.set(key, value);
+        });
+      }
+      if (_cookies.isNotEmpty) {
+        request.headers.set(HttpHeaders.cookieHeader, _cookieHeader());
+      }
+      request.headers.removeAll(HttpHeaders.expectHeader);
+
+      final sentRequestHeaders = <String, String>{};
+      request.headers.forEach((name, values) {
+        sentRequestHeaders[name] = values.join(',');
+      });
+
+      final response = await request.close();
+      final responseBytes = await consolidateHttpClientResponseBytes(response);
+      _updateCookiesFromHeaders(response.headers);
+      final responseHeaders = <String, String>{};
+      response.headers.forEach((name, values) {
+        responseHeaders[name] = values.join(',');
+      });
+      if (response.statusCode >= 400) {
+        _logHttpError(
+          method: 'GET',
+          uri: uri,
+          requestHeaders: sentRequestHeaders,
+          statusCode: response.statusCode,
+          responseHeaders: responseHeaders,
+          responseBody: utf8.decode(responseBytes, allowMalformed: true),
+        );
+      }
+      return http.Response.bytes(
+        responseBytes,
+        response.statusCode,
+        headers: responseHeaders,
+        reasonPhrase: response.reasonPhrase,
+      );
+    } finally {
+      httpClient.close(force: true);
+    }
+  }
+
   Future<http.Response> _delete(Uri uri, {Map<String, String>? headers}) async {
     final httpClient = HttpClient();
     try {
@@ -627,6 +869,38 @@ class FrappeService {
     return _cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
   }
 
+  Future<_DecodedFrappeResponse> _sendJsonWithRelogin(
+    Future<http.Response> Function() request, {
+    required Uri uri,
+  }) async {
+    final response = await request();
+    try {
+      return _DecodedFrappeResponse(
+        response: response,
+        decoded: await _decodeJson(response.body),
+      );
+    } catch (error) {
+      if (!_isHtmlResponseError(error) || !hasCredentials) rethrow;
+      _cookies.clear();
+      await login(username!, password!);
+      final retry = await request();
+      try {
+        return _DecodedFrappeResponse(
+          response: retry,
+          decoded: await _decodeJson(retry.body),
+        );
+      } catch (retryError) {
+        if (_isHtmlResponseError(retryError)) {
+          throw Exception(
+            'ERPNext mengembalikan halaman HTML untuk ${uri.path}. '
+            'Status ${retry.statusCode}. Pastikan user punya API access dan permission DocType.',
+          );
+        }
+        rethrow;
+      }
+    }
+  }
+
   Future<dynamic> _decodeJson(String source) async {
     try {
       if (source.length < 50 * 1024) {
@@ -645,30 +919,125 @@ class FrappeService {
     }
   }
 
+  bool _isHtmlResponseError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('mengembalikan halaman html') ||
+        message.contains('returned html') ||
+        message.contains('<!doctype html') ||
+        message.contains('<html');
+  }
+
   static String _extractFrappeError(dynamic decoded, int statusCode) {
     if (decoded is Map) {
       final exception = decoded['exception']?.toString();
       if (exception != null && exception.isNotEmpty) {
-        return exception;
+        return _friendlyFrappeMessage(exception, statusCode);
       }
 
       final exc = decoded['exc']?.toString();
       if (exc != null && exc.isNotEmpty) {
-        return exc;
+        return _friendlyFrappeMessage(exc, statusCode);
       }
 
       final message = decoded['message'];
       if (message != null) {
-        return message.toString();
+        return _friendlyFrappeMessage(message.toString(), statusCode);
       }
 
       final serverMessages = decoded['_server_messages']?.toString();
       if (serverMessages != null && serverMessages.isNotEmpty) {
-        return serverMessages;
+        return _friendlyFrappeMessage(serverMessages, statusCode);
       }
     }
 
     return 'Frappe API error: $statusCode';
+  }
+
+  static String _friendlyFrappeMessage(String raw, int statusCode) {
+    final parsed = _parseServerMessage(raw).trim();
+    final message = parsed.isEmpty ? raw.trim() : parsed;
+    final lower = message.toLowerCase();
+
+    if (lower.contains('permissionerror') ||
+        lower.contains('not permitted') ||
+        lower.contains('insufficient permission')) {
+      return 'Akses ERPNext tidak diizinkan untuk data ini.';
+    }
+    if (lower.contains('doctype') &&
+        (lower.contains('not found') ||
+            lower.contains('does not exist') ||
+            lower.contains('tidak ditemukan'))) {
+      final doctype = _extractMissingDoctype(message);
+      return doctype == null
+          ? 'Fitur belum aktif di site ERPNext ini.'
+          : 'Fitur $doctype belum aktif di site ERPNext ini.';
+    }
+    if (statusCode == 401 || statusCode == 403) {
+      return 'Session atau akses ERPNext tidak diizinkan.';
+    }
+    if (statusCode == 404) {
+      return 'Data atau endpoint ERPNext tidak ditemukan.';
+    }
+    return message;
+  }
+
+  static String _parseServerMessage(String raw) {
+    dynamic value = raw;
+    for (var depth = 0; depth < 3; depth++) {
+      if (value is! String) break;
+      final trimmed = value.trim();
+      if (!(trimmed.startsWith('[') || trimmed.startsWith('{'))) break;
+      try {
+        value = jsonDecode(trimmed);
+      } on FormatException {
+        break;
+      }
+    }
+
+    if (value is List) {
+      final messages = value
+          .map(_messageFromServerMessageItem)
+          .where((message) => message.trim().isNotEmpty)
+          .toList();
+      if (messages.isNotEmpty) return messages.join('\n');
+    }
+    if (value is Map) {
+      return _messageFromServerMessageItem(value);
+    }
+    return raw;
+  }
+
+  static String _messageFromServerMessageItem(dynamic item) {
+    if (item is String) {
+      final nested = _parseServerMessage(item);
+      return nested == item ? item : nested;
+    }
+    if (item is Map) {
+      final message = item['message'] ?? item['title'] ?? item['indicator'];
+      return message?.toString() ?? '';
+    }
+    return item?.toString() ?? '';
+  }
+
+  static String? _extractMissingDoctype(String message) {
+    final patterns = [
+      RegExp(
+        r'DocType\s+(.+?)\s+(?:tidak ditemukan|not found|does not exist)',
+        caseSensitive: false,
+      ),
+      RegExp(
+        r'(.+?)\s+DocType\s+(?:tidak ditemukan|not found|does not exist)',
+        caseSensitive: false,
+      ),
+    ];
+    for (final pattern in patterns) {
+      final match = pattern.firstMatch(message);
+      final value = match?.group(1)?.trim();
+      if (value != null && value.isNotEmpty) {
+        return value.replaceAll(RegExp(r'["`.]'), '').trim();
+      }
+    }
+    return null;
   }
 
   void _logHttpError({
@@ -688,4 +1057,11 @@ class FrappeService {
       name: 'FrappeService',
     );
   }
+}
+
+class _DecodedFrappeResponse {
+  final http.Response response;
+  final dynamic decoded;
+
+  const _DecodedFrappeResponse({required this.response, required this.decoded});
 }

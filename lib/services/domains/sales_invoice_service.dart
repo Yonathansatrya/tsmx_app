@@ -1,13 +1,12 @@
 import '../../models/sales_invoice.dart';
 import '../frappe_service.dart';
+import 'frappe_document_service.dart';
 
-class SalesInvoiceService {
-  final FrappeService _frappe;
-
-  SalesInvoiceService(this._frappe);
-
-  Future<SalesInvoice> load(String invoiceId) async {
-    final doc = await _frappe.fetchDocument('Sales Invoice', invoiceId);
-    return SalesInvoice.fromJson(doc);
-  }
+class SalesInvoiceService extends FrappeDocumentService<SalesInvoice> {
+  SalesInvoiceService(FrappeService frappe)
+    : super(
+        frappe: frappe,
+        doctype: 'Sales Invoice',
+        fromJson: SalesInvoice.fromJson,
+      );
 }

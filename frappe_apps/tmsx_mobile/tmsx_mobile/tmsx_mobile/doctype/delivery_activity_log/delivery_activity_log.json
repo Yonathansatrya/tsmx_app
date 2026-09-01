@@ -1,0 +1,123 @@
+{
+  "actions": [],
+  "allow_rename": 0,
+  "autoname": "format:DAL-.YYYY.-.#####",
+  "creation": "2026-06-27 00:00:00.000000",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "delivery_note",
+    "customer",
+    "driver",
+    "activity_status",
+    "notes",
+    "captured_at",
+    "latitude",
+    "longitude",
+    "accuracy"
+  ],
+  "fields": [
+    {
+      "fieldname": "delivery_note",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Delivery Note",
+      "options": "Delivery Note",
+      "reqd": 1
+    },
+    {
+      "fieldname": "customer",
+      "fieldtype": "Link",
+      "in_list_view": 1,
+      "label": "Customer",
+      "options": "Customer"
+    },
+    {
+      "fieldname": "driver",
+      "fieldtype": "Data",
+      "in_list_view": 1,
+      "label": "Driver"
+    },
+    {
+      "fieldname": "activity_status",
+      "fieldtype": "Select",
+      "in_list_view": 1,
+      "in_standard_filter": 1,
+      "label": "Activity Status",
+      "options": "Departed\nArrived\nDelivered\nFailed\nReturned"
+    },
+    {
+      "fieldname": "notes",
+      "fieldtype": "Small Text",
+      "label": "Notes"
+    },
+    {
+      "fieldname": "captured_at",
+      "fieldtype": "Datetime",
+      "in_list_view": 1,
+      "label": "Captured At"
+    },
+    {
+      "fieldname": "latitude",
+      "fieldtype": "Data",
+      "label": "Latitude"
+    },
+    {
+      "fieldname": "longitude",
+      "fieldtype": "Data",
+      "label": "Longitude"
+    },
+    {
+      "fieldname": "accuracy",
+      "fieldtype": "Float",
+      "label": "Accuracy"
+    }
+  ],
+  "links": [],
+  "modified": "2026-06-27 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "TMSX Mobile",
+  "name": "Delivery Activity Log",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "create": 1,
+      "delete": 1,
+      "read": 1,
+      "report": 1,
+      "role": "System Manager",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "role": "Logistics User",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "role": "Driver",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Logistics Manager",
+      "write": 1
+    },
+    {
+      "create": 1,
+      "delete": 1,
+      "read": 1,
+      "report": 1,
+      "role": "Logistics Admin",
+      "write": 1
+    }
+  ],
+  "sort_field": "captured_at",
+  "sort_order": "DESC",
+  "states": []
+}

@@ -58,18 +58,79 @@ Widget erpActionButton({
   required VoidCallback? onPressed,
   bool filled = false,
 }) {
-  final child = filled
-      ? FilledButton.icon(
-          onPressed: onPressed,
-          icon: Icon(icon, size: 18),
-          label: Text(label),
-        )
-      : OutlinedButton.icon(
-          onPressed: onPressed,
-          icon: Icon(icon, size: 18),
-          label: Text(label),
-        );
-  return SizedBox(width: double.infinity, child: child);
+  final enabled = onPressed != null;
+  final foreground = filled
+      ? AppColors.white
+      : (enabled ? AppColors.primary : AppColors.slate);
+  final background = filled
+      ? (enabled ? AppColors.primary : AppColors.surfaceMuted)
+      : AppColors.white;
+  final borderColor = filled
+      ? Colors.transparent
+      : (enabled
+            ? AppColors.primary.withValues(alpha: 0.26)
+            : AppColors.border);
+
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 9),
+    child: Material(
+      color: background,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 54),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor),
+            boxShadow: enabled
+                ? [
+                    BoxShadow(
+                      color:
+                          (filled ? AppColors.primary : AppColors.primaryDark)
+                              .withValues(alpha: filled ? 0.20 : 0.06),
+                      blurRadius: filled ? 18 : 14,
+                      offset: const Offset(0, 8),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: filled
+                      ? AppColors.white.withValues(alpha: 0.16)
+                      : AppColors.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 18, color: foreground),
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 Widget erpWorkflowSection({
@@ -89,9 +150,7 @@ Widget erpWorkflowSection({
         ),
       ),
       const SizedBox(height: 8),
-      ...children.map(
-        (w) => Padding(padding: const EdgeInsets.only(bottom: 8), child: w),
-      ),
+      ...children,
     ],
   );
 }

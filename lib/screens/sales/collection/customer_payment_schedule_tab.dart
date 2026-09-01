@@ -4,21 +4,33 @@ import 'package:provider/provider.dart';
 import '../../../models/sales_invoice.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
+import '../../../utils/date_range_presets.dart';
 import '../../../utils/erp_format.dart';
 import '../../../widgets/erp/erp_empty_state.dart';
 import '../../../widgets/erp/erp_error_box.dart';
+import 'ar_aging_tab.dart';
 import 'collection_widgets.dart';
+import '../shared/sales_ui.dart';
 
 class CustomerPaymentScheduleTab extends StatefulWidget {
-  const CustomerPaymentScheduleTab({super.key});
+  const CustomerPaymentScheduleTab({
+    super.key,
+    required this.range,
+    required this.dateBasis,
+    required this.applyDateFilter,
+  });
+
+  final DateRangePreset range;
+  final CollectionAgingDateBasis dateBasis;
+  final bool applyDateFilter;
 
   @override
   State<CustomerPaymentScheduleTab> createState() =>
       _CustomerPaymentScheduleTabState();
 }
 
-class _CustomerPaymentScheduleTabState
-    extends State<CustomerPaymentScheduleTab> {
+class _CustomerPaymentScheduleTabState extends State<CustomerPaymentScheduleTab>
+    with AutomaticKeepAliveClientMixin {
   List<SalesInvoice> invoices = const [];
   bool loading = true;
   String? error;
@@ -45,17 +57,44 @@ class _CustomerPaymentScheduleTabState
     }
   }
 
+  @override
+  bool get wantKeepAlive => true;
+
   bool _isDue(SalesInvoice row) {
-    final date = DateTime.tryParse(row.dueDate);
+    final date = DateTime.tryParse(row.collectionDueDate);
     if (date == null) return false;
     final today = DateTime.now();
     return !date.isAfter(DateTime(today.year, today.month, today.day));
   }
 
+  List<SalesInvoice> get filteredInvoices {
+    if (!widget.applyDateFilter) return invoices;
+    return invoices.where((invoice) {
+      final rawDate = widget.dateBasis == CollectionAgingDateBasis.invoiceDate
+          ? invoice.date
+          : invoice.tukarFakturDate;
+      final parsed = DateTime.tryParse(rawDate);
+      if (parsed == null) return false;
+      final date = DateTime(parsed.year, parsed.month, parsed.day);
+      final from = DateTime(
+        widget.range.from.year,
+        widget.range.from.month,
+        widget.range.from.day,
+      );
+      final to = DateTime(
+        widget.range.to.year,
+        widget.range.to.month,
+        widget.range.to.day,
+      );
+      return !date.isBefore(from) && !date.isAfter(to);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final sorted = invoices.toList()
-      ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    super.build(context);
+    final sorted = filteredInvoices.toList()
+      ..sort((a, b) => a.collectionDueDate.compareTo(b.collectionDueDate));
     final due = sorted.where(_isDue).length;
     final total = sorted.fold<double>(
       0,
@@ -65,11 +104,11 @@ class _CustomerPaymentScheduleTabState
       onRefresh: _load,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+        padding: SalesUi.screenPaddingOf(context),
         children: [
           const CollectionSectionHeader(
             title: 'Janji Bayar Customer',
-            subtitle: 'Jadwal bayar mengikuti jatuh tempo invoice ERPNext',
+            subtitle: 'Jadwal bayar mengikuti due date SI dan term TT',
             icon: Icons.event_available_rounded,
           ),
           Row(
@@ -124,54 +163,115 @@ class _CustomerPaymentScheduleTabState
             ...sorted.map(
               (row) => Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: Card(
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 7,
-                    ),
-                    leading: CircleAvatar(
-                      backgroundColor: _isDue(row)
-                          ? AppColors.warning.withValues(alpha: 0.12)
-                          : AppColors.softGreen,
-                      foregroundColor: _isDue(row)
-                          ? AppColors.warning
-                          : AppColors.primary,
-                      child: Icon(
-                        _isDue(row)
-                            ? Icons.notification_important_outlined
-                            : Icons.event_available_outlined,
-                      ),
-                    ),
-                    title: Text(
-                      row.customer,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    subtitle: Text(
-                      'Tanggal janji: ${row.dueDate}\nInvoice: ${row.id}',
-                    ),
-                    isThreeLine: true,
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        CollectionStatusChip(
-                          label: _isDue(row) ? 'Jatuh Tempo' : 'Terjadwal',
-                          color: _isDue(row)
-                              ? AppColors.warning
-                              : AppColors.primary,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Rp ${formatErpCurrency(row.outstandingAmount)}',
-                          style: const TextStyle(fontWeight: FontWeight.w900),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                child: _PaymentScheduleCard(row: row, due: _isDue(row)),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentScheduleCard extends StatelessWidget {
+  const _PaymentScheduleCard({required this.row, required this.due});
+
+  final SalesInvoice row;
+  final bool due;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = due ? AppColors.warning : AppColors.primary;
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: color.withValues(alpha: 0.12)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.07),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(
+              due
+                  ? Icons.notification_important_outlined
+                  : Icons.event_available_outlined,
+              color: color,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.customer,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.navy,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  row.id,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.slate,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    CollectionStatusChip(
+                      label: due ? 'Jatuh Tempo' : 'Terjadwal',
+                      color: color,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        row.collectionDueDate,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            'Rp ${formatErpCurrency(row.outstandingAmount)}',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );

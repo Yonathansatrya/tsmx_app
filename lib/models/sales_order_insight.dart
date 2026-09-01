@@ -1,19 +1,23 @@
 class CustomerSalesInsight {
   final double creditLimit;
   final double outstanding;
+  final double depositBalance;
   final String company;
   final String currency;
   final String priceList;
   final String priceListCurrency;
+  final String customerGroup;
   final List<CustomerPurchaseHistory> history;
 
   const CustomerSalesInsight({
     this.creditLimit = 0,
     this.outstanding = 0,
+    this.depositBalance = 0,
     this.company = '',
     this.currency = '',
     this.priceList = '',
     this.priceListCurrency = '',
+    this.customerGroup = '',
     this.history = const [],
   });
 
@@ -51,6 +55,7 @@ class ItemSalesInsight {
   final double priceListRate;
   final double price;
   final String currency;
+  final double discountAmount;
   final double discountPercentage;
   final String pricingRule;
   final List<WarehouseStockInsight> stocks;
@@ -61,6 +66,7 @@ class ItemSalesInsight {
     this.priceListRate = 0,
     this.price = 0,
     this.currency = '',
+    this.discountAmount = 0,
     this.discountPercentage = 0,
     this.pricingRule = '',
     this.stocks = const [],

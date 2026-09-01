@@ -44,6 +44,7 @@ class PurchaseOrder {
   final double perReceived;
   final double perBilled;
   final String eta;
+  final String modified;
   final int itemsCount;
   final double totalValue;
   final List<PurchaseOrderItem> items;
@@ -58,12 +59,27 @@ class PurchaseOrder {
     this.perReceived = 0,
     this.perBilled = 0,
     required this.eta,
+    this.modified = '',
     required this.itemsCount,
     required this.totalValue,
     this.items = const [],
   });
 
-  bool get isDelayed => statusKey == PurchaseOrderStatusKey.delayed;
+  bool get isOverdue {
+    final etaDate = _parseEta(eta);
+    final today = DateTime.now();
+    final isOverdue =
+        etaDate != null &&
+        etaDate.isBefore(DateTime(today.year, today.month, today.day));
+    final settled =
+        statusText.toLowerCase().contains('completed') ||
+        statusText.toLowerCase().contains('cancel') ||
+        statusText.toLowerCase().contains('closed') ||
+        statusText.toLowerCase().contains('delivered');
+    return isOverdue && !settled;
+  }
+
+  bool get isDelayed => isOverdue;
 
   PurchaseOrder copyWith({
     String? id,
@@ -75,6 +91,7 @@ class PurchaseOrder {
     double? perReceived,
     double? perBilled,
     String? eta,
+    String? modified,
     int? itemsCount,
     double? totalValue,
     List<PurchaseOrderItem>? items,
@@ -89,6 +106,7 @@ class PurchaseOrder {
       perReceived: perReceived ?? this.perReceived,
       perBilled: perBilled ?? this.perBilled,
       eta: eta ?? this.eta,
+      modified: modified ?? this.modified,
       itemsCount: itemsCount ?? this.itemsCount,
       totalValue: totalValue ?? this.totalValue,
       items: items ?? this.items,
@@ -113,7 +131,10 @@ class PurchaseOrder {
     final itemsCount = NumParse.asInt(json['total_qty']);
 
     final totalValue = NumParse.asDouble(
-      json['rounded_total'] ?? json['grand_total'],
+      json['base_net_total'] ??
+          json['net_total'] ??
+          json['rounded_total'] ??
+          json['grand_total'],
     );
 
     final docstatus = NumParse.asInt(json['docstatus']);
@@ -122,21 +143,9 @@ class PurchaseOrder {
       docstatus: docstatus,
     );
 
-    final etaDate = _parseEta(eta);
-    final today = DateTime.now();
-    final isOverdue =
-        etaDate != null &&
-        etaDate.isBefore(DateTime(today.year, today.month, today.day));
-    final isDelayed =
-        isOverdue &&
-        !statusText.toLowerCase().contains('completed') &&
-        !statusText.toLowerCase().contains('cancel') &&
-        !statusText.toLowerCase().contains('closed');
-
     final statusKey = parsePurchaseOrderStatus(
       statusText,
       docstatus: docstatus,
-      isDelayed: isDelayed,
     );
 
     final rawItems = json['items'];
@@ -160,6 +169,7 @@ class PurchaseOrder {
       perReceived: NumParse.asDouble(json['per_received']),
       perBilled: NumParse.asDouble(json['per_billed']),
       eta: eta,
+      modified: json['modified']?.toString() ?? '',
       itemsCount: itemsCount,
       totalValue: totalValue,
       items: items,

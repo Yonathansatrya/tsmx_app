@@ -10,28 +10,34 @@ import '../../../models/sales_workspace.dart';
 import '../../../models/warehouse_info.dart';
 import '../../../state/app_state.dart';
 import '../../../theme/app_colors.dart';
+import '../../../widgets/erp/erp_item_autocomplete_field.dart';
+import '../../../widgets/responsive/responsive_layout.dart';
+import '../shared/sales_ui.dart';
 
 class CreateSalesOrderScreen extends StatefulWidget {
   final String? editOrderId;
+  final SalesOrder? duplicateFrom;
 
-  const CreateSalesOrderScreen({super.key, this.editOrderId});
+  const CreateSalesOrderScreen({
+    super.key,
+    this.editOrderId,
+    this.duplicateFrom,
+  });
 
   bool get isEditMode => editOrderId != null;
+  bool get isDuplicateMode => duplicateFrom != null && editOrderId == null;
 
   @override
   State<CreateSalesOrderScreen> createState() => _CreateSalesOrderScreenState();
 }
 
 class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
-  static const _defaultWarehouseName = 'Stores - Jakarta';
-  static const _defaultCompanyName = 'Distribusi Jakarta';
-  static const _defaultCostCenterName = 'Sales - Jakarta';
-
   final _formKey = GlobalKey<FormState>();
   final _customerCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
   final _rateCtrl = TextEditingController();
   final _discountCtrl = TextEditingController(text: '0');
+  final _notedCtrl = TextEditingController();
   final List<_AdditionalItemRow> _additionalItems = [];
   final ImagePicker _imagePicker = ImagePicker();
   final List<XFile> _photos = [];
@@ -41,7 +47,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   bool _isLoadingCustomerInsight = false;
   String? _customerInsightError;
   Timer? _pricingDebounce;
-  int _pricingRequestVersion = 0;
   String? _selectedCurrency;
   String? _selectedPriceList;
   String? _priceListCurrency;
@@ -50,6 +55,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   String? _initialItemText;
   String? _selectedItemCode;
   String? _selectedSeries;
+  String? _selectedCompany;
   String? _selectedWarehouse;
   String? _selectedCenter;
   String? _selectedSalesPerson;
@@ -65,6 +71,20 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   String? _itemError;
   double _totalAmount = 0.0;
 
+  bool get _isCustomerLocked => widget.isDuplicateMode;
+
+  String get _screenTitle {
+    if (widget.isEditMode) return 'Edit Sales Order';
+    if (widget.isDuplicateMode) return 'Duplicate Sales Order';
+    return 'New Sales Order';
+  }
+
+  String get _saveButtonLabel {
+    if (widget.isEditMode) return 'Update Sales Order';
+    if (widget.isDuplicateMode) return 'Create Duplicate SO';
+    return 'Save Sales Order';
+  }
+
   List<String> _seriesOptions = [];
   List<String> _customerSeriesOptions = [];
   List<String> _customerTypeOptions = [];
@@ -72,6 +92,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   List<String> _territoryOptions = [];
   List<String> _paymentTermsOptions = [];
   List<String> _salesPersonOptions = [];
+  List<String> _companyOptions = [];
   List<String> _currencyOptions = [];
   List<String> _priceListOptions = [];
   List<_CostCenterOption> _costCenterOptions = [];
@@ -92,20 +113,13 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }).toList();
   }
 
-  String? _defaultWarehouse(List<WarehouseInfo> warehouses) {
-    for (final warehouse in warehouses) {
-      if (warehouse.name.trim().toLowerCase() ==
-          _defaultWarehouseName.toLowerCase()) {
-        return warehouse.name;
-      }
-    }
-    for (final warehouse in warehouses) {
-      if (warehouse.company.trim().toLowerCase() ==
-          _defaultCompanyName.toLowerCase()) {
-        return warehouse.name;
-      }
-    }
-    return warehouses.isNotEmpty ? warehouses.first.name : null;
+  List<WarehouseInfo> _warehousesForCompany(AppState appState) {
+    final warehouses = _warehouseOptions(appState);
+    final company = _selectedCompany?.trim() ?? '';
+    if (company.isEmpty) return warehouses;
+    return warehouses
+        .where((warehouse) => warehouse.company == company)
+        .toList();
   }
 
   Future<void> _ensureWarehouseEnabled(AppState appState) async {
@@ -268,20 +282,223 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     return null;
   }
 
-  List<_CostCenterOption> _costCentersForWarehouse(
-    List<WarehouseInfo> warehouses,
-  ) {
-    final company = _selectedWarehouseInfo(warehouses)?.company ?? '';
-    if (company.isEmpty) return _costCenterOptions;
+  List<_CostCenterOption> _costCentersForCompany() {
+    final company = _selectedCompany?.trim() ?? '';
+    if (company.isEmpty) {
+      return _ensureSelectedCostCenterOption(_costCenterOptions);
+    }
 
     final filtered = _costCenterOptions
         .where((center) => center.company == company)
         .toList();
-    return filtered.isNotEmpty ? filtered : _costCenterOptions;
+    final options = filtered.isNotEmpty ? filtered : _costCenterOptions;
+    return _ensureSelectedCostCenterOption(options);
   }
 
-  String _selectedCompany(List<WarehouseInfo> warehouses) {
-    return _selectedWarehouseInfo(warehouses)?.company ?? '';
+  List<_CostCenterOption> _ensureSelectedCostCenterOption(
+    List<_CostCenterOption> options,
+  ) {
+    final selected = _selectedCenter?.trim() ?? '';
+    if (selected.isEmpty || options.any((center) => center.name == selected)) {
+      return options;
+    }
+    return [
+      ...options,
+      _CostCenterOption(name: selected, company: _selectedCompany ?? ''),
+    ];
+  }
+
+  String _activeCompany() => _selectedCompany?.trim() ?? '';
+
+  String? _customerSalesPerson(_CustomerOption? customer) {
+    if (customer == null) return null;
+    for (final row in customer.salesTeam) {
+      final salesPerson = row['sales_person']?.toString().trim() ?? '';
+      if (salesPerson.isNotEmpty) return salesPerson;
+    }
+    return null;
+  }
+
+  void _clearCustomer() {
+    setState(() {
+      _customerCtrl.clear();
+      _customerError = null;
+      _customerInsight = null;
+      _customerInsightError = null;
+      _itemInsights.clear();
+    });
+  }
+
+  void _applyCustomerSelection(String customerId) {
+    final appState = context.read<AppState>();
+    _customerCtrl.text = customerId;
+    final customer = _selectedCustomerOption();
+    if (appState.mobileAccess.isSalesUser) {
+      _selectedSalesPerson = appState.currentSalesPerson;
+    } else {
+      final customerSalesPerson = _customerSalesPerson(customer);
+      _selectedSalesPerson = _salesPersonOptions.contains(customerSalesPerson)
+          ? customerSalesPerson
+          : null;
+    }
+    _customerError = null;
+    _customerInsight = null;
+    _customerInsightError = null;
+    _itemInsights.clear();
+  }
+
+  Future<void> _applyCustomerErpDefaults(String customerId) async {
+    final appState = context.read<AppState>();
+    try {
+      final customer = await appState.frappeService.fetchDocument(
+        'Customer',
+        customerId,
+      );
+      if (!mounted || _customerCtrl.text.trim() != customerId) return;
+
+      String resolveDefault({
+        required List<String> fields,
+        required List<String> keyFragments,
+      }) {
+        String fromRow(Map<dynamic, dynamic> row) {
+          for (final field in fields) {
+            final value = row[field]?.toString().trim() ?? '';
+            if (value.isNotEmpty) return value;
+          }
+          for (final entry in row.entries) {
+            final key = entry.key.toString().toLowerCase();
+            if (!keyFragments.any(key.contains)) continue;
+            final value = entry.value?.toString().trim() ?? '';
+            if (value.isNotEmpty && value != 'null') return value;
+          }
+          return '';
+        }
+
+        final direct = fromRow(customer);
+        if (direct.isNotEmpty) return direct;
+
+        final company = _activeCompany().toLowerCase();
+        for (final value in customer.values) {
+          if (value is! List) continue;
+          for (final rawRow in value) {
+            if (rawRow is! Map) continue;
+            final rowCompany =
+                rawRow['company']?.toString().trim().toLowerCase() ?? '';
+            if (company.isNotEmpty &&
+                rowCompany.isNotEmpty &&
+                rowCompany != company) {
+              continue;
+            }
+            final nested = fromRow(rawRow);
+            if (nested.isNotEmpty) return nested;
+          }
+        }
+        return '';
+      }
+
+      final defaultCostCenter = resolveDefault(
+        fields: const [
+          'cost_center',
+          'default_cost_center',
+          'custom_cost_center',
+          'custom_default_cost_center',
+        ],
+        keyFragments: const ['cost_center', 'costcentre'],
+      );
+      final defaultWarehouse = resolveDefault(
+        fields: const [
+          'warehouse',
+          'default_warehouse',
+          'custom_warehouse',
+          'custom_default_warehouse',
+        ],
+        keyFragments: const ['warehouse'],
+      );
+      final salesTeam = customer['sales_team'];
+
+      String? customerSalesPerson;
+      if (salesTeam is List) {
+        for (final rawRow in salesTeam) {
+          if (rawRow is! Map) continue;
+          final salesPerson = rawRow['sales_person']?.toString().trim() ?? '';
+          if (salesPerson.isNotEmpty) {
+            customerSalesPerson = salesPerson;
+            break;
+          }
+        }
+      }
+
+      final warehouses = _warehousesForCompany(appState);
+      final costCenters = _costCentersForCompany();
+      String? matchingWarehouse;
+      for (final warehouse in warehouses) {
+        if (warehouse.name.trim().toLowerCase() ==
+            defaultWarehouse.toLowerCase()) {
+          matchingWarehouse = warehouse.name;
+          break;
+        }
+      }
+      String? matchingCostCenter;
+      for (final costCenter in costCenters) {
+        if (costCenter.name.trim().toLowerCase() ==
+            defaultCostCenter.toLowerCase()) {
+          matchingCostCenter = costCenter.name;
+          break;
+        }
+      }
+      setState(() {
+        _selectedCenter = matchingCostCenter;
+        _selectedWarehouse = matchingWarehouse;
+        if (appState.mobileAccess.isSalesUser) {
+          _selectedSalesPerson = appState.currentSalesPerson;
+        } else {
+          _selectedSalesPerson =
+              _salesPersonOptions.contains(customerSalesPerson)
+              ? customerSalesPerson
+              : null;
+        }
+      });
+      _scheduleRepriceAllItems();
+    } catch (_) {
+      // Customer defaults are optional; manual selectors remain available.
+    }
+  }
+
+  Future<void> _onCompanySelected(String? company) async {
+    final appState = context.read<AppState>();
+    setState(() {
+      _selectedCompany = company;
+      final warehouses = _warehousesForCompany(appState);
+      if (!warehouses.any((row) => row.name == _selectedWarehouse)) {
+        _selectedWarehouse = null;
+      }
+      final costCenters = _costCentersForCompany();
+      if (!costCenters.any((row) => row.name == _selectedCenter)) {
+        _selectedCenter = null;
+      }
+    });
+
+    if (company?.trim().isNotEmpty == true) {
+      try {
+        final companyDoc = await appState.frappeService.fetchDocument(
+          'Company',
+          company!,
+        );
+        final currency =
+            companyDoc['default_currency']?.toString() ??
+            companyDoc['currency']?.toString() ??
+            '';
+        if (mounted && _currencyOptions.contains(currency)) {
+          setState(() {
+            _selectedCurrency = currency;
+            _priceListCurrency ??= currency;
+          });
+        }
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    await _loadCustomerInsight();
+    _scheduleRepriceAllItems();
   }
 
   Future<List<_CostCenterOption>> _fetchCostCenterOptions(
@@ -339,13 +556,16 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   @override
   void initState() {
     super.initState();
+    _itemTextController = TextEditingController();
     _qtyCtrl.addListener(_onPricingInputChanged);
     _rateCtrl.addListener(_calculateTotal);
     _discountCtrl.addListener(_calculateTotal);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final appState = context.read<AppState>();
-      final defaultWarehouse = _defaultWarehouse(_warehouseOptions(appState));
+      final defaultWarehouse = appState.preferredWarehouse(
+        _warehouseOptions(appState),
+      );
       if (defaultWarehouse != null && _selectedWarehouse == null) {
         setState(() => _selectedWarehouse = defaultWarehouse);
       }
@@ -360,6 +580,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     _qtyCtrl.dispose();
     _rateCtrl.dispose();
     _discountCtrl.dispose();
+    _notedCtrl.dispose();
+    _itemTextController?.dispose();
     for (final row in _additionalItems) {
       row.dispose();
     }
@@ -369,22 +591,73 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
   void _calculateTotal() {
     setState(() {
-      final qty = double.tryParse(_qtyCtrl.text.trim()) ?? 0;
-      final rate = double.tryParse(_rateCtrl.text.trim()) ?? 0;
-      final discount = double.tryParse(_discountCtrl.text.trim()) ?? 0;
-      final subtotal =
-          (qty * (rate - discount).clamp(0, double.infinity)) +
-          _additionalItems.fold<double>(0, (total, row) {
-            final rowQty = double.tryParse(row.qtyController.text.trim()) ?? 0;
-            final rowRate =
-                double.tryParse(row.rateController.text.trim()) ?? 0;
-            final rowDiscount =
-                double.tryParse(row.discountController.text.trim()) ?? 0;
-            return total +
-                (rowQty * (rowRate - rowDiscount).clamp(0, double.infinity));
-          });
-      _totalAmount = subtotal;
+      _totalAmount =
+          _itemSubtotal(
+            qtyText: _qtyCtrl.text,
+            rateText: _rateCtrl.text,
+            discountText: _discountCtrl.text,
+          ) +
+          _additionalItems.fold<double>(
+            0,
+            (total, row) =>
+                total +
+                _itemSubtotal(
+                  qtyText: row.qtyController.text,
+                  rateText: row.rateController.text,
+                  discountText: row.discountController.text,
+                ),
+          );
     });
+  }
+
+  double _parseNumber(String value) {
+    final cleaned = value
+        .trim()
+        .replaceAll(RegExp(r'[^0-9,.-]'), '')
+        .replaceAll('.', '')
+        .replaceAll(',', '.');
+    return double.tryParse(cleaned) ?? 0;
+  }
+
+  double _itemQty(String value) => _parseNumber(value);
+
+  double _itemRate(String value) => _parseNumber(value);
+
+  double _itemDiscount(String value) => _parseNumber(value);
+
+  double _effectiveItemRate({
+    required String rateText,
+    required String discountText,
+  }) {
+    final rate = _itemRate(rateText);
+    final discount = _itemDiscount(discountText);
+    return (rate - discount).clamp(0, double.infinity);
+  }
+
+  double _itemSubtotal({
+    required String qtyText,
+    required String rateText,
+    required String discountText,
+  }) {
+    return _itemQty(qtyText) *
+        _effectiveItemRate(rateText: rateText, discountText: discountText);
+  }
+
+  String _formatRupiah(double value) {
+    return NumberFormat.currency(
+      locale: 'id_ID',
+      symbol: '',
+      decimalDigits: 0,
+    ).format(value).trim();
+  }
+
+  void _formatMoneyController(TextEditingController controller) {
+    if (controller.text.trim().isEmpty) return;
+    final value = _parseNumber(controller.text);
+    controller.text = _formatRupiah(value);
+    controller.selection = TextSelection.collapsed(
+      offset: controller.text.length,
+    );
   }
 
   void _onPricingInputChanged() {
@@ -400,8 +673,28 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     setState(() => _additionalItems.add(row));
   }
 
+  void _clearPrimaryItem() {
+    setState(() {
+      _selectedItemCode = null;
+      _initialItemText = null;
+      _itemTextController?.clear();
+      _qtyCtrl.text = '1';
+      _rateCtrl.clear();
+      _discountCtrl.text = '0';
+      _itemError = null;
+    });
+    _calculateTotal();
+  }
+
+  void _adjustQuantity(TextEditingController controller, double delta) {
+    final current = _parseNumber(controller.text);
+    final next = (current + delta).clamp(1, double.infinity);
+    controller.text = next == next.roundToDouble()
+        ? next.toInt().toString()
+        : next.toStringAsFixed(2);
+  }
+
   void _scheduleRepriceAllItems() {
-    _pricingRequestVersion++;
     _pricingDebounce?.cancel();
     _pricingDebounce = Timer(const Duration(milliseconds: 350), () {
       if (mounted) _repriceAllItems();
@@ -440,14 +733,21 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       String? warehouse,
     }) {
       final pricing = _itemInsights[itemCode];
+      final originalRate = rate ?? 0;
+      final discount = discountAmount ?? 0;
+      final effectiveRate = (originalRate - discount).clamp(0, double.infinity);
+      final rowAmount = qty * effectiveRate;
       return {
         'item_code': itemCode,
         'qty': qty,
         'delivery_date': deliveryDate,
-        if (rate != null && rate > 0) 'rate': rate,
-        if (discountAmount != null && discountAmount > 0)
-          'discount_amount': discountAmount,
-        if (pricing != null && pricing.priceListRate > 0)
+        if (originalRate > 0) 'price_list_rate': originalRate,
+        if (effectiveRate > 0) 'rate': effectiveRate,
+        if (effectiveRate > 0) 'net_rate': effectiveRate,
+        if (rowAmount > 0) 'amount': rowAmount,
+        if (rowAmount > 0) 'net_amount': rowAmount,
+        'discount_amount': discount,
+        if (originalRate <= 0 && pricing != null && pricing.priceListRate > 0)
           'price_list_rate': pricing.priceListRate,
         if ((discountAmount == null || discountAmount <= 0) &&
             pricing != null &&
@@ -468,16 +768,16 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       itemPayload(
         itemCode: firstItemCode,
         qty: double.parse(_qtyCtrl.text.trim()),
-        rate: double.tryParse(_rateCtrl.text.trim()),
-        discountAmount: double.tryParse(_discountCtrl.text.trim()),
+        rate: _itemRate(_rateCtrl.text),
+        discountAmount: _itemDiscount(_discountCtrl.text),
         warehouse: _selectedWarehouse,
       ),
       ..._additionalItems.map(
         (row) => itemPayload(
           itemCode: row.itemCode!,
           qty: double.parse(row.qtyController.text.trim()),
-          rate: double.tryParse(row.rateController.text.trim()),
-          discountAmount: double.tryParse(row.discountController.text.trim()),
+          rate: _itemRate(row.rateController.text),
+          discountAmount: _itemDiscount(row.discountController.text),
           warehouse: row.warehouse ?? _selectedWarehouse,
         ),
       ),
@@ -494,7 +794,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     try {
       final insight = await context.read<AppState>().fetchCustomerSalesInsight(
         customer,
-        company: _selectedCompany(_warehouseOptions(context.read<AppState>())),
+        company: _activeCompany(),
       );
       if (!mounted) return;
       setState(() {
@@ -524,43 +824,71 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     _AdditionalItemRow? row,
   }) async {
     if (itemCode.isEmpty) return null;
-    final requestVersion = _pricingRequestVersion;
     final loadingKey = row == null ? 'first:$itemCode' : 'row:${row.hashCode}';
+    String pricingContextKey() {
+      final controller = row?.qtyController ?? _qtyCtrl;
+      return [
+        itemCode,
+        _customerCtrl.text.trim(),
+        _activeCompany(),
+        _selectedPriceList ?? '',
+        _selectedCurrency ?? '',
+        row?.warehouse ?? _selectedWarehouse ?? '',
+        controller.text.trim(),
+      ].join('|');
+    }
+
+    final requestContextKey = pricingContextKey();
     setState(() => _loadingItemPrices.add(loadingKey));
     try {
-      final appState = context.read<AppState>();
       final qty =
           double.tryParse((row?.qtyController ?? _qtyCtrl).text.trim()) ?? 1;
-      final insight = await context.read<AppState>().fetchItemSalesInsight(
-        itemCode,
-        customer: _customerCtrl.text.trim(),
-        company: _selectedCompany(_warehouseOptions(appState)),
-        priceList: _selectedPriceList,
-        currency: _selectedCurrency,
-        warehouse: row?.warehouse ?? _selectedWarehouse,
-        transactionDate: _selectedDate,
-        qty: qty,
-        ignorePricingRule: false,
+      final insight = await _withTransientRetry(
+        () => context.read<AppState>().fetchItemSalesInsight(
+          itemCode,
+          customer: _customerCtrl.text.trim(),
+          company: _activeCompany(),
+          priceList: _selectedPriceList,
+          currency: _selectedCurrency,
+          warehouse: row?.warehouse ?? _selectedWarehouse,
+          customerGroup: _customerInsight?.customerGroup,
+          transactionDate: _selectedDate,
+          qty: qty,
+          ignorePricingRule: false,
+        ),
       );
-      if (!mounted || requestVersion != _pricingRequestVersion) return insight;
+      if (!mounted || requestContextKey != pricingContextKey()) {
+        return insight;
+      }
       if (row == null && _selectedItemCode != itemCode) return insight;
       if (row != null && row.itemCode != itemCode) return insight;
+      final resolvedPrice = insight.priceListRate > 0
+          ? insight.priceListRate
+          : insight.price;
       setState(() {
         _itemInsights[itemCode] = insight;
-        if (applyPrice && insight.price > 0) {
+        if (applyPrice && resolvedPrice > 0) {
           if (row == null) {
-            _rateCtrl.text = insight.price.toString();
+            _rateCtrl.text = _formatRupiah(resolvedPrice);
+            if (insight.discountAmount > 0) {
+              _discountCtrl.text = _formatRupiah(insight.discountAmount);
+            }
           } else {
-            row.rateController.text = insight.price.toString();
+            row.rateController.text = _formatRupiah(resolvedPrice);
+            if (insight.discountAmount > 0) {
+              row.discountController.text = _formatRupiah(
+                insight.discountAmount,
+              );
+            }
           }
         }
       });
       return insight;
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gagal mengambil stok/harga: $error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_pricingErrorMessage(error))));
       }
       return null;
     } finally {
@@ -568,64 +896,33 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }
   }
 
-  Future<void> _showItemInsight(String itemCode) async {
-    final insight = _itemInsights[itemCode] ?? await _loadItemInsight(itemCode);
-    if (!mounted || insight == null) return;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                insight.itemCode,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                insight.price > 0
-                    ? '${insight.priceList}: ${insight.currency} ${insight.price.toStringAsFixed(0)}'
-                    : 'Harga price list tidak ditemukan',
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Stock per Gudang',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: insight.stocks
-                      .map(
-                        (stock) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: Text(stock.warehouse),
-                          subtitle: Text(
-                            'Reserved ${stock.reservedQty.toStringAsFixed(0)} | '
-                            'Projected ${stock.projectedQty.toStringAsFixed(0)}',
-                          ),
-                          trailing: Text(
-                            stock.actualQty.toStringAsFixed(0),
-                            style: const TextStyle(fontWeight: FontWeight.w900),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  Future<T> _withTransientRetry<T>(Future<T> Function() action) async {
+    try {
+      return await action();
+    } catch (error) {
+      if (!_isTransientNetworkError(error)) rethrow;
+      await Future<void>.delayed(const Duration(milliseconds: 650));
+      return action();
+    }
+  }
+
+  bool _isTransientNetworkError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('socketexception') ||
+        message.contains('connection abort') ||
+        message.contains('connection reset') ||
+        message.contains('connection closed') ||
+        message.contains('connection refused') ||
+        message.contains('failed host lookup') ||
+        message.contains('timed out') ||
+        message.contains('timeout');
+  }
+
+  String _pricingErrorMessage(Object error) {
+    if (_isTransientNetworkError(error)) {
+      return 'Koneksi ke ERPNext terputus saat mengambil stok/harga. Coba refresh atau pilih item lagi.';
+    }
+    return 'Gagal mengambil stok/harga: ${_selectorErrorMessage(error)}';
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
@@ -643,12 +940,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => _CustomerHistorySheet(
-        customer: customer,
-        company: _selectedCompany(
-          _warehouseOptions(this.context.read<AppState>()),
-        ),
-      ),
+      builder: (context) =>
+          _CustomerHistorySheet(customer: customer, company: _activeCompany()),
     );
   }
 
@@ -721,43 +1014,384 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   String _normalizeItemCode(String rawText) {
     final trimmed = rawText.trim();
     if (trimmed.isEmpty) return '';
-    final match = RegExp(r'\(([^)]+)\)\$').firstMatch(trimmed);
+    final match = RegExp(r'\(([^)]+)\)$').firstMatch(trimmed);
     if (match != null) {
       return match.group(1)!.trim();
+    }
+    final dashIndex = trimmed.lastIndexOf(' - ');
+    if (dashIndex >= 0 && dashIndex + 3 < trimmed.length) {
+      return trimmed.substring(dashIndex + 3).trim();
     }
     return trimmed;
   }
 
-  Future<void> _validateItem(String value) async {
-    final candidate = _selectedItemCode ?? _normalizeItemCode(value);
-    if (candidate.isEmpty) {
-      setState(() => _itemError = null);
-      return;
-    }
+  _ItemOption? _itemOptionFromRow(Map<String, dynamic> row) {
+    final itemCode = row['item_code']?.toString().trim() ?? '';
+    final name = row['name']?.toString().trim() ?? '';
+    final code = itemCode.isNotEmpty ? itemCode : name;
+    final itemName = row['item_name']?.toString().trim() ?? code;
+    if (code.isEmpty) return null;
+    return _ItemOption(code: code, name: itemName);
+  }
 
-    setState(() => _isValidatingItem = true);
+  Future<Iterable<_ItemOption>> _searchItemOptions(
+    BuildContext context,
+    String value,
+  ) async {
+    final query = value.trim();
+    if (query.isEmpty) return _itemOptions.take(20);
+
+    final remoteRows = await context.read<AppState>().fetchSellableItems(
+      query: query,
+      limit: 50,
+    );
+    final remoteOptions = remoteRows
+        .map(_itemOptionFromRow)
+        .whereType<_ItemOption>()
+        .toList();
+    if (remoteOptions.isNotEmpty) return remoteOptions;
+
+    final needle = query.toLowerCase();
+    return _itemOptions.where((option) {
+      final label = option.label.toLowerCase();
+      return label.contains(needle) ||
+          option.code.toLowerCase().contains(needle);
+    });
+  }
+
+  Future<_ItemOption?> _showItemSelectSheet({
+    required String title,
+    String? selectedCode,
+  }) async {
+    final result = await showModalBottomSheet<_ItemOption>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        var query = '';
+        Future<List<_ItemOption>> loadOptions() async {
+          final options = await _searchItemOptions(sheetContext, query);
+          return options.toList();
+        }
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: 12,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 12,
+                ),
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.84,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(26),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryDark.withValues(alpha: 0.16),
+                        blurRadius: 26,
+                        offset: const Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          width: 44,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.border,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 10, 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: AppColors.softGreen,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Icon(
+                                Icons.inventory_2_rounded,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.navy,
+                                    ),
+                                  ),
+                                  const Text(
+                                    'Cari nama atau kode item yang boleh dijual.',
+                                    style: TextStyle(
+                                      color: AppColors.slate,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Tutup',
+                              onPressed: () => Navigator.pop(sheetContext),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: TextField(
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: 'Search item name or item code',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            filled: true,
+                            fillColor: AppColors.background,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 14,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.28,
+                                ),
+                              ),
+                            ),
+                          ),
+                          onChanged: (value) =>
+                              setSheetState(() => query = value),
+                        ),
+                      ),
+                      Flexible(
+                        child: FutureBuilder<List<_ItemOption>>(
+                          future: loadOptions(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                    ConnectionState.waiting &&
+                                query.trim().isNotEmpty) {
+                              return const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(28),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final items =
+                                snapshot.data ?? const <_ItemOption>[];
+                            if (items.isEmpty) {
+                              return const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(28),
+                                  child: Text(
+                                    'Item tidak ditemukan',
+                                    style: TextStyle(
+                                      color: AppColors.slate,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            return ListView.separated(
+                              shrinkWrap: true,
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                              itemCount: items.length,
+                              separatorBuilder: (context, index) =>
+                                  const SizedBox(height: 8),
+                              itemBuilder: (context, index) {
+                                final item = items[index];
+                                final selected = item.code == selectedCode;
+                                return Material(
+                                  color: selected
+                                      ? AppColors.softGreen
+                                      : AppColors.background,
+                                  borderRadius: BorderRadius.circular(18),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(18),
+                                    onTap: () =>
+                                        Navigator.pop(sheetContext, item),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(
+                                          color: selected
+                                              ? AppColors.primary.withValues(
+                                                  alpha: 0.28,
+                                                )
+                                              : AppColors.border,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 38,
+                                            height: 38,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                            ),
+                                            child: const Icon(
+                                              Icons.inventory_2_rounded,
+                                              color: AppColors.primary,
+                                              size: 20,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  item.name,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    color: AppColors.navy,
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  item.code,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    color: AppColors.slate,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          if (selected)
+                                            const Icon(
+                                              Icons.check_circle_rounded,
+                                              color: AppColors.success,
+                                            )
+                                          else
+                                            const Icon(
+                                              Icons.chevron_right_rounded,
+                                              color: AppColors.slate,
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    return result;
+  }
+
+  Future<void> _selectPrimaryItem() async {
+    final option = await _showItemSelectSheet(
+      title: 'Pilih Item',
+      selectedCode: _selectedItemCode,
+    );
+    if (option == null || !mounted) return;
+    setState(() {
+      _selectedItemCode = option.code;
+      _initialItemText = option.label;
+      _itemTextController?.text = option.label;
+      _itemError = null;
+      _rateCtrl.clear();
+      _isValidatingItem = true;
+    });
     try {
-      final appState = context.read<AppState>();
-      await appState.frappeService.fetchDocument('Item', candidate);
-      if (!mounted) return;
-      setState(() => _itemError = null);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _itemError = 'Item tidak ditemukan');
+      await _loadItemInsight(option.code, applyPrice: true);
     } finally {
-      if (mounted) {
-        setState(() => _isValidatingItem = false);
-      }
+      if (mounted) setState(() => _isValidatingItem = false);
     }
   }
 
-  List<_CustomerOption> _filteredCustomers(String query) {
-    final normalized = query.trim().toLowerCase();
-    if (normalized.isEmpty) return _customerOptions.take(30).toList();
+  Future<void> _selectAdditionalItem(_AdditionalItemRow row) async {
+    final option = await _showItemSelectSheet(
+      title: 'Pilih Item Tambahan',
+      selectedCode: row.itemCode,
+    );
+    if (option == null || !mounted) return;
+    setState(() {
+      row.itemCode = option.code;
+      row.itemTextController.text = option.label;
+      row.rateController.clear();
+    });
+    await _loadItemInsight(option.code, applyPrice: true, row: row);
+  }
 
-    return _customerOptions.where((customer) {
+  List<_CustomerOption> _filteredCustomers(String query) {
+    final customers = _salesScopedCustomerOptions();
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) return customers.take(30).toList();
+
+    return customers.where((customer) {
       return customer.id.toLowerCase().contains(normalized) ||
           customer.name.toLowerCase().contains(normalized);
+    }).toList();
+  }
+
+  List<_CustomerOption> _salesScopedCustomerOptions() {
+    final appState = context.read<AppState>();
+    if (!appState.mobileAccess.isSalesUser) return _customerOptions;
+
+    final salesPerson = appState.currentSalesPerson?.trim() ?? '';
+    if (salesPerson.isEmpty) return const [];
+
+    return _customerOptions.where((customer) {
+      return customer.salesTeam.any(
+        (row) => row['sales_person']?.toString().trim() == salesPerson,
+      );
     }).toList();
   }
 
@@ -769,6 +1403,14 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     return null;
   }
 
+  String _selectedCustomerName() {
+    final customer = _selectedCustomerOption();
+    final name = customer?.name.trim() ?? '';
+    final id = _customerCtrl.text.trim();
+    if (name.isEmpty || name == id) return '';
+    return name;
+  }
+
   Future<void> _showCustomerSelectSheet() async {
     String? selectedCustomerId;
     var shouldAddCustomer = false;
@@ -776,117 +1418,234 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     final result = await showModalBottomSheet<Object>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (sheetContext) {
         var query = '';
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final customers = _filteredCustomers(query);
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Pilih Customer',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.navy,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(sheetContext),
-                        icon: const Icon(Icons.close_rounded),
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 12,
+                  right: 12,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 12,
+                ),
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.82,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryDark.withValues(alpha: 0.16),
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      labelText: 'Search nama customer',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      filled: true,
-                      fillColor: AppColors.background,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(
-                          color: AppColors.primary.withValues(alpha: 0.2),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: AppColors.border,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
                         ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                    ),
-                    onChanged: (value) => setSheetState(() => query = value),
-                  ),
-                  const SizedBox(height: 10),
-                  if (context.read<AppState>().userRole != 'Sales') ...[
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(sheetContext, true);
-                      },
-                      icon: const Icon(Icons.person_add_alt_1_rounded),
-                      label: const Text('Add Customer Baru'),
-                    ),
-                    const SizedBox(height: 10),
-                  ],
-                  SizedBox(
-                    height: MediaQuery.of(sheetContext).size.height * 0.42,
-                    child: customers.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'Customer tidak ditemukan',
-                              style: TextStyle(color: AppColors.slate),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 10, 10),
+                        child: Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'Pilih Customer',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.navy,
+                                ),
+                              ),
                             ),
-                          )
-                        : ListView.separated(
-                            itemCount: customers.length,
-                            separatorBuilder: (context, index) =>
-                                const Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              final customer = customers[index];
-                              final selected =
-                                  customer.id == _customerCtrl.text.trim();
-                              return ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: Text(
-                                  customer.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
+                            IconButton(
+                              tooltip: 'Tutup',
+                              onPressed: () => Navigator.pop(sheetContext),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: TextField(
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: 'Cari nama atau ID customer',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                          onChanged: (value) =>
+                              setSheetState(() => query = value),
+                        ),
+                      ),
+                      if (!context
+                          .read<AppState>()
+                          .mobileAccess
+                          .isSalesUser) ...[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.pop(sheetContext, true);
+                            },
+                            icon: const Icon(Icons.person_add_alt_1_rounded),
+                            label: const Text('Add Customer Baru'),
+                          ),
+                        ),
+                      ],
+                      Flexible(
+                        child: customers.isEmpty
+                            ? const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(28),
+                                  child: Text(
+                                    'Customer tidak ditemukan',
+                                    style: TextStyle(
+                                      color: AppColors.slate,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
-                                subtitle: customer.name == customer.id
-                                    ? null
-                                    : Text(customer.id),
-                                trailing: selected
-                                    ? const Icon(
-                                        Icons.check_circle,
-                                        color: Colors.green,
-                                      )
-                                    : null,
-                                onTap: () {
-                                  Navigator.pop(sheetContext, customer.id);
+                              )
+                            : ListView.separated(
+                                shrinkWrap: true,
+                                padding: const EdgeInsets.fromLTRB(
+                                  12,
+                                  0,
+                                  12,
+                                  14,
+                                ),
+                                itemCount: customers.length,
+                                separatorBuilder: (context, index) =>
+                                    const SizedBox(height: 8),
+                                itemBuilder: (context, index) {
+                                  final customer = customers[index];
+                                  final selected =
+                                      customer.id == _customerCtrl.text.trim();
+                                  return Material(
+                                    color: selected
+                                        ? AppColors.softGreen
+                                        : AppColors.background,
+                                    borderRadius: BorderRadius.circular(18),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(18),
+                                      onTap: () {
+                                        Navigator.pop(
+                                          sheetContext,
+                                          customer.id,
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                            18,
+                                          ),
+                                          border: Border.all(
+                                            color: selected
+                                                ? AppColors.primary.withValues(
+                                                    alpha: 0.28,
+                                                  )
+                                                : AppColors.border,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 38,
+                                              height: 38,
+                                              decoration: BoxDecoration(
+                                                color: AppColors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                              ),
+                                              child: const Icon(
+                                                Icons.storefront_rounded,
+                                                color: AppColors.primary,
+                                                size: 20,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    customer.name,
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: const TextStyle(
+                                                      color: AppColors.navy,
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                    ),
+                                                  ),
+                                                  if (customer.name !=
+                                                      customer.id) ...[
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      customer.id,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                        color: AppColors.slate,
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                            if (selected)
+                                              const Icon(
+                                                Icons.check_circle_rounded,
+                                                color: AppColors.success,
+                                              )
+                                            else
+                                              const Icon(
+                                                Icons.chevron_right_rounded,
+                                                color: AppColors.slate,
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
                                 },
-                              );
-                            },
-                          ),
+                              ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             );
           },
@@ -901,14 +1660,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }
 
     if (selectedCustomerId != null && mounted) {
-      setState(() {
-        _customerCtrl.text = selectedCustomerId!;
-        _customerError = null;
-        _customerInsight = null;
-        _customerInsightError = null;
-        _pricingRequestVersion++;
-        _itemInsights.clear();
-      });
+      setState(() => _applyCustomerSelection(selectedCustomerId!));
+      await _applyCustomerErpDefaults(selectedCustomerId);
       await _loadCustomerInsight();
     }
 
@@ -919,8 +1672,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
   Future<void> _showAddCustomerSheet() async {
     final appState = context.read<AppState>();
-    final warehouses = _warehouseOptions(appState);
-    final company = _selectedCompany(warehouses);
+    final company = _activeCompany();
     final nameCtrl = TextEditingController(text: _customerCtrl.text.trim());
     final formKey = GlobalKey<FormState>();
     String? selectedSeries = _customerSeriesOptions.isNotEmpty
@@ -942,9 +1694,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     if (company.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Pilih warehouse terlebih dahulu untuk menentukan company.',
-          ),
+          content: Text('Pilih Company terlebih dahulu.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -971,7 +1721,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text(
-                      'Series, type, dan payment terms wajib tersedia dari Frappe.',
+                      'Series, tipe customer, dan payment terms wajib tersedia.',
                     ),
                     backgroundColor: Colors.orange,
                   ),
@@ -1172,7 +1922,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedDeliveryDate.isBefore(_selectedDate)) {
+    if (_dateOnly(_selectedDeliveryDate).isBefore(_dateOnly(_selectedDate))) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Delivery Date tidak boleh sebelum Transaction Date'),
@@ -1190,6 +1940,15 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       );
       return;
     }
+    if (_selectedCompany == null || _selectedCompany!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Company wajib dipilih'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
     if (_selectedWarehouse == null || _selectedWarehouse!.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1201,7 +1960,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }
     final appState = context.read<AppState>();
     final customerSalesTeam = _selectedCustomerOption()?.salesTeam ?? const [];
-    if (appState.userRole == 'Sales' && customerSalesTeam.isEmpty) {
+    final isSalesUser = appState.mobileAccess.isSalesUser;
+    if (isSalesUser && customerSalesTeam.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -1213,7 +1973,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       );
       return;
     }
-    if (appState.userRole != 'Sales' &&
+    if (!isSalesUser &&
         (_selectedSalesPerson == null ||
             _selectedSalesPerson!.trim().isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1236,12 +1996,11 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     final invalidAdditionalItem = _additionalItems.any((row) {
       final qty = double.tryParse(row.qtyController.text.trim());
       final rateText = row.rateController.text.trim();
-      final rate = rateText.isEmpty ? 0 : double.tryParse(rateText);
+      final rate = rateText.isEmpty ? 0 : _itemRate(rateText);
       return row.itemCode == null ||
           row.itemCode!.isEmpty ||
           qty == null ||
           qty <= 0 ||
-          rate == null ||
           rate < 0;
     });
     if (invalidAdditionalItem) {
@@ -1268,9 +2027,6 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       }
       final items = _buildItemsPayload(itemCode);
       if (!await _confirmOrderRisks(items)) return;
-      final selectedWarehouseInfo = _selectedWarehouseInfo(
-        _warehouseOptions(appState),
-      );
       final SalesOrder savedOrder;
       if (widget.isEditMode) {
         savedOrder = await appState.updateSalesOrder(
@@ -1279,17 +2035,16 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           items: items,
           warehouse: _selectedWarehouse,
           costCenter: _selectedCenter,
-          company: selectedWarehouseInfo?.company,
+          company: _selectedCompany,
           currency: _selectedCurrency,
           sellingPriceList: _selectedPriceList,
           priceListCurrency: _priceListCurrency,
           ignorePricingRule: false,
-          salesPerson: appState.userRole == 'Sales'
-              ? null
-              : _selectedSalesPerson,
-          salesTeam: appState.userRole == 'Sales' ? customerSalesTeam : null,
+          salesPerson: _selectedSalesPerson,
+          noted: _notedCtrl.text.trim(),
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
+          refreshAfterSave: false,
         );
       } else {
         savedOrder = await appState.createSalesOrder(
@@ -1298,16 +2053,15 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           warehouse: _selectedWarehouse,
           series: _selectedSeries,
           costCenter: _selectedCenter,
-          company: selectedWarehouseInfo?.company,
+          company: _selectedCompany,
           currency: _selectedCurrency,
           sellingPriceList: _selectedPriceList,
           priceListCurrency: _priceListCurrency,
-          salesPerson: appState.userRole == 'Sales'
-              ? null
-              : _selectedSalesPerson,
-          salesTeam: appState.userRole == 'Sales' ? customerSalesTeam : null,
+          salesPerson: _selectedSalesPerson,
+          noted: _notedCtrl.text.trim(),
           transactionDate: _selectedDate,
           deliveryDate: _selectedDeliveryDate,
+          refreshAfterSave: false,
         );
       }
       var failedUploads = 0;
@@ -1364,6 +2118,10 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }
   }
 
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
   Future<void> _loadSelectors() async {
     final appState = context.read<AppState>();
     setState(() {
@@ -1373,29 +2131,39 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
 
     try {
       final selectorErrors = <String>[];
-      final seriesOptions = await _loadSelector<List<String>>(
+      final seriesFuture = _loadSelector<List<String>>(
         label: 'Series Sales Order',
         load: () => _fetchSalesOrderSeriesOptions(appState),
         fallback: const [],
         errors: selectorErrors,
       );
-      final costCenters = await _loadSelector<List<_CostCenterOption>>(
+      final costCentersFuture = _loadSelector<List<_CostCenterOption>>(
         label: 'Cost Center',
         load: () => _fetchCostCenterOptions(appState),
         fallback: const [],
         errors: selectorErrors,
       );
-      final customerSeriesOptions = await _fetchDocTypeSelectOptions(
-        appState,
-        doctype: 'Customer',
-        fieldname: 'naming_series',
+      final customerSeriesFuture = _loadSelector<List<String>>(
+        label: 'Customer Naming Series',
+        load: () => _fetchDocTypeSelectOptions(
+          appState,
+          doctype: 'Customer',
+          fieldname: 'naming_series',
+        ),
+        fallback: const [],
+        errors: selectorErrors,
       );
-      final customerTypeOptions = await _fetchDocTypeSelectOptions(
-        appState,
-        doctype: 'Customer',
-        fieldname: 'customer_type',
+      final customerTypeFuture = _loadSelector<List<String>>(
+        label: 'Customer Type',
+        load: () => _fetchDocTypeSelectOptions(
+          appState,
+          doctype: 'Customer',
+          fieldname: 'customer_type',
+        ),
+        fallback: const [],
+        errors: selectorErrors,
       );
-      final customerGroupOptions = await _loadSelector<List<String>>(
+      final customerGroupFuture = _loadSelector<List<String>>(
         label: 'Customer Group',
         load: () => _fetchLinkOptions(
           appState,
@@ -1407,7 +2175,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         fallback: const [],
         errors: selectorErrors,
       );
-      final territoryOptions = await _loadSelector<List<String>>(
+      final territoryFuture = _loadSelector<List<String>>(
         label: 'Territory',
         load: () => _fetchLinkOptions(
           appState,
@@ -1419,26 +2187,26 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         fallback: const [],
         errors: selectorErrors,
       );
-      final paymentTermsOptions = await _loadSelector<List<String>>(
+      final paymentTermsFuture = _loadSelector<List<String>>(
         label: 'Payment Terms Template',
         load: () =>
             _fetchLinkOptions(appState, doctype: 'Payment Terms Template'),
         fallback: const [],
         errors: selectorErrors,
       );
-      final salesPersonOptions = await _loadSelector<List<String>>(
+      final salesPersonFuture = _loadSelector<List<String>>(
         label: 'Sales Person',
         load: () => _fetchSalesPersonOptions(appState),
         fallback: const [],
         errors: selectorErrors,
       );
-      final currencyOptions = await _loadSelector<List<String>>(
+      final currencyFuture = _loadSelector<List<String>>(
         label: 'Currency',
         load: () => _fetchLinkOptions(appState, doctype: 'Currency'),
         fallback: const [],
         errors: selectorErrors,
       );
-      var priceListOptions = await _loadSelector<List<String>>(
+      final priceListFuture = _loadSelector<List<String>>(
         label: 'Price List',
         load: () => _fetchLinkOptions(
           appState,
@@ -1451,6 +2219,40 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         fallback: const [],
         errors: selectorErrors,
       );
+      final sellingSettingsFuture = appState.frappeService
+          .fetchDocument('Selling Settings', 'Selling Settings')
+          .catchError((_) => <String, dynamic>{});
+      final salesCustomersFuture = _loadSelector<List<SalesCustomerOption>>(
+        label: 'Customer / Sales Team',
+        load: appState.fetchSalesCustomers,
+        fallback: const [],
+        errors: selectorErrors,
+      );
+      final itemDataFuture = _loadSelector<List<Map<String, dynamic>>>(
+        label: 'Item',
+        load: () => appState.fetchSellableItems(limit: 200),
+        fallback: const [],
+        errors: selectorErrors,
+      );
+      final warehouseFuture = appState.warehouses.isEmpty
+          ? _loadSelector<void>(
+              label: 'Warehouse',
+              load: appState.refreshWarehouses,
+              fallback: null,
+              errors: selectorErrors,
+            )
+          : Future<void>.value();
+
+      final seriesOptions = await seriesFuture;
+      final costCenters = await costCentersFuture;
+      final customerSeriesOptions = await customerSeriesFuture;
+      final customerTypeOptions = await customerTypeFuture;
+      final customerGroupOptions = await customerGroupFuture;
+      final territoryOptions = await territoryFuture;
+      final paymentTermsOptions = await paymentTermsFuture;
+      final salesPersonOptions = await salesPersonFuture;
+      final currencyOptions = await currencyFuture;
+      var priceListOptions = await priceListFuture;
       if (priceListOptions.isEmpty) {
         priceListOptions = await _loadSelector<List<String>>(
           label: 'Price List',
@@ -1465,25 +2267,13 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           errors: selectorErrors,
         );
       }
-      String defaultSellingPriceList = '';
-      try {
-        final sellingSettings = await appState.frappeService.fetchDocument(
-          'Selling Settings',
-          'Selling Settings',
-        );
-        defaultSellingPriceList =
-            sellingSettings['selling_price_list']?.toString() ??
-            sellingSettings['default_price_list']?.toString() ??
-            '';
-      } catch (_) {}
-
-      final salesCustomers = await _loadSelector<List<SalesCustomerOption>>(
-        label: 'Customer / Sales Team',
-        load: appState.fetchSalesCustomers,
-        fallback: const [],
-        errors: selectorErrors,
-      );
-      final customerOptions = salesCustomers
+      final sellingSettings = await sellingSettingsFuture;
+      final defaultSellingPriceList =
+          sellingSettings['selling_price_list']?.toString() ??
+          sellingSettings['default_price_list']?.toString() ??
+          '';
+      final salesCustomers = await salesCustomersFuture;
+      var customerOptions = salesCustomers
           .map(
             (customer) => _CustomerOption(
               id: customer.id,
@@ -1492,66 +2282,55 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
             ),
           )
           .toList();
+      if (appState.mobileAccess.isSalesUser) {
+        final salesPerson = appState.currentSalesPerson?.trim() ?? '';
+        customerOptions = customerOptions.where((customer) {
+          return salesPerson.isNotEmpty &&
+              customer.salesTeam.any(
+                (row) => row['sales_person']?.toString().trim() == salesPerson,
+              );
+        }).toList();
+      }
 
-      final itemData = await _loadSelector<List<Map<String, dynamic>>>(
-        label: 'Item',
-        load: () async {
-          try {
-            return await appState.frappeService.fetchResource(
-              'Item',
-              fields: const ['name', 'item_name'],
-              orderBy: 'item_name asc',
-            );
-          } catch (_) {
-            return appState.frappeService.fetchResource(
-              'Item',
-              fields: const ['name'],
-              orderBy: 'name asc',
-            );
-          }
-        },
-        fallback: const [],
-        errors: selectorErrors,
-      );
-
+      final itemData = await itemDataFuture;
       final itemOptions = itemData
-          .map((row) {
-            final code = row['name']?.toString() ?? '';
-            final name = row['item_name']?.toString() ?? code;
-            if (code.isEmpty) return null;
-            return _ItemOption(code: code, name: name);
-          })
+          .map(_itemOptionFromRow)
           .whereType<_ItemOption>()
           .toList();
 
-      if (appState.warehouses.isEmpty) {
-        await _loadSelector<void>(
-          label: 'Warehouse',
-          load: appState.refreshWarehouses,
-          fallback: null,
-          errors: selectorErrors,
-        );
-      }
+      await warehouseFuture;
       final warehouseOptions = _warehouseOptions(appState);
-      final selectedWarehouseValid = warehouseOptions.any(
+      final companyOptions = <String>{
+        ...appState.sellingCompanies,
+        ...warehouseOptions
+            .map((warehouse) => warehouse.company)
+            .where((company) => company.trim().isNotEmpty),
+      }.toList()..sort();
+      final warehouseCompany = _selectedWarehouseInfo(
+        warehouseOptions,
+      )?.company;
+      final selectedCompany = companyOptions.contains(_selectedCompany)
+          ? _selectedCompany
+          : (companyOptions.contains(warehouseCompany)
+                ? warehouseCompany
+                : appState.preferredCompany(companyOptions));
+      final companyWarehouses = selectedCompany?.isNotEmpty == true
+          ? warehouseOptions
+                .where((warehouse) => warehouse.company == selectedCompany)
+                .toList()
+          : warehouseOptions;
+      final selectedWarehouseValid = companyWarehouses.any(
         (warehouse) => warehouse.name == _selectedWarehouse,
       );
       final selectedWarehouse = selectedWarehouseValid
           ? _selectedWarehouse
-          : _defaultWarehouse(warehouseOptions);
-      String selectedWarehouseCompany = '';
-      for (final warehouse in warehouseOptions) {
-        if (warehouse.name == selectedWarehouse) {
-          selectedWarehouseCompany = warehouse.company;
-          break;
-        }
-      }
+          : appState.preferredWarehouse(companyWarehouses);
       String companyCurrency = '';
-      if (selectedWarehouseCompany.isNotEmpty) {
+      if (selectedCompany?.isNotEmpty == true) {
         try {
           final companyDoc = await appState.frappeService.fetchDocument(
             'Company',
-            selectedWarehouseCompany,
+            selectedCompany!,
           );
           companyCurrency =
               companyDoc['default_currency']?.toString() ??
@@ -1559,22 +2338,17 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
               '';
         } catch (_) {}
       }
-      final availableCostCenters = selectedWarehouseCompany.isEmpty
+      final availableCostCenters = selectedCompany?.isNotEmpty != true
           ? costCenters
           : costCenters
-                .where((center) => center.company == selectedWarehouseCompany)
+                .where((center) => center.company == selectedCompany)
                 .toList();
       final costCenterChoices = availableCostCenters.isNotEmpty
           ? availableCostCenters
           : costCenters;
-      String? defaultCostCenter;
-      for (final center in costCenterChoices) {
-        if (center.name.trim().toLowerCase() ==
-            _defaultCostCenterName.toLowerCase()) {
-          defaultCostCenter = center.name;
-          break;
-        }
-      }
+      final defaultCostCenter = costCenterChoices.isNotEmpty
+          ? costCenterChoices.first.name
+          : null;
 
       if (!mounted) return;
       setState(() {
@@ -1591,6 +2365,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         _territoryOptions = _normalizeOptions(territoryOptions);
         _paymentTermsOptions = _normalizeOptions(paymentTermsOptions);
         _salesPersonOptions = _normalizeOptions(salesPersonOptions);
+        _companyOptions = _normalizeOptions(companyOptions);
         _currencyOptions = _normalizeOptions(currencyOptions);
         _priceListOptions = _normalizeOptions(priceListOptions);
         _costCenterOptions = _normalizeCostCenterOptions(costCenters);
@@ -1598,20 +2373,22 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         _selectedSeries = _seriesOptions.contains(_selectedSeries)
             ? _selectedSeries
             : (_seriesOptions.isNotEmpty ? _seriesOptions.first : null);
+        _selectedCompany = selectedCompany;
         _selectedCenter =
-            costCenterChoices.any((center) => center.name == _selectedCenter)
+            _selectedCenter?.trim().isNotEmpty == true &&
+                _ensureSelectedCostCenterOption(
+                  costCenterChoices,
+                ).any((center) => center.name == _selectedCenter)
             ? _selectedCenter
             : (defaultCostCenter ??
                   (costCenterChoices.isNotEmpty
                       ? costCenterChoices.first.name
                       : null));
-        _selectedSalesPerson = appState.userRole == 'Sales'
+        _selectedSalesPerson = appState.mobileAccess.isSalesUser
             ? appState.currentSalesPerson
             : (_salesPersonOptions.contains(_selectedSalesPerson)
                   ? _selectedSalesPerson
-                  : (_salesPersonOptions.isNotEmpty
-                        ? _salesPersonOptions.first
-                        : null));
+                  : null);
         _itemOptions = itemOptions;
         _selectedWarehouse = selectedWarehouse;
         _selectedCurrency = _currencyOptions.contains(_selectedCurrency)
@@ -1635,7 +2412,9 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
           widget.editOrderId!,
         );
         if (!mounted) return;
-        _applyEditingOrder(editingOrder);
+        _applyOrderToForm(editingOrder, keepCurrentDates: false);
+      } else if (widget.isDuplicateMode) {
+        _applyOrderToForm(widget.duplicateFrom!, keepCurrentDates: true);
       }
     } catch (error) {
       if (!mounted) return;
@@ -1651,7 +2430,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     }
   }
 
-  void _applyEditingOrder(SalesOrder order) {
+  void _applyOrderToForm(SalesOrder order, {required bool keepCurrentDates}) {
     final firstItem = order.items.isNotEmpty ? order.items.first : null;
     for (final row in _additionalItems) {
       row.dispose();
@@ -1660,10 +2439,13 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
     for (final item in order.items.skip(1)) {
       final row = _AdditionalItemRow(
         itemCode: item.itemCode,
+        itemLabel: item.itemCode.isNotEmpty
+            ? '${item.itemName} - ${item.itemCode}'
+            : item.itemName,
         qty: item.qty.toString(),
-        rate: item.rate > 0 ? item.rate.toString() : '',
+        rate: item.rate > 0 ? _formatRupiah(item.rate) : '',
         discount: item.discountAmount > 0
-            ? item.discountAmount.toString()
+            ? _formatRupiah(item.discountAmount)
             : '0',
         warehouse: item.warehouse.isNotEmpty ? item.warehouse : null,
       );
@@ -1683,20 +2465,47 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
       _priceListCurrency = order.priceListCurrency.isNotEmpty
           ? order.priceListCurrency
           : _priceListCurrency;
-      _discountCtrl.text = firstItem?.discountAmount.toString() ?? '0';
-      _selectedDate = DateTime.tryParse(order.date) ?? _selectedDate;
-      _selectedDeliveryDate = _selectedDate;
+      final orderCostCenter = order.costCenter.trim().isNotEmpty
+          ? order.costCenter.trim()
+          : firstItem?.costCenter.trim() ?? '';
+      if (orderCostCenter.isNotEmpty) {
+        _selectedCenter = orderCostCenter;
+      }
+      _notedCtrl.text = order.noted;
+      _discountCtrl.text = firstItem?.discountAmount != null
+          ? _formatRupiah(firstItem!.discountAmount)
+          : '0';
+      if (!keepCurrentDates) {
+        _selectedDate = DateTime.tryParse(order.date) ?? _selectedDate;
+        final deliveryDate = order.deliveryDate.isNotEmpty
+            ? order.deliveryDate
+            : firstItem?.deliveryDate;
+        _selectedDeliveryDate =
+            DateTime.tryParse(deliveryDate ?? '') ?? _selectedDeliveryDate;
+      }
+      if (order.salesPerson.isNotEmpty &&
+          _salesPersonOptions.contains(order.salesPerson)) {
+        _selectedSalesPerson = order.salesPerson;
+      }
       if (firstItem != null) {
         _selectedItemCode = firstItem.itemCode.isNotEmpty
             ? firstItem.itemCode
             : firstItem.itemName;
         _qtyCtrl.text = firstItem.qty.toString();
-        _rateCtrl.text = firstItem.rate > 0 ? firstItem.rate.toString() : '';
+        _rateCtrl.text = firstItem.rate > 0
+            ? _formatRupiah(firstItem.rate)
+            : '';
         if (firstItem.warehouse.isNotEmpty) {
           _selectedWarehouse = firstItem.warehouse;
+          final warehouse = _selectedWarehouseInfo(
+            _warehouseOptions(context.read<AppState>()),
+          );
+          if (warehouse?.company.isNotEmpty == true) {
+            _selectedCompany = warehouse!.company;
+          }
         }
         _initialItemText = firstItem.itemCode.isNotEmpty
-            ? '${firstItem.itemName} (${firstItem.itemCode})'
+            ? '${firstItem.itemName} - ${firstItem.itemCode}'
             : firstItem.itemName;
         _itemTextController?.text = _initialItemText!;
       }
@@ -1710,8 +2519,8 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final warehouseOptions = _warehouseOptions(appState);
-    final costCenterOptions = _costCentersForWarehouse(warehouseOptions);
+    final warehouseOptions = _warehousesForCompany(appState);
+    final costCenterOptions = _costCentersForCompany();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -1722,7 +2531,7 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         centerTitle: false,
         titleSpacing: 16,
         title: Text(
-          widget.isEditMode ? 'Edit Sales Order' : 'New Sales Order',
+          _screenTitle,
           style: TextStyle(
             color: AppColors.primary,
             fontSize: 18,
@@ -1735,579 +2544,340 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_selectorLoadError != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF7ED),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFFED7AA)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(
-                        Icons.warning_amber_rounded,
-                        color: Colors.orange,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Sebagian data tidak dapat dibaca',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _selectorLoadError!,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: 'Coba lagi',
-                        onPressed: _isLoadingSelectors ? null : _loadSelectors,
-                        icon: const Icon(Icons.refresh_rounded),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-              // Document Info Section
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+        padding: TmsxResponsive.pagePadding(context, top: 16, bottom: 24),
+        child: TmsxResponsiveBody(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_selectorLoadError != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFED7AA)),
                     ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Document Info',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.slate,
-                      ),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    DropdownButtonFormField<String>(
-                      initialValue: _seriesOptions.isNotEmpty
-                          ? (_seriesOptions.contains(_selectedSeries)
-                                ? _selectedSeries
-                                : _seriesOptions.first)
-                          : null,
-                      decoration: InputDecoration(
-                        labelText: 'Series',
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                      ),
-                      items: _seriesOptions
-                          .map(
-                            (series) => DropdownMenuItem(
-                              value: series,
-                              child: Text(series),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: _seriesOptions.isEmpty
-                          ? null
-                          : (v) => setState(() => _selectedSeries = v),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Series wajib dipilih'
-                          : null,
-                      hint: _isLoadingSelectors
-                          ? const Text('Loading series...')
-                          : const Text('Pilih series'),
-                    ),
-                    if (_seriesError != null) ...[
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _seriesError!,
-                              style: const TextStyle(
-                                color: Colors.redAccent,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                          TextButton.icon(
-                            onPressed: _isLoadingSelectors
-                                ? null
-                                : _loadSelectors,
-                            icon: const Icon(Icons.refresh_rounded),
-                            label: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    ],
-
-                    const SizedBox(height: 12),
-
-                    Row(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: _selectedDate,
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime(2030),
-                              );
-
-                              if (picked != null) {
-                                setState(() {
-                                  _selectedDate = picked;
-
-                                  if (_selectedDeliveryDate.isBefore(picked)) {
-                                    _selectedDeliveryDate = picked;
-                                  }
-                                });
-                                _scheduleRepriceAllItems();
-                              }
-                            },
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.background,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                ),
-                              ),
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(
-                                        Icons.calendar_today,
-                                        size: 14,
-                                        color: AppColors.slate,
-                                      ),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'Date',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.slate,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    DateFormat(
-                                      'dd-MM-yyyy',
-                                    ).format(_selectedDate),
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      color: AppColors.navy,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(width: 12),
-
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate:
-                                    _selectedDeliveryDate.isBefore(
-                                      _selectedDate,
-                                    )
-                                    ? _selectedDate
-                                    : _selectedDeliveryDate,
-                                firstDate: _selectedDate,
-                                lastDate: DateTime(2030),
-                              );
-
-                              if (picked != null) {
-                                setState(() => _selectedDeliveryDate = picked);
-                              }
-                            },
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.background,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                ),
-                              ),
-                              padding: const EdgeInsets.all(12),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Row(
-                                    children: [
-                                      Icon(
-                                        Icons.local_shipping_outlined,
-                                        size: 14,
-                                        color: AppColors.slate,
-                                      ),
-                                      SizedBox(width: 6),
-                                      Text(
-                                        'Delivery',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.slate,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    DateFormat(
-                                      'dd-MM-yyyy',
-                                    ).format(_selectedDeliveryDate),
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      color: AppColors.navy,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    DropdownButtonFormField<String>(
-                      initialValue: costCenterOptions.isNotEmpty
-                          ? (costCenterOptions.any(
-                                  (center) => center.name == _selectedCenter,
-                                )
-                                ? _selectedCenter
-                                : costCenterOptions.first.name)
-                          : null,
-                      decoration: InputDecoration(
-                        labelText: 'Cost Center',
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                      ),
-                      items: costCenterOptions
-                          .map(
-                            (center) => DropdownMenuItem(
-                              value: center.name,
-                              child: Text(center.name),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: costCenterOptions.isEmpty
-                          ? null
-                          : (v) => setState(() => _selectedCenter = v),
-                      hint: _isLoadingSelectors
-                          ? const Text('Loading cost centers...')
-                          : const Text('Pilih cost center'),
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    if (appState.userRole == 'Sales')
-                      InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: 'Sales',
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                            ),
-                          ),
-                        ),
-                        child: Text(
-                          appState.currentSalesPerson ??
-                              appState.salesIdentityError ??
-                              '-',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      )
-                    else
-                      DropdownButtonFormField<String>(
-                        initialValue:
-                            _salesPersonOptions.contains(_selectedSalesPerson)
-                            ? _selectedSalesPerson
-                            : null,
-                        decoration: InputDecoration(
-                          labelText: 'Sales Person',
-                          filled: true,
-                          fillColor: AppColors.background,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                            ),
-                          ),
-                        ),
-                        items: _salesPersonOptions
-                            .map(
-                              (salesPerson) => DropdownMenuItem(
-                                value: salesPerson,
-                                child: Text(salesPerson),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: _salesPersonOptions.isEmpty
-                            ? null
-                            : (value) =>
-                                  setState(() => _selectedSalesPerson = value),
-                        validator: (value) =>
-                            value == null || value.trim().isEmpty
-                            ? 'Sales Person wajib dipilih'
-                            : null,
-                        hint: _isLoadingSelectors
-                            ? const Text('Loading sales persons...')
-                            : const Text('Pilih sales person'),
-                      ),
-
-                    const SizedBox(height: 12),
-
-                    TextFormField(
-                      controller: _customerCtrl,
-                      readOnly: true,
-                      onTap: _showCustomerSelectSheet,
-                      decoration: InputDecoration(
-                        labelText: 'Nama Customer',
-                        hintText: _isLoadingSelectors
-                            ? 'Loading customer...'
-                            : 'Pilih atau search customer',
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        suffixIcon:
-                            _customerError == null &&
-                                _customerCtrl.text.isNotEmpty
-                            ? const Icon(
-                                Icons.check_circle,
-                                color: Colors.green,
-                              )
-                            : const Icon(Icons.arrow_drop_down_rounded),
-                        errorText: _customerError,
-                      ),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? 'Customer wajib diisi'
-                          : null,
-                    ),
-                    if (_isLoadingCustomerInsight) ...[
-                      const SizedBox(height: 10),
-                      const LinearProgressIndicator(),
-                    ] else if (_customerInsight != null) ...[
-                      const SizedBox(height: 10),
-                      _CustomerInsightCard(
-                        insight: _customerInsight!,
-                        orderTotal: _totalAmount,
-                        onHistory: _showCustomerHistory,
-                      ),
-                    ] else if (_customerInsightError != null) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.orange.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const Text(
-                              'Informasi kredit customer gagal dimuat.',
-                              style: TextStyle(fontWeight: FontWeight.w800),
-                            ),
-                            TextButton.icon(
-                              onPressed: _loadCustomerInsight,
-                              icon: const Icon(Icons.refresh_rounded),
-                              label: const Text('Retry informasi customer'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: AppColors.cardShadow,
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Currency & Price List',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.slate,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              labelText: 'Currency',
-                              prefixIcon: Icon(Icons.lock_outline_rounded),
-                            ),
-                            child: Text(
-                              _selectedCurrency ?? '-',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.navy,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
+                        const Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.orange,
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              labelText: 'Selling Price List',
-                              prefixIcon: Icon(Icons.lock_outline_rounded),
-                            ),
-                            child: Text(
-                              _selectedPriceList ?? '-',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.navy,
-                                fontWeight: FontWeight.w700,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Sebagian data tidak dapat dibaca',
+                                style: TextStyle(fontWeight: FontWeight.w700),
                               ),
-                            ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _selectorLoadError!,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
                           ),
+                        ),
+                        IconButton(
+                          tooltip: 'Coba lagi',
+                          onPressed: _isLoadingSelectors
+                              ? null
+                              : _loadSelectors,
+                          icon: const Icon(Icons.refresh_rounded),
                         ),
                       ],
                     ),
-                    if (_priceListCurrency != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Price List Currency: $_priceListCurrency',
-                        style: const TextStyle(
-                          color: AppColors.slate,
-                          fontSize: 11,
-                        ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                // Document Info Section
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
                     ],
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Warehouse',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.slate,
+                  ),
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Informasi Sales Order',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.slate,
+                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
 
-                    if (warehouseOptions.isNotEmpty)
                       DropdownButtonFormField<String>(
-                        key: ValueKey('warehouse:${_selectedWarehouse ?? ''}'),
-                        initialValue:
-                            warehouseOptions.any(
-                              (w) => w.name == _selectedWarehouse,
-                            )
-                            ? _selectedWarehouse
-                            : '',
+                        initialValue: _seriesOptions.isNotEmpty
+                            ? (_seriesOptions.contains(_selectedSeries)
+                                  ? _selectedSeries
+                                  : _seriesOptions.first)
+                            : null,
                         decoration: InputDecoration(
-                          labelText: 'Pilih Warehouse',
+                          labelText: 'Series',
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                        ),
+                        items: _seriesOptions
+                            .map(
+                              (series) => DropdownMenuItem(
+                                value: series,
+                                child: Text(series),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: _seriesOptions.isEmpty
+                            ? null
+                            : (v) => setState(() => _selectedSeries = v),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? 'Series wajib dipilih'
+                            : null,
+                        hint: _isLoadingSelectors
+                            ? const Text('Loading series...')
+                            : const Text('Pilih series'),
+                      ),
+                      if (_seriesError != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _seriesError!,
+                                style: const TextStyle(
+                                  color: Colors.redAccent,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: _isLoadingSelectors
+                                  ? null
+                                  : _loadSelectors,
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      if (!appState.mobileAccess.isSalesUser) ...[
+                        const SizedBox(height: 12),
+                        ErpItemAutocompleteField(
+                          label: 'Sales Person',
+                          selectedId:
+                              _salesPersonOptions.contains(_selectedSalesPerson)
+                              ? _selectedSalesPerson
+                              : null,
+                          decoration: InputDecoration(
+                            labelText: 'Sales Person',
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                              ),
+                            ),
+                          ),
+                          options: _salesPersonOptions
+                              .map(
+                                (salesPerson) => ErpItemOption(
+                                  id: salesPerson,
+                                  label: salesPerson,
+                                ),
+                              )
+                              .toList(),
+                          onSelected: (value) =>
+                              setState(() => _selectedSalesPerson = value),
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Sales Person wajib dipilih'
+                              : null,
+                        ),
+                      ],
+
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _selectedDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2030),
+                                );
+
+                                if (picked != null) {
+                                  setState(() {
+                                    _selectedDate = picked;
+
+                                    if (_dateOnly(
+                                      _selectedDeliveryDate,
+                                    ).isBefore(_dateOnly(picked))) {
+                                      _selectedDeliveryDate = picked;
+                                    }
+                                  });
+                                  _scheduleRepriceAllItems();
+                                }
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.background,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                  ),
+                                ),
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(
+                                          Icons.calendar_today,
+                                          size: 14,
+                                          color: AppColors.slate,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Date',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.slate,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      DateFormat(
+                                        'dd-MM-yyyy',
+                                      ).format(_selectedDate),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.navy,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(width: 12),
+
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate:
+                                      _dateOnly(
+                                        _selectedDeliveryDate,
+                                      ).isBefore(_dateOnly(_selectedDate))
+                                      ? _dateOnly(_selectedDate)
+                                      : _selectedDeliveryDate,
+                                  firstDate: _dateOnly(_selectedDate),
+                                  lastDate: DateTime(2030),
+                                );
+
+                                if (picked != null) {
+                                  setState(
+                                    () => _selectedDeliveryDate = picked,
+                                  );
+                                }
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: AppColors.background,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.primary.withValues(
+                                      alpha: 0.2,
+                                    ),
+                                  ),
+                                ),
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(
+                                          Icons.local_shipping_outlined,
+                                          size: 14,
+                                          color: AppColors.slate,
+                                        ),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Delivery',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.slate,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      DateFormat(
+                                        'dd-MM-yyyy',
+                                      ).format(_selectedDeliveryDate),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.navy,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      ErpItemAutocompleteField(
+                        label: 'Company',
+                        selectedId: _companyOptions.contains(_selectedCompany)
+                            ? _selectedCompany
+                            : null,
+                        decoration: InputDecoration(
+                          labelText: 'Company',
                           filled: true,
                           fillColor: AppColors.background,
                           border: OutlineInputBorder(
@@ -2321,614 +2891,830 @@ class _CreateSalesOrderScreenState extends State<CreateSalesOrderScreen> {
                             vertical: 12,
                           ),
                         ),
-                        items: [
-                          const DropdownMenuItem<String>(
-                            value: '',
-                            child: Text('- None -'),
-                          ),
-                          ...warehouseOptions.map(
-                            (w) => DropdownMenuItem<String>(
-                              value: w.name,
-                              child: Text(
-                                w.name,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                        options: _companyOptions
+                            .map(
+                              (company) =>
+                                  ErpItemOption(id: company, label: company),
+                            )
+                            .toList(),
+                        onSelected: _onCompanySelected,
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? 'Company wajib dipilih'
+                            : null,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: _customerCtrl,
+                        readOnly: true,
+                        onTap: _isCustomerLocked
+                            ? null
+                            : _showCustomerSelectSheet,
+                        decoration: InputDecoration(
+                          labelText: 'Nama Customer',
+                          hintText: _isLoadingSelectors
+                              ? 'Loading customer...'
+                              : (_isCustomerLocked
+                                    ? 'Customer dikunci dari dokumen asal'
+                                    : 'Pilih atau search customer'),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
                             ),
                           ),
-                        ],
-                        onChanged: (v) {
-                          setState(() {
-                            _selectedWarehouse = v == '' ? null : v;
-                            final nextCostCenters = _costCentersForWarehouse(
-                              warehouseOptions,
-                            );
-                            _selectedCenter =
-                                nextCostCenters.any(
-                                  (center) => center.name == _selectedCenter,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          suffixIcon: _isCustomerLocked
+                              ? const Icon(Icons.lock_outline_rounded)
+                              : _customerCtrl.text.isNotEmpty
+                              ? IconButton(
+                                  tooltip: 'Bersihkan Customer',
+                                  onPressed: _clearCustomer,
+                                  icon: const Icon(Icons.close_rounded),
                                 )
-                                ? _selectedCenter
-                                : (nextCostCenters.isNotEmpty
-                                      ? nextCostCenters.first.name
-                                      : null);
-                          });
-                          _loadCustomerInsight();
-                          _scheduleRepriceAllItems();
-                        },
-                      )
-                    else
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.orange.withValues(alpha: 0.5),
-                          ),
+                              : const Icon(Icons.search_rounded),
+                          errorText: _customerError,
                         ),
-                        padding: const EdgeInsets.all(12),
-                        child: const Text(
-                          'Warehouse tidak tersedia. Refresh Stock tab terlebih dahulu.',
-                          style: TextStyle(fontSize: 12, color: Colors.orange),
-                        ),
+                        validator: (v) => (v == null || v.trim().isEmpty)
+                            ? 'Customer wajib diisi'
+                            : null,
                       ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Item Details',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.slate,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Autocomplete<_ItemOption>(
-                      optionsBuilder: (textEditingValue) {
-                        final query = textEditingValue.text.toLowerCase();
-                        if (query.isEmpty) {
-                          return _itemOptions.take(20);
-                        }
-                        return _itemOptions.where((option) {
-                          final label = option.label.toLowerCase();
-                          return label.contains(query) ||
-                              option.code.toLowerCase().contains(query);
-                        });
-                      },
-                      displayStringForOption: (option) => option.label,
-                      onSelected: (option) {
-                        setState(() {
-                          _selectedItemCode = option.code;
-                          _itemTextController?.text = option.label;
-                          _itemError = null;
-                        });
-                        _loadItemInsight(option.code, applyPrice: true);
-                      },
-                      fieldViewBuilder:
-                          (
-                            context,
-                            textEditingController,
-                            focusNode,
-                            onSubmit,
-                          ) {
-                            _itemTextController ??= textEditingController;
-                            if (_initialItemText != null &&
-                                textEditingController.text.isEmpty) {
-                              textEditingController.text = _initialItemText!;
-                            }
-                            return TextFormField(
-                              controller: textEditingController,
-                              focusNode: focusNode,
-                              onChanged: (value) {
-                                final code = _normalizeItemCode(value);
-                                if (_selectedItemCode != null &&
-                                    code != _selectedItemCode) {
-                                  setState(() => _selectedItemCode = null);
-                                }
-                                if (value.contains('(') &&
-                                    value.endsWith(')') &&
-                                    code.isNotEmpty) {
-                                  setState(() => _selectedItemCode = code);
-                                }
-                                _validateItem(value);
-                              },
-                              decoration: InputDecoration(
-                                labelText: 'Nama Item / Kode',
-                                hintText: 'Cari dengan nama atau kode',
-                                filled: true,
-                                fillColor: AppColors.background,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: AppColors.primary.withValues(
-                                      alpha: 0.2,
-                                    ),
-                                  ),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                                suffixIcon: _isValidatingItem
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(8),
-                                        child: SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        ),
-                                      )
-                                    : _itemError == null &&
-                                          (_itemTextController
-                                                  ?.text
-                                                  .isNotEmpty ??
-                                              false)
-                                    ? const Icon(
-                                        Icons.check_circle,
-                                        color: Colors.green,
-                                      )
-                                    : null,
-                                errorText: _itemError,
-                              ),
-                              validator: (v) {
-                                if (v == null || v.trim().isEmpty) {
-                                  return 'Item wajib diisi';
-                                }
-                                return null;
-                              },
-                            );
-                          },
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: _qtyCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: 'Quantity',
-                              filled: true,
-                              fillColor: AppColors.background,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
-                              ),
-                            ),
-                            validator: (v) {
-                              final q = double.tryParse(v?.trim() ?? '');
-                              if (q == null || q <= 0) return 'Qty > 0';
-                              return null;
-                            },
+                      if (_selectedCustomerName().isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: ValueKey(
+                            'customer_name_${_customerCtrl.text.trim()}',
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            controller: _rateCtrl,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: InputDecoration(
-                              labelText: 'Harga/Unit',
-                              filled: true,
-                              fillColor: AppColors.background,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: AppColors.primary.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                ),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 12,
+                          initialValue: _selectedCustomerName(),
+                          readOnly: true,
+                          decoration: InputDecoration(
+                            labelText: 'Customer Name',
+                            filled: true,
+                            fillColor: AppColors.background,
+                            prefixIcon: const Icon(Icons.storefront_outlined),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(alpha: 0.2),
                               ),
                             ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) return null;
-                              final r = double.tryParse(v.trim());
-                              if (r == null || r < 0) return 'Harga >= 0';
-                              return null;
-                            },
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                              ),
+                            ),
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 10),
-                    TextFormField(
-                      controller: _discountCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Discount Amount',
-                        prefixIcon: const Icon(Icons.discount_outlined),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: AppColors.primary.withValues(alpha: 0.2),
+                      const SizedBox(height: 12),
+                      ErpItemAutocompleteField(
+                        label: 'Cost Center',
+                        selectedId:
+                            costCenterOptions.any(
+                              (center) => center.name == _selectedCenter,
+                            )
+                            ? _selectedCenter
+                            : null,
+                        decoration: InputDecoration(
+                          labelText: 'Cost Center',
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
                           ),
                         ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
+                        options: costCenterOptions
+                            .map(
+                              (center) => ErpItemOption(
+                                id: center.name,
+                                label: center.name,
+                              ),
+                            )
+                            .toList(),
+                        onSelected: (v) => setState(() => _selectedCenter = v),
                       ),
-                      validator: (value) {
-                        final discount = double.tryParse(value?.trim() ?? '');
-                        if (discount == null || discount < 0) {
-                          return 'Diskon harus 0 atau lebih';
-                        }
-                        final rate =
-                            double.tryParse(_rateCtrl.text.trim()) ?? 0;
-                        if (rate > 0 && discount > rate) {
-                          return 'Diskon tidak boleh melebihi harga';
-                        }
-                        return null;
-                      },
-                    ),
+                      const SizedBox(height: 12),
+                      if (warehouseOptions.isNotEmpty)
+                        ErpItemAutocompleteField(
+                          key: ValueKey(
+                            'warehouse:${_selectedWarehouse ?? ''}',
+                          ),
+                          label: 'Warehouse',
+                          selectedId:
+                              warehouseOptions.any(
+                                (warehouse) =>
+                                    warehouse.name == _selectedWarehouse,
+                              )
+                              ? _selectedWarehouse
+                              : null,
+                          decoration: InputDecoration(
+                            labelText: 'Warehouse',
+                            filled: true,
+                            fillColor: AppColors.background,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                color: AppColors.primary.withValues(alpha: 0.2),
+                              ),
+                            ),
+                          ),
+                          options: warehouseOptions
+                              .map(
+                                (warehouse) => ErpItemOption(
+                                  id: warehouse.name,
+                                  label: warehouse.name,
+                                ),
+                              )
+                              .toList(),
+                          onSelected: (value) {
+                            setState(() => _selectedWarehouse = value);
+                            _loadCustomerInsight();
+                            _scheduleRepriceAllItems();
+                          },
+                          validator: (value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Warehouse wajib dipilih'
+                              : null,
+                        )
+                      else
+                        const Text(
+                          'Warehouse tidak tersedia untuk Company ini.',
+                          style: TextStyle(color: Colors.orange),
+                        ),
+                      if (_isLoadingCustomerInsight) ...[
+                        const SizedBox(height: 10),
+                        const LinearProgressIndicator(),
+                      ] else if (_customerInsight != null) ...[
+                        const SizedBox(height: 10),
+                        _CustomerInsightCard(
+                          insight: _customerInsight!,
+                          orderTotal: _totalAmount,
+                          onHistory: _showCustomerHistory,
+                        ),
+                      ] else if (_customerInsightError != null) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.orange.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const Text(
+                                'Informasi kredit customer gagal dimuat.',
+                                style: TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                              TextButton.icon(
+                                onPressed: _loadCustomerInsight,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Retry informasi customer'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
 
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        onPressed: _selectedItemCode == null
-                            ? null
-                            : () => _showItemInsight(_selectedItemCode!),
-                        icon: const Icon(Icons.inventory_2_outlined),
-                        label: const Text('Cek stok & harga'),
-                      ),
-                    ),
-                    if (_selectedItemCode != null)
-                      _ItemPricingLine(
-                        insight: _itemInsights[_selectedItemCode],
-                        isLoading: _loadingItemPrices.contains(
-                          'first:$_selectedItemCode',
+                const SizedBox(height: 16),
+
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: AppColors.cardShadow,
+                  ),
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Currency & Price List',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.slate,
                         ),
                       ),
-                    const SizedBox(height: 12),
-                    ..._additionalItems.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final row = entry.value;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
+                      const SizedBox(height: 12),
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Currency',
+                          prefixIcon: const Icon(Icons.lock_outline_rounded),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        child: Text(
+                          _selectedCurrency ?? '-',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.navy,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: 'Selling Price List',
+                          prefixIcon: const Icon(Icons.lock_outline_rounded),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        child: Text(
+                          _selectedPriceList ??
+                              (_priceListOptions.isEmpty
+                                  ? 'Price List tidak tersedia'
+                                  : '-'),
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.navy,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (_priceListCurrency != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Price List Currency: $_priceListCurrency',
+                          style: const TextStyle(
+                            color: AppColors.slate,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Items',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.navy,
+                              ),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed:
+                                _selectedItemCode == null &&
+                                    (_itemTextController?.text.isEmpty ?? true)
+                                ? null
+                                : _clearPrimaryItem,
+                            icon: const Icon(Icons.delete_outline_rounded),
+                            label: const Text('Hapus Item'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.redAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _itemTextController,
+                        readOnly: true,
+                        onTap: _selectPrimaryItem,
+                        decoration: InputDecoration(
+                          labelText: 'Nama Item / Kode',
+                          hintText: 'Pilih atau search item',
+                          prefixIcon: const Icon(Icons.inventory_2_rounded),
+                          suffixIcon: _isValidatingItem
+                              ? const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : IconButton(
+                                  tooltip: 'Search item',
+                                  onPressed: _selectPrimaryItem,
+                                  icon: const Icon(Icons.search_rounded),
+                                ),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.16),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.10),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.36),
+                              width: 1.4,
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 14,
+                          ),
+                          errorText: _itemError,
+                        ),
+                        validator: (v) {
+                          if ((_selectedItemCode ?? '').trim().isEmpty) {
+                            return 'Item wajib dipilih';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      TextFormField(
+                        controller: _qtyCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Quantity',
+                          prefixIcon: IconButton(
+                            tooltip: 'Kurangi quantity',
+                            onPressed: () => _adjustQuantity(_qtyCtrl, -1),
+                            icon: const Icon(Icons.remove_rounded),
+                          ),
+                          suffixIcon: IconButton(
+                            tooltip: 'Tambah quantity',
+                            onPressed: () => _adjustQuantity(_qtyCtrl, 1),
+                            icon: const Icon(Icons.add_rounded),
+                          ),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        validator: (v) {
+                          final q = double.tryParse(v?.trim() ?? '');
+                          if (q == null || q <= 0) return 'Qty > 0';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _rateCtrl,
+                        readOnly: true,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onEditingComplete: () =>
+                            _formatMoneyController(_rateCtrl),
+                        onTapOutside: (_) => _formatMoneyController(_rateCtrl),
+                        decoration: InputDecoration(
+                          labelText: 'Harga/Unit',
+                          prefixIcon: const Icon(Icons.lock_outline_rounded),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return null;
+                          final r = _itemRate(v);
+                          if (r < 0) return 'Harga >= 0';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextFormField(
+                        controller: _discountCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        onEditingComplete: () =>
+                            _formatMoneyController(_discountCtrl),
+                        onTapOutside: (_) =>
+                            _formatMoneyController(_discountCtrl),
+                        decoration: InputDecoration(
+                          labelText: 'Discount Amount',
+                          prefixIcon: const Icon(Icons.discount_outlined),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                            ),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                        validator: (value) {
+                          final discount = _itemDiscount(value ?? '');
+                          if (discount < 0) {
+                            return 'Diskon harus 0 atau lebih';
+                          }
+                          final rate = _itemRate(_rateCtrl.text);
+                          if (rate > 0 && discount > rate) {
+                            return 'Diskon tidak boleh melebihi harga';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _ItemSubtotalSummary(
+                        qty: _itemQty(_qtyCtrl.text),
+                        rate: _itemRate(_rateCtrl.text),
+                        discount: _itemDiscount(_discountCtrl.text),
+                        effectiveRate: _effectiveItemRate(
+                          rateText: _rateCtrl.text,
+                          discountText: _discountCtrl.text,
+                        ),
+                        subtotal: _itemSubtotal(
+                          qtyText: _qtyCtrl.text,
+                          rateText: _rateCtrl.text,
+                          discountText: _discountCtrl.text,
+                        ),
+                        formatCurrency: _formatRupiah,
+                      ),
+                      const SizedBox(height: 12),
+                      ..._additionalItems.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final row = entry.value;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.18),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Item ${index + 2}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.navy,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: 'Hapus item',
+                                    onPressed: () => _removeItemRow(index),
+                                    icon: const Icon(
+                                      Icons.delete_outline_rounded,
+                                      color: Colors.redAccent,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              TextFormField(
+                                controller: row.itemTextController,
+                                readOnly: true,
+                                onTap: () => _selectAdditionalItem(row),
+                                decoration: InputDecoration(
+                                  labelText: 'Nama Item / Kode',
+                                  hintText: 'Pilih atau search item',
+                                  prefixIcon: const Icon(
+                                    Icons.inventory_2_rounded,
+                                  ),
+                                  suffixIcon: IconButton(
+                                    tooltip: 'Search item',
+                                    onPressed: () => _selectAdditionalItem(row),
+                                    icon: const Icon(Icons.search_rounded),
+                                  ),
+                                  filled: true,
+                                  fillColor: AppColors.white,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                    borderSide: BorderSide(
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.16,
+                                      ),
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                    borderSide: BorderSide(
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.10,
+                                      ),
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(18),
+                                    borderSide: BorderSide(
+                                      color: AppColors.primary.withValues(
+                                        alpha: 0.36,
+                                      ),
+                                      width: 1.4,
+                                    ),
+                                  ),
+                                ),
+                                validator: (value) {
+                                  if (row.itemCode == null ||
+                                      row.itemCode!.trim().isEmpty) {
+                                    return 'Item wajib dipilih';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                controller: row.qtyController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                decoration: InputDecoration(
+                                  labelText: 'Quantity',
+                                  prefixIcon: IconButton(
+                                    tooltip: 'Kurangi quantity',
+                                    onPressed: () =>
+                                        _adjustQuantity(row.qtyController, -1),
+                                    icon: const Icon(Icons.remove_rounded),
+                                  ),
+                                  suffixIcon: IconButton(
+                                    tooltip: 'Tambah quantity',
+                                    onPressed: () =>
+                                        _adjustQuantity(row.qtyController, 1),
+                                    icon: const Icon(Icons.add_rounded),
+                                  ),
+                                ),
+                                validator: (value) {
+                                  final qty = double.tryParse(
+                                    value?.trim() ?? '',
+                                  );
+                                  return qty == null || qty <= 0
+                                      ? 'Qty > 0'
+                                      : null;
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                controller: row.rateController,
+                                readOnly: true,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                onEditingComplete: () =>
+                                    _formatMoneyController(row.rateController),
+                                onTapOutside: (_) =>
+                                    _formatMoneyController(row.rateController),
+                                decoration: const InputDecoration(
+                                  labelText: 'Harga/Unit',
+                                  prefixIcon: Icon(Icons.lock_outline_rounded),
+                                ),
+                                validator: (value) {
+                                  if (value == null || value.trim().isEmpty) {
+                                    return null;
+                                  }
+                                  final rate = _itemRate(value);
+                                  return rate < 0 ? 'Harga >= 0' : null;
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              TextFormField(
+                                controller: row.discountController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                onEditingComplete: () => _formatMoneyController(
+                                  row.discountController,
+                                ),
+                                onTapOutside: (_) => _formatMoneyController(
+                                  row.discountController,
+                                ),
+                                decoration: const InputDecoration(
+                                  labelText: 'Discount Amount',
+                                  prefixIcon: Icon(Icons.discount_outlined),
+                                ),
+                                validator: (value) {
+                                  final discount = _itemDiscount(value ?? '');
+                                  if (discount < 0) {
+                                    return 'Diskon harus 0 atau lebih';
+                                  }
+                                  final rate = _itemRate(
+                                    row.rateController.text,
+                                  );
+                                  if (rate > 0 && discount > rate) {
+                                    return 'Diskon tidak boleh melebihi harga';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              _ItemSubtotalSummary(
+                                qty: _itemQty(row.qtyController.text),
+                                rate: _itemRate(row.rateController.text),
+                                discount: _itemDiscount(
+                                  row.discountController.text,
+                                ),
+                                effectiveRate: _effectiveItemRate(
+                                  rateText: row.rateController.text,
+                                  discountText: row.discountController.text,
+                                ),
+                                subtotal: _itemSubtotal(
+                                  qtyText: row.qtyController.text,
+                                  rateText: row.rateController.text,
+                                  discountText: row.discountController.text,
+                                ),
+                                formatCurrency: _formatRupiah,
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                      OutlinedButton.icon(
+                        onPressed: _addItemRow,
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Tambah Item'),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
                         decoration: BoxDecoration(
                           color: AppColors.background,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.18),
+                            color: AppColors.primary.withValues(alpha: 0.2),
                           ),
                         ),
-                        child: Column(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Item ${index + 2}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      color: AppColors.navy,
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                  tooltip: 'Hapus item',
-                                  onPressed: () => _removeItemRow(index),
-                                  icon: const Icon(
-                                    Icons.delete_outline_rounded,
-                                    color: Colors.redAccent,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            Autocomplete<_ItemOption>(
-                              optionsBuilder: (textEditingValue) {
-                                final query = textEditingValue.text
-                                    .toLowerCase();
-                                if (query.isEmpty) {
-                                  return _itemOptions.take(20);
-                                }
-                                return _itemOptions.where((option) {
-                                  final label = option.label.toLowerCase();
-                                  return label.contains(query) ||
-                                      option.code.toLowerCase().contains(query);
-                                });
-                              },
-                              displayStringForOption: (option) => option.label,
-                              onSelected: (option) {
-                                setState(() {
-                                  row.itemCode = option.code;
-                                  row.itemTextController?.text = option.label;
-                                });
-                                _loadItemInsight(
-                                  option.code,
-                                  applyPrice: true,
-                                  row: row,
-                                );
-                              },
-                              fieldViewBuilder:
-                                  (
-                                    context,
-                                    textEditingController,
-                                    focusNode,
-                                    onSubmit,
-                                  ) {
-                                    row.itemTextController =
-                                        textEditingController;
-                                    if (row.itemCode != null &&
-                                        textEditingController.text.isEmpty) {
-                                      final currentOption = _itemOptions
-                                          .firstWhere(
-                                            (option) =>
-                                                option.code == row.itemCode,
-                                            orElse: () => _ItemOption(
-                                              code: row.itemCode ?? '',
-                                              name: row.itemCode ?? '',
-                                            ),
-                                          );
-                                      textEditingController.text =
-                                          currentOption.label;
-                                    }
-                                    return TextFormField(
-                                      controller: textEditingController,
-                                      focusNode: focusNode,
-                                      onChanged: (value) {
-                                        final code = _normalizeItemCode(value);
-                                        if (row.itemCode != null &&
-                                            code != row.itemCode) {
-                                          setState(() => row.itemCode = null);
-                                        }
-                                      },
-                                      decoration: InputDecoration(
-                                        labelText: 'Nama Item / Kode',
-                                        hintText: 'Cari dengan nama atau kode',
-                                        filled: true,
-                                        fillColor: AppColors.white,
-                                        border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                      ),
-                                      validator: (value) {
-                                        if (row.itemCode == null ||
-                                            row.itemCode!.trim().isEmpty) {
-                                          return 'Item wajib dipilih';
-                                        }
-                                        return null;
-                                      },
-                                    );
-                                  },
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: row.qtyController,
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Quantity',
-                                    ),
-                                    validator: (value) {
-                                      final qty = double.tryParse(
-                                        value?.trim() ?? '',
-                                      );
-                                      return qty == null || qty <= 0
-                                          ? 'Qty > 0'
-                                          : null;
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: TextFormField(
-                                    controller: row.rateController,
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                          decimal: true,
-                                        ),
-                                    decoration: const InputDecoration(
-                                      labelText: 'Harga/Unit',
-                                    ),
-                                    validator: (value) {
-                                      if (value == null ||
-                                          value.trim().isEmpty) {
-                                        return null;
-                                      }
-                                      final rate = double.tryParse(
-                                        value.trim(),
-                                      );
-                                      return rate == null || rate < 0
-                                          ? 'Harga >= 0'
-                                          : null;
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 10),
-                            TextFormField(
-                              controller: row.discountController,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              decoration: const InputDecoration(
-                                labelText: 'Discount Amount',
-                                prefixIcon: Icon(Icons.discount_outlined),
-                              ),
-                              validator: (value) {
-                                final discount = double.tryParse(
-                                  value?.trim() ?? '',
-                                );
-                                if (discount == null || discount < 0) {
-                                  return 'Diskon harus 0 atau lebih';
-                                }
-                                final rate =
-                                    double.tryParse(
-                                      row.rateController.text.trim(),
-                                    ) ??
-                                    0;
-                                if (rate > 0 && discount > rate) {
-                                  return 'Diskon tidak boleh melebihi harga';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 10),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: TextButton.icon(
-                                onPressed: row.itemCode == null
-                                    ? null
-                                    : () => _showItemInsight(row.itemCode!),
-                                icon: const Icon(Icons.inventory_2_outlined),
-                                label: const Text('Cek stok & harga'),
+                            const Text(
+                              'Total Amount',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.slate,
                               ),
                             ),
-                            if (row.itemCode != null)
-                              _ItemPricingLine(
-                                insight: _itemInsights[row.itemCode],
-                                isLoading: _loadingItemPrices.contains(
-                                  'row:${row.hashCode}',
-                                ),
+                            Text(
+                              'Rp ${_formatRupiah(_totalAmount)}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.primary,
                               ),
+                            ),
                           ],
                         ),
-                      );
-                    }),
-                    OutlinedButton.icon(
-                      onPressed: _addItemRow,
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text('Tambah Item'),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: AppColors.primary.withValues(alpha: 0.2),
-                        ),
                       ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 14,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Total Amount',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.slate,
-                            ),
-                          ),
-                          Text(
-                            'Rp ${_totalAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => '.')}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              _AttachmentCard(
-                photos: _photos,
-                onCamera: () => _pickPhoto(ImageSource.camera),
-                onGallery: () => _pickPhoto(ImageSource.gallery),
-                onRemove: (index) => setState(() => _photos.removeAt(index)),
-              ),
+                _SalesOrderNotedCard(controller: _notedCtrl),
 
-              const SizedBox(height: 24),
-            ],
+                const SizedBox(height: 16),
+
+                _AttachmentCard(
+                  photos: _photos,
+                  onCamera: () => _pickPhoto(ImageSource.camera),
+                  onGallery: () => _pickPhoto(ImageSource.gallery),
+                  onRemove: (index) => setState(() => _photos.removeAt(index)),
+                ),
+
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
 
       bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.all(16),
-        child: ElevatedButton(
-          onPressed:
-              (_isSaving ||
-                  _isLoadingSelectors ||
-                  _isValidatingItem ||
-                  _selectedSeries == null)
-              ? null
-              : _save,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+        minimum: EdgeInsets.all(TmsxResponsive.horizontalPadding(context)),
+        child: TmsxResponsiveBody(
+          child: ElevatedButton(
+            onPressed:
+                (_isSaving ||
+                    _isLoadingSelectors ||
+                    _isValidatingItem ||
+                    _selectedSeries == null)
+                ? null
+                : _save,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 2,
             ),
-            elevation: 2,
-          ),
-          child: _isSaving
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            child: _isSaving
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Text(
+                    _saveButtonLabel,
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
                   ),
-                )
-              : Text(
-                  widget.isEditMode ? 'Update Sales Order' : 'Save Sales Order',
-                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14),
-                ),
+          ),
         ),
       ),
     );
@@ -2941,7 +3727,7 @@ class _ItemOption {
 
   _ItemOption({required this.code, required this.name});
 
-  String get label => '$name ($code)';
+  String get label => '$name - $code';
 }
 
 class _CustomerOption {
@@ -2969,22 +3755,173 @@ class _AdditionalItemRow {
   final TextEditingController qtyController;
   final TextEditingController rateController;
   final TextEditingController discountController;
-  TextEditingController? itemTextController;
+  final TextEditingController itemTextController;
 
   _AdditionalItemRow({
     this.itemCode,
+    String itemLabel = '',
     String qty = '1',
     String rate = '',
     String discount = '0',
     this.warehouse,
   }) : qtyController = TextEditingController(text: qty),
        rateController = TextEditingController(text: rate),
-       discountController = TextEditingController(text: discount);
+       discountController = TextEditingController(text: discount),
+       itemTextController = TextEditingController(text: itemLabel);
 
   void dispose() {
     qtyController.dispose();
     rateController.dispose();
     discountController.dispose();
+    itemTextController.dispose();
+  }
+}
+
+class _SalesOrderNotedCard extends StatelessWidget {
+  final TextEditingController controller;
+
+  const _SalesOrderNotedCard({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: AppColors.cardShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('Noted', style: TextStyle(fontWeight: FontWeight.w800)),
+          const Padding(
+            padding: EdgeInsets.only(top: 4, bottom: 10),
+            child: Text(
+              'Catatan tambahan, termasuk permintaan diskon dari customer.',
+              style: TextStyle(fontSize: 11, color: AppColors.slate),
+            ),
+          ),
+          TextFormField(
+            controller: controller,
+            minLines: 3,
+            maxLines: 5,
+            textInputAction: TextInputAction.newline,
+            decoration: InputDecoration(
+              labelText: 'Noted',
+              hintText: 'Contoh: Customer meminta diskon tambahan.',
+              prefixIcon: const Icon(Icons.notes_rounded),
+              filled: true,
+              fillColor: AppColors.background,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(
+                  color: AppColors.primary.withValues(alpha: 0.2),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemSubtotalSummary extends StatelessWidget {
+  final double qty;
+  final double rate;
+  final double discount;
+  final double effectiveRate;
+  final double subtotal;
+  final String Function(double value) formatCurrency;
+
+  const _ItemSubtotalSummary({
+    required this.qty,
+    required this.rate,
+    required this.discount,
+    required this.effectiveRate,
+    required this.subtotal,
+    required this.formatCurrency,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final qtyLabel = qty == qty.roundToDouble()
+        ? qty.toInt().toString()
+        : qty.toStringAsFixed(2);
+    final notes = <String>[
+      'Harga asli Rp ${formatCurrency(rate)}',
+      if (discount > 0) 'Diskon per item Rp ${formatCurrency(discount)}',
+      'Harga final Rp ${formatCurrency(effectiveRate)}',
+    ];
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.softGreen.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SubtotalLine(
+            label:
+                'Sub total ($qtyLabel x Rp ${formatCurrency(effectiveRate)})',
+            value: 'Rp ${formatCurrency(subtotal)}',
+            highlight: true,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            notes.join(' • '),
+            style: const TextStyle(
+              color: AppColors.slate,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SubtotalLine extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool highlight;
+
+  const _SubtotalLine({
+    required this.label,
+    required this.value,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = highlight ? AppColors.primary : AppColors.navy;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: AppColors.navy,
+              fontSize: 12,
+              fontWeight: highlight ? FontWeight.w900 : FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          value,
+          style: TextStyle(
+            color: color,
+            fontSize: highlight ? 14 : 12,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -3041,6 +3978,10 @@ class _CustomerInsightCard extends StatelessWidget {
                 warning: overLimit,
               ),
               _InsightMetric(
+                label: 'Deposit',
+                value: 'Rp ${insight.depositBalance.toStringAsFixed(0)}',
+              ),
+              _InsightMetric(
                 label: 'Sisa Kredit',
                 value: insight.creditLimit > 0
                     ? 'Rp ${insight.availableCredit.toStringAsFixed(0)}'
@@ -3072,6 +4013,39 @@ class _CustomerInsightCard extends StatelessWidget {
               ),
             ],
           ),
+          if (insight.depositBalance > 0) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.18),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.account_balance_wallet_rounded,
+                    color: AppColors.primary,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Deposit customer tersedia Rp ${insight.depositBalance.toStringAsFixed(0)} dari AR minus.',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -3081,39 +4055,6 @@ class _CustomerInsightCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ItemPricingLine extends StatelessWidget {
-  final ItemSalesInsight? insight;
-  final bool isLoading;
-
-  const _ItemPricingLine({required this.insight, required this.isLoading});
-
-  @override
-  Widget build(BuildContext context) {
-    if (isLoading) {
-      return const LinearProgressIndicator(minHeight: 2);
-    }
-    final value = insight;
-    if (value == null) return const SizedBox.shrink();
-    final detail = <String>[
-      if (value.priceList.isNotEmpty) value.priceList,
-      if (value.priceListRate > 0)
-        'List ${value.currency} ${value.priceListRate.toStringAsFixed(0)}',
-      if (value.discountPercentage > 0)
-        'Diskon ${value.discountPercentage.toStringAsFixed(1)}%',
-      if (value.pricingRule.isNotEmpty) 'Rule ${value.pricingRule}',
-    ];
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        detail.isEmpty
-            ? 'Harga manual / price list tidak ditemukan'
-            : detail.join(' | '),
-        style: const TextStyle(fontSize: 11, color: AppColors.slate),
       ),
     );
   }
@@ -3215,23 +4156,25 @@ class _CustomerHistorySheetState extends State<_CustomerHistorySheet>
                         Text('${row.date} | ${row.status}'),
                         const SizedBox(height: 8),
                         if (items is List)
-                          ...items.map(
-                            (item) => ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              title: Text(
-                                item is Map
-                                    ? item['item_name']?.toString() ??
-                                          item['item_code']?.toString() ??
-                                          'Item'
-                                    : 'Item',
+                          ...items.map((item) {
+                            final title = item is Map
+                                ? item['item_name']?.toString() ??
+                                      item['item_code']?.toString() ??
+                                      'Item'
+                                : 'Item';
+                            final qty = item is Map
+                                ? 'Qty ${item['qty']?.toString() ?? '0'}'
+                                : '';
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: SalesPickerOptionTile(
+                                title: title,
+                                subtitle: qty,
+                                icon: Icons.inventory_2_rounded,
+                                onTap: () {},
                               ),
-                              trailing: Text(
-                                item is Map
-                                    ? 'x${item['qty']?.toString() ?? '0'}'
-                                    : '',
-                              ),
-                            ),
-                          ),
+                            );
+                          }),
                       ],
                     ),
                   ),
@@ -3263,18 +4206,17 @@ class _CustomerHistorySheetState extends State<_CustomerHistorySheet>
             child: Text('Belum ada transaksi customer ini.'),
           ),
         ...rows.map(
-          (row) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            onTap: () => _showDetail(row),
-            title: Text(row.id),
-            subtitle: Text(
-              '${row.date} | ${row.status}'
-              '${row.itemsCount > 0 ? ' | Qty ${row.itemsCount}' : ''}'
-              '${row.outstanding > 0 ? ' | Outstanding Rp ${row.outstanding.toStringAsFixed(0)}' : ''}',
-            ),
-            trailing: Text(
-              'Rp ${row.total.toStringAsFixed(0)}',
-              style: const TextStyle(fontWeight: FontWeight.w800),
+          (row) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SalesPickerOptionTile(
+              title: row.id,
+              subtitle:
+                  '${row.date} | ${row.status}'
+                  '${row.itemsCount > 0 ? ' | Qty ${row.itemsCount}' : ''}'
+                  '${row.outstanding > 0 ? ' | Outstanding Rp ${row.outstanding.toStringAsFixed(0)}' : ''}'
+                  ' | Rp ${row.total.toStringAsFixed(0)}',
+              icon: Icons.receipt_long_rounded,
+              onTap: () => _showDetail(row),
             ),
           ),
         ),
@@ -3429,17 +4371,48 @@ class _AttachmentCard extends StatelessWidget {
             ],
           ),
           ...photos.asMap().entries.map(
-            (entry) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.image_outlined),
-              title: Text(
-                entry.value.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: IconButton(
-                onPressed: () => onRemove(entry.key),
-                icon: const Icon(Icons.close_rounded),
+            (entry) => Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.image_outlined,
+                        color: AppColors.primary,
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        entry.value.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.navy,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => onRemove(entry.key),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
